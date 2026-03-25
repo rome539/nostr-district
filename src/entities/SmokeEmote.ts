@@ -46,7 +46,7 @@ export class SmokeEmote {
     // Scale-dependent offsets
     const isRoom = scale === 'room';
     const cigOffX = isRoom ? 18 : 5;
-    const cigOffY = isRoom ? -110 : -26;
+    const cigOffY = isRoom ? -110 : -32;
     const cigW = isRoom ? 8 : 4;
     const cigH = isRoom ? 3 : 1.5;
     const tipW = isRoom ? 3 : 1.5;
