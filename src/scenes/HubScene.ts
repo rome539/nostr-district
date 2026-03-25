@@ -1,0 +1,477 @@
+import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
+import {
+  connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
+  sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendNameUpdate,
+  setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, setOnlinePlayersHandler,
+} from '../nostr/presenceService';
+import { startDMSubscription, canUseDMs } from '../nostr/dmService';
+import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
+import { DMPanel } from '../ui/DMPanel';
+import { ChatUI } from '../ui/ChatUI';
+import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
+import { ProfileModal } from '../ui/ProfileModal';
+import { SmokeEmote } from '../entities/SmokeEmote';
+import { SettingsPanel } from '../ui/SettingsPanel';
+import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
+import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
+import { sendAvatarUpdate } from '../nostr/presenceService';
+import { ComputerUI } from '../ui/ComputerUI';
+import { authStore } from '../stores/authStore';
+import { LoginScreen } from '../ui/LoginScreen';
+import {
+  loginWithExtension, loginWithNsec, loginAsGuest,
+  startBunkerFlow, loginWithBunkerUrl, cancelBunkerFlow,
+} from '../nostr/nostrService';
+
+interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
+
+const ENTERABLE: BuildingZone[] = [
+  { id: 'relay', name: 'RELAY', doorX: 180, neonColor: P.sign1 },
+  { id: 'feed', name: 'THE FEED', doorX: 480, neonColor: P.pink },
+  { id: 'myroom', name: 'MY ROOM', doorX: 740, neonColor: P.teal },
+  { id: 'lounge', name: 'LOUNGE', doorX: 980, neonColor: P.pink },
+  { id: 'market', name: 'MARKET', doorX: 1215, neonColor: P.amber },
+];
+
+interface OtherPlayer {
+  sprite: Phaser.GameObjects.Image;
+  nameText: Phaser.GameObjects.Text;
+  targetX: number; targetY: number;
+  name: string;
+  avatar?: string;
+  clickZone?: Phaser.GameObjects.Zone;
+  smoke?: SmokeEmote;
+}
+
+export class HubScene extends Phaser.Scene {
+  private player!: Phaser.GameObjects.Image;
+  private playerName!: Phaser.GameObjects.Text;
+  private playerGlow!: Phaser.GameObjects.Graphics;
+  private targetX: number | null = null;
+  private isMoving = false;
+  private facingRight = true;
+  private nearBuilding: BuildingZone | null = null;
+  private promptText!: Phaser.GameObjects.Text;
+  private promptBg!: Phaser.GameObjects.Graphics;
+  private promptArrow!: Phaser.GameObjects.Text;
+  private otherPlayers = new Map<string, OtherPlayer>();
+  private dyingSprites = new Map<string, OtherPlayer>();
+
+  private chatUI!: ChatUI;
+  private dmPanel!: DMPanel;
+  private playerNames = new Map<string, string>();
+
+  private parallaxBg!: Phaser.GameObjects.Image;
+  private dustParticles: { x: number; y: number; vx: number; vy: number; alpha: number; size: number; color: string }[] = [];
+  private dustGraphics!: Phaser.GameObjects.Graphics;
+  private neonTimer = 0;
+  private neonFrame = 0;
+  private onlineCount = 0;
+
+  private shootingStar: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number } | null = null;
+  private shootingStarTimer = 0;
+  private shootingStarGraphics!: Phaser.GameObjects.Graphics;
+  private smokeGraphics!: Phaser.GameObjects.Graphics;
+  private chimneyGraphics!: Phaser.GameObjects.Graphics;
+  private chimneyParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }[] = [];
+  private chimneySpawnTimer = 0;
+  // [worldX, chimney-cap Y] — matches BootScene fgBuildings where ri%2===0 && w>50
+  // 3 chimneys on unnamed buildings: bi=0 (left), bi=2 (mid-left), bi=12 (right)
+  private readonly CHIMNEYS: [number, number][] = [
+    [22, GROUND_Y - 238], [318, GROUND_Y - 258], [1502, GROUND_Y - 218],
+  ];
+  private smokeEmote = new SmokeEmote();
+  private settingsPanel = new SettingsPanel();
+  private computerUI = new ComputerUI();
+
+  private playerY = GROUND_Y + 8;
+  private isReturning = false;
+  private playerPickerEl: HTMLDivElement | null = null;
+  private toastEl: HTMLDivElement | null = null;
+  private waitingForAccess = false;
+  private returnFromRoom: string | null = null;
+
+  constructor() { super({ key: 'HubScene' }); }
+  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.smokeEmote.stop(); }
+
+  create(): void {
+    // ── Login gate ──
+    const auth = authStore.getState();
+    if (!auth.isLoggedIn && !auth.isGuest) {
+      this.showLoginScreen();
+      return;
+    }
+    this.startGame();
+  }
+
+  private showLoginScreen(): void {
+    const loginScreen = new LoginScreen({
+      onExtensionLogin: async () => {
+        try {
+          await loginWithExtension();
+          loginScreen.destroy();
+          this.finishLogin();
+        } catch (e: any) {
+          loginScreen.setStatus(e.message, true);
+        }
+      },
+      onNsecLogin: async (nsec: string) => {
+        try {
+          await loginWithNsec(nsec);
+          loginScreen.destroy();
+          this.finishLogin();
+        } catch (e: any) {
+          loginScreen.setStatus(e.message, true);
+        }
+      },
+      onGuestLogin: async () => {
+        await loginAsGuest();
+        loginScreen.destroy();
+        this.finishLogin();
+      },
+      onBunkerLogin: async (url: string) => {
+        try {
+          await loginWithBunkerUrl(url);
+          loginScreen.destroy();
+          this.finishLogin();
+        } catch (e: any) {
+          loginScreen.setBunkerStatus(e.message, true);
+        }
+      },
+      onBunkerClientFlow: async () => {
+        try {
+          const qrContainer = loginScreen.getQRContainer();
+          const { connectUri, waitForConnect } = await startBunkerFlow(
+            (status, msg) => {
+              loginScreen.setBunkerStatus(msg);
+            },
+            qrContainer,
+          );
+          if (connectUri) loginScreen.showConnectUri(connectUri);
+          loginScreen.setBunkerStatus('Waiting for signer approval...');
+
+          // Watch authStore for login completion — more reliable than awaiting the promise
+          const unsub = authStore.subscribe(() => {
+            const s = authStore.getState();
+            if (s.isLoggedIn && s.loginMethod === 'bunker') {
+              unsub();
+              loginScreen.destroy();
+              this.finishLogin();
+            }
+          });
+
+          // Also await the promise as a fallback
+          waitForConnect.then(() => {
+            const s = authStore.getState();
+            if (s.isLoggedIn) {
+              unsub();
+              loginScreen.destroy();
+              this.finishLogin();
+            }
+          }).catch((e: any) => {
+            unsub();
+            loginScreen.setBunkerStatus(e.message, true);
+          });
+
+        } catch (e: any) {
+          loginScreen.setBunkerStatus(e.message, true);
+        }
+      },
+      onBunkerCancel: () => {
+        cancelBunkerFlow();
+      },
+    });
+  }
+
+  private _loginDone = false;
+  private finishLogin(): void {
+    if (this._loginDone) return;
+    this._loginDone = true;
+    const auth = authStore.getState();
+    this.registry.set('playerPubkey', auth.pubkey || '');
+    this.registry.set('playerName', auth.displayName || 'anon');
+    this.startGame();
+  }
+
+  private startGame(): void {
+    // Ensure registry has current auth state (covers guest + returning from room)
+    const auth = authStore.getState();
+    if (!this.registry.get('playerPubkey') && auth.pubkey) {
+      this.registry.set('playerPubkey', auth.pubkey);
+      this.registry.set('playerName', auth.displayName || 'anon');
+    }
+    this.parallaxBg = this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'parallax_bg').setDepth(-2).setAlpha(0.6);
+    this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
+    this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
+    this.shootingStarGraphics = this.add.graphics().setDepth(-1);
+    this.chimneyGraphics = this.add.graphics().setDepth(1);
+    this.smokeGraphics = this.add.graphics().setDepth(15);
+    this.createPlayer(); this.createInteractPrompt();
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
+    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.setDeadzone(80, 50);
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { const wx = this.cameras.main.scrollX + p.x; if (p.y < GROUND_Y - 10 || p.y > 455) return; this.targetX = Phaser.Math.Clamp(wx, 20, WORLD_WIDTH - 20); this.isMoving = true; });
+    this.input.keyboard?.on('keydown-E', () => this.tryEnter());
+    this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
+    this.connectToPresence(); this.setupRoomRequestHandlers();
+
+    // When background profile fetch completes, update name text + presence
+    const unsubProfile = authStore.subscribe(() => {
+      const newName = authStore.getState().displayName;
+      if (newName && newName !== this.registry.get('playerName')) {
+        this.registry.set('playerName', newName);
+        this.playerName?.setText(newName);
+        sendNameUpdate(newName);
+      }
+    });
+    this.events.on('shutdown', () => unsubProfile());
+
+    this.chatUI = new ChatUI();
+    const chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
+    this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
+    let ep = this.registry.get('dmPanel') as DMPanel | undefined;
+    if (!ep) { ep = new DMPanel(this.registry.get('playerPubkey') || null); this.registry.set('dmPanel', ep); }
+    this.dmPanel = ep;
+    if (canUseDMs()) startDMSubscription();
+    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.cameras.main.fadeIn(400, 10, 0, 20);
+    this.settingsPanel.create();
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+  }
+
+  update(time: number, delta: number): void {
+    this.updateMovement(); this.updateProximity(); this.updateParallax();
+    this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time); this.updateShootingStar(delta);
+    this.updateChimneySmoke(delta);
+    this.smokeGraphics.clear();
+    if (this.smokeEmote.active) { if (this.isMoving || this.targetX !== null) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
+    this.playerName.setPosition(this.player.x, this.player.y - 44);
+    sendPosition(this.player.x, this.player.y);
+    this.otherPlayers.forEach(o => {
+      if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
+      if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
+      o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
+      if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
+      if (o.smoke?.active) o.smoke.update(this.smokeGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
+    });
+  }
+
+  // ── Room Requests ──
+  private setupRoomRequestHandlers(): void {
+    setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
+    setRoomGrantedHandler((op, on, room) => { this.waitingForAccess = false; this.chatUI.addMessage('system', `${on} accepted!`, P.teal); this.enterRoom(room, `${on}'s Room`, P.teal, op); });
+    setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); });
+    setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Removed from room', P.amber); });
+  }
+  private showRoomRequestToast(rp: string, rn: string): void {
+    if (this.toastEl) this.toastEl.remove();
+    const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    this.toastEl = document.createElement('div');
+    this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(135deg,${P.bg},#0e0828);border:1px solid ${P.teal}55;border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
+    this.toastEl.innerHTML = `<div style="color:${P.teal};font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:${P.lcream};font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:${P.teal}33;border:1px solid ${P.teal}66;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
+    document.body.appendChild(this.toastEl);
+    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true); this.toastEl?.remove(); this.toastEl = null; });
+    this.toastEl.querySelector('#td')!.addEventListener('click', () => { sendRoomResponse(rp, false); this.toastEl?.remove(); this.toastEl = null; });
+    setTimeout(() => { if (this.toastEl) { sendRoomResponse(rp, false); this.toastEl.remove(); this.toastEl = null; } }, 30000);
+  }
+
+  // ── Player Picker ──
+  private showPlayerPicker(): void {
+    if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; }
+    const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room';
+    this.playerPickerEl = document.createElement('div');
+    this.playerPickerEl.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,${P.bg},#0e0828);border:1px solid ${P.dpurp}55;border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);min-width:300px;max-width:360px;`;
+    this.playerPickerEl.innerHTML = `<div style="color:${P.teal};font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">MY ROOM</div><button class="pe" style="width:100%;padding:10px;margin-bottom:12px;background:${P.teal}22;border:1px solid ${P.teal}55;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Enter ${esc(myName)}'s Room</button><div style="color:${P.dpurp};font-size:12px;margin-bottom:10px;text-align:center;">\u2014 or visit someone \u2014</div><input class="ps" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:rgba(10,0,20,0.8);border:1px solid ${P.dpurp}44;border-radius:6px;color:${P.lcream};font-size:13px;outline:none;box-sizing:border-box;"/><div class="pl" style="max-height:200px;overflow-y:auto;border:1px solid ${P.dpurp}22;border-radius:6px;"></div><button class="pc" style="width:100%;padding:8px;margin-top:12px;background:none;border:1px solid ${P.dpurp}44;border-radius:6px;color:${P.dpurp};font-size:12px;cursor:pointer;">Cancel</button>`;
+    document.body.appendChild(this.playerPickerEl);
+    this.playerPickerEl.querySelector('.pe')!.addEventListener('click', () => { this.closePlayerPicker(); this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); });
+    this.playerPickerEl.querySelector('.pc')!.addEventListener('click', () => this.closePlayerPicker());
+    const si = this.playerPickerEl.querySelector('.ps') as HTMLInputElement;
+    si.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') this.closePlayerPicker(); });
+    const eh = (e: KeyboardEvent) => { if (e.key === 'Escape') this.closePlayerPicker(); };
+    document.addEventListener('keydown', eh); (this.playerPickerEl as any)._eh = eh;
+    const ll = this.playerPickerEl.querySelector('.pl') as HTMLDivElement;
+    ll.innerHTML = `<div style="color:${P.dpurp};font-size:12px;text-align:center;padding:12px;">Loading...</div>`;
+    let ap: { pubkey: string; name: string }[] = [];
+    const rl = (f: string) => { const fl = f ? ap.filter(p => p.name.toLowerCase().includes(f.toLowerCase())) : ap; if (!fl.length) { ll.innerHTML = `<div style="color:${P.dpurp};font-size:12px;text-align:center;padding:12px;">${f ? 'No matches' : 'No players online'}</div>`; return; } ll.innerHTML = fl.map(p => `<div class="pp" data-pk="${p.pubkey}" style="padding:10px 14px;border-bottom:1px solid ${P.dpurp}15;cursor:pointer;display:flex;justify-content:space-between;align-items:center;"><span style="color:${P.lcream};font-size:13px;">${esc(p.name)}</span><span style="color:${P.teal};font-size:11px;opacity:0.6;">Request \u2192</span></div>`).join(''); ll.querySelectorAll('.pp').forEach(el => { el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `${P.dpurp}15`); el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent'); el.addEventListener('click', () => { const pk = (el as HTMLElement).dataset.pk; if (pk) { this.closePlayerPicker(); this.requestRoomAccess(pk); } }); }); };
+    si.addEventListener('input', () => rl(si.value));
+    setOnlinePlayersHandler((p) => { setOnlinePlayersHandler(null); ap = p; rl(si.value); }); requestOnlinePlayers();
+  }
+  private closePlayerPicker(): void { if (this.playerPickerEl) { const h = (this.playerPickerEl as any)._eh; if (h) document.removeEventListener('keydown', h); this.playerPickerEl.remove(); this.playerPickerEl = null; } setOnlinePlayersHandler(null); }
+  private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
+  private enterRoom(rid: string, rn: string, nc: string, op?: string): void {
+    this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
+    const f2 = this.add.graphics().setDepth(201); f2.fillStyle(0xffffff, 0.15); f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
+    this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op }); } });
+  }
+
+  // ── Presence ──
+  private connectToPresence(): void {
+    const cb = {
+      onPlayerJoin: (p: any) => { const mk = this.registry.get('playerPubkey'); if (p.pubkey === mk || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, p.avatar); sendAvatarUpdate(); },
+      onPlayerMove: (pk: string, x: number, y: number) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
+      onPlayerLeave: (pk: string) => this.removeOtherPlayer(pk),
+      onCountUpdate: (c: number) => { this.onlineCount = c; },
+      onChat: (pk: string, name: string, text: string) => {
+        const isMe = pk === this.registry.get('playerPubkey');
+        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp); return; }
+        if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
+        if (isMe && text.startsWith('/emote ')) return;
+        if (!isMe && mutedPlayers.has(pk)) return;
+        if (!isMe && shouldFilter(text)) return;
+        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp);
+        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, P.teal);
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); }
+      },
+      onAvatarUpdate: (pk: string, avatarStr: string) => {
+        const o = this.otherPlayers.get(pk); if (!o) return;
+        o.avatar = avatarStr;
+        const avatarConfig = deserializeAvatar(avatarStr) || getDefaultAvatar();
+        const texKey = `avatar_hub_${pk}`;
+        if (this.textures.exists(texKey)) this.textures.remove(texKey);
+        this.textures.addCanvas(texKey, renderHubSprite(avatarConfig));
+        o.sprite.setTexture(texKey).setTint(0xffffff);
+      },
+      onNameUpdate: (pk: string, name: string) => {
+        const o = this.otherPlayers.get(pk); if (!o) return;
+        o.name = name;
+        o.nameText.setText(name.slice(0, 14));
+      },
+    };
+    if (!this.isReturning) connectPresence(cb);
+    else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on')); }
+  }
+
+  // ── Other Players ──
+  private addOtherPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string): void {
+    // If a dying sprite for this pk is still fading out, destroy it immediately
+    // before we remove its texture — otherwise glTexture becomes null and crashes WebGL
+    const dying = this.dyingSprites.get(pk);
+    if (dying) {
+      this.tweens.killTweensOf([dying.sprite, dying.nameText]);
+      dying.sprite.destroy(); dying.nameText.destroy(); if (dying.clickZone) dying.clickZone.destroy();
+      this.dyingSprites.delete(pk);
+    }
+    const texKey = `avatar_hub_${pk}`;
+    const avatarConfig = avatarStr ? (deserializeAvatar(avatarStr) || getDefaultAvatar()) : getDefaultAvatar();
+    if (this.textures.exists(texKey)) this.textures.remove(texKey);
+    this.textures.addCanvas(texKey, renderHubSprite(avatarConfig));
+    const sp = this.add.image(px, py, texKey).setOrigin(0.5, 1).setScale(1).setDepth(8);
+    if (!avatarStr) {
+      const h = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      sp.setTint([0xe87aab, 0x7b68ee, 0x5dcaa5, 0x6a4888, 0x4a6080][h % 5]);
+    }
+    const nt = this.add.text(px, py - 44, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.lcream, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr });
+    this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
+    const cz = this.add.zone(px, py - 20, 24, 44).setInteractive({ useHandCursor: true }).setDepth(12);
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }); });
+    const op = this.otherPlayers.get(pk); if (op) op.clickZone = cz;
+  }
+  private removeOtherPlayer(pk: string): void {
+    const o = this.otherPlayers.get(pk); if (!o) return;
+    this.otherPlayers.delete(pk);
+    const n = this.playerNames.get(pk); if (n) this.playerNames.delete(n.toLowerCase()); this.playerNames.delete(pk);
+    this.dyingSprites.set(pk, o);
+    this.tweens.add({ targets: [o.sprite, o.nameText], alpha: 0, duration: 300, onComplete: () => {
+      o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy();
+      this.dyingSprites.delete(pk);
+    }});
+  }
+
+  // ── Visuals ──
+  private updateParallax(): void { this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor; }
+  private initDustParticles(): void { const c = [P.pink, P.purp, P.amber, P.teal, P.lcream]; for (let i = 0; i < 40; i++) this.dustParticles.push({ x: Math.random() * WORLD_WIDTH, y: 50 + Math.random() * (GROUND_Y - 60), vx: -0.1 + Math.random() * 0.2, vy: -0.05 + Math.random() * 0.1, alpha: 0.05 + Math.random() * 0.12, size: Math.random() > 0.8 ? 2 : 1, color: c[Math.floor(Math.random() * c.length)] }); }
+  private updateDustParticles(d: number): void { this.dustGraphics.clear(); const dt = d / 16; this.dustParticles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; if (p.x < 0) p.x = WORLD_WIDTH; if (p.x > WORLD_WIDTH) p.x = 0; if (p.y < 40) p.y = GROUND_Y - 20; if (p.y > GROUND_Y - 10) p.y = 50; const rgb = hexToRgb(p.color); this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha); this.dustGraphics.fillRect(p.x, p.y, p.size, p.size); }); }
+  private updateShootingStar(d: number): void { this.shootingStarGraphics.clear(); if (!this.shootingStar) { this.shootingStarTimer += d; if (this.shootingStarTimer > 8000 + Math.random() * 12000) { this.shootingStarTimer = 0; const r = Math.random() > 0.5; this.shootingStar = { x: r ? Math.random() * WORLD_WIDTH * 0.5 : WORLD_WIDTH * 0.5 + Math.random() * WORLD_WIDTH * 0.5, y: 10 + Math.random() * 40, vx: r ? 4 + Math.random() * 3 : -(4 + Math.random() * 3), vy: 1.5 + Math.random() * 1.5, life: 0, maxLife: 400 + Math.random() * 300 }; } return; } const s = this.shootingStar; const dt = d / 16; s.x += s.vx * dt; s.y += s.vy * dt; s.life += d; const pr = s.life / s.maxLife; const a = pr < 0.15 ? pr / 0.15 : pr > 0.7 ? (1 - pr) / 0.3 : 1; this.shootingStarGraphics.fillStyle(0xffffff, a * 0.9); this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2); for (let i = 1; i <= 6; i++) { const tx = s.x - s.vx * i * 1.2; const ty = s.y - s.vy * i * 1.2; const ta = a * (0.5 - i * 0.07); if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 3 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 3 ? 2 : 1, 1); } } if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > WORLD_WIDTH + 20) this.shootingStar = null; }
+  private updateChimneySmoke(delta: number): void {
+    this.chimneySpawnTimer += delta;
+    if (this.chimneySpawnTimer > 90) {
+      this.chimneySpawnTimer = 0;
+      for (const [cx, cy] of this.CHIMNEYS) {
+        if (Math.random() > 0.45) {
+          this.chimneyParticles.push({
+            x: cx + 3 + (Math.random() - 0.5) * 4,
+            y: cy,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: -(0.35 + Math.random() * 0.5),
+            life: 0,
+            maxLife: 2200 + Math.random() * 1800,
+            size: 3 + Math.random() * 3,
+          });
+        }
+      }
+    }
+    this.chimneyGraphics.clear();
+    const dt = delta / 16;
+    for (let i = this.chimneyParticles.length - 1; i >= 0; i--) {
+      const p = this.chimneyParticles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx += (Math.random() - 0.5) * 0.025;
+      p.life += delta;
+      const progress = p.life / p.maxLife;
+      if (progress >= 1) { this.chimneyParticles.splice(i, 1); continue; }
+      const alpha = progress < 0.15 ? progress / 0.15 : (1 - progress) / 0.85;
+      const radius = p.size + progress * 5;
+      this.chimneyGraphics.fillStyle(0xbbbbcc, alpha * 0.28);
+      this.chimneyGraphics.fillCircle(p.x, p.y, radius);
+    }
+    if (this.chimneyParticles.length > 120) this.chimneyParticles = this.chimneyParticles.slice(-90);
+  }
+  private updateNeonFlicker(d: number): void { this.neonTimer += d; if (this.neonTimer > ANIM.neonFlicker + Math.random() * 200) { this.neonTimer = 0; this.neonFrame = (this.neonFrame + 1) % 4; } }
+  private updatePlayerGlow(t: number): void { const p = 0.06 + Math.sin(t * ANIM.breatheSpeed) * 0.025; this.playerGlow.clear(); this.playerGlow.setPosition(this.player.x, this.player.y); this.playerGlow.fillStyle(hexToNum(P.teal), p * 0.4); this.playerGlow.fillEllipse(0, -1, 36, 10); this.playerGlow.fillStyle(hexToNum(P.teal), p); this.playerGlow.fillEllipse(0, -1, 24, 6); }
+
+  // ── Player ──
+  private createPlayer(): void {
+    this.playerGlow = this.add.graphics().setDepth(9);
+    let sx = 400; if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
+    this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
+    const n = this.registry.get('playerName') || 'guest';
+    this.playerName = this.add.text(sx, this.playerY - 44, n, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+  }
+  private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
+  private updateProximity(): void { let fi = -1; let cd = Infinity; for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } } const f = fi >= 0 ? ENTERABLE[fi] : null; if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`[E] Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } } }
+  private createInteractPrompt(): void { this.promptBg = this.add.graphics(); this.promptBg.fillStyle(hexToNum(P.bg), 0.88); this.promptBg.fillRoundedRect(0, 0, 124, 28, 5); this.promptBg.lineStyle(1, hexToNum(P.dpurp), 0.4); this.promptBg.strokeRoundedRect(0, 0, 124, 28, 5); this.promptBg.setDepth(50); this.promptBg.setVisible(false); this.promptText = this.add.text(0, 0, '', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51); this.promptText.setVisible(false); this.promptArrow = this.add.text(0, 0, '\u25BC', { fontFamily: 'monospace', fontSize: '9px', color: P.teal, align: 'center' }).setOrigin(0.5).setDepth(51); this.promptArrow.setVisible(false); }
+  private tryEnter(): void { if (!this.nearBuilding) return; this.isMoving = false; this.targetX = null; if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; } this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor); }
+
+  // ── Commands ──
+  private handleCommand(text: string): void {
+    const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
+    switch (cmd) {
+      case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players online', P.teal); return; } let tp: string | null = null; const tn = arg.toLowerCase(); this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(tn)) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
+      case 'visit': { if (!arg) return; let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
+      case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} online: ${ps.join(', ')}` : 'No players online', P.teal); break; }
+      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: relay, feed, myroom, lounge, market', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'myroom', my:'myroom', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; if (rid === 'myroom') this.showPlayerPicker(); else this.enterRoom(b.id, b.name, b.neonColor); break; }
+      case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Chat muted' : 'Unmuted', s ? P.amber : P.teal); break; }
+      case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
+      case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
+      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
+      case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
+        if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
+        this.computerUI.open(
+          (newAvatar) => {
+            if (this.textures.exists('player')) this.textures.remove('player');
+            this.textures.addCanvas('player', renderHubSprite(newAvatar));
+            this.player.setTexture('player');
+            if (this.textures.exists('player_room')) this.textures.remove('player_room');
+            this.textures.addCanvas('player_room', renderRoomSprite(newAvatar));
+            sendAvatarUpdate();
+          },
+          (newName) => {
+            this.registry.set('playerName', newName);
+            this.playerName.setText(newName);
+            sendNameUpdate(newName);
+          }
+        );
+        this.chatUI.addMessage('system', 'Terminal opened', P.teal);
+        break;
+      }
+      case 'status': { this.chatUI.addMessage('system', `NOSTR DISTRICT \u00B7 ${this.otherPlayers.size + 1} online`, P.teal); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+    }
+    this.chatUI.flashLog();
+  }
+}
