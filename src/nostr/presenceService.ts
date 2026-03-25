@@ -49,7 +49,11 @@ export function connectPresence(cb: PresenceCallback): void {
   callbacks = cb;
 
   try {
-    ws = new WebSocket(import.meta.env.PROD ? 'wss://YOUR_RAILWAY_URL' : 'ws://localhost:3100');
+    ws = new WebSocket(
+  import.meta.env.PROD
+    ? 'wss://nostr-district-production.up.railway.app'
+    : 'ws://localhost:3100'
+);
   } catch (e) {
     console.warn('[Presence] Could not connect to server');
     return;
