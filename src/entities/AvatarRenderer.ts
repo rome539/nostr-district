@@ -7,7 +7,7 @@
 
 import { AvatarConfig } from '../stores/avatarStore';
 
-export function renderHubSprite(a: AvatarConfig): HTMLCanvasElement {
+export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = 20; c.height = 40;
   const x = c.getContext('2d')!;
@@ -26,39 +26,44 @@ export function renderHubSprite(a: AvatarConfig): HTMLCanvasElement {
   x.fillRect(cx - 2 * s, headY + 2 * s, 4 * s, 3 * s);
   x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1 * s);
 
+  // ── Walk animation leg offsets ──
+  // Frame 0: left leg up 1px, right leg down 1px. Frame 1: opposite.
+  const legLY = walkFrame === 0 ? -1 * s : 1 * s;  // left leg Y offset
+  const legRY = walkFrame === 0 ? 1 * s : -1 * s;  // right leg Y offset
+
   // ── Bottom ──
   x.fillStyle = a.bottomColor;
   if (a.top === 'dress') {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
   } else if (a.bottom === 'shorts') {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 3 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 3 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 3 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 3 * s);
     x.fillStyle = a.skinColor;
-    x.fillRect(cx - 2 * s, headY + 16 * s, 1.5 * s, 3 * s);
-    x.fillRect(cx + 0.5 * s, headY + 16 * s, 1.5 * s, 3 * s);
+    x.fillRect(cx - 2 * s, headY + 16 * s + legLY, 1.5 * s, 3 * s);
+    x.fillRect(cx + 0.5 * s, headY + 16 * s + legRY, 1.5 * s, 3 * s);
   } else if (a.bottom === 'skirt') {
     x.fillRect(cx - 2.5 * s, headY + 13 * s, 5 * s, 2 * s);
     x.fillStyle = a.skinColor;
-    x.fillRect(cx - 2 * s, headY + 15 * s, 1.5 * s, 4 * s);
-    x.fillRect(cx + 0.5 * s, headY + 15 * s, 1.5 * s, 4 * s);
+    x.fillRect(cx - 2 * s, headY + 15 * s + legLY, 1.5 * s, 4 * s);
+    x.fillRect(cx + 0.5 * s, headY + 15 * s + legRY, 1.5 * s, 4 * s);
   } else if (a.bottom === 'joggers') {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
     x.fillStyle = darken(a.bottomColor, 20);
-    x.fillRect(cx - 2 * s, headY + 18 * s, 1.5 * s, 1 * s);
-    x.fillRect(cx + 0.5 * s, headY + 18 * s, 1.5 * s, 1 * s);
+    x.fillRect(cx - 2 * s, headY + 18 * s + legLY, 1.5 * s, 1 * s);
+    x.fillRect(cx + 0.5 * s, headY + 18 * s + legRY, 1.5 * s, 1 * s);
   } else if (a.bottom === 'cargopants') {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
     x.fillStyle = darken(a.bottomColor, 15);
-    x.fillRect(cx - 2 * s, headY + 15 * s, 1.5 * s, 2 * s);
+    x.fillRect(cx - 2 * s, headY + 15 * s + legLY, 1.5 * s, 2 * s);
   } else if (a.bottom === 'overalls') {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
   } else {
-    x.fillRect(cx - 2 * s, headY + 13 * s, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
   }
 
   // ── Top ──

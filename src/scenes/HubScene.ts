@@ -14,7 +14,7 @@ import { ProfileModal } from '../ui/ProfileModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
-import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
+import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { sendAvatarUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
@@ -50,6 +50,8 @@ export class HubScene extends Phaser.Scene {
   private playerGlow!: Phaser.GameObjects.Graphics;
   private targetX: number | null = null;
   private isMoving = false;
+  private walkTime = 0;
+  private walkFrame = 0;
   private facingRight = true;
   private nearBuilding: BuildingZone | null = null;
   private promptText!: Phaser.GameObjects.Text;
@@ -244,6 +246,39 @@ export class HubScene extends Phaser.Scene {
     this.updateMovement(); this.updateProximity(); this.updateParallax();
     this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time); this.updateShootingStar(delta);
     this.updateChimneySmoke(delta);
+
+    // Walk animation — bob up/down and alternate leg frame
+    const isWalking = this.isMoving || this.targetX !== null;
+    if (isWalking) {
+      this.walkTime += delta;
+      // Bob: full cycle every 300ms, 2px up then back
+      const bobOffset = Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
+      this.player.y = this.playerY + bobOffset;
+      // Leg frame: switch every 150ms
+      const newFrame = Math.floor(this.walkTime / 150) % 2;
+      if (newFrame !== this.walkFrame) {
+        this.walkFrame = newFrame;
+        this.player.setTexture(`player_walk${this.walkFrame}`);
+      }
+    } else {
+      this.walkTime = 0;
+      if (this.walkFrame !== 0) {
+        this.walkFrame = 0;
+        this.player.setTexture('player');
+      }
+      this.player.y = this.playerY;
+    }
+
+    // Update other players' walk bob
+    this.otherPlayers.forEach((o) => {
+      if (Math.abs(o.targetX - o.sprite.x) > 3) {
+        const bob = Math.abs(Math.sin(time * Math.PI / 150)) * -2;
+        o.sprite.y = this.playerY + bob;
+      } else {
+        o.sprite.y = this.playerY;
+      }
+    });
+
     this.smokeGraphics.clear();
     if (this.smokeEmote.active) { if (this.isMoving || this.targetX !== null) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
     this.playerName.setPosition(this.player.x, this.player.y - 44);
@@ -315,7 +350,7 @@ export class HubScene extends Phaser.Scene {
       onCountUpdate: (c: number) => { this.onlineCount = c; },
       onChat: (pk: string, name: string, text: string) => {
         const isMe = pk === this.registry.get('playerPubkey');
-        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp); return; }
+        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
         if (!isMe && mutedPlayers.has(pk)) return;
@@ -430,6 +465,15 @@ export class HubScene extends Phaser.Scene {
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY - 44, n, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    this.generateWalkFrames();
+  }
+
+  private generateWalkFrames(): void {
+    const avatar = getAvatar();
+    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
+    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
+    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
+    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
   private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
   private updateProximity(): void { let fi = -1; let cd = Infinity; for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } } const f = fi >= 0 ? ENTERABLE[fi] : null; if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`[E] Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } } }
@@ -455,6 +499,7 @@ export class HubScene extends Phaser.Scene {
             if (this.textures.exists('player')) this.textures.remove('player');
             this.textures.addCanvas('player', renderHubSprite(newAvatar));
             this.player.setTexture('player');
+            this.generateWalkFrames();
             if (this.textures.exists('player_room')) this.textures.remove('player_room');
             this.textures.addCanvas('player_room', renderRoomSprite(newAvatar));
             sendAvatarUpdate();
