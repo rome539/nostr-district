@@ -28,7 +28,9 @@ function esc(s: string): string {
 }
 
 export class ComputerUI {
+  private backdrop: HTMLDivElement | null = null;
   private panel: HTMLDivElement | null = null;
+  private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private onAvatarChange: OnAvatarChange | null = null;
   private onProfileSave: ((name: string) => void) | null = null;
   private onRoomChange: OnRoomChange | null = null;
@@ -59,12 +61,25 @@ export class ComputerUI {
   }
 
   close(): void {
+    if (this.keydownHandler) {
+      document.removeEventListener('keydown', this.keydownHandler);
+      this.keydownHandler = null;
+    }
+    if (this.backdrop) { this.backdrop.remove(); this.backdrop = null; }
     if (this.panel) { this.panel.remove(); this.panel = null; }
   }
 
   isOpen(): boolean { return !!this.panel; }
 
   private buildPanel(): void {
+    this.backdrop = document.createElement('div');
+    this.backdrop.style.cssText = `
+      position:fixed;inset:0;z-index:2999;
+      background:rgba(4,2,12,0.35);backdrop-filter:blur(1px);
+    `;
+    this.backdrop.addEventListener('click', () => this.close());
+    document.body.appendChild(this.backdrop);
+
     this.panel = document.createElement('div');
     this.panel.id = PANEL_ID;
     this.panel.style.cssText = `
@@ -92,6 +107,15 @@ export class ComputerUI {
     this.panel.addEventListener('keydown', (e) => e.stopPropagation());
     this.panel.addEventListener('mousedown', (e) => e.stopPropagation());
     document.body.appendChild(this.panel);
+
+    this.keydownHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.close();
+      }
+    };
+    document.addEventListener('keydown', this.keydownHandler);
 
     this.panel.querySelector('#comp-close')!.addEventListener('click', () => this.close());
 

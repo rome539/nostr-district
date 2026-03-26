@@ -298,6 +298,15 @@ export class RoomScene extends Phaser.Scene {
     this.roomBgImage.setTexture(texKey);
   }
 
+  private setComputerPromptVisible(visible: boolean): void {
+    this.computerPrompt.setVisible(visible);
+    this.computerPromptBg.setVisible(visible);
+    if (visible) {
+      this.computerPromptBg.setPosition(595, 260);
+      this.computerPrompt.setPosition(660, 274);
+    }
+  }
+
   update(time: number, delta: number): void {
     if (!this.introActive) {
       this.updateMovement();
@@ -318,15 +327,8 @@ export class RoomScene extends Phaser.Scene {
     // Computer proximity check (myroom only — desk is around x=600-720)
     if (this.isMyRoom() && !this.introActive) {
       const near = this.player.x > 560 && this.player.x < 740;
-      if (near !== this.nearComputer) {
-        this.nearComputer = near;
-        this.computerPrompt.setVisible(near);
-        this.computerPromptBg.setVisible(near);
-        if (near) {
-          this.computerPromptBg.setPosition(595, 260);
-          this.computerPrompt.setPosition(660, 274);
-        }
-      }
+      if (near !== this.nearComputer) this.nearComputer = near;
+      this.setComputerPromptVisible(near && !this.computerUI.isOpen());
     }
 
     // Room-specific updates
@@ -546,7 +548,14 @@ export class RoomScene extends Phaser.Scene {
     btn.on('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
     btn.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
     btn.on('pointerdown', () => this.leaveRoom());
-    this.input.keyboard?.on('keydown-ESC', () => this.leaveRoom());
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.computerUI.isOpen()) {
+        this.computerUI.close();
+        this.setComputerPromptVisible(this.nearComputer);
+        return;
+      }
+      this.leaveRoom();
+    });
   }
   private createRoomLabel(): void {
     const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
@@ -557,7 +566,8 @@ export class RoomScene extends Phaser.Scene {
   private leaveRoom(): void { this.chatUI.destroy(); this.cameras.main.fadeOut(200, 10, 0, 20); this.time.delayedCall(200, () => { this.scene.start('HubScene', { _returning: true, fromRoom: this.roomConfig.id }); }); }
   private isMyRoom(): boolean { return this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === this.registry.get('playerPubkey'); }
   private openComputer(): void {
-    if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
+    if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
+    this.setComputerPromptVisible(false);
     this.computerUI.open(
       (newAvatar) => {
         if (this.textures.exists('player_room')) this.textures.remove('player_room');

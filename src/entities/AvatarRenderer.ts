@@ -322,7 +322,7 @@ export function renderRoomSprite(a: AvatarConfig): HTMLCanvasElement {
     x.fillStyle = a.skinColor;
     x.fillRect(3, oY + 18, 2, 10);
     x.fillRect(19, oY + 18, 2, 10);
-    x.fillRect(5, oY + 24, 14, 4);
+    x.fillRect(5, oY + 24, 14, 6);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 14, 8, 1);
   } else if (a.top === 'jersey') {
