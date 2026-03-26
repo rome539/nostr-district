@@ -528,46 +528,47 @@ function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: number): vo
 // HATS — hub scale
 // ══════════════════════════════════════
 function drawHubHat(x: CanvasRenderingContext2D, hat: string, cx: number, hy: number, s: number): void {
+  const hatY = hy + s + 2;
   switch (hat) {
     case 'cap':
-      x.fillRect(cx - 2 * s, hy - 3 * s, 4 * s, 2 * s);
-      x.fillRect(cx - 3 * s, hy - 1 * s, 3 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 1 * s, 2 * s, 0.5 * s);
       break;
     case 'beanie':
-      x.fillRect(cx - 2 * s, hy - 4 * s, 4 * s, 3 * s);
-      x.fillRect(cx - 1 * s, hy - 5 * s, 2 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 2 * s);
+      x.fillRect(cx - 0.5 * s, hatY - 4 * s, 1 * s, 1 * s);
       break;
     case 'tophat':
-      x.fillRect(cx - 1.5 * s, hy - 6 * s, 3 * s, 4 * s);
-      x.fillRect(cx - 2.5 * s, hy - 2 * s, 5 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s, hatY - 5 * s, 3 * s, 3 * s);
+      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
       break;
     case 'cowboy': {
-      x.fillRect(cx - 1.5 * s, hy - 5 * s, 3 * s, 3 * s);
-      x.fillRect(cx - 3.5 * s, hy - 2 * s, 7 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s, hatY - 4 * s, 3 * s, 2 * s);
+      x.fillRect(cx - 3 * s, hatY - 2 * s, 6 * s, 1 * s);
       const cSave = x.fillStyle as string;
       x.fillStyle = darken(cSave, 20);
-      x.fillRect(cx - 1.5 * s, hy - 5 * s, 3 * s, 0.5 * s);
+      x.fillRect(cx - 1.5 * s, hatY - 4 * s, 3 * s, 0.5 * s);
       x.fillStyle = cSave;
       break;
     }
     case 'beret':
-      x.fillRect(cx - 2 * s, hy - 3 * s, 4 * s, 2 * s);
-      x.fillRect(cx - 1 * s, hy - 4 * s, 3 * s, 1 * s);
-      x.fillRect(cx - 2 * s, hy - 2 * s, 5 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 1 * s, hatY - 3 * s, 3 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 1 * s, 4 * s, 0.5 * s);
       break;
     case 'bucket':
-      x.fillRect(cx - 2 * s, hy - 4 * s, 4 * s, 3 * s);
-      x.fillRect(cx - 2.5 * s, hy - 1 * s, 5 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hatY - 1 * s, 4 * s, 1 * s);
       break;
     case 'crown': {
       const crSave = x.fillStyle as string;
       x.fillStyle = '#f0c040';
-      x.fillRect(cx - 2 * s, hy - 4 * s, 4 * s, 2 * s);
-      x.fillRect(cx - 2 * s, hy - 5 * s, 1 * s, 1 * s);
-      x.fillRect(cx - 0.5 * s, hy - 6 * s, 1 * s, 2 * s);
-      x.fillRect(cx + 1 * s, hy - 5 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 1.5 * s);
+      x.fillRect(cx - 2 * s, hatY - 4 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 0.5 * s, hatY - 5 * s, 1 * s, 1.5 * s);
+      x.fillRect(cx + 1 * s, hatY - 4 * s, 1 * s, 1 * s);
       x.fillStyle = '#e87a10'; x.globalAlpha = 0.7;
-      x.fillRect(cx - 1 * s, hy - 3 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 1 * s, hatY - 2 * s, 1 * s, 0.5 * s);
       x.globalAlpha = 1;
       x.fillStyle = crSave;
       break;

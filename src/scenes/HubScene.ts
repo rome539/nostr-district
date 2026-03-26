@@ -465,11 +465,10 @@ export class HubScene extends Phaser.Scene {
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY - 44, n, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
-    this.generateWalkFrames();
+    this.generateWalkFrames(getAvatar());
   }
 
-  private generateWalkFrames(): void {
-    const avatar = getAvatar();
+  private generateWalkFrames(avatar = getAvatar()): void {
     if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
     if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
     this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
@@ -499,7 +498,7 @@ export class HubScene extends Phaser.Scene {
             if (this.textures.exists('player')) this.textures.remove('player');
             this.textures.addCanvas('player', renderHubSprite(newAvatar));
             this.player.setTexture('player');
-            this.generateWalkFrames();
+            this.generateWalkFrames(newAvatar);
             if (this.textures.exists('player_room')) this.textures.remove('player_room');
             this.textures.addCanvas('player_room', renderRoomSprite(newAvatar));
             sendAvatarUpdate();
