@@ -145,7 +145,7 @@ export class ComputerUI {
     const avatar = getAvatar();
     body.innerHTML = `
       <div style="display:flex;gap:16px;margin-bottom:14px;">
-        <div id="ward-preview" style="width:96px;height:180px;background:${P.navy};border:1px solid ${P.dpurp}33;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
+        <div id="ward-preview" style="width:96px;height:180px;background:linear-gradient(180deg,#5a5672 0%,#4b465f 68%,#40394f 100%);border:1px solid rgba(255,255,255,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -18px 28px rgba(24,18,36,0.22);position:relative;overflow:hidden;"></div>
         <div style="flex:1;">
           <div id="ward-slots" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;"></div>
           <div id="ward-options"></div>
@@ -163,13 +163,16 @@ export class ComputerUI {
     const container = this.panel?.querySelector('#ward-preview');
     if (!container) return;
     container.innerHTML = '';
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:absolute;inset:0;background:radial-gradient(circle at 50% 24%, rgba(255,255,255,0.12), transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 52%, transparent 52%), linear-gradient(90deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 16px), linear-gradient(180deg, transparent 0%, transparent 78%, rgba(255,244,200,0.10) 78%, rgba(255,244,200,0.16) 100%);pointer-events:none;';
+    container.appendChild(backdrop);
     const spriteCanvas = renderRoomSprite(avatar);
     const preview = document.createElement('canvas');
     preview.width = 72; preview.height = 156;
     const px = preview.getContext('2d')!;
     px.imageSmoothingEnabled = false;
     px.drawImage(spriteCanvas, 0, 0, 24, 52, 0, 0, 72, 156);
-    preview.style.cssText = 'image-rendering:pixelated;';
+    preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;filter:drop-shadow(0 1px 0 rgba(255,255,255,0.14)) drop-shadow(0 2px 8px rgba(0,0,0,0.38));';
     container.appendChild(preview);
   }
 

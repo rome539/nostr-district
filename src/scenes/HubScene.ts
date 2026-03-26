@@ -50,6 +50,7 @@ export class HubScene extends Phaser.Scene {
   private playerGlow!: Phaser.GameObjects.Graphics;
   private targetX: number | null = null;
   private isMoving = false;
+  private isKeyboardMoving = false;
   private walkTime = 0;
   private walkFrame = 0;
   private facingRight = true;
@@ -248,7 +249,7 @@ export class HubScene extends Phaser.Scene {
     this.updateChimneySmoke(delta);
 
     // Walk animation — bob up/down and alternate leg frame
-    const isWalking = this.isMoving || this.targetX !== null;
+    const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
       this.walkTime += delta;
       // Bob: full cycle every 300ms, 2px up then back
@@ -280,7 +281,7 @@ export class HubScene extends Phaser.Scene {
     });
 
     this.smokeGraphics.clear();
-    if (this.smokeEmote.active) { if (this.isMoving || this.targetX !== null) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
+    if (this.smokeEmote.active) { if (isWalking) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
     this.playerName.setPosition(this.player.x, this.player.y - 44);
     sendPosition(this.player.x, this.player.y);
     this.otherPlayers.forEach(o => {
@@ -474,7 +475,7 @@ export class HubScene extends Phaser.Scene {
     this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
-  private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
+  private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } this.isKeyboardMoving = vx !== 0; if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
   private updateProximity(): void { let fi = -1; let cd = Infinity; for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } } const f = fi >= 0 ? ENTERABLE[fi] : null; if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`[E] Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } } }
   private createInteractPrompt(): void { this.promptBg = this.add.graphics(); this.promptBg.fillStyle(hexToNum(P.bg), 0.88); this.promptBg.fillRoundedRect(0, 0, 124, 28, 5); this.promptBg.lineStyle(1, hexToNum(P.dpurp), 0.4); this.promptBg.strokeRoundedRect(0, 0, 124, 28, 5); this.promptBg.setDepth(50); this.promptBg.setVisible(false); this.promptText = this.add.text(0, 0, '', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51); this.promptText.setVisible(false); this.promptArrow = this.add.text(0, 0, '\u25BC', { fontFamily: 'monospace', fontSize: '9px', color: P.teal, align: 'center' }).setOrigin(0.5).setDepth(51); this.promptArrow.setVisible(false); }
   private tryEnter(): void { if (!this.nearBuilding) return; this.isMoving = false; this.targetX = null; if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; } this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor); }

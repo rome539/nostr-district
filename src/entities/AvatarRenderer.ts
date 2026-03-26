@@ -17,8 +17,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   const headY = 4;
   const tw = 2.5 * s;
 
-  const topDark  = darken(a.topColor, 25);
-  const topLight = lighten(a.topColor, 30);
+  const topDark  = darken(a.topColor, 18);
+  const topLight = lighten(a.topColor, 18);
 
   // ── Skin ──
   x.fillStyle = a.skinColor;
@@ -183,8 +183,8 @@ export function renderRoomSprite(a: AvatarConfig): HTMLCanvasElement {
   x.imageSmoothingEnabled = false;
   const oY = 8;
 
-  const topDark  = darken(a.topColor, 25);
-  const topLight = lighten(a.topColor, 30);
+  const topDark  = darken(a.topColor, 18);
+  const topLight = lighten(a.topColor, 18);
 
   // ── Skin (head + neck) ──
   x.fillStyle = a.skinColor;
@@ -783,14 +783,16 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
       x.fillRect(cx + 1, ey + 1, 2, 1);
       break;
     case 'wink':
-      x.globalAlpha = 0.75;
-      x.fillRect(cx + 1, ey, 1, 1);
-      x.fillRect(cx - 2, ey + 1, 2, 1);
+      x.globalAlpha = 0.9;
+      x.fillRect(cx + 1, ey - 1, 1, 2);
+      x.fillRect(cx - 2, ey, 2, 1);
       break;
     case 'star':
       x.globalAlpha = 0.9;
-      x.fillRect(cx - 1, ey - 1, 1, 3);
-      x.fillRect(cx - 2, ey, 3, 1);
+      x.fillRect(cx - 2, ey + 1, 2, 1);
+      x.fillRect(cx - 1, ey, 1, 3);
+      x.fillRect(cx + 1, ey + 1, 2, 1);
+      x.fillRect(cx + 2, ey, 1, 3);
       break;
     case 'hollow':
       x.globalAlpha = 0.85;
@@ -865,9 +867,10 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
 // ══════════════════════════════════════
 function lighten(hex: string, amount: number): string {
   const n = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, ((n >> 16) & 0xff) + amount);
-  const g = Math.min(255, ((n >> 8) & 0xff) + amount);
-  const b = Math.min(255, (n & 0xff) + amount);
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const r = clamp(((n >> 16) & 0xff) + amount);
+  const g = clamp(((n >> 8) & 0xff) + amount);
+  const b = clamp((n & 0xff) + amount);
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
