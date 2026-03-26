@@ -295,12 +295,12 @@ export function renderRoomSprite(a: AvatarConfig): HTMLCanvasElement {
     x.fillRect(5, oY + 27, 14, 2);
   } else if (a.top === 'vest') {
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 14, 18, 14);
+    x.fillRect(3, oY + 14, 18, 16);
     x.fillStyle = a.topColor;
-    x.fillRect(5, oY + 14, 6, 14);
-    x.fillRect(13, oY + 14, 6, 14);
+    x.fillRect(5, oY + 14, 6, 16);
+    x.fillRect(13, oY + 14, 6, 16);
     x.fillStyle = topDark;
-    x.fillRect(11, oY + 15, 2, 12);
+    x.fillRect(11, oY + 15, 2, 14);
     x.fillRect(5, oY + 14, 14, 2);
   } else if (a.top === 'trenchcoat') {
     x.fillRect(1, oY + 14, 22, 4);
