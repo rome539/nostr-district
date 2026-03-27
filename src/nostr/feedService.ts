@@ -25,6 +25,18 @@ const noteBuffer: FeedEvent[] = [];
 const processedIds = new Set<string>();
 const MAX_BUFFER = 200;
 const eventTimestamps: number[] = [];
+const LOW_WATER_MARK = 40;
+const INITIAL_FETCH_LIMIT = 60;
+const REFILL_FETCH_LIMIT = 30;
+const REFILL_INTERVAL_MS = 15000;
+const FEED_RELAYS = [
+  'wss://relay.nostr.band',
+  'wss://nos.lol',
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+];
+let latestCreatedAt = 0;
+let refillTimer: ReturnType<typeof setInterval> | null = null;
 
 // ── Public API ──
 
@@ -43,6 +55,7 @@ export async function initFeedService(): Promise<void> {
 
   // Also open a live subscription on regular relays for new notes
   startLiveSubscription();
+  startRefillPolling();
 
   console.log(`[Feed] Ready — ${noteBuffer.length} notes buffered`);
 }
@@ -50,6 +63,7 @@ export async function initFeedService(): Promise<void> {
 export function stopFeedService(): void {
   started = false;
   if (liveSubClose) { try { liveSubClose(); } catch (_) {} liveSubClose = null; }
+  if (refillTimer) { clearInterval(refillTimer); refillTimer = null; }
   processedIds.clear();
 }
 
@@ -71,14 +85,8 @@ export function getEventRate(): number {
 // ── Initial fetch: grab recent notes via standard REQ with limit ──
 
 async function fetchFromPrimalCache(): Promise<void> {
-  const relays = [
-    'wss://relay.nostr.band',
-    'wss://nos.lol',
-    'wss://relay.damus.io',
-  ];
-
-  for (const url of relays) {
-    const ok = await tryFetchFromRelay(url);
+  for (const url of FEED_RELAYS) {
+    const ok = await tryFetchFromRelay(url, INITIAL_FETCH_LIMIT);
     if (ok && noteBuffer.length > 0) {
       console.log(`[Feed] Got ${noteBuffer.length} notes from ${url}`);
       return;
@@ -87,7 +95,7 @@ async function fetchFromPrimalCache(): Promise<void> {
   console.warn('[Feed] All initial relays failed or returned nothing');
 }
 
-function tryFetchFromRelay(url: string): Promise<boolean> {
+function tryFetchFromRelay(url: string, limit: number, since?: number): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     try {
       const ws = new WebSocket(url);
@@ -103,14 +111,16 @@ function tryFetchFromRelay(url: string): Promise<boolean> {
       const timeout = setTimeout(() => done(count > 0), 6000);
 
       ws.onopen = () => {
-        ws.send(JSON.stringify(['REQ', 'init', { kinds: [1], limit: 60 }]));
+        const filter: Record<string, unknown> = { kinds: [1], limit };
+        if (since) filter.since = since;
+        ws.send(JSON.stringify(['REQ', `feed-${Date.now()}`, filter]));
       };
       ws.onmessage = (msg: MessageEvent) => {
         try {
           const data = JSON.parse(msg.data);
           if (!Array.isArray(data)) return;
           if (data[0] === 'EVENT' && data[2]?.kind === 1) { addEvent(data[2]); count++; }
-          if (data[0] === 'EOSE' || count >= 60) done(count > 0);
+          if (data[0] === 'EOSE' || count >= limit) done(count > 0);
         } catch (_) {}
       };
       ws.onerror = () => done(false);
@@ -127,12 +137,7 @@ async function startLiveSubscription(): Promise<void> {
   try {
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
-    const relays = [
-      'wss://relay.nostr.band',
-      'wss://relay.damus.io',
-      'wss://nos.lol',
-      'wss://relay.primal.net',
-    ];
+    const relays = FEED_RELAYS;
     const since = Math.floor(Date.now() / 1000) - 300; // last 5 min
 
     const sub = pool.subscribeMany(
@@ -152,6 +157,23 @@ async function startLiveSubscription(): Promise<void> {
   }
 }
 
+function startRefillPolling(): void {
+  if (refillTimer) clearInterval(refillTimer);
+  refillTimer = setInterval(() => {
+    void refillFeedBuffer();
+  }, REFILL_INTERVAL_MS);
+}
+
+async function refillFeedBuffer(): Promise<void> {
+  if (!started || noteBuffer.length >= LOW_WATER_MARK) return;
+
+  const since = latestCreatedAt > 0 ? Math.max(0, latestCreatedAt - 30) : Math.floor(Date.now() / 1000) - 900;
+  for (const url of FEED_RELAYS) {
+    const ok = await tryFetchFromRelay(url, REFILL_FETCH_LIMIT, since);
+    if (ok && noteBuffer.length >= LOW_WATER_MARK) return;
+  }
+}
+
 // ── Shared event processor ──
 
 function addEvent(event: any): void {
@@ -159,6 +181,7 @@ function addEvent(event: any): void {
   if (processedIds.has(event.id)) return;
   processedIds.add(event.id);
   eventTimestamps.push(Date.now());
+  latestCreatedAt = Math.max(latestCreatedAt, event.created_at || 0);
   if (eventTimestamps.length > 3000) eventTimestamps.shift();
 
   if (processedIds.size > 5000) {

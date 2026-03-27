@@ -654,18 +654,18 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       break;
     case 'bandana': {
       x.globalAlpha = 1;
-      // Band across face
-      x.fillRect(cx - 2 * s, hy + 3.5 * s, 4 * s, 1.5 * s);
+      // Band across face (1px lower)
+      x.fillRect(cx - 2 * s, hy + 4 * s, 4 * s, 1.5 * s);
       // Triangle point hanging down
-      x.fillRect(cx - 1 * s, hy + 5 * s, 2 * s, 1 * s);
-      x.fillRect(cx - 0.5 * s, hy + 6 * s, 1 * s, 0.5 * s);
+      x.fillRect(cx - 1 * s, hy + 5.5 * s, 2 * s, 1 * s);
+      x.fillRect(cx - 0.5 * s, hy + 6.5 * s, 1 * s, 0.5 * s);
       // Lighter top fold
       x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
-      x.fillRect(cx - 2 * s, hy + 3.5 * s, 4 * s, 0.5 * s);
+      x.fillRect(cx - 2 * s, hy + 4 * s, 4 * s, 0.5 * s);
       x.globalAlpha = 1;
       // Knot at back right
       x.fillStyle = darken(savedColor, 20);
-      x.fillRect(cx + 2 * s, hy + 4 * s, 1 * s, 0.5 * s);
+      x.fillRect(cx + 2 * s, hy + 4.5 * s, 1 * s, 0.5 * s);
       x.fillStyle = savedColor;
       break;
     }
@@ -675,6 +675,9 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       break;
     case 'eyepatch':
       x.globalAlpha = 0.9;
+      // Strap wrapping across full head width
+      x.fillRect(cx - 2 * s, hy + 2.5 * s, 4 * s, 0.5 * s);
+      // Patch over right eye
       x.fillRect(cx + 0.5 * s, hy + 3 * s, 1.5 * s, 1 * s);
       x.globalAlpha = 1;
       break;
@@ -710,26 +713,26 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       x.fillRect(6, oY + 5, 5, 2);
       x.fillRect(13, oY + 5, 5, 2);
       x.fillRect(11, oY + 5, 2, 1);
-      x.fillRect(3,  oY + 5, 3, 1);
-      x.fillRect(18, oY + 5, 3, 1);
+      x.fillRect(5,  oY + 5, 1, 1);
+      x.fillRect(18, oY + 5, 1, 1);
       x.globalAlpha = 1;
       break;
     case 'bandana': {
       x.globalAlpha = 1;
-      // Main band across lower face
-      x.fillRect(5, oY + 6, 14, 4);
+      // Main band across lower face (1px lower)
+      x.fillRect(5, oY + 7, 14, 4);
       // Triangle point down
-      x.fillRect(8,  oY + 10, 8, 2);
-      x.fillRect(10, oY + 12, 4, 2);
-      x.fillRect(11, oY + 14, 2, 1);
+      x.fillRect(8,  oY + 11, 8, 2);
+      x.fillRect(10, oY + 13, 4, 2);
+      x.fillRect(11, oY + 15, 2, 1);
       // Top fold stripe
       x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
-      x.fillRect(5, oY + 6, 14, 1);
+      x.fillRect(5, oY + 7, 14, 1);
       x.globalAlpha = 1;
       // Knot at right side
       x.fillStyle = darken(savedColor, 20);
-      x.fillRect(19, oY + 7, 3, 2);
-      x.fillRect(20, oY + 9, 2, 1);
+      x.fillRect(19, oY + 8, 3, 2);
+      x.fillRect(20, oY + 10, 2, 1);
       x.fillStyle = savedColor;
       break;
     }
@@ -740,7 +743,8 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
     case 'eyepatch':
       x.globalAlpha = 0.9;
       x.fillRect(13, oY + 5, 4, 3);
-      x.fillRect(10, oY + 4, 8, 1);
+      // Strap spanning full head width
+      x.fillRect(5, oY + 4, 14, 1);
       x.globalAlpha = 1;
       break;
     case 'chain':

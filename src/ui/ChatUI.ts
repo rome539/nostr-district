@@ -16,6 +16,8 @@ export class ChatUI {
   private log!: HTMLDivElement;
   private input!: HTMLInputElement;
   private onCommand: ((text: string) => void) | null = null;
+  private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private commandMode = false; // true when blur follows a slash command
 
   /** Create and attach the chat UI */
   create(placeholder: string, accentColor: string, onCommand: (text: string) => void): HTMLInputElement {
@@ -40,19 +42,27 @@ export class ChatUI {
     this.input.addEventListener('focus', () => {
       this.input.style.borderColor = `${accentColor}88`;
       this.input.style.boxShadow = `0 0 10px ${accentColor}20`;
-      this.log.style.opacity = '1'; this.log.style.pointerEvents = 'auto';
+      this.showLog();
     });
     this.input.addEventListener('blur', () => {
       this.input.style.borderColor = `${accentColor}55`;
       this.input.style.boxShadow = 'none';
-      setTimeout(() => { this.log.style.opacity = '0'; this.log.style.pointerEvents = 'none'; }, 8000);
+      // Slash commands need more time to read — give 25 s; normal blur gives 8 s
+      this.scheduleHide(this.commandMode ? 25000 : 8000);
+      this.commandMode = false;
     });
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
         const text = this.input.value.trim();
         if (!text) { this.input.blur(); return; }
-        if (text.startsWith('/')) { this.input.value = ''; this.onCommand?.(text); this.input.blur(); return; }
+        if (text.startsWith('/')) {
+          this.input.value = '';
+          this.commandMode = true;  // blur after this should keep log open longer
+          this.onCommand?.(text);
+          this.input.blur();
+          return;
+        }
         sendChat(text); this.input.value = ''; this.input.blur();
       }
       if (e.key === 'Escape') this.input.blur();
@@ -73,14 +83,30 @@ export class ChatUI {
     this.log.appendChild(msg);
     this.log.scrollTop = this.log.scrollHeight;
     while (this.log.children.length > 50) this.log.removeChild(this.log.firstChild!);
-    this.log.style.opacity = '1'; this.log.style.pointerEvents = 'auto';
-    setTimeout(() => { if (document.activeElement !== this.input) this.log.style.opacity = '0'; this.log.style.pointerEvents = 'none'; }, 12000);
+    this.showLog();
+    this.scheduleHide(12000);
   }
 
   /** Show log temporarily (e.g. after a command) */
   flashLog(duration = 12000): void {
-    this.log.style.opacity = '1'; this.log.style.pointerEvents = 'auto';
-    setTimeout(() => { if (document.activeElement !== this.input) this.log.style.opacity = '0'; this.log.style.pointerEvents = 'none'; }, duration);
+    this.showLog();
+    this.scheduleHide(duration);
+  }
+
+  private showLog(): void {
+    this.log.style.opacity = '1';
+    this.log.style.pointerEvents = 'auto';
+  }
+
+  private scheduleHide(delay: number): void {
+    if (this.hideTimer !== null) clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => {
+      if (document.activeElement !== this.input) {
+        this.log.style.opacity = '0';
+        this.log.style.pointerEvents = 'none';
+      }
+      this.hideTimer = null;
+    }, delay);
   }
 
   getInput(): HTMLInputElement { return this.input; }

@@ -17,11 +17,13 @@ import {
   ALL_FURNITURE, ALL_POSTERS,
   WallTheme, FloorStyle, LightingMood, FurnitureId, PosterId, RoomConfig,
 } from '../stores/roomStore';
+import { getPet, setPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../stores/petStore';
 
 const PANEL_ID = 'computer-panel';
 
 type OnAvatarChange = (avatar: AvatarConfig) => void;
-type OnRoomChange = (config: RoomConfig) => void;
+type OnRoomChange   = (config: RoomConfig) => void;
+type OnPetChange    = (sel: PetSelection) => void;
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -34,27 +36,30 @@ export class ComputerUI {
   private onAvatarChange: OnAvatarChange | null = null;
   private onProfileSave: ((name: string) => void) | null = null;
   private onRoomChange: OnRoomChange | null = null;
+  private onPetChange: OnPetChange | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
-  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' = 'walls';
+  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
 
-  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange): void {
+  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
+    this.onPetChange = onPetChange || null;
     this.currentTab = 'wardrobe';
     this.buildPanel();
   }
 
   /** Open directly to the Room tab (for first-time setup) */
-  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange): void {
+  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
+    this.onPetChange = onPetChange || null;
     this.currentTab = 'room';
     this.currentRoomSection = 'walls';
     this.buildPanel();
@@ -129,8 +134,8 @@ export class ComputerUI {
 
     const tabs = [
       { key: 'wardrobe', label: '\uD83D\uDC55 Wardrobe' },
-      { key: 'room', label: '\uD83C\uDFE0 Room' },
-      { key: 'profile', label: '\uD83D\uDC64 Profile' },
+      { key: 'room',     label: '\uD83C\uDFE0 Room' },
+      { key: 'profile',  label: '\uD83D\uDC64 Profile' },
     ];
 
     container.innerHTML = tabs.map(t => `
@@ -157,8 +162,8 @@ export class ComputerUI {
     if (!body) return;
     switch (this.currentTab) {
       case 'wardrobe': this.renderWardrobe(body); break;
-      case 'profile': this.renderProfile(body); break;
-      case 'room': this.renderRoom(body); break;
+      case 'profile':  this.renderProfile(body);  break;
+      case 'room':     this.renderRoom(body);      break;
     }
   }
 
@@ -411,11 +416,12 @@ export class ComputerUI {
     if (!container) return;
 
     const sections = [
-      { key: 'walls', label: 'Walls' },
-      { key: 'floor', label: 'Floor' },
-      { key: 'lighting', label: 'Lights' },
+      { key: 'walls',     label: 'Walls' },
+      { key: 'floor',     label: 'Floor' },
+      { key: 'lighting',  label: 'Lights' },
       { key: 'furniture', label: 'Furniture' },
-      { key: 'posters', label: 'Posters' },
+      { key: 'posters',   label: 'Posters' },
+      { key: 'pets',      label: '🐾 Pets' },
     ];
 
     container.innerHTML = sections.map(s => `
@@ -441,11 +447,12 @@ export class ComputerUI {
     if (!container) return;
 
     switch (this.currentRoomSection) {
-      case 'walls': this.renderWallPicker(container, body); break;
-      case 'floor': this.renderFloorPicker(container, body); break;
-      case 'lighting': this.renderLightingPicker(container, body); break;
+      case 'walls':     this.renderWallPicker(container, body);      break;
+      case 'floor':     this.renderFloorPicker(container, body);     break;
+      case 'lighting':  this.renderLightingPicker(container, body);  break;
       case 'furniture': this.renderFurniturePicker(container, body); break;
-      case 'posters': this.renderPosterPicker(container, body); break;
+      case 'posters':   this.renderPosterPicker(container, body);    break;
+      case 'pets':      this.renderPets(container);                  break;
     }
   }
 
@@ -728,6 +735,71 @@ export class ComputerUI {
         const newCfg = setPoster(this.activePosterSlot, pid);
         this.onRoomChange?.(newCfg);
         this.renderPosterPicker(container, body);
+      });
+    });
+  }
+
+  // ══════════════════════════════════════
+  // PETS TAB
+  // ══════════════════════════════════════
+  private renderPets(container: HTMLElement): void {
+    const current = getPet();
+
+    const petCard = (species: PetSpecies, breed: number, name: string) => {
+      const isSelected = current.species === species && current.breed === breed;
+      const imgUrl = `pets/${species}-${breed}-idle.png`;
+      const dispH  = species === 'dog' ? 60 : 52;
+      const bgSize = `auto ${dispH}px`;
+      return `
+        <button class="pet-btn" data-species="${species}" data-breed="${breed}" style="
+          display:flex;flex-direction:column;align-items:center;gap:4px;
+          padding:8px 6px;border-radius:6px;cursor:pointer;
+          border:1px solid ${isSelected ? P.teal + '88' : P.dpurp + '33'};
+          background:${isSelected ? P.teal + '18' : P.navy};
+          color:${isSelected ? P.teal : P.lcream};
+          font-family:'Courier New',monospace;font-size:9px;
+          transition:all 0.12s;
+        ">
+          <div style="
+            width:60px;height:${dispH}px;overflow:hidden;
+            background-image:url('${imgUrl}');
+            background-size:${bgSize};
+            background-position:0 0;
+            background-repeat:no-repeat;
+            image-rendering:pixelated;
+          "></div>
+          <span>${esc(name)}</span>
+        </button>
+      `;
+    };
+
+    container.innerHTML = `
+      <button class="pet-btn" data-species="none" data-breed="0" style="
+        width:100%;padding:8px;border-radius:6px;cursor:pointer;
+        border:1px solid ${current.species === 'none' ? P.red + '66' : P.dpurp + '33'};
+        background:${current.species === 'none' ? P.red + '18' : P.navy};
+        color:${current.species === 'none' ? P.red : P.lpurp};
+        font-family:'Courier New',monospace;font-size:11px;margin-bottom:12px;display:block;
+      ">No Pet</button>
+
+      <div style="color:${P.teal};font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">DOGS</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;">
+        ${DOG_BREEDS.map(b => petCard('dog', b.id, b.name)).join('')}
+      </div>
+
+      <div style="color:${P.pink};font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">CATS</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+        ${CAT_BREEDS.map(b => petCard('cat', b.id, b.name)).join('')}
+      </div>
+    `;
+
+    container.querySelectorAll('.pet-btn').forEach(el => {
+      el.addEventListener('click', () => {
+        const species = (el as HTMLElement).dataset.species as PetSpecies;
+        const breed   = Number((el as HTMLElement).dataset.breed);
+        const sel = setPet({ species, breed });
+        this.onPetChange?.(sel);
+        this.renderPets(container);
       });
     });
   }

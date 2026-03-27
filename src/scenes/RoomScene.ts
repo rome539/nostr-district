@@ -14,6 +14,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
+import { PetSprite } from '../entities/PetSprite';
 import { RoomRenderer } from '../rooms/RoomRenderer';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
@@ -22,6 +23,7 @@ import { sendAvatarUpdate, sendNameUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
+import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../stores/petStore';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
@@ -48,6 +50,7 @@ export class RoomScene extends Phaser.Scene {
   private settingsPanel = new SettingsPanel();
   private computerUI = new ComputerUI();
   private roomRenderer = new RoomRenderer();
+  private pet: PetSprite | null = null;
   private computerPrompt!: Phaser.GameObjects.Text;
   private computerPromptBg!: Phaser.GameObjects.Graphics;
   private nearComputer = false;
@@ -76,6 +79,19 @@ export class RoomScene extends Phaser.Scene {
   constructor() { super({ key: 'RoomScene' }); }
   init(data: RoomSceneConfig): void { this.roomConfig = data; this.feedNotes = []; this.smokeEmote.stop(); this.introActive = false; }
 
+  preload(): void {
+    const sel = getPet();
+    if (sel.species === 'none') return;
+    const prefix = petTexKey(sel);
+    const size   = PET_FRAME_SIZE[sel.species];
+    for (const spec of getAnimSpecs(sel.species)) {
+      const texKey = `${prefix}-${spec.key}`;
+      if (!this.textures.exists(texKey)) {
+        this.load.spritesheet(texKey, `pets/${sel.species}-${sel.breed}-${spec.key}.png`, { frameWidth: size, frameHeight: size });
+      }
+    }
+  }
+
   create(): void {
     const myPubkey = this.registry.get('playerPubkey');
     this.isOwner = this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === myPubkey;
@@ -94,6 +110,11 @@ export class RoomScene extends Phaser.Scene {
     this.createPlayer();
     this.createBackButton();
     this.createRoomLabel();
+
+    // Spawn pet in myroom
+    if (this.roomConfig.id.startsWith('myroom:')) {
+      this.spawnPet(getPet());
+    }
 
     // Chat UI
     this.chatUI = new ChatUI();
@@ -196,6 +217,7 @@ export class RoomScene extends Phaser.Scene {
       this.chatUI.destroy();
       this.settingsPanel.destroy();
       this.computerUI.close();
+      this.pet?.destroy(); this.pet = null;
       if (this.introOverlay) { this.introOverlay.destroy(); this.introOverlay = null; }
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
@@ -278,6 +300,9 @@ export class RoomScene extends Phaser.Scene {
                       },
                       (newConfig) => {
                         this.refreshRoomBackground();
+                      },
+                      (sel) => {
+                        this.switchPet(sel);
                       }
                     );
                   },
@@ -312,6 +337,7 @@ export class RoomScene extends Phaser.Scene {
       this.updateMovement();
     }
     this.playerName.setPosition(this.player.x, this.player.y - 150);
+    this.pet?.update(delta);
     this.updateBlinkingLEDs(time);
     this.updateAmbient(time);
 
@@ -384,15 +410,48 @@ export class RoomScene extends Phaser.Scene {
     this.feedGraphics.fillStyle(hexToNum(P.red), 0.4 + Math.sin(time * 0.005) * 0.4); this.feedGraphics.fillCircle(60, 64, 3);
   }
 
+  private truncateFeedText(text: string, style: Phaser.Types.GameObjects.Text.TextStyle, maxWidth: number): string {
+    const probe = this.add.text(-9999, -9999, '', style).setVisible(false);
+    let result = text;
+    if (probe.setText(result).width <= maxWidth) {
+      probe.destroy();
+      return result;
+    }
+
+    const ellipsis = '...';
+    let low = 0;
+    let high = text.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      const candidate = text.slice(0, mid) + ellipsis;
+      probe.setText(candidate);
+      if (probe.width <= maxWidth) low = mid;
+      else high = mid - 1;
+    }
+
+    result = text.slice(0, Math.max(0, low)) + ellipsis;
+    probe.destroy();
+    return result;
+  }
+
   private spawnFeedNote(ev: FeedEvent): void {
     const colors = [P.pink, P.purp, P.teal, P.amber];
     const color = colors[Math.abs(ev.pubkey.charCodeAt(0)) % colors.length];
     const ts = { fontFamily: 'monospace', fontSize: '8px', color: '#fff' };
     const startY = 268;
-    const displayContent = ev.content.length > 88 ? ev.content.slice(0, 85) + '...' : ev.content;
+    const npubX = 66;
+    const msgX = 160;
+    const rightPad = 52;
+    const maxMsgWidth = GAME_WIDTH - msgX - rightPad;
+    const displayContent = this.truncateFeedText(ev.content, { ...ts, color: P.lcream }, maxMsgWidth);
     const n: FeedNote = { npub: ev.npub, text: ev.content, color, y: startY, targetY: startY, alpha: 0, age: 0 };
-    n.npubText = this.add.text(66, startY, ev.npub, { ...ts, color, fontStyle: 'bold' }).setDepth(5).setAlpha(0);
-    n.msgText = this.add.text(160, startY, displayContent, { ...ts, color: P.lcream }).setDepth(5).setAlpha(0);
+    n.npubText = this.add.text(npubX, startY, ev.npub, { ...ts, color, fontStyle: 'bold' }).setDepth(5).setAlpha(0);
+    n.msgText = this.add.text(msgX, startY, displayContent, {
+      ...ts,
+      color: P.lcream,
+      fixedWidth: maxMsgWidth,
+      wordWrap: { width: maxMsgWidth, useAdvancedWrap: false },
+    }).setDepth(5).setAlpha(0);
     this.feedNotes.push(n);
   }
 
@@ -565,6 +624,36 @@ export class RoomScene extends Phaser.Scene {
   }
   private leaveRoom(): void { this.chatUI.destroy(); this.cameras.main.fadeOut(200, 10, 0, 20); this.time.delayedCall(200, () => { this.scene.start('HubScene', { _returning: true, fromRoom: this.roomConfig.id }); }); }
   private isMyRoom(): boolean { return this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === this.registry.get('playerPubkey'); }
+
+  private spawnPet(sel: PetSelection): void {
+    if (sel.species === 'none') return;
+    this.pet = new PetSprite();
+    this.pet.create(this, sel);
+  }
+
+  /** Called from ComputerUI when the user picks a new pet */
+  switchPet(sel: PetSelection): void {
+    this.pet?.destroy();
+    this.pet = null;
+    if (sel.species === 'none') return;
+
+    const prefix = petTexKey(sel);
+    const size   = PET_FRAME_SIZE[sel.species];
+
+    let anyToLoad = false;
+    for (const spec of getAnimSpecs(sel.species)) {
+      const texKey = `${prefix}-${spec.key}`;
+      if (!this.textures.exists(texKey)) {
+        this.load.spritesheet(texKey, `pets/${sel.species}-${sel.breed}-${spec.key}.png`, { frameWidth: size, frameHeight: size });
+        anyToLoad = true;
+      }
+    }
+
+    if (!anyToLoad) { this.spawnPet(sel); return; }
+
+    this.load.once('complete', () => { if (!this.pet) this.spawnPet(sel); });
+    this.load.start();
+  }
   private openComputer(): void {
     if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
     this.setComputerPromptVisible(false);
@@ -584,9 +673,11 @@ export class RoomScene extends Phaser.Scene {
       },
       (newConfig) => {
         this.refreshRoomBackground();
+      },
+      (sel) => {
+        this.switchPet(sel);
       }
     );
-    this.chatUI.addMessage('system', 'Terminal opened', P.teal);
   }
   private updateMovement(): void {
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0; let vy = 0; const sp = 250;
