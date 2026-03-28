@@ -6,6 +6,7 @@
  * - Metadata batch-fetched (10 at a time) so large lists don't hammer relays
  * - Offline list paginated 20 at a time
  * - Click any row → ProfileModal
+ * - ONLINE tab shows all players currently in the district
  */
 
 import { P } from '../config/game.config';
@@ -22,6 +23,14 @@ interface FollowEntry {
   metaLoaded: boolean;
 }
 
+interface OnlinePlayer {
+  pubkey: string;
+  name: string;
+  avatar?: string;
+  status?: string;
+  room?: string;
+}
+
 const PAGE_SIZE  = 20;
 const META_BATCH = 10;
 
@@ -34,12 +43,14 @@ export class FollowsPanel {
   private isOpen        = false;
   private follows:       FollowEntry[]  = [];
   private onlinePubkeys = new Set<string>();
+  private onlinePlayers: OnlinePlayer[] = [];
   private searchQuery   = '';
   private offlinePage   = 0;
   private loading       = true;
   private metaQueue:    string[] = [];
   private metaFetching  = false;
-  private loaded        = false; // has a load been kicked off this session
+  private loaded        = false;
+  private activeTab:    'follows' | 'online' = 'follows';
 
   constructor() { this.injectStyles(); }
 
@@ -50,14 +61,20 @@ export class FollowsPanel {
     this.container!.classList.add('fp-open');
     this.isOpen = true;
 
-    // Register online handler every time we open
     setOnlinePlayersHandler((players) => {
       this.onlinePubkeys = new Set(players.map(p => p.pubkey));
+      this.onlinePlayers = players.map(p => ({
+        pubkey: p.pubkey,
+        name: (p as any).name || p.pubkey.slice(0, 8) + '...',
+        avatar: (p as any).avatar,
+        status: (p as any).status,
+        room: (p as any).room,
+      }));
       if (!this.loading) this.render();
     });
 
     if (!this.loaded) this.load();
-    else requestOnlinePlayers(); // refresh online status
+    else requestOnlinePlayers();
   }
 
   close(): void {
@@ -143,8 +160,70 @@ export class FollowsPanel {
 
   private render(): void {
     const body = this.container?.querySelector('.fp-body') as HTMLDivElement | null;
-    const header = this.container?.querySelector('.fp-title') as HTMLElement | null;
     if (!body) return;
+
+    this.updateTabs();
+
+    if (this.activeTab === 'online') {
+      this.renderOnlineTab(body);
+    } else {
+      this.renderFollowsTab(body);
+    }
+  }
+
+  private updateTabs(): void {
+    const followsTab = this.container?.querySelector('.fp-tab-follows') as HTMLElement | null;
+    const onlineTab  = this.container?.querySelector('.fp-tab-online')  as HTMLElement | null;
+    if (!followsTab || !onlineTab) return;
+    if (this.activeTab === 'follows') {
+      followsTab.classList.add('fp-tab-active');
+      onlineTab.classList.remove('fp-tab-active');
+    } else {
+      onlineTab.classList.add('fp-tab-active');
+      followsTab.classList.remove('fp-tab-active');
+    }
+  }
+
+  private renderOnlineTab(body: HTMLDivElement): void {
+    if (this.onlinePlayers.length === 0) {
+      body.innerHTML = `<div class="fp-empty">No players online</div>`;
+      return;
+    }
+
+    const myPubkey = authStore.getState().pubkey;
+    const q = this.searchQuery.toLowerCase();
+    const players = q
+      ? this.onlinePlayers.filter(p => p.name.toLowerCase().includes(q) || p.pubkey.includes(q))
+      : this.onlinePlayers;
+
+    let html = `<div class="fp-section-label" style="color:${P.teal};">ACTIVE (${players.length})</div>`;
+    for (const p of players) {
+      const isSelf = p.pubkey === myPubkey;
+      html += `
+        <div class="fp-row fp-row-online" data-pubkey="${p.pubkey}" data-name="${esc(p.name)}">
+          <span class="fp-dot fp-dot-on"></span>
+          <div class="fp-avatar fp-avatar-placeholder" style="font-size:11px;">👤</div>
+          <div class="fp-info">
+            <div class="fp-name" style="color:${isSelf ? P.teal : P.lcream};">${esc(p.name)}${isSelf ? ' <span style="color:' + P.teal + ';font-size:9px;opacity:0.6;">(you)</span>' : ''}</div>
+            ${p.status ? `<div class="fp-nip05" style="color:${P.lpurp};font-style:italic;">${esc(p.status)}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    body.innerHTML = html;
+
+    body.querySelectorAll('.fp-row').forEach(el => {
+      el.addEventListener('click', () => {
+        const pk   = (el as HTMLElement).dataset.pubkey!;
+        const name = (el as HTMLElement).dataset.name!;
+        const player = this.onlinePlayers.find(p => p.pubkey === pk);
+        ProfileModal.show(pk, name, player?.avatar, player?.status);
+      });
+    });
+  }
+
+  private renderFollowsTab(body: HTMLDivElement): void {
+    const header = this.container?.querySelector('.fp-title') as HTMLElement | null;
 
     if (this.loading) {
       body.innerHTML = `<div class="fp-empty">Loading follows…</div>`;
@@ -161,7 +240,6 @@ export class FollowsPanel {
     const offlineVisible = offline.slice(0, (this.offlinePage + 1) * PAGE_SIZE);
     const hasMore = offline.length > offlineVisible.length;
 
-    // Update header count
     if (header) {
       const badge = online.length > 0
         ? ` <span style="color:#4cff91;font-size:11px;opacity:0.8;">(${online.length} online)</span>`
@@ -219,7 +297,8 @@ export class FollowsPanel {
       el.addEventListener('click', () => {
         const pk   = (el as HTMLElement).dataset.pubkey!;
         const name = (el as HTMLElement).dataset.name!;
-        ProfileModal.show(pk, name);
+        const op = this.onlinePlayers.find(p => p.pubkey === pk);
+        ProfileModal.show(pk, name, op?.avatar, op?.status);
       });
     });
 
@@ -240,13 +319,27 @@ export class FollowsPanel {
         <span class="fp-title">FOLLOWS</span>
         <button class="fp-close">✕</button>
       </div>
+      <div class="fp-tabs">
+        <button class="fp-tab fp-tab-follows fp-tab-active">Follows</button>
+        <button class="fp-tab fp-tab-online">Online</button>
+      </div>
       <div class="fp-search-wrap">
-        <input class="fp-search" type="text" placeholder="search follows…" autocomplete="off">
+        <input class="fp-search" type="text" placeholder="search…" autocomplete="off">
       </div>
       <div class="fp-body"></div>
     `;
 
     this.container.querySelector('.fp-close')?.addEventListener('click', () => this.close());
+
+    this.container.querySelector('.fp-tab-follows')?.addEventListener('click', () => {
+      this.activeTab = 'follows';
+      this.render();
+    });
+    this.container.querySelector('.fp-tab-online')?.addEventListener('click', () => {
+      this.activeTab = 'online';
+      requestOnlinePlayers();
+      this.render();
+    });
 
     const search = this.container.querySelector('.fp-search') as HTMLInputElement;
     search?.addEventListener('input', () => {
@@ -254,7 +347,6 @@ export class FollowsPanel {
       this.offlinePage = 0;
       this.render();
     });
-    // Stop game from swallowing key events inside the search box
     search?.addEventListener('keydown', e => e.stopPropagation());
 
     document.body.appendChild(this.container);
@@ -289,6 +381,19 @@ export class FollowsPanel {
         cursor: pointer; padding: 0; opacity: 0.7; line-height: 1;
       }
       .fp-close:hover { opacity: 1; color: ${P.teal}; }
+
+      .fp-tabs {
+        display: flex; border-bottom: 1px solid ${P.dpurp}33; flex-shrink: 0;
+      }
+      .fp-tab {
+        flex: 1; padding: 8px 0; background: none; border: none;
+        color: ${P.lpurp}; font-family: 'Courier New', monospace; font-size: 11px;
+        cursor: pointer; letter-spacing: 0.4px; opacity: 0.6;
+        transition: color 0.15s, opacity 0.15s;
+        border-bottom: 2px solid transparent; margin-bottom: -1px;
+      }
+      .fp-tab:hover { opacity: 0.9; color: ${P.lcream}; }
+      .fp-tab-active { color: ${P.teal}; opacity: 1; border-bottom-color: ${P.teal}; }
 
       .fp-search-wrap { padding: 10px 14px; border-bottom: 1px solid ${P.dpurp}33; flex-shrink: 0; }
       .fp-search {

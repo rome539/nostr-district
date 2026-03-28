@@ -25,6 +25,8 @@ export function showPlayerMenu(
   screenX: number,
   screenY: number,
   callbacks: MenuCallbacks,
+  avatar?: string,
+  status?: string,
 ): void {
   // Remove existing
   const existing = document.getElementById(MENU_ID);
@@ -68,7 +70,7 @@ export function showPlayerMenu(
   // View Profile
   menu.querySelector('.ctx-profile')!.addEventListener('click', () => {
     close();
-    ProfileModal.show(pubkey, name);
+    ProfileModal.show(pubkey, name, avatar, status);
   });
 
   // Visit Room

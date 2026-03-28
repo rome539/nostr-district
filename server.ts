@@ -7,6 +7,7 @@ interface Player {
   y: number;
   room: string;
   avatar: string;
+  status: string;
   ws: WebSocket;
 }
 
@@ -32,6 +33,7 @@ wss.on('connection', (ws) => {
           y: msg.y || 348,
           room,
           avatar: msg.avatar || '',
+          status: (msg.status || '').slice(0, 60),
           ws,
         });
         console.log(`[Presence] ${msg.name} joined ${room} (${players.size} online)`);
@@ -39,11 +41,11 @@ wss.on('connection', (ws) => {
         const others: any[] = [];
         players.forEach((p, key) => {
           if (key !== myPubkey && p.room === room) {
-            others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar });
+            others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
           }
         });
         ws.send(JSON.stringify({ type: 'players', players: others }));
-        broadcastToRoom(room, { type: 'join', pubkey: myPubkey, name: msg.name, x: msg.x, y: msg.y, avatar: msg.avatar || '' }, myPubkey);
+        broadcastToRoom(room, { type: 'join', pubkey: myPubkey, name: msg.name, x: msg.x, y: msg.y, avatar: msg.avatar || '', status: (msg.status || '').slice(0, 60) }, myPubkey);
         broadcastCount();
       }
 
@@ -76,11 +78,11 @@ wss.on('connection', (ws) => {
         const others: any[] = [];
         players.forEach((p, key) => {
           if (key !== myPubkey && p.room === newRoom) {
-            others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar });
+            others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
           }
         });
         ws.send(JSON.stringify({ type: 'players', players: others }));
-        broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar }, myPubkey);
+        broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar, status: player.status }, myPubkey);
         broadcastCount();
       }
 
@@ -141,9 +143,7 @@ wss.on('connection', (ws) => {
       if (msg.type === 'online_players' && myPubkey) {
         const list: any[] = [];
         players.forEach((p, key) => {
-          if (key !== myPubkey) {
-            list.push({ pubkey: p.pubkey, name: p.name });
-          }
+          if (key !== myPubkey) list.push({ pubkey: p.pubkey, name: p.name, status: p.status, avatar: p.avatar, room: p.room });
         });
         ws.send(JSON.stringify({ type: 'online_players', players: list }));
       }
@@ -171,6 +171,14 @@ wss.on('connection', (ws) => {
         if (player) {
           player.avatar = msg.avatar || '';
           broadcastToRoom(player.room, { type: 'avatar_update', pubkey: myPubkey, avatar: player.avatar }, myPubkey);
+        }
+      }
+
+      if (msg.type === 'status_update' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (player) {
+          player.status = (msg.status || '').slice(0, 60);
+          broadcastAll({ type: 'status_update', pubkey: myPubkey, status: player.status }, myPubkey);
         }
       }
 

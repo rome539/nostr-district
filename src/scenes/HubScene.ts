@@ -39,9 +39,11 @@ const ENTERABLE: BuildingZone[] = [
 interface OtherPlayer {
   sprite: Phaser.GameObjects.Image;
   nameText: Phaser.GameObjects.Text;
+  statusText: Phaser.GameObjects.Text;
   targetX: number; targetY: number;
   name: string;
   avatar?: string;
+  status?: string;
   clickZone?: Phaser.GameObjects.Zone;
   smoke?: SmokeEmote;
 }
@@ -49,6 +51,7 @@ interface OtherPlayer {
 export class HubScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
   private playerName!: Phaser.GameObjects.Text;
+  private playerStatusText!: Phaser.GameObjects.Text;
   private playerGlow!: Phaser.GameObjects.Graphics;
   private targetX: number | null = null;
   private isMoving = false;
@@ -292,11 +295,13 @@ export class HubScene extends Phaser.Scene {
     this.smokeGraphics.clear();
     if (this.smokeEmote.active) { if (isWalking) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
     this.playerName.setPosition(this.player.x, this.player.y - 44);
+    this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
     sendPosition(this.player.x, this.player.y);
     this.otherPlayers.forEach(o => {
       if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
       if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
+      o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
       if (o.smoke?.active) o.smoke.update(this.smokeGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
     });
@@ -354,7 +359,7 @@ export class HubScene extends Phaser.Scene {
   // ── Presence ──
   private connectToPresence(): void {
     const cb = {
-      onPlayerJoin: (p: any) => { const mk = this.registry.get('playerPubkey'); if (p.pubkey === mk || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, p.avatar); sendAvatarUpdate(); },
+      onPlayerJoin: (p: any) => { const mk = this.registry.get('playerPubkey'); if (p.pubkey === mk || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, p.avatar, p.status); sendAvatarUpdate(); },
       onPlayerMove: (pk: string, x: number, y: number) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
       onPlayerLeave: (pk: string) => this.removeOtherPlayer(pk),
       onCountUpdate: (c: number) => { this.onlineCount = c; },
@@ -383,19 +388,25 @@ export class HubScene extends Phaser.Scene {
         o.name = name;
         o.nameText.setText(name.slice(0, 14));
       },
+      onStatusUpdate: (pk: string, status: string) => {
+        const o = this.otherPlayers.get(pk); if (!o) return;
+        o.status = status;
+        o.statusText.setText(status.slice(0, 30));
+        o.statusText.setAlpha(status ? 1 : 0);
+      },
     };
     if (!this.isReturning) connectPresence(cb);
     else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on')); }
   }
 
   // ── Other Players ──
-  private addOtherPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string): void {
+  private addOtherPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string, status?: string): void {
     // If a dying sprite for this pk is still fading out, destroy it immediately
     // before we remove its texture — otherwise glTexture becomes null and crashes WebGL
     const dying = this.dyingSprites.get(pk);
     if (dying) {
-      this.tweens.killTweensOf([dying.sprite, dying.nameText]);
-      dying.sprite.destroy(); dying.nameText.destroy(); if (dying.clickZone) dying.clickZone.destroy();
+      this.tweens.killTweensOf([dying.sprite, dying.nameText, dying.statusText]);
+      dying.sprite.destroy(); dying.nameText.destroy(); dying.statusText.destroy(); if (dying.clickZone) dying.clickZone.destroy();
       this.dyingSprites.delete(pk);
     }
     const texKey = `avatar_hub_${pk}`;
@@ -408,10 +419,16 @@ export class HubScene extends Phaser.Scene {
       sp.setTint([0xe87aab, 0x7b68ee, 0x5dcaa5, 0x6a4888, 0x4a6080][h % 5]);
     }
     const nt = this.add.text(px, py - 44, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.lcream, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr });
+    const statusStr = (status || '').slice(0, 30);
+    const st = this.add.text(px, py - 59, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr, status: status || '' });
     this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
     const cz = this.add.zone(px, py - 20, 24, 44).setInteractive({ useHandCursor: true }).setDepth(12);
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }); });
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      ptr.event.stopPropagation();
+      const op2 = this.otherPlayers.get(pk);
+      showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status);
+    });
     const op = this.otherPlayers.get(pk); if (op) op.clickZone = cz;
   }
   private removeOtherPlayer(pk: string): void {
@@ -419,8 +436,8 @@ export class HubScene extends Phaser.Scene {
     this.otherPlayers.delete(pk);
     const n = this.playerNames.get(pk); if (n) this.playerNames.delete(n.toLowerCase()); this.playerNames.delete(pk);
     this.dyingSprites.set(pk, o);
-    this.tweens.add({ targets: [o.sprite, o.nameText], alpha: 0, duration: 300, onComplete: () => {
-      o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy();
+    this.tweens.add({ targets: [o.sprite, o.nameText, o.statusText], alpha: 0, duration: 300, onComplete: () => {
+      o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
       this.dyingSprites.delete(pk);
     }});
   }
@@ -475,6 +492,8 @@ export class HubScene extends Phaser.Scene {
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY - 44, n, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    const myStatus = localStorage.getItem('nd_status') || '';
+    this.playerStatusText = this.add.text(sx, this.playerY - 59, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
     this.generateWalkFrames(getAvatar());
   }
 
@@ -523,7 +542,7 @@ export class HubScene extends Phaser.Scene {
         break;
       }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
-      case 'status': { this.chatUI.addMessage('system', `NOSTR DISTRICT \u00B7 ${this.otherPlayers.size + 1} online`, P.teal); break; }
+      case 'status': { const myStatus = localStorage.getItem('nd_status') || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
       case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }

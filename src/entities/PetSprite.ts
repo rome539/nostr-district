@@ -202,10 +202,12 @@ export class PetSprite {
     const animKey = `${texKey}-anim`;
     if (!this.scene.textures.exists(texKey)) return;
 
-    // Scale and position proportional to the pet's actual rendered size
+    // Scale and position proportional to the pet's actual rendered size.
+    // Cat frame: body sits in the bottom ~65% of the 50px frame, head/mouth at ~62% up.
+    // Dog frame: similar layout in the 100px frame.
     const vfxScale = this.sprite.scaleX * 1.1;
-    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.22;
-    const vfxY     = this.sprite.y - this.sprite.displayHeight * 0.88;
+    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.28;
+    const vfxY     = this.sprite.y - this.sprite.displayHeight * 0.62;
 
     const vfx = this.scene.add.sprite(
       this.sprite.x + offsetX,

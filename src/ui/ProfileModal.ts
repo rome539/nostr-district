@@ -10,6 +10,8 @@ import { P } from '../config/game.config';
 import { fetchProfile, fetchContactList, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import type { DMPanel } from './DMPanel';
+import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
+import { renderRoomSprite } from '../entities/AvatarRenderer';
 
 const PUBSCORE_URL = 'https://pubscore.space';
 
@@ -77,7 +79,7 @@ export class ProfileModal {
   private static _dmPanel: DMPanel | null = null;
   static setDMPanel(panel: DMPanel): void { ProfileModal._dmPanel = panel; }
 
-  static async show(pubkey: string, fallbackName: string): Promise<void> {
+  static async show(pubkey: string, fallbackName: string, avatarSerialized?: string, playerStatus?: string): Promise<void> {
     const existing = document.getElementById(MODAL_ID);
     if (existing) existing.remove();
 
@@ -88,7 +90,7 @@ export class ProfileModal {
       background: linear-gradient(180deg, ${P.bg} 0%, #0e0828 100%);
       border: 1px solid ${P.dpurp}55; border-radius: 10px;
       padding: 24px 28px; font-family: 'Courier New', monospace;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.7); min-width: 320px; max-width: 380px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.7); min-width: 400px; max-width: 480px;
     `;
     modal.innerHTML = `
       <div style="color:${P.teal};font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">PROFILE</div>
@@ -178,17 +180,23 @@ export class ProfileModal {
       ` : '';
 
       modal.innerHTML = `
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
-          ${picture
-            ? `<img src="${esc(picture)}" style="width:48px;height:48px;border-radius:8px;border:1px solid ${P.dpurp}44;object-fit:cover;" onerror="this.style.display='none'">`
-            : `<div style="width:48px;height:48px;border-radius:8px;background:${P.dpurp}33;display:flex;align-items:center;justify-content:center;color:${P.lpurp};font-size:22px;">\uD83D\uDC64</div>`
-          }
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+          <canvas id="profile-pixel-avatar" width="48" height="104" style="image-rendering:pixelated;border:1px solid ${P.dpurp}33;border-radius:6px;background:#0a0014;flex-shrink:0;"></canvas>
           <div style="flex:1;min-width:0;">
-            <div style="color:${P.lcream};font-size:15px;font-weight:bold;">${esc(displayName)}</div>
-            ${nip05 ? `<div style="color:${P.teal};font-size:11px;margin-top:3px;">\u2713 ${esc(nip05.length > 30 ? nip05.slice(0, 28) + '...' : nip05)}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+              ${picture
+                ? `<img src="${esc(picture)}" style="width:36px;height:36px;border-radius:6px;border:1px solid ${P.dpurp}44;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">`
+                : ''
+              }
+              <div style="flex:1;min-width:0;">
+                <div style="color:${P.lcream};font-size:15px;font-weight:bold;">${esc(displayName)}</div>
+                ${nip05 ? `<div style="color:${P.teal};font-size:11px;margin-top:2px;">\u2713 ${esc(nip05.length > 30 ? nip05.slice(0, 28) + '...' : nip05)}</div>` : ''}
+              </div>
+              ${!isSelf ? `<button id="profile-dm" title="Send DM" style="background:${P.dpurp}33;border:1px solid ${P.teal}44;border-radius:6px;color:${P.teal};font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">\u2709 DM</button>` : ''}
+            </div>
           </div>
-          ${!isSelf ? `<button id="profile-dm" title="Send DM" style="background:${P.dpurp}33;border:1px solid ${P.teal}44;border-radius:6px;color:${P.teal};font-size:12px;font-family:'Courier New',monospace;padding:6px 10px;cursor:pointer;flex-shrink:0;">\u2709 DM</button>` : ''}
         </div>
+        ${playerStatus ? `<div style="color:${P.teal};font-size:11px;margin-bottom:12px;font-style:italic;opacity:0.85;">\u25CF ${esc(playerStatus)}</div>` : ''}
         ${scoreHtml}
         ${about ? `<div style="color:${P.lcream};font-size:12px;line-height:1.5;opacity:0.7;margin-bottom:14px;max-height:80px;overflow-y:auto;">${esc(about.slice(0, 300))}</div>` : ''}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
@@ -201,6 +209,16 @@ export class ProfileModal {
         </div>
       `;
       addCloseBtn(npubFull);
+
+      // Render pixel avatar
+      const pixelCanvas = modal.querySelector('#profile-pixel-avatar') as HTMLCanvasElement | null;
+      if (pixelCanvas) {
+        const avatarCfg = avatarSerialized ? (deserializeAvatar(avatarSerialized) || getDefaultAvatar()) : getDefaultAvatar();
+        const spriteCanvas = renderRoomSprite(avatarCfg);
+        const pctx = pixelCanvas.getContext('2d')!;
+        pctx.imageSmoothingEnabled = false;
+        pctx.drawImage(spriteCanvas, 0, 0, 24, 52, 0, 0, 48, 104);
+      }
 
       modal.querySelector('#profile-dm')?.addEventListener('click', () => {
         const panel = ProfileModal._dmPanel;

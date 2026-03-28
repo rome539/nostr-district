@@ -7,6 +7,7 @@ type PlayerData = {
   x: number;
   y: number;
   avatar?: string;
+  status?: string;
 };
 
 export type PresenceCallback = {
@@ -17,6 +18,7 @@ export type PresenceCallback = {
   onChat: (pubkey: string, name: string, text: string) => void;
   onAvatarUpdate?: (pubkey: string, avatar: string) => void;
   onNameUpdate?: (pubkey: string, name: string) => void;
+  onStatusUpdate?: (pubkey: string, status: string) => void;
 };
 
 // Global callbacks for room request system — persist across scene changes
@@ -70,6 +72,7 @@ export function connectPresence(cb: PresenceCallback): void {
       y: 348,
       room: 'hub',
       avatar: serializeAvatar(getAvatar()),
+      status: localStorage.getItem('nd_status') || '',
     }));
   };
 
@@ -87,6 +90,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'chat') callbacks?.onChat(msg.pubkey, msg.name, msg.text);
       if (msg.type === 'avatar_update') callbacks?.onAvatarUpdate?.(msg.pubkey, msg.avatar);
       if (msg.type === 'name_update') callbacks?.onNameUpdate?.(msg.pubkey, msg.name);
+      if (msg.type === 'status_update') callbacks?.onStatusUpdate?.(msg.pubkey, msg.status);
 
       // Room request system — these use global handlers, not scene callbacks
       if (msg.type === 'room_request') onRoomRequest?.(msg.requesterPubkey, msg.requesterName);
@@ -172,6 +176,12 @@ export function sendAvatarUpdate(): void {
 export function sendNameUpdate(name: string): void {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'name_update', name }));
+  }
+}
+
+export function sendStatusUpdate(status: string): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'status_update', status }));
   }
 }
 

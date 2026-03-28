@@ -28,11 +28,12 @@ import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, g
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
-interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; targetX: number; targetY: number; avatar?: string; clickZone?: Phaser.GameObjects.Zone; smoke?: SmokeEmote; walkFrame: number; walkTimer: number; }
+interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; statusText: Phaser.GameObjects.Text; targetX: number; targetY: number; avatar?: string; status?: string; clickZone?: Phaser.GameObjects.Zone; smoke?: SmokeEmote; walkFrame: number; walkTimer: number; }
 
 export class RoomScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
   private playerName!: Phaser.GameObjects.Text;
+  private playerStatusText!: Phaser.GameObjects.Text;
   private targetX: number | null = null;
   private isMoving = false;
   private facingRight = true;
@@ -168,7 +169,7 @@ export class RoomScene extends Phaser.Scene {
 
     // Presence
     setPresenceCallbacks({
-      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addRoomPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar); sendAvatarUpdate(); },
+      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addRoomPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
       onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
@@ -195,6 +196,12 @@ export class RoomScene extends Phaser.Scene {
       onNameUpdate: (pk, name) => {
         const o = this.otherPlayers.get(pk); if (!o) return;
         o.nameText.setText(name.slice(0, 14));
+      },
+      onStatusUpdate: (pk, status) => {
+        const o = this.otherPlayers.get(pk); if (!o) return;
+        o.status = status;
+        o.statusText.setText(status.slice(0, 30));
+        o.statusText.setAlpha(status ? 1 : 0);
       },
     });
     sendRoomChange(this.roomConfig.id, GAME_WIDTH / 2, this.playerY);
@@ -250,7 +257,7 @@ export class RoomScene extends Phaser.Scene {
       this.relayHeaderText?.destroy(); this.relayHeaderText = null;
       this.relayCountText?.destroy(); this.relayCountText = null;
       this.relayEventsText?.destroy(); this.relayEventsText = null;
-      this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
+      this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
       setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
     });
@@ -323,7 +330,11 @@ export class RoomScene extends Phaser.Scene {
                       },
                       (sel) => {
                         this.switchPet(sel);
-                      }
+                      },
+                      (newStatus) => {
+                        this.playerStatusText.setText(newStatus.slice(0, 30));
+                        this.playerStatusText.setAlpha(newStatus ? 1 : 0);
+                      },
                     );
                   },
                 });
@@ -357,6 +368,7 @@ export class RoomScene extends Phaser.Scene {
       this.updateMovement();
     }
     this.playerName.setPosition(this.player.x, this.player.y - 150);
+    this.playerStatusText.setPosition(this.player.x, this.player.y - 165);
     this.pet?.update(delta);
     this.updateBlinkingLEDs(time);
     this.updateAmbient(time);
@@ -407,6 +419,7 @@ export class RoomScene extends Phaser.Scene {
       if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
       if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 150);
+      o.statusText.setPosition(o.sprite.x, o.sprite.y - 165);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 80);
       if (o.smoke?.active) o.smoke.update(this.smokeGraphics, delta, o.sprite.x, o.sprite.y, true, 'room');
 
@@ -449,11 +462,11 @@ export class RoomScene extends Phaser.Scene {
       if (n.alpha < 1) n.alpha = Math.min(1, n.alpha + delta * 0.005);
       if (n.y < contentY + 20) n.alpha = Math.max(0, (n.y - contentY) / 20);
       if (n.y < topY) { n.npubText?.destroy(); n.msgText?.destroy(); this.feedNotes.splice(i, 1); continue; }
-      const ey = Math.round(n.y); const ta = n.alpha * 0.55;
+      const ey = Math.round(n.y); const ta = n.alpha;
       // Hide text objects when they're inside the header zone
       const textVisible = ey >= contentY;
       if (n.npubText) { n.npubText.setPosition(66, ey + 2); n.npubText.setAlpha(textVisible ? ta : 0); }
-      if (n.msgText) { n.msgText.setPosition(160, ey + 2); n.msgText.setAlpha(textVisible ? ta * 0.7 : 0); }
+      if (n.msgText) { n.msgText.setPosition(160, ey + 2); n.msgText.setAlpha(textVisible ? ta : 0); }
       if (n.alpha > 0) {
         const isEven = Math.round((ey - 84) / rowH) % 2 === 0;
         this.feedGraphics.fillStyle(isEven ? 0x0a0818 : 0x0c0a20, n.alpha * 0.7);
@@ -612,11 +625,11 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // ── Other Players ──
-  private addRoomPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string): void {
+  private addRoomPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string, status?: string): void {
     const dying = this.dyingSprites.get(pk);
     if (dying) {
-      this.tweens.killTweensOf([dying.sprite, dying.nameText]);
-      dying.sprite.destroy(); dying.nameText.destroy(); if (dying.clickZone) dying.clickZone.destroy();
+      this.tweens.killTweensOf([dying.sprite, dying.nameText, dying.statusText]);
+      dying.sprite.destroy(); dying.nameText.destroy(); dying.statusText.destroy(); if (dying.clickZone) dying.clickZone.destroy();
       this.dyingSprites.delete(pk);
     }
     const texKey = `avatar_room_${pk}`;
@@ -629,16 +642,22 @@ export class RoomScene extends Phaser.Scene {
       sp.setTint([0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8][h % 5]);
     }
     const nt = this.add.text(px, py - 150, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
+    const statusStr = (status || '').slice(0, 30);
+    const st = this.add.text(px, py - 165, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
     const cz = this.add.zone(px, py - 70, 70, 140).setInteractive({ useHandCursor: true }).setDepth(12);
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }); });
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, targetX: px, targetY: py, avatar: avatarStr, clickZone: cz, walkFrame: 0, walkTimer: 0 });
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      ptr.event.stopPropagation();
+      const op2 = this.otherPlayers.get(pk);
+      showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status);
+    });
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, avatar: avatarStr, status: status || '', clickZone: cz, walkFrame: 0, walkTimer: 0 });
   }
   private removeRoomPlayer(pk: string): void {
     const o = this.otherPlayers.get(pk); if (!o) return;
     this.otherPlayers.delete(pk);
     this.dyingSprites.set(pk, o);
-    this.tweens.add({ targets: [o.sprite, o.nameText], alpha: 0, duration: 300, onComplete: () => {
-      o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy();
+    this.tweens.add({ targets: [o.sprite, o.nameText, o.statusText], alpha: 0, duration: 300, onComplete: () => {
+      o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
       this.dyingSprites.delete(pk);
     }});
   }
@@ -661,6 +680,8 @@ export class RoomScene extends Phaser.Scene {
     this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(2.5).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY - 120, name, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    const myStatus = localStorage.getItem('nd_status') || '';
+    this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY - 165, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
   }
   private createBackButton(): void {
     const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
@@ -743,7 +764,11 @@ export class RoomScene extends Phaser.Scene {
       },
       (sel) => {
         this.switchPet(sel);
-      }
+      },
+      (newStatus) => {
+        this.playerStatusText.setText(newStatus.slice(0, 30));
+        this.playerStatusText.setAlpha(newStatus ? 1 : 0);
+      },
     );
   }
   private updateMovement(): void {

@@ -34,6 +34,18 @@ export class DMPanel {
   private myPubkey: string | null = null;
   private totalUnread = 0;
 
+  private readKey(convPubkey: string): string {
+    return `nd_dm_read_${this.myPubkey}_${convPubkey}`;
+  }
+  private getLastRead(convPubkey: string): number {
+    return parseInt(localStorage.getItem(this.readKey(convPubkey)) || '0', 10);
+  }
+  private markRead(convPubkey: string): void {
+    const msgs = this.messages.get(convPubkey);
+    const ts = msgs?.length ? msgs[msgs.length - 1].createdAt : Math.floor(Date.now() / 1000);
+    localStorage.setItem(this.readKey(convPubkey), String(ts));
+  }
+
   constructor(myPubkey: string | null) {
     this.myPubkey = myPubkey;
     this.injectStyles();
@@ -137,7 +149,7 @@ export class DMPanel {
       name: msg.senderName || existing?.name || convPubkey.slice(0, 12) + '...',
       lastMessage: msg.content.slice(0, 50),
       lastTime: msg.createdAt,
-      unread: (this.activePubkey === convPubkey) ? 0 : (existing?.unread || 0) + (msg.isOwn ? 0 : 1),
+      unread: (this.activePubkey === convPubkey) ? 0 : (existing?.unread || 0) + (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey) ? 1 : 0),
     });
 
     if (!existing?.name || existing.name.includes('...')) {
@@ -149,7 +161,7 @@ export class DMPanel {
         this.renderMessages();
       }
       this.renderConversationList();
-    } else if (!msg.isOwn) {
+    } else if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
       const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
       this.showToast(convPubkey, senderName, msg.content);
     }
@@ -367,9 +379,10 @@ export class DMPanel {
   private openConversation(pubkey: string): void {
     this.activePubkey = pubkey;
 
-    // Clear unread
+    // Clear unread and persist read state
     const conv = this.conversations.get(pubkey);
     if (conv) conv.unread = 0;
+    this.markRead(pubkey);
 
     if (!this.conversations.has(pubkey)) {
       this.conversations.set(pubkey, {

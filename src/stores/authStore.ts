@@ -75,9 +75,10 @@ state = {
 
   loginAsGuest: () => {
     const guestId = Math.random().toString(36).slice(2, 8);
+    const savedName = localStorage.getItem('nostr_district_guest_name');
     state.pubkey = null;
     state.npub = null;
-    state.displayName = `guest_${guestId}`;
+    state.displayName = savedName || `guest_${guestId}`;
     state.picture = null;
     state.loginMethod = 'guest';
     state.isLoggedIn = false;

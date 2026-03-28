@@ -99,6 +99,33 @@ export const AVATAR_OPTIONS = {
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow'] as const,
 };
 
+// ── Outfit presets ────────────────────────────────────────────────────────────
+
+const OUTFITS_KEY = 'nd_outfits';
+
+export interface OutfitPreset {
+  name: string;
+  avatar: AvatarConfig;
+}
+
+export function getOutfits(): OutfitPreset[] {
+  try { const s = localStorage.getItem(OUTFITS_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
+}
+
+export function saveOutfit(name: string): OutfitPreset[] {
+  const outfits = getOutfits();
+  outfits.push({ name, avatar: { ...currentAvatar } });
+  try { localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits)); } catch {}
+  return outfits;
+}
+
+export function deleteOutfit(index: number): OutfitPreset[] {
+  const outfits = getOutfits();
+  outfits.splice(index, 1);
+  try { localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits)); } catch {}
+  return outfits;
+}
+
 export const COLOR_PRESETS = [
   '#2a1858', '#1a1040', '#3a2878', '#4a3888',
   '#e87aab', '#c4568a', '#f5b8d0', '#ff4090',

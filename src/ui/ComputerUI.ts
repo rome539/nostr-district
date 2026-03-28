@@ -6,7 +6,7 @@
  */
 
 import { P } from '../config/game.config';
-import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS } from '../stores/avatarStore';
+import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
 import { authStore } from '../stores/authStore';
 import { publishEvent, signEvent } from '../nostr/nostrService';
@@ -18,12 +18,14 @@ import {
   WallTheme, FloorStyle, LightingMood, FurnitureId, PosterId, RoomConfig,
 } from '../stores/roomStore';
 import { getPet, setPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../stores/petStore';
+import { sendStatusUpdate } from '../nostr/presenceService';
 
 const PANEL_ID = 'computer-panel';
 
-type OnAvatarChange = (avatar: AvatarConfig) => void;
-type OnRoomChange   = (config: RoomConfig) => void;
-type OnPetChange    = (sel: PetSelection) => void;
+type OnAvatarChange   = (avatar: AvatarConfig) => void;
+type OnRoomChange     = (config: RoomConfig) => void;
+type OnPetChange      = (sel: PetSelection) => void;
+type OnStatusUpdate   = (status: string) => void;
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -37,29 +39,32 @@ export class ComputerUI {
   private onProfileSave: ((name: string) => void) | null = null;
   private onRoomChange: OnRoomChange | null = null;
   private onPetChange: OnPetChange | null = null;
+  private onStatusUpdate: OnStatusUpdate | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
   private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
 
-  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange): void {
+  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
     this.onPetChange = onPetChange || null;
+    this.onStatusUpdate = onStatusUpdate || null;
     this.currentTab = 'wardrobe';
     this.buildPanel();
   }
 
   /** Open directly to the Room tab (for first-time setup) */
-  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange): void {
+  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
     this.onPetChange = onPetChange || null;
+    this.onStatusUpdate = onStatusUpdate || null;
     this.currentTab = 'room';
     this.currentRoomSection = 'walls';
     this.buildPanel();
@@ -181,11 +186,13 @@ export class ComputerUI {
         </div>
       </div>
       <div id="ward-colors"></div>
+      <div id="ward-outfits" style="margin-top:14px;"></div>
     `;
     this.renderPreview(avatar);
     this.renderSlotTabs(body);
     this.renderOptions(body);
     this.renderColors(body);
+    this.renderOutfits(body);
   }
 
   private renderPreview(avatar: AvatarConfig): void {
@@ -301,6 +308,55 @@ export class ComputerUI {
     });
   }
 
+  private renderOutfits(body: HTMLElement): void {
+    const container = body.querySelector('#ward-outfits') as HTMLElement;
+    if (!container) return;
+    const outfits = getOutfits();
+    const inputStyle = `width:100%;padding:6px 8px;background:#0a0818;border:1px solid ${P.dpurp}44;border-radius:4px;color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;`;
+    container.innerHTML = `
+      <div style="color:${P.lpurp};font-size:10px;margin-bottom:6px;opacity:0.5;">SAVED OUTFITS</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="outfit-name" type="text" maxlength="20" placeholder="Outfit name..." style="${inputStyle}flex:1;"/>
+        <button id="outfit-save" style="padding:6px 10px;background:${P.teal}22;border:1px solid ${P.teal}44;border-radius:4px;color:${P.teal};font-family:'Courier New',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
+      </div>
+      <div id="outfit-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
+        ${outfits.length === 0 ? `<div style="color:${P.dpurp};font-size:11px;text-align:center;padding:8px 0;">No saved outfits</div>` : outfits.map((o, i) => `
+          <div style="display:flex;align-items:center;gap:6px;background:#0e0828;border:1px solid ${P.dpurp}22;border-radius:4px;padding:5px 8px;">
+            <span style="flex:1;color:${P.lcream};font-size:11px;">${esc(o.name)}</span>
+            <button class="outfit-load" data-i="${i}" style="padding:3px 8px;background:${P.pink}22;border:1px solid ${P.pink}44;border-radius:3px;color:${P.pink};font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">Wear</button>
+            <button class="outfit-del" data-i="${i}" style="padding:3px 6px;background:none;border:1px solid ${P.dpurp}33;border-radius:3px;color:${P.lpurp};font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">✕</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    container.querySelector('#outfit-save')?.addEventListener('click', () => {
+      const nameEl = container.querySelector('#outfit-name') as HTMLInputElement;
+      const name = nameEl.value.trim();
+      if (!name) return;
+      saveOutfit(name);
+      nameEl.value = '';
+      this.renderOutfits(body);
+    });
+    container.querySelectorAll('.outfit-load').forEach(el => {
+      el.addEventListener('click', () => {
+        const i = parseInt((el as HTMLElement).dataset.i!);
+        const outfit = getOutfits()[i];
+        if (!outfit) return;
+        const newAvatar = setAvatar(outfit.avatar);
+        this.renderPreview(newAvatar);
+        this.renderOptions(body);
+        this.renderColors(body);
+        this.onAvatarChange?.(newAvatar);
+      });
+    });
+    container.querySelectorAll('.outfit-del').forEach(el => {
+      el.addEventListener('click', () => {
+        deleteOutfit(parseInt((el as HTMLElement).dataset.i!));
+        this.renderOutfits(body);
+      });
+    });
+  }
+
   // ══════════════════════════════════════
   // PROFILE TAB
   // ══════════════════════════════════════
@@ -310,12 +366,43 @@ export class ComputerUI {
     const isGuest = state.loginMethod === 'guest';
 
     if (isGuest) {
+      const currentName = state.displayName || 'guest';
       body.innerHTML = `
-        <div style="text-align:center;padding:30px 0;">
-          <div style="color:${P.lpurp};font-size:13px;margin-bottom:8px;">Guests can't edit profiles</div>
-          <div style="color:${P.dpurp};font-size:11px;">Login with a key to set your Nostr profile</div>
+        <div style="color:${P.lcream};font-size:13px;font-weight:bold;margin-bottom:14px;">Display Name</div>
+        <div style="margin-bottom:10px;">
+          <input id="guest-name" type="text" maxlength="32" value="${esc(currentName)}" style="
+            width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
+            color:${P.lcream};font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
+          "/>
         </div>
+        <div style="margin-top:10px;">
+          <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Status</label>
+          <input id="guest-status" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
+            width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
+            color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+          "/>
+        </div>
+        <button id="guest-name-save" style="
+          width:100%;padding:10px;margin-top:10px;background:${P.teal}33;border:1px solid ${P.teal}55;border-radius:6px;
+          color:${P.teal};font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
+        ">Save</button>
+        <div id="guest-name-status" style="color:${P.dpurp};font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
+        <div style="color:${P.dpurp};font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
       `;
+      const statusEl = body.querySelector('#guest-name-status') as HTMLElement;
+      body.querySelector('#guest-name-save')?.addEventListener('click', () => {
+        const name = ((body.querySelector('#guest-name') as HTMLInputElement).value || '').trim().slice(0, 32);
+        const status = ((body.querySelector('#guest-status') as HTMLInputElement).value || '').trim().slice(0, 60);
+        if (!name) return;
+        localStorage.setItem('nostr_district_guest_name', name);
+        localStorage.setItem('nd_status', status);
+        authStore.setDisplayName(name);
+        this.onProfileSave?.(name);
+        sendStatusUpdate(status);
+        this.onStatusUpdate?.(status);
+        statusEl.style.color = P.teal;
+        statusEl.textContent = 'Saved!';
+      });
       return;
     }
 
@@ -342,12 +429,32 @@ export class ComputerUI {
           color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
       </div>
+      <div style="margin-bottom:14px;">
+        <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Status</label>
+        <input id="prof-status-input" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
+          width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
+          color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+        "/>
+        <button id="prof-status-save" style="
+          width:100%;margin-top:6px;padding:7px;background:${P.purp}22;border:1px solid ${P.purp}44;border-radius:4px;
+          color:${P.lpurp};font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
+        ">Update Status</button>
+      </div>
       <button id="prof-save" style="
         width:100%;padding:10px;background:${P.teal}33;border:1px solid ${P.teal}55;border-radius:6px;
         color:${P.teal};font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
       ">Publish Profile (kind:0)</button>
       <div id="prof-status" style="color:${P.dpurp};font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
     `;
+
+    body.querySelector('#prof-status-save')?.addEventListener('click', () => {
+      const status = ((body.querySelector('#prof-status-input') as HTMLInputElement).value || '').trim().slice(0, 60);
+      localStorage.setItem('nd_status', status);
+      sendStatusUpdate(status);
+      this.onStatusUpdate?.(status);
+      const el = body.querySelector('#prof-status') as HTMLElement;
+      if (el) { el.style.color = P.teal; el.textContent = 'Status updated!'; setTimeout(() => { el.textContent = ''; }, 2000); }
+    });
 
     body.querySelector('#prof-save')?.addEventListener('click', async () => {
       const statusEl = body.querySelector('#prof-status') as HTMLElement;
