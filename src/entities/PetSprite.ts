@@ -202,15 +202,18 @@ export class PetSprite {
     const animKey = `${texKey}-anim`;
     if (!this.scene.textures.exists(texKey)) return;
 
-    // Position: above and slightly ahead of the pet (mirrored by flipX)
-    const offsetX = this.sprite.flipX ? -24 : 24;
+    // Scale and position proportional to the pet's actual rendered size
+    const vfxScale = this.sprite.scaleX * 1.1;
+    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.22;
+    const vfxY     = this.sprite.y - this.sprite.displayHeight * 0.88;
+
     const vfx = this.scene.add.sprite(
       this.sprite.x + offsetX,
-      this.sprite.y - this.sprite.displayHeight * 0.85,
+      vfxY,
       texKey,
     )
       .setOrigin(0.5, 1)
-      .setScale(4)
+      .setScale(vfxScale)
       .setDepth(this.sprite.depth + 2);
 
     vfx.play(animKey);
