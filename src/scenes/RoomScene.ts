@@ -134,6 +134,10 @@ export class RoomScene extends Phaser.Scene {
     // Chat UI
     this.chatUI = new ChatUI();
     const chatInput = this.chatUI.create(`Chat in ${this.roomConfig.name}...`, this.roomConfig.neonColor, (cmd) => this.handleCommand(cmd));
+    this.chatUI.setNameClickHandler((pubkey, name) => {
+      const op = this.otherPlayers.get(pubkey);
+      ProfileModal.show(pubkey, name, op?.avatar, op?.status);
+    });
     this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
 
     // DM Panel — singleton
@@ -175,12 +179,12 @@ export class RoomScene extends Phaser.Scene {
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
       onChat: (pk, name, text) => {
         const isMe = pk === myPubkey;
-        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp); return; }
+        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
-        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp);
+        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
         if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 155, text, P.teal);
         else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 155, text, P.lpurp); }
       },

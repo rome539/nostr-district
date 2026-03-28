@@ -11,6 +11,7 @@ import { P } from '../config/game.config';
 import { sendDirectMessage, onDMReceived, canUseDMs, DMMessage } from '../nostr/dmService';
 import { fetchProfile } from '../nostr/nostrService';
 import { shouldFilter } from '../nostr/moderationService';
+import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 
 interface Conversation {
   pubkey: string;
@@ -33,6 +34,7 @@ export class DMPanel {
   private unsubscribe: (() => void) | null = null;
   private myPubkey: string | null = null;
   private totalUnread = 0;
+  private gifPicker: GifPicker | null = null;
 
   private readKey(convPubkey: string): string {
     return `nd_dm_read_${this.myPubkey}_${convPubkey}`;
@@ -147,7 +149,7 @@ export class DMPanel {
     this.conversations.set(convPubkey, {
       pubkey: convPubkey,
       name: msg.senderName || existing?.name || convPubkey.slice(0, 12) + '...',
-      lastMessage: msg.content.slice(0, 50),
+      lastMessage: isGifUrl(msg.content.trim()) ? '[GIF]' : /^https?:\/\//i.test(msg.content.trim()) ? '[Link]' : msg.content.slice(0, 50),
       lastTime: msg.createdAt,
       unread: (this.activePubkey === convPubkey) ? 0 : (existing?.unread || 0) + (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey) ? 1 : 0),
     });
@@ -287,6 +289,7 @@ export class DMPanel {
           <div class="dm-messages"></div>
           <div class="dm-input-row">
             <input type="text" class="dm-input" placeholder="Type a message..." maxlength="500" />
+            <button class="dm-gif-btn">GIF</button>
           </div>
         </div>
       </div>
@@ -302,12 +305,17 @@ export class DMPanel {
 
     this.inputEl.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') {
-        this.sendMessage();
-      }
-      if (e.key === 'Escape') {
-        this.close();
-      }
+      if (e.key === 'Enter') { this.sendMessage(); }
+      if (e.key === 'Escape') { this.gifPicker?.close(); this.close(); }
+    });
+
+    const gifBtn = this.container.querySelector('.dm-gif-btn') as HTMLButtonElement;
+    gifBtn?.addEventListener('click', () => {
+      if (this.gifPicker?.isOpen()) { this.gifPicker.close(); return; }
+      this.gifPicker = new GifPicker((url) => {
+        if (this.activePubkey) sendDirectMessage(this.activePubkey, url).catch(() => {});
+      });
+      this.gifPicker.open(gifBtn);
     });
 
     this.inputEl.addEventListener('focus', () => {
@@ -364,10 +372,18 @@ export class DMPanel {
     this.messagesEl.innerHTML = msgs.map(msg => {
       const time = new Date(msg.createdAt * 1000);
       const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const t = msg.content.trim();
+      const isGif = isGifUrl(t);
+      const isLink = !isGif && /^https?:\/\/[^\s]+$/i.test(t);
+      const contentHtml = isGif
+        ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
+        : isLink
+          ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:${P.teal};opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
+          : this.escapeHtml(msg.content);
 
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">
-          <div class="dm-msg-content">${this.escapeHtml(msg.content)}</div>
+          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}">${contentHtml}</div>
           <div class="dm-msg-time">${timeStr}</div>
         </div>
       `;
@@ -618,9 +634,10 @@ export class DMPanel {
         padding: 10px 14px;
         border-top: 1px solid ${P.dpurp}33;
         background: rgba(10,0,20,0.4);
+        display: flex; gap: 6px; align-items: center;
       }
       .dm-input {
-        width: 100%;
+        flex: 1;
         background: rgba(10,0,20,0.8);
         border: 1px solid ${P.dpurp}66;
         border-radius: 6px;
@@ -637,6 +654,14 @@ export class DMPanel {
         box-shadow: 0 0 6px ${P.teal}15;
       }
       .dm-input::placeholder { color: ${P.lpurp}88; }
+      .dm-gif-btn {
+        flex-shrink: 0; padding: 8px 10px;
+        background: ${P.dpurp}33; border: 1px solid ${P.dpurp}66; border-radius: 6px;
+        color: ${P.lpurp}; font-family: 'Courier New', monospace; font-size: 11px;
+        font-weight: bold; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+      }
+      .dm-gif-btn:hover { color: ${P.teal}; border-color: ${P.teal}55; }
+      .dm-msg-gif { background: none !important; border: none !important; padding: 0 !important; }
       .dm-empty {
         color: ${P.lpurp};
         font-size: 13px;

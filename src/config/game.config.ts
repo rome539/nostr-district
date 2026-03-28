@@ -1,3 +1,9 @@
+// Klipy GIF search API key
+export const KLIPY_API_KEY = 'BjnOnMJtNNSil2lyQmBZEMlwcoQM4iu97gnxno5Ihwu8zVNixEgRWLOPpLKcbeQ7';
+
+// Optional: Imgur Client ID for GIF search fallback (free at https://api.imgur.com/oauth2/addclient)
+export const IMGUR_CLIENT_ID = '';
+
 export const GAME_WIDTH = 800;
 export const GAME_HEIGHT = 480;
 export const WORLD_WIDTH = 1600;

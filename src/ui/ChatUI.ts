@@ -6,9 +6,24 @@
 import Phaser from 'phaser';
 import { P } from '../config/game.config';
 import { sendChat } from '../nostr/presenceService';
+import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 
 function escapeHtml(text: string): string {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
+}
+
+function renderContent(text: string): string {
+  const t = text.trim();
+  if (isGifUrl(t)) {
+    const src = gifSrcAttr(t);
+    return `<br><img src="${src}" style="max-width:200px;max-height:160px;border-radius:6px;margin-top:4px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${src}','_blank')">`;
+  }
+  if (/^https?:\/\/[^\s]+$/i.test(t)) {
+    const href = t.replace(/"/g, '%22');
+    const label = escapeHtml(t.length > 55 ? t.slice(0, 52) + '…' : t);
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:${P.teal};opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
+  }
+  return `<span style="color:#f5e8d0;opacity:0.85;">${escapeHtml(text)}</span>`;
 }
 
 export class ChatUI {
@@ -16,8 +31,10 @@ export class ChatUI {
   private log!: HTMLDivElement;
   private input!: HTMLInputElement;
   private onCommand: ((text: string) => void) | null = null;
+  private onNameClick: ((pubkey: string, name: string) => void) | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
-  private commandMode = false; // true when blur follows a slash command
+  private commandMode = false;
+  private gifPicker: GifPicker | null = null;
 
   /** Create and attach the chat UI */
   create(placeholder: string, accentColor: string, onCommand: (text: string) => void): HTMLInputElement {
@@ -47,7 +64,6 @@ export class ChatUI {
     this.input.addEventListener('blur', () => {
       this.input.style.borderColor = `${accentColor}55`;
       this.input.style.boxShadow = 'none';
-      // Slash commands need more time to read — give 25 s; normal blur gives 8 s
       this.scheduleHide(this.commandMode ? 25000 : 8000);
       this.commandMode = false;
     });
@@ -58,17 +74,38 @@ export class ChatUI {
         if (!text) { this.input.blur(); return; }
         if (text.startsWith('/')) {
           this.input.value = '';
-          this.commandMode = true;  // blur after this should keep log open longer
+          this.commandMode = true;
           this.onCommand?.(text);
           this.input.blur();
           return;
         }
         sendChat(text); this.input.value = ''; this.input.blur();
       }
-      if (e.key === 'Escape') this.input.blur();
+      if (e.key === 'Escape') { this.gifPicker?.close(); this.input.blur(); }
+    });
+
+    // GIF button
+    const gifBtn = document.createElement('button');
+    gifBtn.textContent = 'GIF';
+    gifBtn.style.cssText = `background:${P.dpurp}33;border:1px solid ${P.dpurp}66;border-radius:6px;color:${P.lpurp};font-family:'Courier New',monospace;font-size:11px;font-weight:bold;padding:0 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:color 0.15s,border-color 0.15s;`;
+    gifBtn.addEventListener('mouseenter', () => { gifBtn.style.color = P.teal; gifBtn.style.borderColor = `${P.teal}55`; });
+    gifBtn.addEventListener('mouseleave', () => { gifBtn.style.color = P.lpurp; gifBtn.style.borderColor = `${P.dpurp}66`; });
+    gifBtn.addEventListener('click', () => {
+      if (this.gifPicker?.isOpen()) {
+        this.gifPicker.close();
+        return;
+      }
+      this.gifPicker = new GifPicker((url) => {
+        sendChat(url);
+        this.showLog();
+        this.scheduleHide(12000);
+      });
+      this.gifPicker.open(gifBtn);
+      this.showLog();
     });
 
     inputRow.appendChild(this.input);
+    inputRow.appendChild(gifBtn);
     this.container.appendChild(inputRow);
     document.body.appendChild(this.container);
 
@@ -76,10 +113,16 @@ export class ChatUI {
   }
 
   /** Add a message to the chat log */
-  addMessage(name: string, text: string, color: string): void {
+  addMessage(name: string, text: string, color: string, pubkey?: string): void {
     const msg = document.createElement('div');
     msg.style.cssText = `margin-bottom:5px;line-height:1.4;padding:2px 0;`;
-    msg.innerHTML = `<span style="color:${color};font-weight:bold;">${escapeHtml(name)}:</span> <span style="color:#f5e8d0;opacity:0.85;">${escapeHtml(text)}</span>`;
+    const nameHtml = (pubkey && this.onNameClick)
+      ? `<span style="color:${color};font-weight:bold;cursor:pointer;" data-pk="${pubkey}">${escapeHtml(name)}</span>`
+      : `<span style="color:${color};font-weight:bold;">${escapeHtml(name)}</span>`;
+    msg.innerHTML = `${nameHtml}: ${renderContent(text)}`;
+    if (pubkey && this.onNameClick) {
+      msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));
+    }
     this.log.appendChild(msg);
     this.log.scrollTop = this.log.scrollHeight;
     while (this.log.children.length > 50) this.log.removeChild(this.log.firstChild!);
@@ -109,14 +152,37 @@ export class ChatUI {
     }, delay);
   }
 
+  setNameClickHandler(fn: (pubkey: string, name: string) => void): void { this.onNameClick = fn; }
+
   getInput(): HTMLInputElement { return this.input; }
 
   destroy(): void {
+    this.gifPicker?.close();
     if (this.container) this.container.remove();
   }
 
   /** Create a speech bubble above a position in a Phaser scene */
   static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000): void {
+    if (isGifUrl(text.trim())) {
+      const cam = scene.cameras.main;
+      const canvas = scene.sys.game.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width / canvas.width;
+      const scaleY = rect.height / canvas.height;
+      const sx = rect.left + (bx - cam.scrollX) * cam.zoom * scaleX;
+      const sy = rect.top + (by - 16 - cam.scrollY) * cam.zoom * scaleY;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = `position:fixed;left:${sx}px;top:${sy}px;transform:translateX(-50%) translateY(-100%);z-index:200;pointer-events:none;opacity:0;transition:opacity 0.2s ease;`;
+      const img = document.createElement('img');
+      img.src = gifSrcAttr(text.trim());
+      img.style.cssText = `max-width:120px;max-height:80px;border-radius:6px;display:block;border:2px solid ${tint}88;box-shadow:0 2px 12px rgba(0,0,0,0.7);`;
+      img.onerror = () => wrap.remove();
+      wrap.appendChild(img);
+      document.body.appendChild(wrap);
+      requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+      setTimeout(() => { wrap.style.opacity = '0'; setTimeout(() => wrap.remove(), 400); }, lifetime - 400);
+      return;
+    }
     const displayText = text.length > 40 ? text.slice(0, 40) + '...' : text;
     const bubbleText = scene.add.text(bx, by - 10, displayText, {
       fontFamily: '"Courier New", monospace', fontSize: '12px', color: tint, align: 'center',
