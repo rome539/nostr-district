@@ -15,6 +15,7 @@ import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMen
 import { ProfileModal } from '../ui/ProfileModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { PetSprite } from '../entities/PetSprite';
+import { FollowsPanel } from '../ui/FollowsPanel';
 import { RoomRenderer } from '../rooms/RoomRenderer';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
@@ -27,7 +28,7 @@ import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, g
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
-interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; targetX: number; targetY: number; avatar?: string; clickZone?: Phaser.GameObjects.Zone; smoke?: SmokeEmote; }
+interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; targetX: number; targetY: number; avatar?: string; clickZone?: Phaser.GameObjects.Zone; smoke?: SmokeEmote; walkFrame: number; walkTimer: number; }
 
 export class RoomScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
@@ -45,6 +46,7 @@ export class RoomScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private followsPanel!: FollowsPanel;
   private smokeGraphics!: Phaser.GameObjects.Graphics;
   private smokeEmote = new SmokeEmote();
   private settingsPanel = new SettingsPanel();
@@ -55,6 +57,11 @@ export class RoomScene extends Phaser.Scene {
   private computerPromptBg!: Phaser.GameObjects.Graphics;
   private nearComputer = false;
   private roomBgImage!: Phaser.GameObjects.Image;
+
+  // Walk animation
+  private walkFrame = 0;
+  private walkTimer = 0;
+  private isWalking = false;
 
   // First-time intro state
   private introActive = false;
@@ -125,6 +132,11 @@ export class RoomScene extends Phaser.Scene {
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
     this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+
+    let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
+    if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
+    this.followsPanel = rfp;
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -222,6 +234,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
       if (this.dmPanel) this.dmPanel.close();
+      if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
       this.feedNotes.forEach(n => { n.npubText?.destroy(); n.msgText?.destroy(); });
       this.feedNotes = [];
@@ -363,13 +376,56 @@ export class RoomScene extends Phaser.Scene {
     if (rc === 'relay') this.updateRelayStatus(delta);
     if (rc === 'lounge') this.updateLoungeRoom(time, delta);
 
+    // Local player walk animation
+    if (this.isWalking) {
+      this.walkTimer += delta;
+      if (this.walkTimer >= 180) {
+        this.walkTimer = 0;
+        this.walkFrame = this.walkFrame === 1 ? 2 : 1;
+        if (this.textures.exists('player_room')) this.textures.remove('player_room');
+        this.textures.addCanvas('player_room', renderRoomSprite(getAvatar(), this.walkFrame));
+        this.player.setTexture('player_room');
+      }
+    } else if (this.walkFrame !== 0) {
+      this.walkFrame = 0;
+      this.walkTimer = 0;
+      if (this.textures.exists('player_room')) this.textures.remove('player_room');
+      this.textures.addCanvas('player_room', renderRoomSprite(getAvatar(), 0));
+      this.player.setTexture('player_room');
+    }
+
     // Other players
-    this.otherPlayers.forEach(o => {
+    this.otherPlayers.forEach((o, pk) => {
+      const prevX = o.sprite.x;
       if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
       if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 150);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 80);
       if (o.smoke?.active) o.smoke.update(this.smokeGraphics, delta, o.sprite.x, o.sprite.y, true, 'room');
+
+      // Walk animation for other players
+      const oMoving = Math.abs(o.targetX - o.sprite.x) > 1;
+      if (oMoving) {
+        o.sprite.setFlipX(o.targetX < o.sprite.x);
+        o.walkTimer += delta;
+        if (o.walkTimer >= 180) {
+          o.walkTimer = 0;
+          o.walkFrame = o.walkFrame === 1 ? 2 : 1;
+          const avatarConfig = o.avatar ? (deserializeAvatar(o.avatar) || getDefaultAvatar()) : getDefaultAvatar();
+          const texKey = `avatar_room_${pk}`;
+          if (this.textures.exists(texKey)) this.textures.remove(texKey);
+          this.textures.addCanvas(texKey, renderRoomSprite(avatarConfig, o.walkFrame));
+          o.sprite.setTexture(texKey);
+        }
+      } else if (o.walkFrame !== 0) {
+        o.walkFrame = 0;
+        o.walkTimer = 0;
+        const avatarConfig = o.avatar ? (deserializeAvatar(o.avatar) || getDefaultAvatar()) : getDefaultAvatar();
+        const texKey = `avatar_room_${pk}`;
+        if (this.textures.exists(texKey)) this.textures.remove(texKey);
+        this.textures.addCanvas(texKey, renderRoomSprite(avatarConfig, 0));
+        o.sprite.setTexture(texKey);
+      }
     });
   }
 
@@ -568,7 +624,7 @@ export class RoomScene extends Phaser.Scene {
     const nt = this.add.text(px, py - 150, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
     const cz = this.add.zone(px, py - 70, 70, 140).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }); });
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, targetX: px, targetY: py, avatar: avatarStr, clickZone: cz });
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, targetX: px, targetY: py, avatar: avatarStr, clickZone: cz, walkFrame: 0, walkTimer: 0 });
   }
   private removeRoomPlayer(pk: string): void {
     const o = this.otherPlayers.get(pk); if (!o) return;
@@ -687,6 +743,7 @@ export class RoomScene extends Phaser.Scene {
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, GAME_WIDTH - 40);
     this.player.y = Phaser.Math.Clamp(this.player.y, 350, 445);
     this.playerY = this.player.y; this.player.setFlipX(!this.facingRight);
+    this.isWalking = vx !== 0 || vy !== 0 || (this.isMoving && this.targetX !== null);
   }
 
   // ── Commands ──

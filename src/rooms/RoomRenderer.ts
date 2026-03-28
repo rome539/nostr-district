@@ -212,21 +212,27 @@ export class RoomRenderer {
       }
     } else if (cfg.floorStyle === 'neon') {
       // Dark with neon gridlines
-      x.strokeStyle = light.primary; x.lineWidth = 0.5; x.globalAlpha = 0.06;
-      for (let fy = FY + 11; fy < H; fy += 22) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
+      x.strokeStyle = light.primary; x.lineWidth = 1; x.globalAlpha = 0.28;
+      for (let fy = FY + 22; fy < H; fy += 22) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
       for (let fx = 0; fx < W; fx += 38) { x.beginPath(); x.moveTo(fx, FY); x.lineTo(fx, H); x.stroke(); }
-      x.globalAlpha = 1;
+      // Glow pass
+      x.lineWidth = 3; x.globalAlpha = 0.06;
+      for (let fy = FY + 22; fy < H; fy += 22) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
+      for (let fx = 0; fx < W; fx += 38) { x.beginPath(); x.moveTo(fx, FY); x.lineTo(fx, H); x.stroke(); }
+      x.globalAlpha = 1; x.lineWidth = 1;
     } else if (cfg.floorStyle === 'marble') {
-      // Veined pattern
-      for (let i = 0; i < 30; i++) {
-        x.globalAlpha = 0.04;
-        const sx = Math.random() * W;
-        const sy = FY + Math.random() * (H - FY);
-        x.beginPath(); x.moveTo(sx, sy);
-        x.quadraticCurveTo(sx + 40 + Math.random() * 80, sy + (Math.random() - 0.5) * 20, sx + 80 + Math.random() * 100, sy + (Math.random() - 0.5) * 10);
-        x.strokeStyle = floor.alt; x.lineWidth = 1; x.stroke();
-        x.globalAlpha = 1;
+      // Large slab tiles with grout lines
+      const slabW = 90; const slabH = 24;
+      for (let fy = FY; fy < H; fy += slabH) {
+        for (let fx = 0; fx < W; fx += slabW) {
+          x.globalAlpha = 0.04 + ((Math.floor(fx / slabW) + Math.floor((fy - FY) / slabH)) % 2) * 0.04;
+          r(fx, fy, slabW - 1, slabH - 1, floor.alt);
+        }
       }
+      x.globalAlpha = 0.5; x.strokeStyle = floor.groove; x.lineWidth = 1;
+      for (let fy = FY; fy < H; fy += slabH) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
+      for (let fx = 0; fx < W; fx += slabW) { x.beginPath(); x.moveTo(fx, FY); x.lineTo(fx, H); x.stroke(); }
+      x.globalAlpha = 1;
     } else if (cfg.floorStyle === 'tatami') {
       // Woven mat — grid of rectangles with alternating weave direction
       for (let fy = FY; fy < H; fy += 18) {
@@ -262,6 +268,31 @@ export class RoomRenderer {
           x.globalAlpha = 1;
         }
       }
+    } else if (cfg.floorStyle === 'bamboo') {
+      // Vertical bamboo stalks with node rings
+      const stalkW = 14;
+      for (let fx = 0; fx < W; fx += stalkW) {
+        const col = Math.floor(fx / stalkW);
+        const shade = col % 3 === 0 ? lighten(floor.base, 12) : col % 3 === 1 ? floor.base : darken(floor.base, 8);
+        r(fx, FY, stalkW - 1, H - FY, shade);
+        // Grain lines
+        x.globalAlpha = 0.15;
+        r(fx + 3, FY, 1, H - FY, '#6a7a28');
+        r(fx + 9, FY, 1, H - FY, '#4a5818');
+        x.globalAlpha = 1;
+        // Node rings at staggered intervals
+        const nodeOffset = (col % 3) * 6;
+        for (let fy = FY + 10 + nodeOffset; fy < H; fy += 18) {
+          x.globalAlpha = 0.45; r(fx, fy, stalkW - 1, 2, floor.groove);
+          x.globalAlpha = 0.2;  r(fx, fy + 2, stalkW - 1, 1, lighten(floor.base, 20));
+          x.globalAlpha = 1;
+        }
+      }
+      // Subtle sheen
+      const bSheen = x.createLinearGradient(0, FY, 0, H);
+      bSheen.addColorStop(0, 'rgba(160,200,40,0.06)');
+      bSheen.addColorStop(1, 'rgba(0,0,0,0.08)');
+      x.fillStyle = bSheen; x.fillRect(0, FY, W, H - FY);
     } else {
       // Hardwood planks — warm brown wood look
       const WOOD_BASE   = '#3d1f0a';
@@ -659,6 +690,126 @@ export class RoomRenderer {
       x.beginPath(); x.arc(tvX + tvW - 7, tvY + tvH - 6, 5, 0, Math.PI * 2); x.fill();
       x.globalAlpha = 1;
     }
+    // ── Cat Tree / Scratching Post ──
+    if (cfg.furniture.includes('cat_tree')) {
+      const ctX = 776; const ctBotY = FY + 144;
+      const ctC = fc('cat_tree');
+      const ctLight = lighten(ctC, 22);
+      const ctDark  = darken(ctC, 14);
+      // Floor shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(ctX, ctBotY + 1, 20, 4, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Base platform
+      r(ctX - 19, ctBotY - 8, 38, 8, ctDark);
+      r(ctX - 17, ctBotY - 6, 34, 5, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.2; x.fillRect(ctX - 17, ctBotY - 6, 34, 2); x.globalAlpha = 1;
+      // Center post — sisal rope bands
+      r(ctX - 5, ctBotY - 82, 10, 74, ctDark);
+      for (let py2 = ctBotY - 82; py2 < ctBotY - 8; py2 += 5) {
+        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
+      }
+      // Mid platform
+      r(ctX - 20, ctBotY - 52, 40, 6, ctDark);
+      r(ctX - 18, ctBotY - 50, 36, 4, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.18; x.fillRect(ctX - 18, ctBotY - 50, 36, 2); x.globalAlpha = 1;
+      // Post between mid and top
+      r(ctX - 5, ctBotY - 100, 10, 48, ctDark);
+      for (let py2 = ctBotY - 100; py2 < ctBotY - 52; py2 += 5) {
+        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
+      }
+      // Hideout box
+      r(ctX - 15, ctBotY - 130, 30, 30, ctDark);
+      r(ctX - 13, ctBotY - 128, 26, 26, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.1; x.fillRect(ctX - 13, ctBotY - 128, 26, 4); x.globalAlpha = 1;
+      // Entrance hole
+      x.fillStyle = '#06030e';
+      x.beginPath(); x.arc(ctX, ctBotY - 115, 7, 0, Math.PI * 2); x.fill();
+      // Roof cap
+      r(ctX - 17, ctBotY - 132, 34, 5, ctDark);
+      x.fillStyle = ctLight; x.globalAlpha = 0.22; x.fillRect(ctX - 17, ctBotY - 132, 34, 2); x.globalAlpha = 1;
+      // Dangling toy — hangs from mid platform edge
+      x.strokeStyle = darken(ctC, 20); x.lineWidth = 1; x.globalAlpha = 0.6;
+      x.beginPath(); x.moveTo(ctX - 14, ctBotY - 50); x.lineTo(ctX - 14, ctBotY - 36); x.stroke();
+      x.globalAlpha = 1;
+      x.fillStyle = P.pink; x.globalAlpha = 0.9;
+      x.beginPath(); x.arc(ctX - 14, ctBotY - 33, 4, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#fff'; x.globalAlpha = 0.25;
+      x.beginPath(); x.arc(ctX - 16, ctBotY - 35, 1.5, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+    }
+
+    // ── Pet Bowls (food & water) ──
+    if (cfg.furniture.includes('pet_bowl')) {
+      const bwlX = 598; const bwlY = FY + 144;
+      const bowlC = fc('pet_bowl');
+      const bowlLight = lighten(bowlC, 22);
+      // Floor shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.18;
+      x.beginPath(); x.ellipse(bwlX + 18, bwlY + 8, 24, 5, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Left bowl — water
+      x.fillStyle = darken(bowlC, 12);
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = bowlC;
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#3a8edc'; x.globalAlpha = 0.8;
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#fff'; x.globalAlpha = 0.22;
+      x.beginPath(); x.ellipse(bwlX + 5, bwlY + 2, 3, 1.5, -0.4, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Right bowl — kibble
+      x.fillStyle = darken(bowlC, 12);
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = bowlC;
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#7a4820'; x.globalAlpha = 0.9;
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      x.fillStyle = '#a06030'; x.globalAlpha = 0.95;
+      [[27,1],[30,0],[33,1],[29,-1],[32,-1]].forEach(([ox, oy]) => {
+        x.beginPath(); x.arc(bwlX + ox, bwlY + oy, 1.5, 0, Math.PI * 2); x.fill();
+      });
+      x.globalAlpha = 1;
+      // Rim highlight on both
+      x.strokeStyle = bowlLight; x.lineWidth = 1; x.globalAlpha = 0.35;
+      x.beginPath(); x.ellipse(bwlX + 8,  bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
+      x.globalAlpha = 1;
+    }
+
+    // ── Pet Bed ──
+    if (cfg.furniture.includes('pet_bed')) {
+      const bedCX = 704; const bedY = FY + 124;
+      const bedC = fc('pet_bed');
+      const bedLight = lighten(bedC, 28);
+      const bedDark  = darken(bedC, 16);
+      // Floor shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(bedCX, bedY + 22, 30, 6, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Bolster ring (donut outline — drawn as large then inner cutout)
+      x.fillStyle = bedDark;
+      x.beginPath(); x.ellipse(bedCX, bedY + 10, 30, 17, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = bedC;
+      x.beginPath(); x.ellipse(bedCX, bedY + 10, 26, 14, 0, 0, Math.PI * 2); x.fill();
+      // Inner well (where the pet curls up)
+      x.fillStyle = bedDark;
+      x.beginPath(); x.ellipse(bedCX, bedY + 11, 17, 9, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = darken(bedC, 8);
+      x.beginPath(); x.ellipse(bedCX, bedY + 11, 14, 7, 0, 0, Math.PI * 2); x.fill();
+      // Top-left rim highlight
+      x.fillStyle = bedLight; x.globalAlpha = 0.35;
+      x.beginPath(); x.ellipse(bedCX - 10, bedY + 5, 13, 6, -0.5, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Subtle stitching seam around bolster top
+      x.strokeStyle = bedDark; x.lineWidth = 1; x.globalAlpha = 0.4;
+      x.setLineDash([3, 3]);
+      x.beginPath(); x.ellipse(bedCX, bedY + 8, 22, 12, 0, 0, Math.PI * 2); x.stroke();
+      x.setLineDash([]);
+      x.globalAlpha = 1;
+    }
+
     const lightColor = cfg.ceilingLightColor || light.primary;
     for (let lx = 30; lx < W - 30; lx += 30) {
       r(lx, 14, 30, 1, wall.accent);

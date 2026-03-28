@@ -491,6 +491,21 @@ export class ComputerUI {
     const cfg = getRoomConfig();
     const floors = Object.entries(FLOOR_STYLES) as [FloorStyle, typeof FLOOR_STYLES[FloorStyle]][];
 
+    const floorPreview = (key: string): string => {
+      switch (key) {
+        case 'hardwood': return `background:repeating-linear-gradient(180deg,#5a2e10 0px,#5a2e10 10px,#2a1406 10px,#2a1406 12px);`;
+        case 'tile':     return `background-color:#1a1838;background-image:linear-gradient(45deg,#2a285044 25%,transparent 25%,transparent 75%,#2a285044 75%),linear-gradient(45deg,#2a285044 25%,#1a1838 25%,#1a1838 75%,#2a285044 75%);background-size:8px 8px;background-position:0 0,4px 4px;`;
+        case 'carpet':   return `background:#2e1850;`;
+        case 'concrete': return `background-color:#222228;background-image:repeating-linear-gradient(135deg,#2a2a30 0px,#2a2a30 1px,transparent 1px,transparent 4px);background-size:4px 4px;`;
+        case 'neon':     return `background-color:#06060e;background-image:linear-gradient(0deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%),linear-gradient(90deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%);background-size:10px 10px;`;
+        case 'marble':   return `background:#dcd8ec;background-image:linear-gradient(125deg,transparent 28%,rgba(80,72,104,0.35) 30%,rgba(80,72,104,0.15) 33%,transparent 35%),linear-gradient(55deg,transparent 45%,rgba(80,72,104,0.25) 47%,transparent 50%);`;
+        case 'tatami':   return `background-color:#2a2010;background-image:repeating-linear-gradient(0deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 9px),repeating-linear-gradient(90deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 18px);`;
+        case 'hex':      return `background-color:#12101e;background-image:linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%);background-size:10px 18px;background-position:0 0,0 0,5px 9px,5px 9px,0 0,5px 9px;`;
+        case 'bamboo':   return `background-color:#2a2e12;background-image:repeating-linear-gradient(90deg,#3e4418 0px,#3e4418 13px,#1a1e08 13px,#1a1e08 14px),repeating-linear-gradient(0deg,transparent 0px,transparent 7px,rgba(26,30,8,0.6) 7px,rgba(26,30,8,0.6) 9px,transparent 9px,transparent 18px);background-size:14px 18px;`;
+        default:         return `background:#1e1040;`;
+      }
+    };
+
     container.innerHTML = `
       <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Floor Style</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
@@ -501,9 +516,7 @@ export class ComputerUI {
             border:2px solid ${cfg.floorStyle === key ? P.teal : P.dpurp + '33'};
             background:${P.navy};color:${cfg.floorStyle === key ? P.teal : P.lpurp};
           ">
-            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:6px;background:${style.base};border:1px solid ${style.alt};
-              ${key === 'tile' ? `background-image:linear-gradient(45deg,${style.alt} 25%,transparent 25%,transparent 75%,${style.alt} 75%);background-size:8px 8px;` : ''}
-            "></div>
+            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:6px;border:1px solid ${P.dpurp}33;${floorPreview(key)}"></div>
             ${esc(style.label)}
           </button>
         `).join('')}
@@ -568,6 +581,9 @@ export class ComputerUI {
       beanbag:    { label: 'Fabric',       colors: ['#c44060','#e0603a','#40a060','#4060c4','#a040a0','#c0a030','#30a0a0','#c06040'] },
       arcade:     { label: 'Cabinet',      colors: ['#1e1432','#1a0808','#081a08','#08081a','#201008','#0a1020','#181020','#201818'] },
       tv:         { label: 'Bezel',        colors: ['#1a1830','#181818','#141420','#201418','#181420','#141818','#1a1818','#141414'] },
+      pet_bed:    { label: 'Cushion',      colors: ['#7a3858','#c44060','#6b2840','#3d5a80','#2a6040','#7a4828','#6040a0','#5a5a5a'] },
+      cat_tree:   { label: 'Sisal / Wood', colors: ['#5a3a1a','#7a5530','#3a2810','#8a7050','#2a1808','#6a4a28','#4a3818','#9a8060'] },
+      pet_bowl:   { label: 'Bowl Color',   colors: ['#2a1e3e','#181828','#2a2010','#1a2a1a','#281a18','#1e2a28','#281828','#202028'] },
     };
 
     const activeColor = this.activeFurnitureColor;

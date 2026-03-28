@@ -176,12 +176,16 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   return c;
 }
 
-export function renderRoomSprite(a: AvatarConfig): HTMLCanvasElement {
+export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = 24; c.height = 60;
   const x = c.getContext('2d')!;
   x.imageSmoothingEnabled = false;
   const oY = 8;
+
+  // Walk animation leg offsets: frame 0 = neutral (standing), frame 1 = left up/right down, frame 2 = opposite
+  const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
+  const rY = walkFrame === 1 ? 1 : walkFrame === 2 ? -1 : 0;
 
   const topDark  = darken(a.topColor, 18);
   const topLight = lighten(a.topColor, 18);
@@ -196,49 +200,49 @@ export function renderRoomSprite(a: AvatarConfig): HTMLCanvasElement {
   // ── Bottom ──
   x.fillStyle = a.bottomColor;
   if (a.top === 'dress') {
-    x.fillRect(7, oY + 30, 4, 14);
-    x.fillRect(13, oY + 30, 4, 14);
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
   } else if (a.bottom === 'shorts') {
     x.fillRect(7, oY + 30, 4, 6);
     x.fillRect(13, oY + 30, 4, 6);
     x.fillStyle = a.skinColor;
-    x.fillRect(7, oY + 36, 4, 8);
-    x.fillRect(13, oY + 36, 4, 8);
+    x.fillRect(7, oY + 36 + lY, 4, 8);
+    x.fillRect(13, oY + 36 + rY, 4, 8);
   } else if (a.bottom === 'skirt') {
     x.fillRect(5, oY + 28, 14, 6);
     x.fillStyle = a.skinColor;
-    x.fillRect(7, oY + 34, 4, 10);
-    x.fillRect(13, oY + 34, 4, 10);
+    x.fillRect(7, oY + 34 + lY, 4, 10);
+    x.fillRect(13, oY + 34 + rY, 4, 10);
   } else if (a.bottom === 'joggers') {
-    x.fillRect(7, oY + 30, 4, 14);
-    x.fillRect(13, oY + 30, 4, 14);
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
     x.fillStyle = darken(a.bottomColor, 20);
-    x.fillRect(7, oY + 42, 4, 2);
-    x.fillRect(13, oY + 42, 4, 2);
+    x.fillRect(7, oY + 42 + lY, 4, 2);
+    x.fillRect(13, oY + 42 + rY, 4, 2);
   } else if (a.bottom === 'cargopants') {
-    x.fillRect(7, oY + 30, 4, 14);
-    x.fillRect(13, oY + 30, 4, 14);
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
     x.fillStyle = darken(a.bottomColor, 15);
-    x.fillRect(7, oY + 33, 4, 4);
-    x.fillRect(13, oY + 33, 4, 4);
+    x.fillRect(7, oY + 33 + lY, 4, 4);
+    x.fillRect(13, oY + 33 + rY, 4, 4);
     x.fillStyle = darken(a.bottomColor, 25);
-    x.fillRect(7, oY + 37, 4, 1);
-    x.fillRect(13, oY + 37, 4, 1);
+    x.fillRect(7, oY + 37 + lY, 4, 1);
+    x.fillRect(13, oY + 37 + rY, 4, 1);
   } else if (a.bottom === 'overalls') {
-    x.fillRect(7, oY + 30, 4, 14);
-    x.fillRect(13, oY + 30, 4, 14);
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
     // Waistband
     x.fillStyle = darken(a.bottomColor, 10);
     x.fillRect(5, oY + 28, 14, 3);
   } else {
-    x.fillRect(7, oY + 30, 4, 14);
-    x.fillRect(13, oY + 30, 4, 14);
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
   }
 
   // Feet
   x.fillStyle = darken(a.bottomColor, 20);
-  x.fillRect(5, oY + 44, 6, 3);
-  x.fillRect(13, oY + 44, 6, 3);
+  x.fillRect(5, oY + 44 + lY, 6, 3);
+  x.fillRect(13, oY + 44 + rY, 6, 3);
 
   // ── Top ──
   x.fillStyle = a.topColor;

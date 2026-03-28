@@ -32,6 +32,24 @@ export async function fetchProfile(pubkey: string): Promise<any> {
 }
 
 /**
+ * Fetch a user's kind:3 contact list.
+ * Returns the full raw tags array (preserves relay hints) and the set of followed hex pubkeys.
+ */
+export async function fetchContactList(pubkey: string): Promise<{ tags: string[][]; follows: Set<string> }> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, { kinds: [3], authors: [pubkey] });
+    if (!event) return { tags: [], follows: new Set() };
+    const follows = new Set<string>(
+      event.tags.filter((t: string[]) => t[0] === 'p').map((t: string[]) => t[1])
+    );
+    return { tags: event.tags, follows };
+  } catch (_) {
+    return { tags: [], follows: new Set() };
+  }
+}
+
+/**
  * Publish a signed Nostr event via raw WebSocket — bypasses the pool so
  * nostr-tools' internal setTimeout bug (event ref nullified mid-flight)
  * can't cause "Cannot read properties of null (reading 'id')".

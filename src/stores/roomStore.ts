@@ -24,9 +24,10 @@ export type FloorStyle =
   | 'carpet'     // soft solid color
   | 'concrete'   // industrial gray
   | 'neon'       // dark with neon trim
-  | 'marble'     // light pattern
+  | 'marble'     // white with gray veins
   | 'tatami'     // japanese woven mat
-  | 'hex';       // hexagonal tile pattern
+  | 'hex'        // hexagonal tile pattern
+  | 'bamboo';    // vertical bamboo stalks
 
 export type LightingMood =
   | 'teal'       // original teal accent
@@ -50,7 +51,10 @@ export type FurnitureId =
   | 'minifridge'
   | 'beanbag'    // bean bag chair in the corner
   | 'arcade'     // retro arcade cabinet
-  | 'tv';        // wall-mounted TV
+  | 'tv'         // wall-mounted TV
+  | 'pet_bed'    // round cushioned pet bed (cat & dog)
+  | 'cat_tree'   // cat tree / scratching post
+  | 'pet_bowl';  // food & water bowl set
 
 export type PosterId =
   | 'none'
@@ -152,6 +156,9 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   beanbag:    '#c44060',  // hot pink/red
   arcade:     '#1e1432',  // charcoal
   tv:         '#1a1830',  // dark navy
+  pet_bed:    '#7a3858',  // warm rose/mauve cushion
+  cat_tree:   '#5a3a1a',  // natural tan/sisal
+  pet_bowl:   '#2a1e3e',  // dark pewter
 };
 
 export function setFurnitureColor(id: FurnitureId, color: string): RoomConfig {
@@ -217,10 +224,11 @@ export const FLOOR_STYLES: Record<FloorStyle, { base: string; alt: string; groov
   tile:     { base: '#181830', alt: '#222244', groove: '#101028', label: 'Tile' },
   carpet:   { base: '#201838', alt: '#241c3e', groove: '#1a1230', label: 'Carpet' },
   concrete: { base: '#1a1a20', alt: '#1e1e26', groove: '#14141a', label: 'Concrete' },
-  neon:     { base: '#0a0a14', alt: '#0e0e1a', groove: '#060610', label: 'Neon' },
-  marble:   { base: '#1e1a2a', alt: '#242038', groove: '#18142a', label: 'Marble' },
+  neon:     { base: '#06060e', alt: '#0e0e1a', groove: '#060610', label: 'Neon' },
+  marble:   { base: '#dcd8ec', alt: '#504868', groove: '#a098b8', label: 'Marble' },
   tatami:   { base: '#1a1808', alt: '#242010', groove: '#141206', label: 'Tatami' },
   hex:      { base: '#12101e', alt: '#1a182c', groove: '#0e0c18', label: 'Hex Tile' },
+  bamboo:   { base: '#2a2e12', alt: '#3e4418', groove: '#1a1e08', label: 'Bamboo' },
 };
 
 /** Color definitions for each lighting mood */
@@ -249,6 +257,9 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   beanbag:   { label: 'Bean Bag', emoji: '🫘' },
   arcade:    { label: 'Arcade Cabinet', emoji: '🕹' },
   tv:        { label: 'Wall TV', emoji: '📺' },
+  pet_bed:   { label: 'Pet Bed', emoji: '🛏' },
+  cat_tree:  { label: 'Cat Tree', emoji: '🐾' },
+  pet_bowl:  { label: 'Pet Bowls', emoji: '🥣' },
 };
 
 /** Poster display data */
@@ -268,7 +279,7 @@ export const POSTER_DATA: Record<PosterId, { label: string; emoji: string }> = {
 };
 
 /** All available furniture IDs */
-export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv'];
+export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv', 'pet_bed', 'cat_tree', 'pet_bowl'];
 
 /** All available poster IDs */
 export const ALL_POSTERS: PosterId[] = ['none', 'bitcoin', 'nostr', 'pixel_art', 'landscape', 'cat', 'skull', 'moon', 'code', 'synthwave', 'matrix', 'space'];

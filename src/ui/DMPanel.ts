@@ -32,6 +32,7 @@ export class DMPanel {
   private isOpen = false;
   private unsubscribe: (() => void) | null = null;
   private myPubkey: string | null = null;
+  private totalUnread = 0;
 
   constructor(myPubkey: string | null) {
     this.myPubkey = myPubkey;
@@ -55,6 +56,8 @@ export class DMPanel {
     if (!this.container) this.buildDOM();
     this.container!.classList.add('dm-open');
     this.isOpen = true;
+    this.totalUnread = 0;
+    this.updateBadge();
 
     if (targetPubkey) {
       this.openConversation(targetPubkey);
@@ -146,7 +149,97 @@ export class DMPanel {
         this.renderMessages();
       }
       this.renderConversationList();
+    } else if (!msg.isOwn) {
+      const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
+      this.showToast(convPubkey, senderName, msg.content);
     }
+  }
+
+  private showToast(pubkey: string, senderName: string, content: string): void {
+    this.totalUnread++;
+
+    const existing = document.getElementById('dm-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'dm-toast';
+    toast.style.cssText = `
+      position: fixed; bottom: 80px; right: 20px; z-index: 4000;
+      background: linear-gradient(135deg, ${P.bg} 0%, #0e0828 100%);
+      border: 1px solid ${P.teal}66; border-radius: 10px;
+      padding: 12px 16px; font-family: 'Courier New', monospace;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 12px ${P.teal}22;
+      max-width: 280px; cursor: pointer;
+      animation: dm-toast-in 0.2s ease;
+    `;
+    toast.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="color:${P.teal};font-size:13px;">\u2709</span>
+        <span style="color:${P.teal};font-size:12px;font-weight:bold;">${senderName.slice(0, 24)}</span>
+        <button id="dm-toast-close" style="margin-left:auto;background:none;border:none;color:${P.lpurp};font-size:14px;cursor:pointer;padding:0;line-height:1;">\u2715</button>
+      </div>
+      <div style="color:${P.lcream};font-size:11px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${content.slice(0, 60)}</div>
+    `;
+
+    if (!document.getElementById('dm-toast-style')) {
+      const s = document.createElement('style');
+      s.id = 'dm-toast-style';
+      s.textContent = `@keyframes dm-toast-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`;
+      document.head.appendChild(s);
+    }
+
+    document.body.appendChild(toast);
+
+    const dismiss = () => { toast.remove(); this.updateBadge(); };
+    const timer = setTimeout(dismiss, 5000);
+
+    toast.addEventListener('click', () => {
+      clearTimeout(timer);
+      toast.remove();
+      this.open(pubkey);
+    });
+
+    document.getElementById('dm-toast-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearTimeout(timer);
+      dismiss();
+    });
+  }
+
+  private updateBadge(): void {
+    const existing = document.getElementById('dm-badge');
+    if (this.totalUnread <= 0) {
+      existing?.remove();
+      return;
+    }
+    if (existing) {
+      existing.querySelector('.dm-badge-count')!.textContent = String(this.totalUnread);
+      return;
+    }
+    const badge = document.createElement('div');
+    badge.id = 'dm-badge';
+    badge.style.cssText = `
+      position: fixed; bottom: 20px; right: 20px; z-index: 3999;
+      background: linear-gradient(135deg, ${P.bg} 0%, #0e0828 100%);
+      border: 1px solid ${P.teal}66; border-radius: 50px;
+      padding: 8px 14px; font-family: 'Courier New', monospace;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.6), 0 0 8px ${P.teal}22;
+      display: flex; align-items: center; gap: 7px;
+      cursor: pointer; animation: dm-toast-in 0.2s ease;
+    `;
+    badge.innerHTML = `
+      <span style="color:${P.teal};font-size:14px;">\u2709</span>
+      <span class="dm-badge-count" style="
+        background:${P.teal}; color:${P.bg}; font-size:10px; font-weight:bold;
+        border-radius:50%; width:16px; height:16px;
+        display:flex; align-items:center; justify-content:center;
+      ">${this.totalUnread}</span>
+    `;
+    badge.addEventListener('click', () => {
+      badge.remove();
+      this.open();
+    });
+    document.body.appendChild(badge);
   }
 
   private async fetchAndSetName(pubkey: string): Promise<void> {

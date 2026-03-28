@@ -8,6 +8,7 @@ import {
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
 import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
 import { DMPanel } from '../ui/DMPanel';
+import { FollowsPanel } from '../ui/FollowsPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
@@ -63,6 +64,7 @@ export class HubScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private followsPanel!: FollowsPanel;
   private playerNames = new Map<string, string>();
 
   private parallaxBg!: Phaser.GameObjects.Image;
@@ -236,11 +238,17 @@ export class HubScene extends Phaser.Scene {
     let ep = this.registry.get('dmPanel') as DMPanel | undefined;
     if (!ep) { ep = new DMPanel(this.registry.get('playerPubkey') || null); this.registry.set('dmPanel', ep); }
     this.dmPanel = ep;
+    ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
     this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+
+    let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
+    if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
+    this.followsPanel = fp;
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
   }
 
   update(time: number, delta: number): void {

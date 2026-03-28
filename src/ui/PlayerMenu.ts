@@ -6,9 +6,7 @@
  */
 
 import { P } from '../config/game.config';
-import { canUseDMs } from '../nostr/dmService';
 import { sendRoomRequest } from '../nostr/presenceService';
-import { DMPanel } from './DMPanel';
 import { ProfileModal } from './ProfileModal';
 
 const MENU_ID = 'player-context-menu';
@@ -18,7 +16,7 @@ export const mutedPlayers = new Set<string>();
 
 interface MenuCallbacks {
   onChat: (text: string, color: string) => void;
-  getDMPanel: () => DMPanel | null;
+  getDMPanel?: () => unknown;
 }
 
 export function showPlayerMenu(
@@ -50,7 +48,6 @@ export function showPlayerMenu(
   menu.innerHTML = `
     <div style="color:${P.lcream};font-size:13px;font-weight:bold;padding:8px 16px 10px;border-bottom:1px solid ${P.dpurp}22;">${esc(name)}</div>
     <div class="ctx-profile" style="padding:10px 16px;color:${P.lpurp};font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDC64 View Profile</div>
-    <div class="ctx-dm" style="padding:10px 16px;color:${P.teal};font-size:13px;cursor:pointer;transition:background 0.15s;">\u2709 Send DM</div>
     <div class="ctx-visit" style="padding:10px 16px;color:${P.pink};font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
     <div style="height:1px;background:${P.dpurp}22;margin:2px 0;"></div>
     <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? P.teal : P.amber};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
@@ -61,7 +58,7 @@ export function showPlayerMenu(
   document.body.appendChild(menu);
 
   // Hover effects
-  menu.querySelectorAll('.ctx-profile,.ctx-dm,.ctx-visit,.ctx-mute').forEach(el => {
+  menu.querySelectorAll('.ctx-profile,.ctx-visit,.ctx-mute').forEach(el => {
     el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `${P.dpurp}20`);
     el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent');
   });
@@ -72,18 +69,6 @@ export function showPlayerMenu(
   menu.querySelector('.ctx-profile')!.addEventListener('click', () => {
     close();
     ProfileModal.show(pubkey, name);
-  });
-
-  // Send DM
-  menu.querySelector('.ctx-dm')!.addEventListener('click', () => {
-    close();
-    if (canUseDMs()) {
-      const panel = callbacks.getDMPanel();
-      if (panel) panel.open(pubkey);
-      callbacks.onChat(`Opening DM with ${name}...`, P.teal);
-    } else {
-      callbacks.onChat('DMs require login with a key', P.amber);
-    }
   });
 
   // Visit Room
