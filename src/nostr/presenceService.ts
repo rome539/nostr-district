@@ -21,7 +21,7 @@ export type PresenceCallback = {
 
 // Global callbacks for room request system — persist across scene changes
 type RoomRequestHandler = (requesterPubkey: string, requesterName: string) => void;
-type RoomGrantedHandler = (ownerPubkey: string, ownerName: string, room: string) => void;
+type RoomGrantedHandler = (ownerPubkey: string, ownerName: string, room: string, roomConfig?: string) => void;
 type RoomDeniedHandler = (reason: string) => void;
 type RoomKickHandler = (reason: string) => void;
 type OnlinePlayersHandler = (players: { pubkey: string; name: string }[]) => void;
@@ -90,7 +90,7 @@ export function connectPresence(cb: PresenceCallback): void {
 
       // Room request system — these use global handlers, not scene callbacks
       if (msg.type === 'room_request') onRoomRequest?.(msg.requesterPubkey, msg.requesterName);
-      if (msg.type === 'room_granted') onRoomGranted?.(msg.ownerPubkey, msg.ownerName, msg.room);
+      if (msg.type === 'room_granted') onRoomGranted?.(msg.ownerPubkey, msg.ownerName, msg.room, msg.roomConfig);
       if (msg.type === 'room_denied') onRoomDenied?.(msg.reason);
       if (msg.type === 'room_kick') onRoomKick?.(msg.reason);
       if (msg.type === 'online_players') onOnlinePlayers?.(msg.players);
@@ -127,9 +127,9 @@ export function sendRoomRequest(ownerPubkey: string): void {
 }
 
 /** Respond to a room request (owner accepts/denies) */
-export function sendRoomResponse(requesterPubkey: string, accepted: boolean): void {
+export function sendRoomResponse(requesterPubkey: string, accepted: boolean, roomConfig?: string): void {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'room_response', requesterPubkey, accepted }));
+    ws.send(JSON.stringify({ type: 'room_response', requesterPubkey, accepted, roomConfig }));
   }
 }
 

@@ -7,7 +7,7 @@
 
 import { P } from '../config/game.config';
 import {
-  getRoomConfig,
+  getRoomConfig, RoomConfig,
   WALL_THEMES, FLOOR_STYLES, LIGHTING_MOODS,
   getFurnitureColor,
   PosterId,
@@ -25,6 +25,7 @@ export class RoomRenderer {
     neonColor: string,
     W: number,
     H: number,
+    ownerRoomConfig?: RoomConfig,
   ): string {
     this.blinkingLEDs = [];
     const canvas = document.createElement('canvas');
@@ -35,7 +36,7 @@ export class RoomRenderer {
     const rc = roomId.startsWith('myroom:') ? 'myroom' : roomId;
     const nc = neonColor;
 
-    if (rc === 'myroom') this.drawMyRoom(x, W, H, nc);
+    if (rc === 'myroom') this.drawMyRoom(x, W, H, nc, ownerRoomConfig);
     else if (rc === 'lounge') this.drawLounge(x, W, H, nc);
     else if (rc === 'relay') this.drawRelay(x, W, H, nc);
     else if (rc === 'feed') this.drawFeed(x, W, H, nc);
@@ -107,8 +108,8 @@ export class RoomRenderer {
   // ════════════════════════════════════════════
   // DYNAMIC MY ROOM
   // ════════════════════════════════════════════
-  private drawMyRoom(x: CanvasRenderingContext2D, W: number, H: number, nc: string): void {
-    const cfg = getRoomConfig();
+  private drawMyRoom(x: CanvasRenderingContext2D, W: number, H: number, nc: string, ownerRoomConfig?: RoomConfig): void {
+    const cfg = ownerRoomConfig ?? getRoomConfig();
     const wall = WALL_THEMES[cfg.wallTheme];
     const floor = FLOOR_STYLES[cfg.floorStyle];
     const light = LIGHTING_MOODS[cfg.lighting];

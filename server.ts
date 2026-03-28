@@ -123,6 +123,7 @@ wss.on('connection', (ws) => {
               ownerPubkey: myPubkey,
               ownerName: player.name,
               room: `myroom:${myPubkey}`,
+              roomConfig: msg.roomConfig,
             }));
           }
         } else {

@@ -14,7 +14,7 @@ export interface AvatarConfig {
   bottomColor: string;
   hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown';
   hatColor: string;
-  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses';
+  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones';
   accessoryColor: string;
   eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow';
   eyeColor: string;
@@ -95,7 +95,7 @@ export const AVATAR_OPTIONS = {
   top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey'] as const,
   bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls'] as const,
   hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown'] as const,
-  accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses'] as const,
+  accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow'] as const,
 };
 

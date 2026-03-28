@@ -34,36 +34,36 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   // ── Bottom ──
   x.fillStyle = a.bottomColor;
   if (a.top === 'dress') {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
   } else if (a.bottom === 'shorts') {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 3 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 3 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 4 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 4 * s);
     x.fillStyle = a.skinColor;
     x.fillRect(cx - 2 * s, headY + 16 * s + legLY, 1.5 * s, 3 * s);
     x.fillRect(cx + 0.5 * s, headY + 16 * s + legRY, 1.5 * s, 3 * s);
   } else if (a.bottom === 'skirt') {
     x.fillRect(cx - 2.5 * s, headY + 13 * s, 5 * s, 2 * s);
     x.fillStyle = a.skinColor;
-    x.fillRect(cx - 2 * s, headY + 15 * s + legLY, 1.5 * s, 4 * s);
-    x.fillRect(cx + 0.5 * s, headY + 15 * s + legRY, 1.5 * s, 4 * s);
+    x.fillRect(cx - 2 * s, headY + 14 * s + legLY, 1.5 * s, 5 * s);
+    x.fillRect(cx + 0.5 * s, headY + 14 * s + legRY, 1.5 * s, 5 * s);
   } else if (a.bottom === 'joggers') {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
     x.fillStyle = darken(a.bottomColor, 20);
     x.fillRect(cx - 2 * s, headY + 18 * s + legLY, 1.5 * s, 1 * s);
     x.fillRect(cx + 0.5 * s, headY + 18 * s + legRY, 1.5 * s, 1 * s);
   } else if (a.bottom === 'cargopants') {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
     x.fillStyle = darken(a.bottomColor, 15);
     x.fillRect(cx - 2 * s, headY + 15 * s + legLY, 1.5 * s, 2 * s);
   } else if (a.bottom === 'overalls') {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
   } else {
-    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
-    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
   }
 
   // ── Top ──
@@ -143,6 +143,12 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.globalAlpha = 1;
   }
 
+  // ── Headphones drawn before hair so hair renders on top ──
+  if (a.accessory === 'headphones') {
+    x.fillStyle = a.accessoryColor;
+    drawHubAccessory(x, 'headphones', cx, headY, s);
+  }
+
   // ── Hair ──
   const hasHat = a.hat !== 'none';
   const longHairStyle = ['long', 'ponytail', 'mullet'].includes(a.hair);
@@ -167,8 +173,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   // ── Eyes (before accessories so acc draws on top) ──
   drawHubEyes(x, a, cx, headY, s);
 
-  // ── Accessory ──
-  if (a.accessory !== 'none') {
+  // ── Accessory (non-headphones already drawn above) ──
+  if (a.accessory !== 'none' && a.accessory !== 'headphones') {
     x.fillStyle = a.accessoryColor;
     drawHubAccessory(x, a.accessory, cx, headY, s);
   }
@@ -200,28 +206,28 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   // ── Bottom ──
   x.fillStyle = a.bottomColor;
   if (a.top === 'dress') {
-    x.fillRect(7, oY + 30 + lY, 4, 14);
-    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
   } else if (a.bottom === 'shorts') {
-    x.fillRect(7, oY + 30, 4, 6);
-    x.fillRect(13, oY + 30, 4, 6);
+    x.fillRect(7, oY + 29 + lY, 4, 7);
+    x.fillRect(13, oY + 29 + rY, 4, 7);
     x.fillStyle = a.skinColor;
     x.fillRect(7, oY + 36 + lY, 4, 8);
     x.fillRect(13, oY + 36 + rY, 4, 8);
   } else if (a.bottom === 'skirt') {
     x.fillRect(5, oY + 28, 14, 6);
     x.fillStyle = a.skinColor;
-    x.fillRect(7, oY + 34 + lY, 4, 10);
-    x.fillRect(13, oY + 34 + rY, 4, 10);
+    x.fillRect(7, oY + 33 + lY, 4, 11);
+    x.fillRect(13, oY + 33 + rY, 4, 11);
   } else if (a.bottom === 'joggers') {
-    x.fillRect(7, oY + 30 + lY, 4, 14);
-    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
     x.fillStyle = darken(a.bottomColor, 20);
     x.fillRect(7, oY + 42 + lY, 4, 2);
     x.fillRect(13, oY + 42 + rY, 4, 2);
   } else if (a.bottom === 'cargopants') {
-    x.fillRect(7, oY + 30 + lY, 4, 14);
-    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
     x.fillStyle = darken(a.bottomColor, 15);
     x.fillRect(7, oY + 33 + lY, 4, 4);
     x.fillRect(13, oY + 33 + rY, 4, 4);
@@ -229,14 +235,14 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(7, oY + 37 + lY, 4, 1);
     x.fillRect(13, oY + 37 + rY, 4, 1);
   } else if (a.bottom === 'overalls') {
-    x.fillRect(7, oY + 30 + lY, 4, 14);
-    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
     // Waistband
     x.fillStyle = darken(a.bottomColor, 10);
     x.fillRect(5, oY + 28, 14, 3);
   } else {
-    x.fillRect(7, oY + 30 + lY, 4, 14);
-    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
   }
 
   // Feet
@@ -356,6 +362,12 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.globalAlpha = 1;
   }
 
+  // ── Headphones drawn before hair so hair renders on top ──
+  if (a.accessory === 'headphones') {
+    x.fillStyle = a.accessoryColor;
+    drawRoomAccessory(x, 'headphones', oY);
+  }
+
   // ── Hair ──
   const hasHat = a.hat !== 'none';
   const longHairStyle = ['long', 'ponytail', 'mullet'].includes(a.hair);
@@ -377,8 +389,8 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   // ── Eyes (before accessories so acc draws on top) ──
   drawRoomEyes(x, a, oY);
 
-  // ── Accessory ──
-  if (a.accessory !== 'none') {
+  // ── Accessory (non-headphones already drawn above) ──
+  if (a.accessory !== 'none' && a.accessory !== 'headphones') {
     x.fillStyle = a.accessoryColor;
     drawRoomAccessory(x, a.accessory, oY);
   }
@@ -696,6 +708,18 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       x.fillRect(cx + 2 * s,   hy + 4 * s, 0.5 * s, 1 * s);
       x.globalAlpha = 1;
       break;
+    case 'headphones': {
+      x.fillRect(cx - 1.5 * s, hy,           3 * s,   0.5 * s); // thin band
+      x.fillRect(cx - 2 * s,   hy + 0.5 * s, 0.5 * s, 1.5 * s); // left arm
+      x.fillRect(cx + 1.5 * s, hy + 0.5 * s, 0.5 * s, 1.5 * s); // right arm
+      x.fillRect(cx - 2.5 * s, hy + 1.5 * s, s,       2.5 * s); // left cup
+      x.fillRect(cx + 1.5 * s, hy + 1.5 * s, s,       2.5 * s); // right cup
+      x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
+      x.fillRect(cx - 2.25 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
+      x.fillRect(cx + 1.75 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
+      x.fillStyle = savedColor; x.globalAlpha = 1;
+      break;
+    }
   }
 }
 
@@ -762,6 +786,23 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       x.fillRect(18, oY + 7, 2, 3);
       x.globalAlpha = 1;
       break;
+    case 'headphones': {
+      // Head top: x=7-16 at oY. Head widens to x=5-18 at oY+2.
+      // Band follows that exact contour then cups protrude outside.
+      x.fillRect(7, oY,     10, 1); // across head top (x=7-16)
+      x.fillRect(7, oY + 1,  1, 1); // left edge down (still x=7)
+      x.fillRect(16, oY + 1, 1, 1); // right edge down (still x=16)
+      x.fillRect(5, oY + 2,  2, 2); // left steps out to x=5 as head widens
+      x.fillRect(17, oY + 2, 2, 2); // right steps out to x=17
+      // Ear cups protrude just outside the head sides (head left=5, right=18)
+      x.fillRect(2, oY + 3,  3, 4); // left cup
+      x.fillRect(19, oY + 3, 3, 4); // right cup
+      x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
+      x.fillRect(3, oY + 4, 1, 2);
+      x.fillRect(20, oY + 4, 1, 2);
+      x.fillStyle = savedColor; x.globalAlpha = 1;
+      break;
+    }
   }
 }
 

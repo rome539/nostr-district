@@ -24,6 +24,7 @@ import {
   loginWithExtension, loginWithNsec, loginAsGuest,
   startBunkerFlow, loginWithBunkerUrl, cancelBunkerFlow,
 } from '../nostr/nostrService';
+import { getRoomConfig } from '../stores/roomStore';
 
 interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
 
@@ -304,7 +305,7 @@ export class HubScene extends Phaser.Scene {
   // ── Room Requests ──
   private setupRoomRequestHandlers(): void {
     setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
-    setRoomGrantedHandler((op, on, room) => { this.waitingForAccess = false; this.chatUI.addMessage('system', `${on} accepted!`, P.teal); this.enterRoom(room, `${on}'s Room`, P.teal, op); });
+    setRoomGrantedHandler((op, on, room, roomConfig) => { this.waitingForAccess = false; this.chatUI.addMessage('system', `${on} accepted!`, P.teal); this.enterRoom(room, `${on}'s Room`, P.teal, op, roomConfig); });
     setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); });
     setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Removed from room', P.amber); });
   }
@@ -315,7 +316,7 @@ export class HubScene extends Phaser.Scene {
     this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(135deg,${P.bg},#0e0828);border:1px solid ${P.teal}55;border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
     this.toastEl.innerHTML = `<div style="color:${P.teal};font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:${P.lcream};font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:${P.teal}33;border:1px solid ${P.teal}66;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
     document.body.appendChild(this.toastEl);
-    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true); this.toastEl?.remove(); this.toastEl = null; });
+    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true, JSON.stringify(getRoomConfig())); this.toastEl?.remove(); this.toastEl = null; });
     this.toastEl.querySelector('#td')!.addEventListener('click', () => { sendRoomResponse(rp, false); this.toastEl?.remove(); this.toastEl = null; });
     setTimeout(() => { if (this.toastEl) { sendRoomResponse(rp, false); this.toastEl.remove(); this.toastEl = null; } }, 30000);
   }
@@ -344,10 +345,10 @@ export class HubScene extends Phaser.Scene {
   }
   private closePlayerPicker(): void { if (this.playerPickerEl) { const h = (this.playerPickerEl as any)._eh; if (h) document.removeEventListener('keydown', h); this.playerPickerEl.remove(); this.playerPickerEl = null; } setOnlinePlayersHandler(null); }
   private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
-  private enterRoom(rid: string, rn: string, nc: string, op?: string): void {
+  private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
     this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
     const f2 = this.add.graphics().setDepth(201); f2.fillStyle(0xffffff, 0.15); f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
-    this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op }); } });
+    this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op, ownerRoomConfig }); } });
   }
 
   // ── Presence ──
@@ -521,8 +522,9 @@ export class HubScene extends Phaser.Scene {
         this.chatUI.addMessage('system', 'Terminal opened', P.teal);
         break;
       }
+      case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'status': { this.chatUI.addMessage('system', `NOSTR DISTRICT \u00B7 ${this.otherPlayers.size + 1} online`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }
     this.chatUI.flashLog();

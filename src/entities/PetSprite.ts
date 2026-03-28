@@ -9,6 +9,70 @@
 
 import { PetSelection, PET_FRAME_SIZE, getAnimSpecs } from '../stores/petStore';
 
+// ── Web Audio sound synthesis ────────────────────────────────────────────────
+
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext {
+  if (!_audioCtx) _audioCtx = new AudioContext();
+  return _audioCtx;
+}
+
+function playMeow(): void {
+  try {
+    const ctx  = getAudioCtx();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.connect(gain);
+
+    const t = ctx.currentTime;
+    // Meow: pitch rises then falls, gentle envelope
+    osc.frequency.setValueAtTime(480, t);
+    osc.frequency.linearRampToValueAtTime(820, t + 0.15);
+    osc.frequency.linearRampToValueAtTime(560, t + 0.38);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.18, t + 0.06);
+    gain.gain.setValueAtTime(0.18, t + 0.28);
+    gain.gain.linearRampToValueAtTime(0, t + 0.42);
+
+    osc.start(t);
+    osc.stop(t + 0.45);
+  } catch (_) {}
+}
+
+function playBark(): void {
+  try {
+    const ctx  = getAudioCtx();
+
+    // Bark = two short tonal bursts + noise thump
+    const bark = (delay: number) => {
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.connect(gain);
+
+      const t = ctx.currentTime + delay;
+      osc.frequency.setValueAtTime(340, t);
+      osc.frequency.exponentialRampToValueAtTime(180, t + 0.12);
+
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.02);
+      gain.gain.linearRampToValueAtTime(0, t + 0.14);
+
+      osc.start(t);
+      osc.stop(t + 0.16);
+    };
+
+    bark(0);
+    bark(0.2);
+  } catch (_) {}
+}
+
 const PET_SPEED  = 60;   // px/s
 const FLOOR_MIN  = 382;  // top of walkable band; kept below the back wall/furniture line
 const FLOOR_MAX  = 445;  // bottom of walkable band (matches player clamp max)
@@ -45,6 +109,7 @@ const ONE_SHOT_STATES = new Set(['stretch', 'lick', 'itch', 'emote']);
 type PetState = 'walk' | 'idle' | 'sit' | 'sleep' | 'lay' | 'stretch' | 'lick' | 'itch' | 'emote';
 
 export class PetSprite {
+  private scene!: Phaser.Scene;
   private sprite!: Phaser.GameObjects.Sprite;
   private state: PetState = 'idle';
   private previousState: PetState | null = null;
@@ -62,6 +127,7 @@ export class PetSprite {
 
   create(scene: Phaser.Scene, sel: PetSelection): void {
     if (sel.species === 'none') return;
+    this.scene     = scene;
     this.species   = sel.species;
     this.prefix    = `pet-${sel.species}-${sel.breed}`;
     this.baseScale = sel.species === 'dog'
@@ -90,7 +156,73 @@ export class PetSprite {
       .setOrigin(0.5, 1);
 
     this.applyPerspective();
+    this.ensureVFXAssets();
     this.enterState('idle');
+  }
+
+  private ensureVFXAssets(): void {
+    // Register meow-vfx animation if texture was loaded
+    if (this.scene.textures.exists('meow-vfx') && !this.scene.anims.exists('meow-vfx-anim')) {
+      this.scene.anims.create({
+        key: 'meow-vfx-anim',
+        frames: this.scene.anims.generateFrameNumbers('meow-vfx', { start: 0, end: 2 }),
+        frameRate: 6,
+        repeat: 0,
+      });
+    }
+
+    // Generate bark-vfx canvas texture — three 16×16 frames of pixel-art "!" marks
+    if (!this.scene.textures.exists('bark-vfx')) {
+      const c = document.createElement('canvas');
+      c.width = 48; c.height = 16;
+      const ctx = c.getContext('2d')!;
+      const dot = (x: number, y: number) => { ctx.fillRect(x, y, 1, 1); };
+      ctx.fillStyle = '#ffffff';
+      // Frame 0 (x 0–15): "!" at col 7
+      dot(7,4); dot(7,5); dot(7,6); dot(7,7); dot(7,9);
+      // Frame 1 (x 16–31): "!" at col 23 + small side dots
+      dot(23,3); dot(23,4); dot(23,5); dot(23,6); dot(23,8);
+      dot(20,5); dot(26,5);
+      // Frame 2 (x 32–47): scattered dots fading out
+      dot(41,3); dot(38,6); dot(44,6); dot(41,10);
+      this.scene.textures.addCanvas('bark-vfx', c);
+    }
+    if (!this.scene.anims.exists('bark-vfx-anim')) {
+      this.scene.anims.create({
+        key: 'bark-vfx-anim',
+        frames: this.scene.anims.generateFrameNumbers('bark-vfx', { start: 0, end: 2 }),
+        frameRate: 6,
+        repeat: 0,
+      });
+    }
+  }
+
+  private showVFX(): void {
+    const texKey  = this.species === 'cat' ? 'meow-vfx' : 'bark-vfx';
+    const animKey = `${texKey}-anim`;
+    if (!this.scene.textures.exists(texKey)) return;
+
+    // Position: above and slightly ahead of the pet (mirrored by flipX)
+    const offsetX = this.sprite.flipX ? -24 : 24;
+    const vfx = this.scene.add.sprite(
+      this.sprite.x + offsetX,
+      this.sprite.y - this.sprite.displayHeight * 0.85,
+      texKey,
+    )
+      .setOrigin(0.5, 1)
+      .setScale(4)
+      .setDepth(this.sprite.depth + 2);
+
+    vfx.play(animKey);
+    vfx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.scene.tweens.add({
+        targets: vfx,
+        alpha: 0,
+        y: vfx.y - 12,
+        duration: 300,
+        onComplete: () => vfx.destroy(),
+      });
+    });
   }
 
   update(delta: number): void {
@@ -206,6 +338,9 @@ export class PetSprite {
         const emoteKey = this.species === 'dog' ? 'bark' : 'meow';
         this.sprite.play({ key: `${this.prefix}-${emoteKey}-anim`, repeat: 1 }); // 2 loops
         this.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.transitionFrom('emote'));
+        if (this.species === 'cat') playMeow();
+        else playBark();
+        this.showVFX();
         break;
       }
     }
