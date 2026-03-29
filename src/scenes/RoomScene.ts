@@ -818,6 +818,9 @@ export class RoomScene extends Phaser.Scene {
     if (this.isLeavingRoom) return;
     this.isLeavingRoom = true;
     this.waitingForAccess = false;
+    // Stop accepting new player joins before broadcasting hub presence
+    // so hub players don't flash as ghosts during the fade-out
+    setPresenceCallbacks({ ...({} as any), onPlayerJoin: () => {} });
     sendRoomChange('hub');
     this.computerUI.close();
     this.destroyStickyNote();
