@@ -256,7 +256,7 @@ export class HubScene extends Phaser.Scene {
     ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
     this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open((newAvatar) => { if (this.textures.exists('player')) this.textures.remove('player'); this.textures.addCanvas('player', renderHubSprite(newAvatar, 0)); this.textures.addCanvas('player_walk1', renderHubSprite(newAvatar, 1)); }, this.chatUI); } });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open((newAvatar) => { if (this.textures.exists('player')) this.textures.remove('player'); this.textures.addCanvas('player', renderHubSprite(newAvatar, 0)); this.textures.addCanvas('player_walk1', renderHubSprite(newAvatar, 1)); }, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName); sendNameUpdate(newName); }); } });
 
     let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
