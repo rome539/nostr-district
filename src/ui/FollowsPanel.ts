@@ -9,7 +9,6 @@
  * - ONLINE tab shows all players currently in the district
  */
 
-import { P } from '../config/game.config';
 import { fetchContactList, fetchProfile } from '../nostr/nostrService';
 import { requestOnlinePlayers, setOnlinePlayersHandler } from '../nostr/presenceService';
 import { authStore } from '../stores/authStore';
@@ -196,7 +195,7 @@ export class FollowsPanel {
       ? this.onlinePlayers.filter(p => p.name.toLowerCase().includes(q) || p.pubkey.includes(q))
       : this.onlinePlayers;
 
-    let html = `<div class="fp-section-label" style="color:${P.teal};">ACTIVE (${players.length})</div>`;
+    let html = `<div class="fp-section-label" style="color:var(--nd-accent);">ACTIVE (${players.length})</div>`;
     for (const p of players) {
       const isSelf = p.pubkey === myPubkey;
       html += `
@@ -204,8 +203,8 @@ export class FollowsPanel {
           <span class="fp-dot fp-dot-on"></span>
           <div class="fp-avatar fp-avatar-placeholder" style="font-size:11px;">👤</div>
           <div class="fp-info">
-            <div class="fp-name" style="color:${isSelf ? P.teal : P.lcream};">${esc(p.name)}${isSelf ? ' <span style="color:' + P.teal + ';font-size:9px;opacity:0.6;">(you)</span>' : ''}</div>
-            ${p.status ? `<div class="fp-nip05" style="color:${P.lpurp};font-style:italic;">${esc(p.status)}</div>` : ''}
+            <div class="fp-name" style="color:${isSelf ? 'var(--nd-accent)' : 'var(--nd-text)'};">${esc(p.name)}${isSelf ? ' <span style="color:var(--nd-accent);font-size:9px;opacity:0.6;">(you)</span>' : ''}</div>
+            ${p.status ? `<div class="fp-nip05" style="color:var(--nd-subtext);font-style:italic;">${esc(p.status)}</div>` : ''}
           </div>
         </div>`;
     }
@@ -260,7 +259,7 @@ export class FollowsPanel {
              data-name="${esc(f.displayName)}">
           ${dot}${avatar}
           <div class="fp-info">
-            <div class="fp-name" style="color:${isOnline ? P.lcream : P.lpurp};">${esc(f.displayName)}</div>
+            <div class="fp-name" style="color:${isOnline ? 'var(--nd-text)' : 'var(--nd-subtext)'};">${esc(f.displayName)}</div>
             ${f.nip05 ? `<div class="fp-nip05">✓ ${esc(f.nip05)}</div>` : ''}
           </div>
         </div>`;
@@ -269,7 +268,7 @@ export class FollowsPanel {
     let html = '';
 
     if (online.length > 0) {
-      html += `<div class="fp-section-label" style="color:${P.teal};">ONLINE (${online.length})</div>`;
+      html += `<div class="fp-section-label" style="color:var(--nd-accent);">ONLINE (${online.length})</div>`;
       html += online.map(f => row(f, true)).join('');
     }
 
@@ -361,8 +360,8 @@ export class FollowsPanel {
     s.textContent = `
       .fp-panel {
         position: fixed; top: 0; left: -360px; width: 320px; height: 100vh;
-        background: linear-gradient(180deg, ${P.bg} 0%, #0e0828 100%);
-        border-right: 1px solid ${P.dpurp}55;
+        background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
+        border-right: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
         z-index: 2000; font-family: 'Courier New', monospace;
         display: flex; flex-direction: column;
         transition: left 0.25s ease;
@@ -372,81 +371,85 @@ export class FollowsPanel {
 
       .fp-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 14px 18px; border-bottom: 1px solid ${P.dpurp}44;
-        background: rgba(10,0,20,0.5); flex-shrink: 0;
+        padding: 14px 18px; border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
+        background: color-mix(in srgb, black 52%, var(--nd-bg)); flex-shrink: 0;
       }
-      .fp-title { color: ${P.teal}; font-size: 14px; font-weight: bold; letter-spacing: 0.5px; }
+      .fp-title { color: var(--nd-accent); font-size: 14px; font-weight: bold; letter-spacing: 0.5px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
       .fp-close {
-        background: none; border: none; color: ${P.lpurp}; font-size: 18px;
-        cursor: pointer; padding: 0; opacity: 0.7; line-height: 1;
+        background: none; border: none; color: var(--nd-subtext); font-size: 18px;
+        cursor: pointer; padding: 0; line-height: 1;
       }
-      .fp-close:hover { opacity: 1; color: ${P.teal}; }
+      .fp-close:hover { color: var(--nd-text); }
 
       .fp-tabs {
-        display: flex; border-bottom: 1px solid ${P.dpurp}33; flex-shrink: 0;
+        display: flex; border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent); flex-shrink: 0;
+        background: color-mix(in srgb, black 42%, var(--nd-bg));
       }
       .fp-tab {
         flex: 1; padding: 8px 0; background: none; border: none;
-        color: ${P.lpurp}; font-family: 'Courier New', monospace; font-size: 11px;
-        cursor: pointer; letter-spacing: 0.4px; opacity: 0.6;
+        color: var(--nd-subtext); font-family: 'Courier New', monospace; font-size: 11px;
+        cursor: pointer; letter-spacing: 0.4px; opacity: 0.7;
         transition: color 0.15s, opacity 0.15s;
         border-bottom: 2px solid transparent; margin-bottom: -1px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
-      .fp-tab:hover { opacity: 0.9; color: ${P.lcream}; }
-      .fp-tab-active { color: ${P.teal}; opacity: 1; border-bottom-color: ${P.teal}; }
+      .fp-tab:hover { opacity: 1; color: var(--nd-text); }
+      .fp-tab-active { color: var(--nd-accent); opacity: 1; border-bottom-color: var(--nd-accent); }
 
-      .fp-search-wrap { padding: 10px 14px; border-bottom: 1px solid ${P.dpurp}33; flex-shrink: 0; }
+      .fp-search-wrap { padding: 10px 14px; border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 8%,transparent); flex-shrink: 0; background: color-mix(in srgb, black 35%, var(--nd-bg)); }
       .fp-search {
         width: 100%; box-sizing: border-box;
-        background: ${P.dpurp}22; border: 1px solid ${P.dpurp}44; border-radius: 4px;
-        color: ${P.lcream}; font-family: 'Courier New', monospace; font-size: 12px;
+        background: color-mix(in srgb, black 55%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb,var(--nd-text) 20%,transparent); border-radius: 4px;
+        color: var(--nd-text); font-family: 'Courier New', monospace; font-size: 12px;
         padding: 6px 10px; outline: none;
       }
-      .fp-search::placeholder { color: ${P.lpurp}; opacity: 0.5; }
-      .fp-search:focus { border-color: ${P.teal}55; }
+      .fp-search::placeholder { color: var(--nd-subtext); opacity: 0.55; }
+      .fp-search:focus { border-color: color-mix(in srgb,var(--nd-accent) 60%,transparent); }
 
       .fp-body { flex: 1; overflow-y: auto; }
       .fp-body::-webkit-scrollbar { width: 4px; }
-      .fp-body::-webkit-scrollbar-thumb { background: ${P.dpurp}44; border-radius: 2px; }
+      .fp-body::-webkit-scrollbar-thumb { background: color-mix(in srgb,var(--nd-text) 18%,transparent); border-radius: 2px; }
 
       .fp-section-label {
         font-size: 10px; letter-spacing: 0.5px; padding: 8px 14px 4px;
-        color: ${P.lpurp}; opacity: 0.55;
+        color: var(--nd-subtext); opacity: 0.7; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
 
       .fp-row {
         display: flex; align-items: center; gap: 9px;
         padding: 7px 14px; cursor: pointer;
-        border-bottom: 1px solid ${P.dpurp}1a;
+        border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 7%,transparent);
         transition: background 0.1s;
       }
-      .fp-row:hover { background: ${P.dpurp}28; }
-      .fp-row-online { background: rgba(76,255,145,0.025); }
+      .fp-row:hover { background: color-mix(in srgb,var(--nd-text) 6%,transparent); }
+      .fp-row-online { background: rgba(76,255,145,0.03); }
 
       .fp-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
       .fp-dot-on  { background: #4cff91; box-shadow: 0 0 5px #4cff9188; }
-      .fp-dot-off { background: ${P.dpurp}; }
+      .fp-dot-off { background: color-mix(in srgb,var(--nd-text) 25%,transparent); }
 
       .fp-avatar {
         width: 28px; height: 28px; border-radius: 5px; flex-shrink: 0;
-        object-fit: cover; border: 1px solid ${P.dpurp}44;
+        object-fit: cover; border: 1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);
       }
       .fp-avatar-placeholder {
         display: flex; align-items: center; justify-content: center;
-        background: ${P.dpurp}33; font-size: 13px; color: ${P.lpurp};
+        background: color-mix(in srgb, black 40%, var(--nd-bg)); font-size: 13px; color: var(--nd-subtext);
       }
 
       .fp-info { flex: 1; min-width: 0; }
-      .fp-name  { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .fp-nip05 { font-size: 10px; color: ${P.teal}; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+      .fp-name  { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+      .fp-nip05 { font-size: 10px; color: var(--nd-accent); opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 
       .fp-load-more {
         padding: 10px 14px; text-align: center;
-        color: ${P.teal}; font-size: 11px; cursor: pointer; opacity: 0.6;
+        color: var(--nd-accent); font-size: 11px; cursor: pointer; opacity: 0.7;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
       .fp-load-more:hover { opacity: 1; }
 
-      .fp-empty { color: ${P.lpurp}; font-size: 12px; text-align: center; padding: 40px 16px; opacity: 0.5; }
+      .fp-empty { color: var(--nd-subtext); font-size: 12px; text-align: center; padding: 40px 16px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
     `;
     document.head.appendChild(s);
   }

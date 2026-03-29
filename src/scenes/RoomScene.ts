@@ -58,6 +58,8 @@ export class RoomScene extends Phaser.Scene {
   private computerPromptBg!: Phaser.GameObjects.Graphics;
   private nearComputer = false;
   private roomBgImage!: Phaser.GameObjects.Image;
+  private stickyNoteGroup: Phaser.GameObjects.Group | null = null;
+  private stickyNoteOverlay: HTMLDivElement | null = null;
 
   // Walk animation
   private walkFrame = 0;
@@ -115,6 +117,10 @@ export class RoomScene extends Phaser.Scene {
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT, parsedOwnerConfig);
     this.roomBgImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(-1);
 
+    // Sticky note on wall (owner's config for visitor rooms, own config for myroom)
+    const initialNote = parsedOwnerConfig?.pinnedNote ?? (this.roomConfig.id.startsWith('myroom:') ? getRoomConfig().pinnedNote : null);
+    if (initialNote) this.createStickyNote(initialNote);
+
     // Graphics layers
     this.ledGraphics = this.add.graphics().setDepth(3);
     this.ambientGraphics = this.add.graphics().setDepth(2);
@@ -149,6 +155,7 @@ export class RoomScene extends Phaser.Scene {
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -251,6 +258,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.introOverlay) { this.introOverlay.destroy(); this.introOverlay = null; }
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
+      this.destroyStickyNote();
       if (this.dmPanel) this.dmPanel.close();
       if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
@@ -356,6 +364,101 @@ export class RoomScene extends Phaser.Scene {
   private refreshRoomBackground(): void {
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT);
     this.roomBgImage.setTexture(texKey);
+    this.destroyStickyNote();
+    const note = getRoomConfig().pinnedNote;
+    if (note) this.createStickyNote(note);
+  }
+
+  private destroyStickyNote(): void {
+    this.stickyNoteGroup?.clear(true, true);
+    this.stickyNoteGroup = null;
+    if (this.stickyNoteOverlay) { this.stickyNoteOverlay.remove(); this.stickyNoteOverlay = null; }
+  }
+
+  private createStickyNote(text: string): void {
+    this.destroyStickyNote();
+
+    // Position: wall just left of the computer desk
+    const NX = 565, NY = 195, NW = 38, NH = 34;
+
+    const g = this.add.graphics().setDepth(5).setInteractive(
+      new Phaser.Geom.Rectangle(NX - NW / 2, NY - NH / 2, NW, NH),
+      Phaser.Geom.Rectangle.Contains,
+    );
+
+    // Paper shadow
+    g.fillStyle(0x000000, 0.25);
+    g.fillRect(NX - NW / 2 + 3, NY - NH / 2 + 3, NW, NH);
+    // Paper body — warm yellow
+    g.fillStyle(0xe8d87a, 1);
+    g.fillRect(NX - NW / 2, NY - NH / 2, NW, NH);
+    // Folded corner top-right
+    g.fillStyle(0xc8b850, 1);
+    g.fillTriangle(NX + NW / 2 - 14, NY - NH / 2, NX + NW / 2, NY - NH / 2, NX + NW / 2, NY - NH / 2 + 14);
+    // Pushpin
+    g.fillStyle(0xdd3344, 1);
+    g.fillCircle(NX, NY - NH / 2 + 5, 3);
+    g.fillStyle(0xaa2233, 1);
+    g.fillCircle(NX, NY - NH / 2 + 5, 2);
+    // Pin shadow
+    g.fillStyle(0x000000, 0.18);
+    g.fillCircle(NX + 1, NY - NH / 2 + 6, 2);
+
+    // Note text preview (truncate to fit)
+    const preview = text.length > 30 ? text.slice(0, 28) + '…' : text;
+    const noteText = this.add.text(NX - NW / 2 + 5, NY - NH / 2 + 13, preview, {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '7px',
+      color: '#3a2e0a',
+      wordWrap: { width: NW - 12 },
+      lineSpacing: 2,
+    }).setDepth(6);
+
+    g.setInteractive(new Phaser.Geom.Rectangle(NX - NW / 2, NY - NH / 2, NW, NH), Phaser.Geom.Rectangle.Contains);
+    g.input!.cursor = 'pointer';
+
+    g.on('pointerover', () => { g.setAlpha(0.85); });
+    g.on('pointerout',  () => { g.setAlpha(1); });
+    g.on('pointerdown', () => this.showStickyNoteOverlay(text));
+
+    this.stickyNoteGroup = this.add.group([g, noteText]);
+  }
+
+  private showStickyNoteOverlay(text: string): void {
+    if (this.stickyNoteOverlay) { this.stickyNoteOverlay.remove(); this.stickyNoteOverlay = null; return; }
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+      position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+      background:#f0e878;color:#2a1e04;
+      font-family:"Courier New",monospace;font-size:13px;line-height:1.7;
+      padding:20px 22px 16px;border-radius:2px;
+      box-shadow:4px 6px 18px rgba(0,0,0,0.6);
+      max-width:320px;width:90%;white-space:pre-wrap;word-break:break-word;
+      z-index:9999;cursor:pointer;
+    `;
+    // Pushpin at top
+    const pin = document.createElement('div');
+    pin.style.cssText = `
+      position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+      width:18px;height:18px;border-radius:50%;
+      background:radial-gradient(circle at 40% 35%,#ff6677,#aa1122);
+      box-shadow:0 2px 6px rgba(0,0,0,0.5);
+    `;
+    el.appendChild(pin);
+
+    const content = document.createElement('div');
+    content.textContent = text;
+    el.appendChild(content);
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'margin-top:12px;font-size:10px;color:#7a6020;opacity:0.7;text-align:right;';
+    hint.textContent = 'click to close';
+    el.appendChild(hint);
+
+    el.addEventListener('click', () => { el.remove(); this.stickyNoteOverlay = null; });
+    document.body.appendChild(el);
+    this.stickyNoteOverlay = el;
   }
 
   private setComputerPromptVisible(visible: boolean): void {

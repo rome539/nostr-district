@@ -39,8 +39,8 @@ export function showPlayerMenu(
   menu.style.cssText = `
     position: fixed; z-index: 3000;
     left: ${screenX}px; top: ${screenY - 10}px;
-    background: linear-gradient(180deg, ${P.bg} 0%, #0e0828 100%);
-    border: 1px solid ${P.dpurp}55; border-radius: 8px;
+    background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
+    border: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent); border-radius: 8px;
     padding: 6px 0; font-family: 'Courier New', monospace;
     box-shadow: 0 4px 16px rgba(0,0,0,0.6); min-width: 200px;
   `;
@@ -48,11 +48,11 @@ export function showPlayerMenu(
   const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
 
   menu.innerHTML = `
-    <div style="color:${P.lcream};font-size:13px;font-weight:bold;padding:8px 16px 10px;border-bottom:1px solid ${P.dpurp}22;">${esc(name)}</div>
-    <div class="ctx-profile" style="padding:10px 16px;color:${P.lpurp};font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDC64 View Profile</div>
-    <div class="ctx-visit" style="padding:10px 16px;color:${P.pink};font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
-    <div style="height:1px;background:${P.dpurp}22;margin:2px 0;"></div>
-    <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? P.teal : P.amber};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
+    <div style="color:var(--nd-text);font-size:13px;font-weight:bold;padding:8px 16px 10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);">${esc(name)}</div>
+    <div class="ctx-profile" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDC64 View Profile</div>
+    <div class="ctx-visit" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
+    <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 13%,transparent);margin:2px 0;"></div>
+    <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : '#f0b040'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
   `;
 
   menu.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -61,7 +61,7 @@ export function showPlayerMenu(
 
   // Hover effects
   menu.querySelectorAll('.ctx-profile,.ctx-visit,.ctx-mute').forEach(el => {
-    el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `${P.dpurp}20`);
+    el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `color-mix(in srgb,var(--nd-dpurp) 13%,transparent)`);
     el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent');
   });
 

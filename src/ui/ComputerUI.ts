@@ -42,7 +42,7 @@ export class ComputerUI {
   private onStatusUpdate: OnStatusUpdate | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
-  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' = 'walls';
+  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
 
@@ -94,23 +94,23 @@ export class ComputerUI {
     this.panel.id = PANEL_ID;
     this.panel.style.cssText = `
       position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;
-      background:linear-gradient(180deg,#0a0818,#0e0828);
-      border:1px solid ${P.teal}44;border-radius:10px;
+      background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
+      border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:10px;
       font-family:'Courier New',monospace;
-      box-shadow:0 8px 30px rgba(0,0,0,0.8),0 0 40px ${P.teal}08;
+      box-shadow:0 8px 30px rgba(0,0,0,0.8),0 0 40px color-mix(in srgb,var(--nd-accent) 3%,transparent);
       width:460px;max-width:94vw;max-height:88vh;overflow:hidden;
       display:flex;flex-direction:column;
     `;
 
     this.panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid ${P.dpurp}33;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="color:${P.teal};font-size:11px;">&#9679;</span>
-          <span style="color:${P.lcream};font-size:14px;font-weight:bold;">TERMINAL</span>
+          <span style="color:var(--nd-accent);font-size:11px;">&#9679;</span>
+          <span style="color:var(--nd-text);font-size:14px;font-weight:bold;">TERMINAL</span>
         </div>
-        <button id="comp-close" style="background:none;border:none;color:${P.dpurp};font-size:18px;cursor:pointer;padding:4px 8px;">\u2715</button>
+        <button id="comp-close" style="background:none;border:none;color:var(--nd-dpurp);font-size:18px;cursor:pointer;padding:4px 8px;">\u2715</button>
       </div>
-      <div id="comp-tabs" style="display:flex;border-bottom:1px solid ${P.dpurp}22;"></div>
+      <div id="comp-tabs" style="display:flex;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);"></div>
       <div id="comp-body" style="flex:1;overflow-y:auto;padding:16px 18px;"></div>
     `;
 
@@ -147,9 +147,9 @@ export class ComputerUI {
       <button class="comp-tab" data-tab="${t.key}" style="
         flex:1;padding:10px;border:none;font-family:'Courier New',monospace;font-size:12px;
         cursor:pointer;transition:all 0.15s;
-        background:${this.currentTab === t.key ? P.teal + '15' : 'transparent'};
-        color:${this.currentTab === t.key ? P.teal : P.lpurp};
-        border-bottom:2px solid ${this.currentTab === t.key ? P.teal : 'transparent'};
+        background:${this.currentTab === t.key ? 'color-mix(in srgb,var(--nd-accent) 8%,transparent)' : 'transparent'};
+        color:${this.currentTab === t.key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
+        border-bottom:2px solid ${this.currentTab === t.key ? 'var(--nd-accent)' : 'transparent'};
       ">${t.label}</button>
     `).join('');
 
@@ -179,7 +179,7 @@ export class ComputerUI {
     const avatar = getAvatar();
     body.innerHTML = `
       <div style="display:flex;gap:16px;margin-bottom:14px;">
-        <div id="ward-preview" style="width:96px;height:180px;background:linear-gradient(180deg,#5a5672 0%,#4b465f 68%,#40394f 100%);border:1px solid rgba(255,255,255,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -18px 28px rgba(24,18,36,0.22);position:relative;overflow:hidden;"></div>
+        <div id="ward-preview" style="width:96px;height:180px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-purp) 55%,var(--nd-navy)) 0%,var(--nd-navy) 68%,var(--nd-bg) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04),inset 0 -18px 28px rgba(0,0,0,0.3);position:relative;overflow:hidden;"></div>
         <div style="flex:1;">
           <div id="ward-slots" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;"></div>
           <div id="ward-options"></div>
@@ -224,9 +224,9 @@ export class ComputerUI {
     container.innerHTML = slots.map(s => `
       <button class="ws" data-slot="${s.key}" style="
         padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;
-        cursor:pointer;border:1px solid ${this.currentSlot === s.key ? P.teal + '66' : P.dpurp + '33'};
-        background:${this.currentSlot === s.key ? P.teal + '22' : 'transparent'};
-        color:${this.currentSlot === s.key ? P.teal : P.lpurp};
+        cursor:pointer;border:1px solid ${this.currentSlot === s.key ? 'color-mix(in srgb,var(--nd-accent) 40%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+        background:${this.currentSlot === s.key ? 'color-mix(in srgb,var(--nd-accent) 13%,transparent)' : 'transparent'};
+        color:${this.currentSlot === s.key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
       ">${s.label}</button>
     `).join('');
     container.querySelectorAll('.ws').forEach(el => {
@@ -258,9 +258,9 @@ export class ComputerUI {
       ${options.map(opt => `
         <button class="wo" data-v="${opt}" style="
           padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;
-          cursor:pointer;border:1px solid ${current === opt ? P.pink + '66' : P.dpurp + '33'};
-          background:${current === opt ? P.pink + '22' : P.navy};
-          color:${current === opt ? P.pink : P.lcream};
+          cursor:pointer;border:1px solid ${current === opt ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+          background:${current === opt ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
+          color:${current === opt ? 'var(--nd-accent)' : 'var(--nd-text)'};
         ">${esc(opt)}</button>
       `).join('')}
     </div>`;
@@ -288,7 +288,7 @@ export class ComputerUI {
     const currentColor = (avatar as any)[colorKey] as string;
 
     container.innerHTML = `
-      <div style="color:${P.lpurp};font-size:10px;margin-bottom:6px;opacity:0.5;">Color</div>
+      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:6px;opacity:0.5;">Color</div>
       <div style="display:flex;flex-wrap:wrap;gap:3px;">
         ${COLOR_PRESETS.map(c => `
           <div class="wc" data-c="${c}" style="
@@ -312,19 +312,19 @@ export class ComputerUI {
     const container = body.querySelector('#ward-outfits') as HTMLElement;
     if (!container) return;
     const outfits = getOutfits();
-    const inputStyle = `width:100%;padding:6px 8px;background:#0a0818;border:1px solid ${P.dpurp}44;border-radius:4px;color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;`;
+    const inputStyle = `width:100%;padding:6px 8px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;`;
     container.innerHTML = `
-      <div style="color:${P.lpurp};font-size:10px;margin-bottom:6px;opacity:0.5;">SAVED OUTFITS</div>
+      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:6px;opacity:0.5;">SAVED OUTFITS</div>
       <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input id="outfit-name" type="text" maxlength="20" placeholder="Outfit name..." style="${inputStyle}flex:1;"/>
-        <button id="outfit-save" style="padding:6px 10px;background:${P.teal}22;border:1px solid ${P.teal}44;border-radius:4px;color:${P.teal};font-family:'Courier New',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
+        <button id="outfit-save" style="padding:6px 10px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:4px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
       </div>
       <div id="outfit-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
-        ${outfits.length === 0 ? `<div style="color:${P.dpurp};font-size:11px;text-align:center;padding:8px 0;">No saved outfits</div>` : outfits.map((o, i) => `
-          <div style="display:flex;align-items:center;gap:6px;background:#0e0828;border:1px solid ${P.dpurp}22;border-radius:4px;padding:5px 8px;">
-            <span style="flex:1;color:${P.lcream};font-size:11px;">${esc(o.name)}</span>
-            <button class="outfit-load" data-i="${i}" style="padding:3px 8px;background:${P.pink}22;border:1px solid ${P.pink}44;border-radius:3px;color:${P.pink};font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">Wear</button>
-            <button class="outfit-del" data-i="${i}" style="padding:3px 6px;background:none;border:1px solid ${P.dpurp}33;border-radius:3px;color:${P.lpurp};font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">✕</button>
+        ${outfits.length === 0 ? `<div style="color:var(--nd-dpurp);font-size:11px;text-align:center;padding:8px 0;">No saved outfits</div>` : outfits.map((o, i) => `
+          <div style="display:flex;align-items:center;gap:6px;background:color-mix(in srgb,black 40%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 12%,transparent);border-radius:4px;padding:5px 8px;">
+            <span style="flex:1;color:var(--nd-text);font-size:11px;">${esc(o.name)}</span>
+            <button class="outfit-load" data-i="${i}" style="padding:3px 8px;background:color-mix(in srgb,var(--nd-accent) 22%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 44%,transparent);border-radius:3px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">Wear</button>
+            <button class="outfit-del" data-i="${i}" style="padding:3px 6px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border-radius:3px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">✕</button>
           </div>
         `).join('')}
       </div>
@@ -368,26 +368,26 @@ export class ComputerUI {
     if (isGuest) {
       const currentName = state.displayName || 'guest';
       body.innerHTML = `
-        <div style="color:${P.lcream};font-size:13px;font-weight:bold;margin-bottom:14px;">Display Name</div>
+        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;margin-bottom:14px;">Display Name</div>
         <div style="margin-bottom:10px;">
           <input id="guest-name" type="text" maxlength="32" value="${esc(currentName)}" style="
-            width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-            color:${P.lcream};font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
+            width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+            color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
           "/>
         </div>
         <div style="margin-top:10px;">
-          <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Status</label>
+          <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
           <input id="guest-status" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
-            width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-            color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+            width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+            color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
           "/>
         </div>
         <button id="guest-name-save" style="
-          width:100%;padding:10px;margin-top:10px;background:${P.teal}33;border:1px solid ${P.teal}55;border-radius:6px;
-          color:${P.teal};font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
+          width:100%;padding:10px;margin-top:10px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;
+          color:var(--nd-accent);font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
         ">Save</button>
-        <div id="guest-name-status" style="color:${P.dpurp};font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
-        <div style="color:${P.dpurp};font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
+        <div id="guest-name-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
+        <div style="color:var(--nd-dpurp);font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
       `;
       const statusEl = body.querySelector('#guest-name-status') as HTMLElement;
       body.querySelector('#guest-name-save')?.addEventListener('click', () => {
@@ -400,51 +400,51 @@ export class ComputerUI {
         this.onProfileSave?.(name);
         sendStatusUpdate(status);
         this.onStatusUpdate?.(status);
-        statusEl.style.color = P.teal;
+        statusEl.style.color = 'var(--nd-accent)';
         statusEl.textContent = 'Saved!';
       });
       return;
     }
 
     body.innerHTML = `
-      <div style="color:${P.lcream};font-size:13px;font-weight:bold;margin-bottom:14px;">Edit Nostr Profile</div>
+      <div style="color:var(--nd-text);font-size:13px;font-weight:bold;margin-bottom:14px;">Edit Nostr Profile</div>
       <div style="margin-bottom:10px;">
-        <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Display Name</label>
+        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Display Name</label>
         <input id="prof-name" type="text" value="${esc(profile.display_name || profile.name || '')}" style="
-          width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-          color:${P.lcream};font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
+          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+          color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
         "/>
       </div>
       <div style="margin-bottom:10px;">
-        <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">About</label>
+        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">About</label>
         <textarea id="prof-about" rows="3" style="
-          width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-          color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;resize:vertical;
+          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;resize:vertical;
         ">${esc(profile.about || '')}</textarea>
       </div>
       <div style="margin-bottom:14px;">
-        <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Picture URL</label>
+        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Picture URL</label>
         <input id="prof-pic" type="text" value="${esc(profile.picture || '')}" style="
-          width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-          color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
       </div>
       <div style="margin-bottom:14px;">
-        <label style="color:${P.lpurp};font-size:11px;display:block;margin-bottom:4px;">Status</label>
+        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
         <input id="prof-status-input" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
-          width:100%;padding:8px 10px;background:${P.navy};border:1px solid ${P.dpurp}44;border-radius:4px;
-          color:${P.lcream};font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
         <button id="prof-status-save" style="
-          width:100%;margin-top:6px;padding:7px;background:${P.purp}22;border:1px solid ${P.purp}44;border-radius:4px;
-          color:${P.lpurp};font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
+          width:100%;margin-top:6px;padding:7px;background:color-mix(in srgb,var(--nd-purp) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-purp) 27%,transparent);border-radius:4px;
+          color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
         ">Update Status</button>
       </div>
       <button id="prof-save" style="
-        width:100%;padding:10px;background:${P.teal}33;border:1px solid ${P.teal}55;border-radius:6px;
-        color:${P.teal};font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
+        width:100%;padding:10px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;
+        color:var(--nd-accent);font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
       ">Publish Profile (kind:0)</button>
-      <div id="prof-status" style="color:${P.dpurp};font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
+      <div id="prof-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
     `;
 
     body.querySelector('#prof-status-save')?.addEventListener('click', () => {
@@ -453,12 +453,12 @@ export class ComputerUI {
       sendStatusUpdate(status);
       this.onStatusUpdate?.(status);
       const el = body.querySelector('#prof-status') as HTMLElement;
-      if (el) { el.style.color = P.teal; el.textContent = 'Status updated!'; setTimeout(() => { el.textContent = ''; }, 2000); }
+      if (el) { el.style.color = 'var(--nd-accent)'; el.textContent = 'Status updated!'; setTimeout(() => { el.textContent = ''; }, 2000); }
     });
 
     body.querySelector('#prof-save')?.addEventListener('click', async () => {
       const statusEl = body.querySelector('#prof-status') as HTMLElement;
-      statusEl.style.color = P.teal;
+      statusEl.style.color = 'var(--nd-accent)';
       statusEl.textContent = 'Publishing...';
       try {
         const name = (body.querySelector('#prof-name') as HTMLInputElement).value.trim();
@@ -494,7 +494,7 @@ export class ComputerUI {
         authStore.updateProfile(content);
         if (name) this.onProfileSave?.(name);
 
-        statusEl.style.color = P.teal;
+        statusEl.style.color = 'var(--nd-accent)';
         statusEl.textContent = 'Published!';
       } catch (e: any) {
         statusEl.style.color = P.red;
@@ -529,14 +529,15 @@ export class ComputerUI {
       { key: 'furniture', label: 'Furniture' },
       { key: 'posters',   label: 'Posters' },
       { key: 'pets',      label: '🐾 Pets' },
+      { key: 'note',      label: '📌 Note' },
     ];
 
     container.innerHTML = sections.map(s => `
       <button class="rs" data-sec="${s.key}" style="
         padding:6px 12px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;
-        cursor:pointer;border:1px solid ${this.currentRoomSection === s.key ? P.teal + '66' : P.dpurp + '33'};
-        background:${this.currentRoomSection === s.key ? P.teal + '22' : 'transparent'};
-        color:${this.currentRoomSection === s.key ? P.teal : P.lpurp};
+        cursor:pointer;border:1px solid ${this.currentRoomSection === s.key ? 'color-mix(in srgb,var(--nd-accent) 40%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+        background:${this.currentRoomSection === s.key ? 'color-mix(in srgb,var(--nd-accent) 13%,transparent)' : 'transparent'};
+        color:${this.currentRoomSection === s.key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
       ">${s.label}</button>
     `).join('');
 
@@ -560,6 +561,7 @@ export class ComputerUI {
       case 'furniture': this.renderFurniturePicker(container, body); break;
       case 'posters':   this.renderPosterPicker(container, body);    break;
       case 'pets':      this.renderPets(container);                  break;
+      case 'note':      this.renderNotePicker(container);            break;
     }
   }
 
@@ -568,14 +570,14 @@ export class ComputerUI {
     const themes = Object.entries(WALL_THEMES) as [WallTheme, typeof WALL_THEMES[WallTheme]][];
 
     container.innerHTML = `
-      <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Wall Theme</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Theme</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
         ${themes.map(([key, theme]) => `
           <button class="wt" data-wall="${key}" style="
             padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.wallTheme === key ? P.teal : P.dpurp + '33'};
-            background:${theme.bg};color:${cfg.wallTheme === key ? P.teal : P.lpurp};
+            border:2px solid ${cfg.wallTheme === key ? 'var(--nd-accent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+            background:${theme.bg};color:${cfg.wallTheme === key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
           ">
             <div style="width:100%;height:28px;border-radius:3px;margin-bottom:6px;background:${theme.brick};border:1px solid ${theme.accent};"></div>
             ${esc(theme.label)}
@@ -614,16 +616,16 @@ export class ComputerUI {
     };
 
     container.innerHTML = `
-      <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Floor Style</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Floor Style</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${floors.map(([key, style]) => `
           <button class="ft" data-floor="${key}" style="
             padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.floorStyle === key ? P.teal : P.dpurp + '33'};
-            background:${P.navy};color:${cfg.floorStyle === key ? P.teal : P.lpurp};
+            border:2px solid ${cfg.floorStyle === key ? 'var(--nd-accent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+            background:transparent;color:${cfg.floorStyle === key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
           ">
-            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:6px;border:1px solid ${P.dpurp}33;${floorPreview(key)}"></div>
+            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:6px;border:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);${floorPreview(key)}"></div>
             ${esc(style.label)}
           </button>
         `).join('')}
@@ -645,15 +647,15 @@ export class ComputerUI {
     const moods = Object.entries(LIGHTING_MOODS) as [LightingMood, typeof LIGHTING_MOODS[LightingMood]][];
 
     container.innerHTML = `
-      <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Lighting Mood</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Lighting Mood</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${moods.map(([key, mood]) => `
           <button class="lt" data-light="${key}" style="
             padding:12px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.lighting === key ? mood.primary : P.dpurp + '33'};
-            background:${cfg.lighting === key ? mood.primary + '15' : P.navy};
-            color:${cfg.lighting === key ? mood.primary : P.lpurp};
+            border:2px solid ${cfg.lighting === key ? mood.primary : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+            background:${cfg.lighting === key ? mood.primary + '15' : 'transparent'};
+            color:${cfg.lighting === key ? mood.primary : 'var(--nd-subtext)'};
           ">
             <div style="width:20px;height:20px;border-radius:50%;margin:0 auto 6px;background:${mood.primary};box-shadow:0 0 12px ${mood.primary}66;"></div>
             ${esc(mood.label)}
@@ -698,7 +700,7 @@ export class ComputerUI {
     const currentColor = activeColor ? getFurnitureColor(cfg, activeColor) : null;
 
     container.innerHTML = `
-      <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Furniture</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Furniture</div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">
         ${ALL_FURNITURE.map(id => {
           const data = FURNITURE_DATA[id];
@@ -709,8 +711,8 @@ export class ComputerUI {
           return `
             <div style="
               border-radius:6px;overflow:hidden;
-              border:1px solid ${isExpanded ? P.teal + '88' : active ? P.teal + '44' : P.dpurp + '22'};
-              background:${active || isDesk ? P.teal + '0a' : P.navy};
+              border:1px solid ${isExpanded ? 'color-mix(in srgb,var(--nd-accent) 53%,transparent)' : active ? 'color-mix(in srgb,var(--nd-accent) 27%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 13%,transparent)'};
+              background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 3%,transparent)' : 'transparent'};
               opacity:${isDesk ? '0.7' : '1'};
             ">
               <div class="fur-row" data-fid="${id}" style="
@@ -719,7 +721,7 @@ export class ComputerUI {
               ">
                 <span style="font-size:15px;">${data.emoji}</span>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:11px;color:${active || isDesk ? P.teal : P.lpurp};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
+                  <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'var(--nd-subtext)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
                   <div style="font-size:9px;opacity:0.45;">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
                 </div>
                 ${active || isDesk ? `
@@ -731,22 +733,22 @@ export class ComputerUI {
                 ` : ''}
               </div>
               ${isExpanded && activePalette ? `
-                <div style="padding:6px 8px 8px;border-top:1px solid ${P.teal}22;">
-                  <div style="font-size:9px;color:${P.lpurp};opacity:0.6;margin-bottom:5px;">${activePalette.label}</div>
+                <div style="padding:6px 8px 8px;border-top:1px solid color-mix(in srgb,var(--nd-accent) 13%,transparent);">
+                  <div style="font-size:9px;color:var(--nd-subtext);opacity:0.6;margin-bottom:5px;">${activePalette.label}</div>
                   <div style="display:flex;flex-wrap:wrap;gap:4px;">
                     ${activePalette.colors.map(c => `
                       <div class="pal-swatch" data-fid="${id}" data-color="${c}" style="
                         width:20px;height:20px;border-radius:3px;cursor:pointer;
                         background:${c};
-                        border:2px solid ${currentColor === c ? P.teal : 'rgba(255,255,255,0.12)'};
+                        border:2px solid ${currentColor === c ? 'var(--nd-accent)' : 'rgba(255,255,255,0.12)'};
                         transition:transform 0.1s;
                       "></div>
                     `).join('')}
                     <div class="pal-reset" data-fid="${id}" style="
                       width:20px;height:20px;border-radius:3px;cursor:pointer;
-                      background:transparent;border:1px solid ${P.dpurp}55;
+                      background:transparent;border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
                       display:flex;align-items:center;justify-content:center;
-                      font-size:11px;color:${P.dpurp};
+                      font-size:11px;color:var(--nd-dpurp);
                     " title="Reset">↺</div>
                   </div>
                 </div>
@@ -813,15 +815,15 @@ export class ComputerUI {
     const slotLabels = ['Left Wall', 'Center Wall', 'Right Wall'];
 
     container.innerHTML = `
-      <div style="color:${P.lcream};font-size:12px;margin-bottom:10px;">Wall Posters</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Posters</div>
       <div style="display:flex;gap:4px;margin-bottom:12px;">
         ${[0, 1, 2].map(i => `
           <button class="ps" data-pslot="${i}" style="
             flex:1;padding:6px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;
-            border:1px solid ${this.activePosterSlot === i ? P.pink + '66' : P.dpurp + '33'};
-            background:${this.activePosterSlot === i ? P.pink + '15' : 'transparent'};
-            color:${this.activePosterSlot === i ? P.pink : P.lpurp};
+            border:1px solid ${this.activePosterSlot === i ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+            background:${this.activePosterSlot === i ? 'color-mix(in srgb,var(--nd-accent) 15%,transparent)' : 'transparent'};
+            color:${this.activePosterSlot === i ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
           ">${slotLabels[i]}<br/><span style="font-size:9px;opacity:0.6;">${POSTER_DATA[cfg.posters[i]].label}</span></button>
         `).join('')}
       </div>
@@ -833,9 +835,9 @@ export class ComputerUI {
             <button class="po" data-pid="${id}" style="
               padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
               cursor:pointer;text-align:center;transition:all 0.15s;
-              border:1px solid ${active ? P.pink + '66' : P.dpurp + '33'};
-              background:${active ? P.pink + '22' : P.navy};
-              color:${active ? P.pink : P.lcream};
+              border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+              background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
+              color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};
             ">
               <span style="font-size:16px;">${data.emoji}</span><br/>
               <span style="font-size:9px;">${esc(data.label)}</span>
@@ -868,23 +870,25 @@ export class ComputerUI {
   private renderPets(container: HTMLElement): void {
     const current = getPet();
 
-    const petCard = (species: PetSpecies, breed: number, name: string) => {
+    const petCard = (species: PetSpecies, breed: number, name: string, scale = 1.0) => {
       const isSelected = current.species === species && current.breed === breed;
       const imgUrl = `pets/${species}-${breed}-idle.png`;
-      const dispH  = species === 'dog' ? 60 : 52;
-      const bgSize = `auto ${dispH}px`;
+      const baseH  = species === 'dog' ? 60 : 52;
+      const dispH  = Math.round(baseH * scale);
+      const dispW  = dispH; // frames are square
+      const bgSize = `${dispW}px ${dispH}px`;
       return `
         <button class="pet-btn" data-species="${species}" data-breed="${breed}" style="
           display:flex;flex-direction:column;align-items:center;gap:4px;
           padding:8px 6px;border-radius:6px;cursor:pointer;
-          border:1px solid ${isSelected ? P.teal + '88' : P.dpurp + '33'};
-          background:${isSelected ? P.teal + '18' : P.navy};
-          color:${isSelected ? P.teal : P.lcream};
+          border:1px solid ${isSelected ? 'color-mix(in srgb,var(--nd-accent) 53%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+          background:${isSelected ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)' : 'color-mix(in srgb,black 35%,var(--nd-bg))'};
+          color:${isSelected ? 'var(--nd-accent)' : 'var(--nd-text)'};
           font-family:'Courier New',monospace;font-size:9px;
           transition:all 0.12s;
         ">
           <div style="
-            width:60px;height:${dispH}px;overflow:hidden;
+            width:${dispW}px;height:${dispH}px;overflow:hidden;
             background-image:url('${imgUrl}');
             background-size:${bgSize};
             background-position:0 0;
@@ -899,18 +903,18 @@ export class ComputerUI {
     container.innerHTML = `
       <button class="pet-btn" data-species="none" data-breed="0" style="
         width:100%;padding:8px;border-radius:6px;cursor:pointer;
-        border:1px solid ${current.species === 'none' ? P.red + '66' : P.dpurp + '33'};
-        background:${current.species === 'none' ? P.red + '18' : P.navy};
-        color:${current.species === 'none' ? P.red : P.lpurp};
+        border:1px solid ${current.species === 'none' ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
+        background:${current.species === 'none' ? 'color-mix(in srgb,var(--nd-accent) 18%,transparent)' : 'transparent'};
+        color:${current.species === 'none' ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
         font-family:'Courier New',monospace;font-size:11px;margin-bottom:12px;display:block;
       ">No Pet</button>
 
-      <div style="color:${P.teal};font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">DOGS</div>
+      <div style="color:var(--nd-accent);font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">DOGS</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;">
-        ${DOG_BREEDS.map(b => petCard('dog', b.id, b.name)).join('')}
+        ${DOG_BREEDS.map(b => petCard('dog', b.id, b.name, b.scale)).join('')}
       </div>
 
-      <div style="color:${P.pink};font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">CATS</div>
+      <div style="color:var(--nd-accent);font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">CATS</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${CAT_BREEDS.map(b => petCard('cat', b.id, b.name)).join('')}
       </div>
@@ -924,6 +928,70 @@ export class ComputerUI {
         this.onPetChange?.(sel);
         this.renderPets(container);
       });
+    });
+  }
+
+  private renderNotePicker(container: HTMLElement): void {
+    const cfg = getRoomConfig();
+    const current = cfg.pinnedNote || '';
+    const MAX = 220;
+
+    container.innerHTML = `
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:8px;">Wall Note</div>
+      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:12px;line-height:1.5;">
+        Pin a note to your room wall. Visitors can read it when they click the note.
+      </div>
+      <textarea id="note-input" maxlength="${MAX}" style="
+        width:100%;height:110px;resize:none;box-sizing:border-box;
+        background:color-mix(in srgb,black 45%,var(--nd-bg));
+        border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);
+        border-radius:6px;padding:10px;
+        color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;
+        line-height:1.6;outline:none;
+      " placeholder="Leave a note for visitors...">${esc(current)}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span id="note-counter" style="color:var(--nd-subtext);font-size:10px;">${current.length}/${MAX}</span>
+        <div style="display:flex;gap:8px;">
+          ${current ? `<button id="note-clear" style="
+            padding:6px 14px;border-radius:4px;cursor:pointer;
+            background:transparent;border:1px solid color-mix(in srgb,var(--nd-amber) 30%,transparent);
+            color:var(--nd-amber);font-family:'Courier New',monospace;font-size:11px;
+          ">Remove</button>` : ''}
+          <button id="note-save" style="
+            padding:6px 18px;border-radius:4px;cursor:pointer;
+            background:color-mix(in srgb,var(--nd-accent) 18%,transparent);
+            border:1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
+            color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;
+          ">Pin Note</button>
+        </div>
+      </div>
+      <div id="note-saved" style="color:var(--nd-accent);font-size:11px;margin-top:8px;opacity:0;transition:opacity 0.3s;">
+        ✓ Note pinned to wall
+      </div>
+    `;
+
+    const textarea = container.querySelector('#note-input') as HTMLTextAreaElement;
+    const counter  = container.querySelector('#note-counter') as HTMLElement;
+    const saved    = container.querySelector('#note-saved') as HTMLElement;
+
+    textarea.addEventListener('input', () => {
+      counter.textContent = `${textarea.value.length}/${MAX}`;
+    });
+
+    container.querySelector('#note-save')?.addEventListener('click', () => {
+      const text = textarea.value.trim();
+      const newCfg = setRoomConfig({ pinnedNote: text || null });
+      this.onRoomChange?.(newCfg);
+      saved.style.opacity = '1';
+      setTimeout(() => { saved.style.opacity = '0'; }, 2000);
+      // Re-render to show/hide the Remove button
+      this.renderNotePicker(container);
+    });
+
+    container.querySelector('#note-clear')?.addEventListener('click', () => {
+      const newCfg = setRoomConfig({ pinnedNote: null });
+      this.onRoomChange?.(newCfg);
+      this.renderNotePicker(container);
     });
   }
 }

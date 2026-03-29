@@ -83,6 +83,8 @@ export interface RoomConfig {
   hasSetup: boolean;
   /** Ceiling light string color override (uses lighting by default) */
   ceilingLightColor: string | null;
+  /** Pinned wall note text (null = no note) */
+  pinnedNote: string | null;
 }
 
 const STORAGE_KEY = 'nostr_district_room';
@@ -96,6 +98,7 @@ const DEFAULT_ROOM: RoomConfig = {
   furnitureColors: {},
   hasSetup: false,
   ceilingLightColor: null,
+  pinnedNote: null,
 };
 
 let currentRoom: RoomConfig = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {} };
@@ -138,6 +141,7 @@ export function setRoomConfig(config: Partial<RoomConfig>): RoomConfig {
   if (config.lighting !== undefined) currentRoom.lighting = config.lighting;
   if (config.hasSetup !== undefined) currentRoom.hasSetup = config.hasSetup;
   if (config.ceilingLightColor !== undefined) currentRoom.ceilingLightColor = config.ceilingLightColor;
+  if (config.pinnedNote !== undefined) currentRoom.pinnedNote = config.pinnedNote;
   if (config.furnitureColors !== undefined) currentRoom.furnitureColors = { ...config.furnitureColors };
   save();
   return getRoomConfig();

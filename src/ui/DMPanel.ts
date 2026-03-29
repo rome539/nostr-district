@@ -7,7 +7,6 @@
  * - Styled to match Nostr District neon cyberpunk aesthetic
  */
 
-import { P } from '../config/game.config';
 import { sendDirectMessage, onDMReceived, canUseDMs, DMMessage } from '../nostr/dmService';
 import { fetchProfile } from '../nostr/nostrService';
 import { shouldFilter } from '../nostr/moderationService';
@@ -35,6 +34,8 @@ export class DMPanel {
   private myPubkey: string | null = null;
   private totalUnread = 0;
   private gifPicker: GifPicker | null = null;
+  private hiddenConvs = new Set<string>();
+  private showHidden = false;
 
   private readKey(convPubkey: string): string {
     return `nd_dm_read_${this.myPubkey}_${convPubkey}`;
@@ -48,8 +49,37 @@ export class DMPanel {
     localStorage.setItem(this.readKey(convPubkey), String(ts));
   }
 
+  private hiddenKey(): string { return `nd_dm_hidden_${this.myPubkey}`; }
+  private loadHidden(): void {
+    try {
+      const stored = localStorage.getItem(this.hiddenKey());
+      if (stored) (JSON.parse(stored) as string[]).forEach(k => this.hiddenConvs.add(k));
+    } catch (_) {}
+  }
+  private saveHidden(): void {
+    localStorage.setItem(this.hiddenKey(), JSON.stringify([...this.hiddenConvs]));
+  }
+  private hideConversation(pubkey: string): void {
+    this.hiddenConvs.add(pubkey);
+    this.saveHidden();
+    if (this.activePubkey === pubkey) {
+      this.activePubkey = null;
+      const chatEl = this.container?.querySelector('.dm-chat') as HTMLElement;
+      const listEl = this.container?.querySelector('.dm-conv-list') as HTMLElement;
+      if (chatEl) chatEl.style.display = 'none';
+      if (listEl) listEl.style.display = 'block';
+    }
+    this.renderConversationList();
+  }
+  private unhideConversation(pubkey: string): void {
+    this.hiddenConvs.delete(pubkey);
+    this.saveHidden();
+    this.renderConversationList();
+  }
+
   constructor(myPubkey: string | null) {
     this.myPubkey = myPubkey;
+    this.loadHidden();
     this.injectStyles();
 
     // Listen for incoming DMs
@@ -179,20 +209,20 @@ export class DMPanel {
     toast.id = 'dm-toast';
     toast.style.cssText = `
       position: fixed; bottom: 80px; right: 20px; z-index: 4000;
-      background: linear-gradient(135deg, ${P.bg} 0%, #0e0828 100%);
-      border: 1px solid ${P.teal}66; border-radius: 10px;
+      background: linear-gradient(135deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
+      border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent); border-radius: 10px;
       padding: 12px 16px; font-family: 'Courier New', monospace;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 12px ${P.teal}22;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 12px color-mix(in srgb,var(--nd-accent) 13%,transparent);
       max-width: 280px; cursor: pointer;
       animation: dm-toast-in 0.2s ease;
     `;
     toast.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="color:${P.teal};font-size:13px;">\u2709</span>
-        <span style="color:${P.teal};font-size:12px;font-weight:bold;">${senderName.slice(0, 24)}</span>
-        <button id="dm-toast-close" style="margin-left:auto;background:none;border:none;color:${P.lpurp};font-size:14px;cursor:pointer;padding:0;line-height:1;">\u2715</button>
+        <span style="color:var(--nd-accent);font-size:13px;">\u2709</span>
+        <span style="color:var(--nd-accent);font-size:12px;font-weight:bold;">${senderName.slice(0, 24)}</span>
+        <button id="dm-toast-close" style="margin-left:auto;background:none;border:none;color:var(--nd-subtext);font-size:14px;cursor:pointer;padding:0;line-height:1;">\u2715</button>
       </div>
-      <div style="color:${P.lcream};font-size:11px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${content.slice(0, 60)}</div>
+      <div style="color:var(--nd-text);font-size:11px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${content.slice(0, 60)}</div>
     `;
 
     if (!document.getElementById('dm-toast-style')) {
@@ -234,17 +264,17 @@ export class DMPanel {
     badge.id = 'dm-badge';
     badge.style.cssText = `
       position: fixed; bottom: 20px; right: 20px; z-index: 3999;
-      background: linear-gradient(135deg, ${P.bg} 0%, #0e0828 100%);
-      border: 1px solid ${P.teal}66; border-radius: 50px;
+      background: linear-gradient(135deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
+      border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent); border-radius: 50px;
       padding: 8px 14px; font-family: 'Courier New', monospace;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.6), 0 0 8px ${P.teal}22;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.6), 0 0 8px color-mix(in srgb,var(--nd-accent) 13%,transparent);
       display: flex; align-items: center; gap: 7px;
       cursor: pointer; animation: dm-toast-in 0.2s ease;
     `;
     badge.innerHTML = `
-      <span style="color:${P.teal};font-size:14px;">\u2709</span>
+      <span style="color:var(--nd-accent);font-size:14px;">\u2709</span>
       <span class="dm-badge-count" style="
-        background:${P.teal}; color:${P.bg}; font-size:10px; font-weight:bold;
+        background:var(--nd-accent); color:var(--nd-bg); font-size:10px; font-weight:bold;
         border-radius:50%; width:16px; height:16px;
         display:flex; align-items:center; justify-content:center;
       ">${this.totalUnread}</span>
@@ -319,10 +349,10 @@ export class DMPanel {
     });
 
     this.inputEl.addEventListener('focus', () => {
-      this.inputEl!.style.borderColor = `${P.teal}88`;
+      this.inputEl!.style.borderColor = `color-mix(in srgb,var(--nd-accent) 65%,transparent)`;
     });
     this.inputEl.addEventListener('blur', () => {
-      this.inputEl!.style.borderColor = `${P.dpurp}66`;
+      this.inputEl!.style.borderColor = `color-mix(in srgb,var(--nd-text) 20%,transparent)`;
     });
   }
 
@@ -333,29 +363,57 @@ export class DMPanel {
   private renderConversationList(): void {
     if (!this.convListEl) return;
 
-    const sorted = Array.from(this.conversations.values())
+    const all = Array.from(this.conversations.values())
       .sort((a, b) => b.lastTime - a.lastTime);
 
-    if (sorted.length === 0) {
-      this.convListEl.innerHTML = `
-        <div class="dm-empty">No conversations yet.<br/>Click a player to start a DM.</div>
-      `;
+    const visible = all.filter(c => !this.hiddenConvs.has(c.pubkey));
+    const hidden  = all.filter(c =>  this.hiddenConvs.has(c.pubkey));
+
+    if (all.length === 0) {
+      this.convListEl.innerHTML = `<div class="dm-empty">No conversations yet.<br/>Click a player to start a DM.</div>`;
       return;
     }
 
-    this.convListEl.innerHTML = sorted.map(conv => `
-      <div class="dm-conv-item ${conv.pubkey === this.activePubkey ? 'active' : ''}" data-pubkey="${conv.pubkey}">
+    const renderItem = (conv: Conversation, isHidden: boolean) => `
+      <div class="dm-conv-item ${conv.pubkey === this.activePubkey ? 'active' : ''} ${isHidden ? 'dm-conv-hidden' : ''}" data-pubkey="${conv.pubkey}">
         <div class="dm-conv-name">${this.escapeHtml(conv.name)}</div>
         <div class="dm-conv-preview">${this.escapeHtml(conv.lastMessage)}</div>
-        ${conv.unread > 0 ? `<span class="dm-unread">${conv.unread}</span>` : ''}
+        ${conv.unread > 0 && !isHidden ? `<span class="dm-unread">${conv.unread}</span>` : ''}
+        <button class="dm-hide-btn" data-pubkey="${conv.pubkey}" data-hidden="${isHidden}" title="${isHidden ? 'Unhide' : 'Hide'}">${isHidden ? '↩' : '✕'}</button>
       </div>
-    `).join('');
+    `;
+
+    const visibleHtml = visible.map(c => renderItem(c, false)).join('');
+    const hiddenHtml  = this.showHidden ? hidden.map(c => renderItem(c, true)).join('') : '';
+    const footerHtml  = hidden.length > 0 ? `
+      <div class="dm-hidden-toggle" id="dm-hidden-toggle">
+        ${this.showHidden ? '▲ Hide archived' : `▼ Archived (${hidden.length})`}
+      </div>
+    ` : '';
+
+    this.convListEl.innerHTML = visibleHtml + footerHtml + hiddenHtml;
 
     this.convListEl.querySelectorAll('.dm-conv-item').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.dm-hide-btn')) return;
         const pk = (el as HTMLElement).dataset.pubkey;
         if (pk) this.openConversation(pk);
       });
+    });
+
+    this.convListEl.querySelectorAll('.dm-hide-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pk = (btn as HTMLElement).dataset.pubkey!;
+        const isHidden = (btn as HTMLElement).dataset.hidden === 'true';
+        if (isHidden) this.unhideConversation(pk);
+        else this.hideConversation(pk);
+      });
+    });
+
+    document.getElementById('dm-hidden-toggle')?.addEventListener('click', () => {
+      this.showHidden = !this.showHidden;
+      this.renderConversationList();
     });
   }
 
@@ -378,7 +436,7 @@ export class DMPanel {
       const contentHtml = isGif
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
-          ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:${P.teal};opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
+          ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
           : this.escapeHtml(msg.content);
 
       return `
@@ -463,211 +521,160 @@ export class DMPanel {
     style.id = 'dm-panel-styles';
     style.textContent = `
       .dm-panel {
-        position: fixed;
-        top: 0;
-        right: -400px;
-        width: 390px;
-        height: 100vh;
-        background: linear-gradient(180deg, ${P.bg} 0%, #0e0828 100%);
-        border-left: 1px solid ${P.dpurp}55;
-        z-index: 2000;
-        font-family: 'Courier New', monospace;
-        display: flex;
-        flex-direction: column;
-        transition: right 0.25s ease;
-        box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+        position: fixed; top: 0; right: -400px; width: 390px; height: 100vh;
+        background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
+        border-left: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
+        z-index: 2000; font-family: 'Courier New', monospace;
+        display: flex; flex-direction: column;
+        transition: right 0.25s ease; box-shadow: -4px 0 20px rgba(0,0,0,0.5);
       }
-      .dm-panel.dm-open {
-        right: 0;
-      }
+      .dm-panel.dm-open { right: 0; }
+
       .dm-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        display: flex; justify-content: space-between; align-items: center;
         padding: 14px 18px;
-        border-bottom: 1px solid ${P.dpurp}44;
-        background: rgba(10,0,20,0.5);
+        border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
+        background: color-mix(in srgb, black 52%, var(--nd-bg));
       }
       .dm-title {
-        color: ${P.teal};
-        font-size: 15px;
-        font-weight: bold;
-        letter-spacing: 0.5px;
+        color: var(--nd-accent); font-size: 15px; font-weight: bold; letter-spacing: 0.5px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.8);
       }
       .dm-close {
-        background: none;
-        border: none;
-        color: ${P.lpurp};
-        font-size: 18px;
-        cursor: pointer;
-        padding: 4px 8px;
-        transition: color 0.15s;
+        background: none; border: none; color: var(--nd-subtext);
+        font-size: 18px; cursor: pointer; padding: 4px 8px; transition: color 0.15s;
       }
-      .dm-close:hover { color: ${P.pink}; }
-      .dm-body {
-        flex: 1;
-        display: flex;
-        overflow: hidden;
-      }
+      .dm-close:hover { color: var(--nd-text); }
+
+      .dm-body { flex: 1; display: flex; overflow: hidden; }
       .dm-conv-list {
-        flex: 1;
-        overflow-y: auto;
+        flex: 1; overflow-y: auto;
         scrollbar-width: thin;
-        scrollbar-color: ${P.lpurp}44 transparent;
+        scrollbar-color: color-mix(in srgb,var(--nd-text) 18%,transparent) transparent;
       }
       .dm-conv-item {
         padding: 12px 16px;
-        border-bottom: 1px solid ${P.dpurp}22;
-        cursor: pointer;
-        transition: background 0.15s;
-        position: relative;
+        border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 7%,transparent);
+        cursor: pointer; transition: background 0.15s; position: relative;
       }
-      .dm-conv-item:hover { background: rgba(74,45,142,0.15); }
-      .dm-conv-item.active { background: rgba(93,202,165,0.1); border-left: 2px solid ${P.teal}; }
+      .dm-conv-item:hover { background: color-mix(in srgb,var(--nd-text) 6%,transparent); }
+      .dm-conv-item.active { background: color-mix(in srgb,var(--nd-accent) 14%,transparent); border-left: 2px solid var(--nd-accent); }
       .dm-conv-name {
-        color: ${P.lcream};
-        font-size: 13px;
-        font-weight: bold;
-        margin-bottom: 3px;
+        color: var(--nd-text); font-size: 13px; font-weight: bold; margin-bottom: 3px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
       .dm-conv-preview {
-        color: ${P.lpurp};
-        font-size: 12px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        color: var(--nd-subtext); font-size: 12px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
       .dm-unread {
-        position: absolute;
-        top: 12px;
-        right: 14px;
-        background: ${P.pink};
-        color: #fff;
-        font-size: 11px;
-        font-weight: bold;
-        padding: 2px 6px;
-        border-radius: 8px;
-        min-width: 16px;
-        text-align: center;
+        position: absolute; top: 12px; right: 14px;
+        background: var(--nd-accent); color: var(--nd-bg);
+        font-size: 11px; font-weight: bold; padding: 2px 6px;
+        border-radius: 8px; min-width: 16px; text-align: center;
       }
-      .dm-chat {
-        flex: 1;
-        display: none;
-        flex-direction: column;
+      .dm-hide-btn {
+        position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+        background: color-mix(in srgb, black 55%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb, var(--nd-text) 15%, transparent);
+        border-radius: 4px; color: var(--nd-subtext);
+        font-size: 11px; line-height: 1; padding: 3px 6px; cursor: pointer;
+        opacity: 0; transition: opacity 0.15s, color 0.15s;
+        font-family: 'Courier New', monospace;
       }
+      .dm-conv-item:hover .dm-hide-btn { opacity: 1; }
+      .dm-hide-btn:hover { color: var(--nd-text); border-color: color-mix(in srgb, var(--nd-text) 35%, transparent); }
+      .dm-conv-item:has(.dm-unread) .dm-hide-btn { right: 46px; }
+      .dm-conv-hidden { opacity: 0.45; }
+      .dm-conv-hidden .dm-hide-btn { color: var(--nd-accent); }
+      .dm-hidden-toggle {
+        padding: 8px 16px; font-size: 11px;
+        color: var(--nd-subtext); cursor: pointer;
+        border-top: 1px solid color-mix(in srgb, var(--nd-text) 7%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--nd-text) 7%, transparent);
+        background: color-mix(in srgb, black 30%, var(--nd-bg));
+        text-align: center; transition: color 0.15s;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      }
+      .dm-hidden-toggle:hover { color: var(--nd-text); }
+
+      .dm-chat { flex: 1; display: none; flex-direction: column; }
       .dm-chat-header {
         padding: 10px 14px;
-        border-bottom: 1px solid ${P.dpurp}33;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: rgba(10,0,20,0.3);
+        border-bottom: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
+        display: flex; align-items: center; gap: 10px;
+        background: color-mix(in srgb, black 45%, var(--nd-bg));
       }
       .dm-back {
-        background: none;
-        border: none;
-        color: ${P.teal};
-        font-size: 16px;
-        cursor: pointer;
-        padding: 2px 6px;
+        background: none; border: none; color: var(--nd-accent);
+        font-size: 16px; cursor: pointer; padding: 2px 6px;
       }
-      .dm-back:hover { color: ${P.lcream}; }
+      .dm-back:hover { color: var(--nd-text); }
       .dm-chat-name {
-        color: ${P.lcream};
-        font-size: 14px;
-        font-weight: bold;
+        color: var(--nd-text); font-size: 14px; font-weight: bold;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
+
       .dm-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 12px 14px;
+        flex: 1; overflow-y: auto; padding: 12px 14px;
         scrollbar-width: thin;
-        scrollbar-color: ${P.lpurp}44 transparent;
+        scrollbar-color: color-mix(in srgb,var(--nd-text) 18%,transparent) transparent;
       }
-      .dm-msg {
-        margin-bottom: 10px;
-        max-width: 85%;
-      }
-      .dm-msg-own {
-        margin-left: auto;
-        text-align: right;
-      }
-      .dm-msg-other {
-        margin-right: auto;
-      }
+      .dm-msg { margin-bottom: 10px; max-width: 85%; }
+      .dm-msg-own { margin-left: auto; text-align: right; }
+      .dm-msg-other { margin-right: auto; }
       .dm-msg-content {
-        display: inline-block;
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        line-height: 1.4;
-        word-break: break-word;
+        display: inline-block; padding: 8px 12px; border-radius: 8px;
+        font-size: 13px; line-height: 1.4; word-break: break-word;
       }
       .dm-msg-own .dm-msg-content {
-        background: ${P.teal}22;
-        color: ${P.lteal};
-        border: 1px solid ${P.teal}33;
+        background: color-mix(in srgb, var(--nd-accent) 22%, color-mix(in srgb, black 55%, var(--nd-bg)));
+        color: var(--nd-text);
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 55%, transparent);
         border-radius: 8px 8px 2px 8px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       }
       .dm-msg-other .dm-msg-content {
-        background: ${P.dpurp}22;
-        color: ${P.lcream};
-        border: 1px solid ${P.dpurp}33;
+        background: color-mix(in srgb, black 50%, var(--nd-bg));
+        color: var(--nd-text);
+        border: 1px solid color-mix(in srgb, var(--nd-text) 14%, transparent);
         border-radius: 8px 8px 8px 2px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       }
-      .dm-msg-time {
-        font-size: 10px;
-        color: ${P.lpurp};
-        margin-top: 3px;
-      }
-      .dm-msg-own .dm-msg-time {
-        text-align: right;
-      }
-      .dm-msg-error {
-        text-align: center;
-        color: ${P.red};
-        font-size: 12px;
-        padding: 4px;
-        opacity: 0.7;
-      }
+      .dm-msg-time { font-size: 10px; color: var(--nd-subtext); margin-top: 3px; }
+      .dm-msg-own .dm-msg-time { text-align: right; }
+      .dm-msg-error { text-align: center; color: #e85454; font-size: 12px; padding: 4px; opacity: 0.7; }
+
       .dm-input-row {
         padding: 10px 14px;
-        border-top: 1px solid ${P.dpurp}33;
-        background: rgba(10,0,20,0.4);
+        border-top: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
+        background: color-mix(in srgb, black 50%, var(--nd-bg));
         display: flex; gap: 6px; align-items: center;
       }
       .dm-input {
         flex: 1;
-        background: rgba(10,0,20,0.8);
-        border: 1px solid ${P.dpurp}66;
-        border-radius: 6px;
-        color: ${P.lcream};
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        padding: 10px 12px;
-        outline: none;
-        box-sizing: border-box;
-        transition: border-color 0.2s;
+        background: color-mix(in srgb, black 55%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb,var(--nd-text) 20%,transparent);
+        border-radius: 6px; color: var(--nd-text);
+        font-family: 'Courier New', monospace; font-size: 13px;
+        padding: 10px 12px; outline: none; box-sizing: border-box; transition: border-color 0.2s;
       }
-      .dm-input:focus {
-        border-color: ${P.teal}88;
-        box-shadow: 0 0 6px ${P.teal}15;
-      }
-      .dm-input::placeholder { color: ${P.lpurp}88; }
+      .dm-input:focus { border-color: color-mix(in srgb,var(--nd-accent) 65%,transparent); }
+      .dm-input::placeholder { color: var(--nd-subtext); opacity: 0.55; }
       .dm-gif-btn {
         flex-shrink: 0; padding: 8px 10px;
-        background: ${P.dpurp}33; border: 1px solid ${P.dpurp}66; border-radius: 6px;
-        color: ${P.lpurp}; font-family: 'Courier New', monospace; font-size: 11px;
-        font-weight: bold; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+        background: color-mix(in srgb, black 45%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);
+        border-radius: 6px; color: var(--nd-subtext);
+        font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold;
+        cursor: pointer; transition: color 0.15s, border-color 0.15s;
       }
-      .dm-gif-btn:hover { color: ${P.teal}; border-color: ${P.teal}55; }
+      .dm-gif-btn:hover { color: var(--nd-accent); border-color: color-mix(in srgb,var(--nd-accent) 50%,transparent); }
       .dm-msg-gif { background: none !important; border: none !important; padding: 0 !important; }
       .dm-empty {
-        color: ${P.lpurp};
-        font-size: 13px;
-        text-align: center;
-        padding: 30px 20px;
-        line-height: 1.5;
+        color: var(--nd-subtext); font-size: 13px; text-align: center;
+        padding: 30px 20px; line-height: 1.5; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
     `;
     document.head.appendChild(style);

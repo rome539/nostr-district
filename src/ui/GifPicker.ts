@@ -2,7 +2,7 @@
  * GifPicker.ts — Floating GIF & Meme picker (powered by Klipy)
  */
 
-import { P, KLIPY_API_KEY, IMGUR_CLIENT_ID } from '../config/game.config';
+import { KLIPY_API_KEY, IMGUR_CLIENT_ID } from '../config/game.config';
 
 interface GifResult { previewUrl: string; gifUrl: string; title: string; }
 
@@ -240,7 +240,7 @@ export class GifPicker {
     } catch (_) {
       if (!this.el) return;
       const g = this.el.querySelector('#gp-grid') as HTMLDivElement | null;
-      if (g) g.innerHTML = `<div class="gp-status" style="color:${P.amber};">Klipy unavailable</div>`;
+      if (g) g.innerHTML = `<div class="gp-status" style="color:var(--nd-accent);opacity:0.7;">Klipy unavailable</div>`;
     }
   }
 
@@ -255,64 +255,68 @@ export class GifPicker {
     } catch (_) {
       if (!this.el) return;
       const g = this.el.querySelector('#gp-memes-grid') as HTMLDivElement | null;
-      if (g) g.innerHTML = `<div class="gp-status" style="color:${P.amber};">Memes unavailable</div>`;
+      if (g) g.innerHTML = `<div class="gp-status" style="color:var(--nd-accent);opacity:0.7;">Memes unavailable</div>`;
     }
   }
 
   private injectStyles(): void {
-    // Always refresh styles in case panel size changed
     document.getElementById('gp-styles')?.remove();
     const s = document.createElement('style');
     s.id = 'gp-styles';
     s.textContent = `
       .gp {
         position:fixed;z-index:5000;width:300px;
-        background:linear-gradient(180deg,${P.bg} 0%,#0e0828 100%);
-        border:1px solid ${P.dpurp}55;border-radius:10px;
+        background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
+        border:1px solid color-mix(in srgb,var(--nd-text) 12%,transparent);border-radius:10px;
         box-shadow:0 -4px 24px rgba(0,0,0,0.8);
         display:flex;flex-direction:column;overflow:hidden;
         font-family:'Courier New',monospace;
       }
-      .gp-tabs { display:flex;border-bottom:1px solid ${P.dpurp}33;flex-shrink:0; }
+      .gp-tabs {
+        display:flex;border-bottom:1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);flex-shrink:0;
+        background:color-mix(in srgb, black 42%, var(--nd-bg));
+      }
       .gp-tab {
         flex:1;padding:7px 0;background:none;border:none;
-        color:${P.lpurp};font-family:'Courier New',monospace;font-size:11px;
-        cursor:pointer;opacity:0.6;border-bottom:2px solid transparent;margin-bottom:-1px;
+        color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;
+        cursor:pointer;opacity:0.7;border-bottom:2px solid transparent;margin-bottom:-1px;
         transition:color 0.15s,opacity 0.15s;
       }
-      .gp-tab:hover { opacity:0.9; }
-      .gp-tab-active { color:${P.teal};opacity:1;border-bottom-color:${P.teal}; }
+      .gp-tab:hover { opacity:1;color:var(--nd-text); }
+      .gp-tab-active { color:var(--nd-accent);opacity:1;border-bottom-color:var(--nd-accent); }
       .gp-search-panel,.gp-memes-panel { display:flex;flex-direction:column;overflow:hidden; }
-      .gp-search-panel { display:flex; }
-      .gp-row { padding:6px 8px;border-bottom:1px solid ${P.dpurp}33;flex-shrink:0; }
+      .gp-row {
+        padding:6px 8px;border-bottom:1px solid color-mix(in srgb,var(--nd-text) 8%,transparent);flex-shrink:0;
+        background:color-mix(in srgb, black 35%, var(--nd-bg));
+      }
       .gp-search-input,.gp-memes-input {
         width:100%;box-sizing:border-box;
-        background:${P.dpurp}22;border:1px solid ${P.dpurp}44;border-radius:5px;
-        color:${P.lcream};font-family:'Courier New',monospace;font-size:11px;
+        background:color-mix(in srgb, black 55%, var(--nd-bg));
+        border:1px solid color-mix(in srgb,var(--nd-text) 20%,transparent);border-radius:5px;
+        color:var(--nd-text);font-family:'Courier New',monospace;font-size:11px;
         padding:5px 8px;outline:none;
       }
-      .gp-search-input:focus,.gp-memes-input:focus { border-color:${P.teal}55; }
-      .gp-search-input::placeholder,.gp-memes-input::placeholder { color:${P.lpurp};opacity:0.5; }
+      .gp-search-input:focus,.gp-memes-input:focus { border-color:color-mix(in srgb,var(--nd-accent) 65%,transparent); }
+      .gp-search-input::placeholder,.gp-memes-input::placeholder { color:var(--nd-subtext);opacity:0.55; }
       .gp-grid {
-        height:196px;overflow-y:auto;padding:5px;
-        display:grid;grid-template-columns:repeat(3,1fr);gap:4px;align-content:start;
-        scrollbar-width:thin;scrollbar-color:${P.dpurp}44 transparent;
+        height:280px;overflow-y:auto;padding:5px;
+        display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:88px;gap:4px;align-content:start;
+        scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-text) 18%,transparent) transparent;
       }
       .gp-status {
-        grid-column:1/-1;color:${P.lpurp};font-size:11px;
+        grid-column:1/-1;color:var(--nd-subtext);font-size:11px;
         text-align:center;padding:16px 8px;line-height:1.5;
       }
       .gp-thumb {
-        position:relative;padding-bottom:100%;
-        border-radius:4px;overflow:hidden;
-        background:${P.dpurp}22;cursor:pointer;
+        overflow:hidden;border-radius:4px;
+        background:color-mix(in srgb, black 40%, var(--nd-bg));cursor:pointer;
         border:2px solid transparent;transition:border-color 0.1s;
       }
-      .gp-thumb:hover { border-color:${P.teal}; }
-      .gp-thumb img { position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block; }
+      .gp-thumb:hover { border-color:var(--nd-accent); }
+      .gp-thumb img { width:100%;height:100%;object-fit:cover;display:block; }
       .gp-foot {
-        padding:3px 8px;border-top:1px solid ${P.dpurp}22;
-        color:${P.dpurp};font-size:9px;text-align:right;flex-shrink:0;opacity:0.4;
+        padding:3px 8px;border-top:1px solid color-mix(in srgb,var(--nd-text) 8%,transparent);
+        color:var(--nd-subtext);font-size:9px;text-align:right;flex-shrink:0;opacity:0.4;
       }
     `;
     document.head.appendChild(s);

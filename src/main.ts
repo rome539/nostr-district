@@ -5,6 +5,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config/game.config';
 import { LoginScreen } from './ui/LoginScreen';
 import { authStore } from './stores/authStore';
 import { RoomScene } from './scenes/RoomScene';
+import './stores/themeStore'; // init theme CSS vars early
 import {
   loginWithExtension,
   loginWithNsec,

@@ -55,12 +55,12 @@ export const PET_FRAME_SIZE: Record<Exclude<PetSpecies, 'none'>, number> = {
 };
 
 export const DOG_BREEDS = [
-  { id: 1, name: 'Dog 1' },
-  { id: 2, name: 'Dog 2' },
-  { id: 3, name: 'Dog 3' },
-  { id: 4, name: 'Dog 4' },
-  { id: 5, name: 'Dog 5' },
-  { id: 6, name: 'Dog 6' },
+  { id: 1, name: 'Dog 1', scale: 1.0 },
+  { id: 2, name: 'Dog 2', scale: 1.5 },
+  { id: 3, name: 'Dog 3', scale: 1.0 },
+  { id: 4, name: 'Dog 4', scale: 1.5 },
+  { id: 5, name: 'Dog 5', scale: 1.0 },
+  { id: 6, name: 'Dog 6', scale: 1.0 },
 ];
 
 export const CAT_BREEDS = [

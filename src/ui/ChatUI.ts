@@ -4,7 +4,6 @@
  */
 
 import Phaser from 'phaser';
-import { P } from '../config/game.config';
 import { sendChat } from '../nostr/presenceService';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 
@@ -21,7 +20,7 @@ function renderContent(text: string): string {
   if (/^https?:\/\/[^\s]+$/i.test(t)) {
     const href = t.replace(/"/g, '%22');
     const label = escapeHtml(t.length > 55 ? t.slice(0, 52) + '…' : t);
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:${P.teal};opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
   }
   return `<span style="color:#f5e8d0;opacity:0.85;">${escapeHtml(text)}</span>`;
 }
@@ -44,7 +43,7 @@ export class ChatUI {
     this.container.style.cssText = `position:fixed;bottom:12px;left:50%;transform:translateX(-50%);width:520px;max-width:92vw;z-index:1000;font-family:'Courier New',monospace;`;
 
     this.log = document.createElement('div');
-    this.log.style.cssText = `max-height:160px;overflow-y:auto;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,rgba(10,0,20,0.82) 0%,rgba(10,0,20,0.9) 100%);border:1px solid ${accentColor}33;border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:${accentColor}44 transparent;`;
+    this.log.style.cssText = `max-height:160px;overflow-y:auto;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;`;
     this.container.appendChild(this.log);
 
     const inputRow = document.createElement('div');
@@ -54,15 +53,15 @@ export class ChatUI {
     this.input.type = 'text';
     this.input.placeholder = placeholder;
     this.input.maxLength = 200;
-    this.input.style.cssText = `flex:1;background:rgba(10,0,20,0.88);border:1px solid ${accentColor}55;border-radius:6px;color:#fff5e6;font-family:'Courier New',monospace;font-size:13px;padding:10px 14px;outline:none;transition:border-color 0.2s ease,box-shadow 0.2s ease;`;
+    this.input.style.cssText = `flex:1;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;padding:10px 14px;outline:none;transition:border-color 0.2s ease,box-shadow 0.2s ease;`;
 
     this.input.addEventListener('focus', () => {
-      this.input.style.borderColor = `${accentColor}88`;
-      this.input.style.boxShadow = `0 0 10px ${accentColor}20`;
+      this.input.style.borderColor = `color-mix(in srgb,var(--nd-accent) 75%,transparent)`;
+      this.input.style.boxShadow = `0 0 10px color-mix(in srgb,var(--nd-accent) 18%,transparent)`;
       this.showLog();
     });
     this.input.addEventListener('blur', () => {
-      this.input.style.borderColor = `${accentColor}55`;
+      this.input.style.borderColor = `color-mix(in srgb,var(--nd-text) 22%,transparent)`;
       this.input.style.boxShadow = 'none';
       this.scheduleHide(this.commandMode ? 25000 : 8000);
       this.commandMode = false;
@@ -87,9 +86,9 @@ export class ChatUI {
     // GIF button
     const gifBtn = document.createElement('button');
     gifBtn.textContent = 'GIF';
-    gifBtn.style.cssText = `background:${P.dpurp}33;border:1px solid ${P.dpurp}66;border-radius:6px;color:${P.lpurp};font-family:'Courier New',monospace;font-size:11px;font-weight:bold;padding:0 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:color 0.15s,border-color 0.15s;`;
-    gifBtn.addEventListener('mouseenter', () => { gifBtn.style.color = P.teal; gifBtn.style.borderColor = `${P.teal}55`; });
-    gifBtn.addEventListener('mouseleave', () => { gifBtn.style.color = P.lpurp; gifBtn.style.borderColor = `${P.dpurp}66`; });
+    gifBtn.style.cssText = `background:color-mix(in srgb,black 45%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 25%,transparent);border-radius:6px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;font-weight:bold;padding:0 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:color 0.15s,border-color 0.15s;`;
+    gifBtn.addEventListener('mouseenter', () => { gifBtn.style.color = 'var(--nd-accent)'; gifBtn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 55%,transparent)`; });
+    gifBtn.addEventListener('mouseleave', () => { gifBtn.style.color = 'var(--nd-subtext)'; gifBtn.style.borderColor = `color-mix(in srgb,var(--nd-text) 25%,transparent)`; });
     gifBtn.addEventListener('click', () => {
       if (this.gifPicker?.isOpen()) {
         this.gifPicker.close();
@@ -164,23 +163,41 @@ export class ChatUI {
   /** Create a speech bubble above a position in a Phaser scene */
   static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000): void {
     if (isGifUrl(text.trim())) {
-      const cam = scene.cameras.main;
-      const canvas = scene.sys.game.canvas;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = rect.width / canvas.width;
-      const scaleY = rect.height / canvas.height;
-      const sx = rect.left + (bx - cam.scrollX) * cam.zoom * scaleX;
-      const sy = rect.top + (by - 16 - cam.scrollY) * cam.zoom * scaleY;
+      // World coords fixed at moment of posting — bubble stays in place as player walks away
+      const worldX = bx;
+      const worldY = by - 16;
       const wrap = document.createElement('div');
-      wrap.style.cssText = `position:fixed;left:${sx}px;top:${sy}px;transform:translateX(-50%) translateY(-100%);z-index:200;pointer-events:none;opacity:0;transition:opacity 0.2s ease;`;
+      wrap.style.cssText = `position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity 0.2s ease;transform:translateX(-50%) translateY(-100%);`;
       const img = document.createElement('img');
       img.src = gifSrcAttr(text.trim());
       img.style.cssText = `max-width:120px;max-height:80px;border-radius:6px;display:block;border:2px solid ${tint}88;box-shadow:0 2px 12px rgba(0,0,0,0.7);`;
-      img.onerror = () => wrap.remove();
+      img.onerror = () => { cleanup(); wrap.remove(); };
       wrap.appendChild(img);
       document.body.appendChild(wrap);
+
+      const updatePos = () => {
+        const cam = scene.cameras.main;
+        const canvas = scene.sys.game.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width / canvas.width;
+        const scaleY = rect.height / canvas.height;
+        wrap.style.left = `${rect.left + (worldX - cam.scrollX) * cam.zoom * scaleX}px`;
+        wrap.style.top  = `${rect.top  + (worldY - cam.scrollY) * cam.zoom * scaleY}px`;
+      };
+
+      const cleanup = () => {
+        scene.events.off('prerender', updatePos);
+        scene.events.off('shutdown', cleanup);
+      };
+
+      scene.events.on('prerender', updatePos);
+      scene.events.once('shutdown', cleanup);
+      updatePos();
       requestAnimationFrame(() => { wrap.style.opacity = '1'; });
-      setTimeout(() => { wrap.style.opacity = '0'; setTimeout(() => wrap.remove(), 400); }, lifetime - 400);
+      setTimeout(() => {
+        wrap.style.opacity = '0';
+        setTimeout(() => { cleanup(); wrap.remove(); }, 400);
+      }, lifetime - 400);
       return;
     }
     const displayText = text.length > 40 ? text.slice(0, 40) + '...' : text;

@@ -19,12 +19,14 @@ import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatar
 import { sendAvatarUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
+import { loadNostrTheme } from '../nostr/nostrThemeService';
 import { LoginScreen } from '../ui/LoginScreen';
 import {
   loginWithExtension, loginWithNsec, loginAsGuest,
   startBunkerFlow, loginWithBunkerUrl, cancelBunkerFlow,
 } from '../nostr/nostrService';
 import { getRoomConfig } from '../stores/roomStore';
+import { PollBoard } from '../ui/PollBoard';
 
 interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
 
@@ -93,6 +95,9 @@ export class HubScene extends Phaser.Scene {
   private smokeEmote = new SmokeEmote();
   private settingsPanel = new SettingsPanel();
   private computerUI = new ComputerUI();
+  private pollBoard = new PollBoard();
+  private nearBulletinBoard = false;
+  private readonly BULLETIN_X = 1095;
 
   private playerY = GROUND_Y + 8;
   private isReturning = false;
@@ -200,6 +205,8 @@ export class HubScene extends Phaser.Scene {
     const auth = authStore.getState();
     this.registry.set('playerPubkey', auth.pubkey || '');
     this.registry.set('playerName', auth.displayName || 'anon');
+    // Fetch kind 16767 for panel theming (fire-and-forget)
+    if (auth.pubkey) void loadNostrTheme(auth.pubkey);
     this.startGame();
   }
 
@@ -216,7 +223,7 @@ export class HubScene extends Phaser.Scene {
     this.shootingStarGraphics = this.add.graphics().setDepth(-1);
     this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.smokeGraphics = this.add.graphics().setDepth(15);
-    this.createPlayer(); this.createInteractPrompt();
+    this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard();
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
@@ -249,14 +256,17 @@ export class HubScene extends Phaser.Scene {
     ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
     this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open((newAvatar) => { if (this.textures.exists('player')) this.textures.remove('player'); this.textures.addCanvas('player', renderHubSprite(newAvatar, 0)); this.textures.addCanvas('player_walk1', renderHubSprite(newAvatar, 1)); }, this.chatUI); } });
 
     let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
     this.followsPanel = fp;
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-B', () => { if (document.activeElement === this.chatUI.getInput()) return; this.pollBoard.toggle(); });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
   }
 
   update(time: number, delta: number): void {
@@ -336,8 +346,8 @@ export class HubScene extends Phaser.Scene {
     const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room';
     this.playerPickerEl = document.createElement('div');
-    this.playerPickerEl.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,${P.bg},#0e0828);border:1px solid ${P.dpurp}55;border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);min-width:300px;max-width:360px;`;
-    this.playerPickerEl.innerHTML = `<div style="color:${P.teal};font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">MY ROOM</div><button class="pe" style="width:100%;padding:10px;margin-bottom:12px;background:${P.teal}22;border:1px solid ${P.teal}55;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Enter ${esc(myName)}'s Room</button><div style="color:${P.dpurp};font-size:12px;margin-bottom:10px;text-align:center;">\u2014 or visit someone \u2014</div><input class="ps" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:rgba(10,0,20,0.8);border:1px solid ${P.dpurp}44;border-radius:6px;color:${P.lcream};font-size:13px;outline:none;box-sizing:border-box;"/><div class="pl" style="max-height:200px;overflow-y:auto;border:1px solid ${P.dpurp}22;border-radius:6px;"></div><button class="pc" style="width:100%;padding:8px;margin-top:12px;background:none;border:1px solid ${P.dpurp}44;border-radius:6px;color:${P.dpurp};font-size:12px;cursor:pointer;">Cancel</button>`;
+    this.playerPickerEl.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,var(--nd-bg),var(--nd-navy));border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);min-width:300px;max-width:360px;`;
+    this.playerPickerEl.innerHTML = `<div style="color:var(--nd-accent);font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">MY ROOM</div><button class="pe" style="width:100%;padding:10px;margin-bottom:12px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;color:var(--nd-accent);font-size:13px;cursor:pointer;font-weight:bold;">Enter ${esc(myName)}'s Room</button><div style="color:var(--nd-subtext);font-size:12px;margin-bottom:10px;text-align:center;">\u2014 or visit someone \u2014</div><input class="ps" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:color-mix(in srgb,var(--nd-bg) 80%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-text);font-size:13px;outline:none;box-sizing:border-box;"/><div class="pl" style="max-height:200px;overflow-y:auto;border:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);border-radius:6px;"></div><button class="pc" style="width:100%;padding:8px;margin-top:12px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-subtext);font-size:12px;cursor:pointer;">Cancel</button>`;
     document.body.appendChild(this.playerPickerEl);
     this.playerPickerEl.querySelector('.pe')!.addEventListener('click', () => { this.closePlayerPicker(); this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); });
     this.playerPickerEl.querySelector('.pc')!.addEventListener('click', () => this.closePlayerPicker());
@@ -346,9 +356,9 @@ export class HubScene extends Phaser.Scene {
     const eh = (e: KeyboardEvent) => { if (e.key === 'Escape') this.closePlayerPicker(); };
     document.addEventListener('keydown', eh); (this.playerPickerEl as any)._eh = eh;
     const ll = this.playerPickerEl.querySelector('.pl') as HTMLDivElement;
-    ll.innerHTML = `<div style="color:${P.dpurp};font-size:12px;text-align:center;padding:12px;">Loading...</div>`;
+    ll.innerHTML = `<div style="color:var(--nd-subtext);font-size:12px;text-align:center;padding:12px;">Loading...</div>`;
     let ap: { pubkey: string; name: string }[] = [];
-    const rl = (f: string) => { const fl = f ? ap.filter(p => p.name.toLowerCase().includes(f.toLowerCase())) : ap; if (!fl.length) { ll.innerHTML = `<div style="color:${P.dpurp};font-size:12px;text-align:center;padding:12px;">${f ? 'No matches' : 'No players online'}</div>`; return; } ll.innerHTML = fl.map(p => `<div class="pp" data-pk="${p.pubkey}" style="padding:10px 14px;border-bottom:1px solid ${P.dpurp}15;cursor:pointer;display:flex;justify-content:space-between;align-items:center;"><span style="color:${P.lcream};font-size:13px;">${esc(p.name)}</span><span style="color:${P.teal};font-size:11px;opacity:0.6;">Request \u2192</span></div>`).join(''); ll.querySelectorAll('.pp').forEach(el => { el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `${P.dpurp}15`); el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent'); el.addEventListener('click', () => { const pk = (el as HTMLElement).dataset.pk; if (pk) { this.closePlayerPicker(); this.requestRoomAccess(pk); } }); }); };
+    const rl = (f: string) => { const fl = f ? ap.filter(p => p.name.toLowerCase().includes(f.toLowerCase())) : ap; if (!fl.length) { ll.innerHTML = `<div style="color:var(--nd-subtext);font-size:12px;text-align:center;padding:12px;">${f ? 'No matches' : 'No players online'}</div>`; return; } ll.innerHTML = fl.map(p => `<div class="pp" data-pk="${p.pubkey}" style="padding:10px 14px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 8%,transparent);cursor:pointer;display:flex;justify-content:space-between;align-items:center;"><span style="color:var(--nd-text);font-size:13px;">${esc(p.name)}</span><span style="color:var(--nd-accent);font-size:11px;opacity:0.6;">Request \u2192</span></div>`).join(''); ll.querySelectorAll('.pp').forEach(el => { el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `color-mix(in srgb,var(--nd-dpurp) 10%,transparent)`); el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent'); el.addEventListener('click', () => { const pk = (el as HTMLElement).dataset.pk; if (pk) { this.closePlayerPicker(); this.requestRoomAccess(pk); } }); }); };
     si.addEventListener('input', () => rl(si.value));
     setOnlinePlayersHandler((p) => { setOnlinePlayersHandler(null); ap = p; rl(si.value); }); requestOnlinePlayers();
   }
@@ -450,7 +460,54 @@ export class HubScene extends Phaser.Scene {
   private updateParallax(): void { this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor; }
   private initDustParticles(): void { const c = [P.pink, P.purp, P.amber, P.teal, P.lcream]; for (let i = 0; i < 40; i++) this.dustParticles.push({ x: Math.random() * WORLD_WIDTH, y: 50 + Math.random() * (GROUND_Y - 60), vx: -0.1 + Math.random() * 0.2, vy: -0.05 + Math.random() * 0.1, alpha: 0.05 + Math.random() * 0.12, size: Math.random() > 0.8 ? 2 : 1, color: c[Math.floor(Math.random() * c.length)] }); }
   private updateDustParticles(d: number): void { this.dustGraphics.clear(); const dt = d / 16; this.dustParticles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; if (p.x < 0) p.x = WORLD_WIDTH; if (p.x > WORLD_WIDTH) p.x = 0; if (p.y < 40) p.y = GROUND_Y - 20; if (p.y > GROUND_Y - 10) p.y = 50; const rgb = hexToRgb(p.color); this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha); this.dustGraphics.fillRect(p.x, p.y, p.size, p.size); }); }
-  private updateShootingStar(d: number): void { this.shootingStarGraphics.clear(); if (!this.shootingStar) { this.shootingStarTimer += d; if (this.shootingStarTimer > 8000 + Math.random() * 12000) { this.shootingStarTimer = 0; const r = Math.random() > 0.5; this.shootingStar = { x: r ? Math.random() * WORLD_WIDTH * 0.5 : WORLD_WIDTH * 0.5 + Math.random() * WORLD_WIDTH * 0.5, y: 10 + Math.random() * 40, vx: r ? 4 + Math.random() * 3 : -(4 + Math.random() * 3), vy: 1.5 + Math.random() * 1.5, life: 0, maxLife: 400 + Math.random() * 300 }; } return; } const s = this.shootingStar; const dt = d / 16; s.x += s.vx * dt; s.y += s.vy * dt; s.life += d; const pr = s.life / s.maxLife; const a = pr < 0.15 ? pr / 0.15 : pr > 0.7 ? (1 - pr) / 0.3 : 1; this.shootingStarGraphics.fillStyle(0xffffff, a * 0.9); this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2); for (let i = 1; i <= 6; i++) { const tx = s.x - s.vx * i * 1.2; const ty = s.y - s.vy * i * 1.2; const ta = a * (0.5 - i * 0.07); if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 3 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 3 ? 2 : 1, 1); } } if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > WORLD_WIDTH + 20) this.shootingStar = null; }
+  private updateShootingStar(d: number): void {
+    this.shootingStarGraphics.clear();
+    if (!this.shootingStar) {
+      this.shootingStarTimer += d;
+      if (this.shootingStarTimer > 8000 + Math.random() * 12000) {
+        this.shootingStarTimer = 0;
+        const goRight = Math.random() > 0.5;
+        this.shootingStar = {
+          x: goRight ? Math.random() * WORLD_WIDTH * 0.4 : WORLD_WIDTH * 0.6 + Math.random() * WORLD_WIDTH * 0.4,
+          y: 8 + Math.random() * 35,
+          vx: goRight ? 4.5 + Math.random() * 3 : -(4.5 + Math.random() * 3),
+          vy: 1.2 + Math.random() * 1.4,
+          life: 0,
+          maxLife: 450 + Math.random() * 350,
+        };
+      }
+      return;
+    }
+    const s = this.shootingStar;
+    const dt = d / 16;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.life += d;
+    const pr = s.life / s.maxLife;
+    const a = pr < 0.15 ? pr / 0.15 : pr > 0.65 ? (1 - pr) / 0.35 : 1;
+    // Wide glow trail (outer layer)
+    for (let i = 1; i <= 10; i++) {
+      const tx = s.x - s.vx * i * 2.0;
+      const ty = s.y - s.vy * i * 2.0;
+      const ta = a * (0.22 - i * 0.018);
+      if (ta > 0) { this.shootingStarGraphics.fillStyle(0xc8b8ff, ta); this.shootingStarGraphics.fillRect(tx - 1, ty, 3, 2); }
+    }
+    // Bright core trail
+    for (let i = 1; i <= 10; i++) {
+      const tx = s.x - s.vx * i * 1.8;
+      const ty = s.y - s.vy * i * 1.8;
+      const ta = a * (0.65 - i * 0.06);
+      if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 4 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 4 ? 2 : 1, 1); }
+    }
+    // Head with bloom layers
+    this.shootingStarGraphics.fillStyle(0xddd0ff, a * 0.2);
+    this.shootingStarGraphics.fillRect(s.x - 2, s.y - 2, 6, 6);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.5);
+    this.shootingStarGraphics.fillRect(s.x - 1, s.y - 1, 4, 4);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.95);
+    this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
+    if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > WORLD_WIDTH + 20) this.shootingStar = null;
+  }
   private updateChimneySmoke(delta: number): void {
     this.chimneySpawnTimer += delta;
     if (this.chimneySpawnTimer > 90) {
@@ -508,9 +565,84 @@ export class HubScene extends Phaser.Scene {
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
   private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } this.isKeyboardMoving = vx !== 0; if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
-  private updateProximity(): void { let fi = -1; let cd = Infinity; for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } } const f = fi >= 0 ? ENTERABLE[fi] : null; if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`[E] Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } } }
+  private updateProximity(): void {
+    // Check bulletin board first
+    const bdist = Math.abs(this.player.x - this.BULLETIN_X);
+    const wasNearBoard = this.nearBulletinBoard;
+    this.nearBulletinBoard = bdist < 52;
+    if (this.nearBulletinBoard !== wasNearBoard) {
+      if (this.nearBulletinBoard) {
+        const px = this.BULLETIN_X; const py = GROUND_Y - 75;
+        this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true);
+        this.promptBg.setPosition(px - 62, py - 2);
+        this.promptText.setPosition(px, py + 8); this.promptText.setText('[E] View Polls'); this.promptText.setColor(P.amber);
+        this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(P.amber);
+        this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.nearBuilding = null;
+        return;
+      } else {
+        this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
+        this.tweens.killTweensOf(this.promptArrow);
+      }
+    }
+    if (this.nearBulletinBoard) return;
+
+    let fi = -1; let cd = Infinity;
+    for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } }
+    const f = fi >= 0 ? ENTERABLE[fi] : null;
+    if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`[E] Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } }
+  }
   private createInteractPrompt(): void { this.promptBg = this.add.graphics(); this.promptBg.fillStyle(hexToNum(P.bg), 0.88); this.promptBg.fillRoundedRect(0, 0, 124, 28, 5); this.promptBg.lineStyle(1, hexToNum(P.dpurp), 0.4); this.promptBg.strokeRoundedRect(0, 0, 124, 28, 5); this.promptBg.setDepth(50); this.promptBg.setVisible(false); this.promptText = this.add.text(0, 0, '', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51); this.promptText.setVisible(false); this.promptArrow = this.add.text(0, 0, '\u25BC', { fontFamily: 'monospace', fontSize: '9px', color: P.teal, align: 'center' }).setOrigin(0.5).setDepth(51); this.promptArrow.setVisible(false); }
-  private tryEnter(): void { if (!this.nearBuilding) return; this.isMoving = false; this.targetX = null; if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; } this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor); }
+  private createBulletinBoard(): void {
+    const bx = this.BULLETIN_X;
+    const g = this.add.graphics().setDepth(4);
+
+    // Legs — from board bottom flush to ground
+    g.fillStyle(0x3a2a18, 1);
+    g.fillRect(bx - 14, GROUND_Y - 10, 2, 10);
+    g.fillRect(bx + 12, GROUND_Y - 10, 2, 10);
+
+    // Board face — sits just above the legs
+    g.fillStyle(0x5c3d20, 1);
+    g.fillRect(bx - 17, GROUND_Y - 32, 34, 22);
+    g.lineStyle(1, 0x7a5530, 1);
+    g.strokeRect(bx - 17, GROUND_Y - 32, 34, 22);
+
+    // Top shadow
+    g.fillStyle(0x3a2a10, 0.4);
+    g.fillRect(bx - 17, GROUND_Y - 32, 34, 2);
+
+    // Papers
+    g.fillStyle(0xf0e8d0, 0.9);
+    g.fillRect(bx - 14, GROUND_Y - 29, 13, 8);
+    g.fillStyle(0xeae0c4, 0.9);
+    g.fillRect(bx +  1, GROUND_Y - 28, 12, 7);
+    g.fillStyle(0xf5f0e0, 0.9);
+    g.fillRect(bx - 10, GROUND_Y - 18, 18, 6);
+
+    // Pushpins
+    g.fillStyle(0xe84040, 1); g.fillCircle(bx - 7,  GROUND_Y - 30, 1.2);
+    g.fillStyle(0x4499ee, 1); g.fillCircle(bx +  8, GROUND_Y - 29, 1.2);
+    g.fillStyle(0xf0a020, 1); g.fillCircle(bx - 1,  GROUND_Y - 19, 1.2);
+
+    // "POLLS" label
+    const signText = this.add.text(bx, GROUND_Y - 34, 'POLLS', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '7px', color: P.amber, fontStyle: 'bold',
+    }).setOrigin(0.5, 1).setDepth(5);
+
+    this.events.on('update', (time: number) => {
+      signText.setAlpha(Math.sin(time * 0.003) > 0.94 ? 0.4 : 1);
+    });
+  }
+
+  private tryEnter(): void {
+    if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
+    if (!this.nearBuilding) return;
+    this.isMoving = false; this.targetX = null;
+    if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; }
+    this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor);
+  }
 
   // ── Commands ──
   private handleCommand(text: string): void {
@@ -545,9 +677,29 @@ export class HubScene extends Phaser.Scene {
         this.chatUI.addMessage('system', 'Terminal opened', P.teal);
         break;
       }
+      case 'polls': { this.pollBoard.toggle(); break; }
+      case 'flip': case 'coin': {
+        const result = Math.random() < 0.5 ? '👑 HEADS' : '🦅 TAILS';
+        sendChat(`🪙 flipped a coin: ${result}`);
+        break;
+      }
+      case '8ball': {
+        if (!arg) { this.chatUI.addMessage('system', 'Usage: /8ball <question>', P.teal); return; }
+        const responses = [
+          'It is certain.', 'Without a doubt.', 'Yes, definitely.', 'You may rely on it.',
+          'As I see it, yes.', 'Most likely.', 'Outlook good.', 'Signs point to yes.',
+          'Reply hazy, try again.', 'Ask again later.', 'Better not tell you now.',
+          'Cannot predict now.', 'Concentrate and ask again.',
+          "Don't count on it.", 'My reply is no.', 'My sources say no.',
+          'Outlook not so good.', 'Very doubtful.', 'Absolutely not.', 'The stars say no.',
+        ];
+        const answer = responses[Math.floor(Math.random() * responses.length)];
+        sendChat(`🎱 ${arg} — ${answer}`);
+        break;
+      }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'status': { const myStatus = localStorage.getItem('nd_status') || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }
     this.chatUI.flashLog();
