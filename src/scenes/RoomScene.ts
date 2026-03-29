@@ -85,9 +85,10 @@ export class RoomScene extends Phaser.Scene {
   private relayEventsText: Phaser.GameObjects.Text | null = null;
   private relayUpdateTimer = 0;
   private globalPlayerCount = 1;
+  private isLeavingRoom = false;
 
   constructor() { super({ key: 'RoomScene' }); }
-  init(data: RoomSceneConfig): void { this.roomConfig = data; this.feedNotes = []; this.smokeEmote.stop(); this.introActive = false; }
+  init(data: RoomSceneConfig): void { this.roomConfig = data; this.feedNotes = []; this.smokeEmote.stop(); this.introActive = false; this.isLeavingRoom = false; }
 
   preload(): void {
     const sel = getPet();
@@ -813,7 +814,20 @@ export class RoomScene extends Phaser.Scene {
     bg.lineStyle(1, hexToNum(nc), 0.35); bg.strokeRoundedRect(GAME_WIDTH / 2 - 80, 4, 160, 32, 6); bg.setDepth(99);
     this.add.text(GAME_WIDTH / 2, 20, this.roomConfig.name, { fontFamily: '"Courier New", monospace', fontSize: '14px', color: nc, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(100);
   }
-  private leaveRoom(): void { this.chatUI.destroy(); this.cameras.main.fadeOut(200, 10, 0, 20); this.time.delayedCall(200, () => { this.scene.start('HubScene', { _returning: true, fromRoom: this.roomConfig.id }); }); }
+  private leaveRoom(): void {
+    if (this.isLeavingRoom) return;
+    this.isLeavingRoom = true;
+    this.waitingForAccess = false;
+    sendRoomChange('hub');
+    this.computerUI.close();
+    this.destroyStickyNote();
+    this.chatUI.destroy();
+    this.cameras.main.fadeOut(200, 10, 0, 20);
+    this.time.delayedCall(200, () => {
+      if (!this.scene.isActive()) return;
+      this.scene.start('HubScene', { _returning: true, fromRoom: this.roomConfig.id });
+    });
+  }
   private isMyRoom(): boolean { return this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === this.registry.get('playerPubkey'); }
 
   private spawnPet(sel: PetSelection): void {
