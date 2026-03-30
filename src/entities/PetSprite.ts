@@ -96,10 +96,10 @@ const DOG_BREED_SCALE: Record<number, number> = {
 };
 const CAT_BREED_SCALE: Record<number, number> = {
   1: 2.2,
-  2: 2.35, // Cat 2 — slightly larger
-  3: 2.2,
+  2: 2.35, // Maine coon / bigger build
+  3: 2.45, // Cat 3 artwork is smaller in frame — compensate
   4: 2.2,
-  5: 2.2,
+  5: 2.3,  // Fluffy/Persian — slightly larger
   6: 2.2,
 };
 
@@ -202,12 +202,14 @@ export class PetSprite {
     const animKey = `${texKey}-anim`;
     if (!this.scene.textures.exists(texKey)) return;
 
-    // Scale and position proportional to the pet's actual rendered size.
-    // Cat frame: body sits in the bottom ~65% of the 50px frame, head/mouth at ~62% up.
-    // Dog frame: similar layout in the 100px frame.
+    // Cats: 50px frame, cat body fills bottom ~35% of frame.
+    //   Head top ≈ 22px from bottom (44%), mouth ≈ 17px from bottom (34%).
+    //   Use 0.34 so the VFX bottom lands at the mouth, extending upward.
+    // Dogs: 100px frame, content is more spread — 0.55 lands near the muzzle.
+    const yFactor  = this.species === 'cat' ? 0.34 : 0.55;
     const vfxScale = this.sprite.scaleX * 1.1;
-    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.28;
-    const vfxY     = this.sprite.y - this.sprite.displayHeight * 0.62;
+    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.32;
+    const vfxY     = this.sprite.y - this.sprite.displayHeight * yFactor;
 
     const vfx = this.scene.add.sprite(
       this.sprite.x + offsetX,

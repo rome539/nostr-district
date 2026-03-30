@@ -273,6 +273,27 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** WCAG contrast ratio between two colours (1:1 – 21:1) */
+function contrastRatio(a: string, b: string): number {
+  const la = luminance(a), lb = luminance(b);
+  const lighter = Math.max(la, lb), darker = Math.min(la, lb);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Nudge `color` toward white or black until it has at least `minRatio`
+ * contrast against `bg`. Stops after 20 iterations to avoid infinite loops.
+ */
+function ensureContrast(color: string, bg: string, minRatio: number): string {
+  const bgDark = luminance(bg) < 0.5;
+  const target = bgDark ? '#ffffff' : '#000000';
+  let c = color;
+  for (let i = 0; i < 20 && contrastRatio(c, bg) < minRatio; i++) {
+    c = mix(c, target, 0.25);
+  }
+  return c;
+}
+
 // ── Apply / Clear ─────────────────────────────────────────────────────────────
 
 function buildThemeCss(theme: NostrTheme): string {
@@ -299,11 +320,19 @@ function buildThemeCss(theme: NostrTheme): string {
 
   const [br, bg2, bb] = hexToRgb(bg);
 
+  // Enforce minimum contrast so no theme can make text unreadable.
+  // Main text: WCAG AA requires 4.5:1; we use 4.5 as the floor.
+  text    = ensureContrast(text,    bg, 4.5);
+  // Accent/primary used for buttons and highlights: minimum 3:1.
+  primary = ensureContrast(primary, bg, 3.0);
+
   // Derive the full --nd-* set from 3 source colours
   const navy    = mix(bg, primary, 0.08);
   const purp    = mix(bg, primary, 0.45);
   const dpurp   = mix(bg, primary, 0.2);
-  const subtext = mix(text, bg, 0.45);
+  // Subtext is a dimmed version of text — enforce at least 2.5:1 against bg.
+  let subtext   = mix(text, bg, 0.45);
+  subtext       = ensureContrast(subtext, bg, 2.5);
 
   // Apply to :root so the nostr theme fully replaces the active preset
   let css = `

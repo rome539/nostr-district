@@ -19,6 +19,7 @@ import {
 } from '../stores/roomStore';
 import { getPet, setPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../stores/petStore';
 import { sendStatusUpdate } from '../nostr/presenceService';
+import { SoundEngine, MYROOM_TRACKS, MyRoomTrackId } from '../audio/SoundEngine';
 
 const PANEL_ID = 'computer-panel';
 
@@ -42,7 +43,7 @@ export class ComputerUI {
   private onStatusUpdate: OnStatusUpdate | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
-  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' = 'walls';
+  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
 
@@ -530,6 +531,7 @@ export class ComputerUI {
       { key: 'posters',   label: 'Posters' },
       { key: 'pets',      label: 'Pets' },
       { key: 'note',      label: 'Note' },
+      { key: 'music',     label: 'Music' },
     ];
 
     container.innerHTML = sections.map(s => `
@@ -562,6 +564,7 @@ export class ComputerUI {
       case 'posters':   this.renderPosterPicker(container, body);    break;
       case 'pets':      this.renderPets(container);                  break;
       case 'note':      this.renderNotePicker(container);            break;
+      case 'music':     this.renderMusicPicker(container);           break;
     }
   }
 
@@ -991,5 +994,62 @@ export class ComputerUI {
       this.onRoomChange?.(newCfg);
       this.renderNotePicker(container);
     });
+  }
+
+  private renderMusicPicker(container: HTMLElement): void {
+    const snd = SoundEngine.get();
+
+    const allOptions: { id: MyRoomTrackId; label: string }[] = [
+      { id: 'off', label: 'Off' },
+      ...MYROOM_TRACKS,
+    ];
+
+    const render = () => {
+      container.innerHTML = `
+        <div style="padding:8px 0;">
+          <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:12px;">ROOM TRACK</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${allOptions.map(t => {
+              const active = t.id === snd.myRoomTrack;
+              return `
+                <div class="mu-track" data-trackid="${t.id}" style="
+                  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;
+                  border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 44%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 22%,transparent)'};
+                  background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)' : 'transparent'};
+                  transition:background 0.15s,border-color 0.15s;
+                ">
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
+                    background:${active ? 'var(--nd-accent)' : 'transparent'};
+                    border:1px solid ${active ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
+                  "></span>
+                  <span style="color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};font-size:12px;">${esc(t.label)}</span>
+                  ${active ? `<span style="color:var(--nd-accent);font-size:10px;margin-left:auto;opacity:0.7;">${t.id === 'off' ? 'silent' : 'playing'}</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div style="color:var(--nd-subtext);font-size:10px;opacity:0.45;margin-top:14px;line-height:1.5;">
+            Music by Kevin MacLeod (incompetech.com)<br>Licensed under CC BY 4.0
+          </div>
+        </div>
+      `;
+
+      container.querySelectorAll('.mu-track').forEach(el => {
+        (el as HTMLElement).addEventListener('mouseenter', () => {
+          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
+            (el as HTMLElement).style.background = 'color-mix(in srgb,var(--nd-dpurp) 12%,transparent)';
+        });
+        (el as HTMLElement).addEventListener('mouseleave', () => {
+          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
+            (el as HTMLElement).style.background = 'transparent';
+        });
+        (el as HTMLElement).addEventListener('click', () => {
+          snd.setMyRoomTrack((el as HTMLElement).dataset.trackid as MyRoomTrackId);
+          render();
+        });
+      });
+    };
+
+    render();
   }
 }

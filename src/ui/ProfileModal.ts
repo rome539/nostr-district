@@ -7,7 +7,7 @@
  */
 
 import { P } from '../config/game.config';
-import { fetchProfile, fetchContactList, signEvent, publishEvent } from '../nostr/nostrService';
+import { fetchProfile, fetchContactList, signEvent, publishEvent, fetchUserNotes, UserNote } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import type { DMPanel } from './DMPanel';
 import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
@@ -75,6 +75,14 @@ const PUBSCORE_API = 'https://api.pubscore.space';
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function timeAgo(unixSec: number): string {
+  const diff = Math.floor(Date.now() / 1000) - unixSec;
+  if (diff < 60)   return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 /** Check if a pubkey belongs to a guest (ephemeral key, no real identity) */
@@ -262,8 +270,10 @@ export class ProfileModal {
           ${about ? `<div style="color:var(--nd-text);font-size:12px;line-height:1.5;opacity:0.8;margin-bottom:14px;max-height:80px;overflow-y:auto;text-shadow:0 1px 4px rgba(0,0,0,0.8);">${esc(about.slice(0, 300))}</div>` : ''}
           <div style="display:flex;gap:8px;">
             ${followBtnHtml}
+            ${!isGuest ? `<button id="profile-notes-btn" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:6px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;">Notes ▾</button>` : ''}
             <button id="profile-close" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">Close</button>
           </div>
+          <div id="profile-notes-feed" style="display:none;margin-top:12px;max-height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-dpurp) 33%,transparent) transparent;"></div>
         </div>
       `;
       addCloseBtn(npubFull, npubUnder);
@@ -320,6 +330,59 @@ export class ProfileModal {
           }
         });
       }
+      // Notes feed toggle
+      const notesBtn = modal.querySelector('#profile-notes-btn') as HTMLButtonElement | null;
+      const notesFeed = modal.querySelector('#profile-notes-feed') as HTMLElement | null;
+      if (notesBtn && notesFeed) {
+        let loaded = false;
+        notesBtn.addEventListener('click', async () => {
+          const open = notesFeed.style.display !== 'none';
+          if (open) {
+            notesFeed.style.display = 'none';
+            notesBtn.textContent = 'Notes ▾';
+            notesBtn.style.color = 'var(--nd-subtext)';
+            notesBtn.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 44%,transparent)';
+            return;
+          }
+          notesFeed.style.display = 'block';
+          notesBtn.textContent = 'Notes ▴';
+          notesBtn.style.color = 'var(--nd-accent)';
+          notesBtn.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 44%,transparent)';
+          if (loaded) return;
+          loaded = true;
+          notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">Loading notes…</div>`;
+          const notes = await fetchUserNotes(pubkey, 20);
+          if (!document.getElementById(MODAL_ID)) return;
+          if (!notes.length) {
+            notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">No notes found.</div>`;
+            return;
+          }
+          notesFeed.innerHTML = notes.map(n => {
+            const ago = timeAgo(n.createdAt);
+            let label = '';
+            let body = '';
+            if (n.kind === 6) {
+              label = `<span style="color:var(--nd-subtext);font-size:10px;opacity:0.6;">reposted</span>`;
+              body = n.repostOf ? `<span style="opacity:0.45;font-size:10px;">note: ${n.repostOf.slice(0,12)}…</span>` : '';
+            } else if (n.quotedId) {
+              label = `<span style="color:var(--nd-subtext);font-size:10px;opacity:0.6;">quoted</span>`;
+              const cleaned = n.content.replace(/nostr:note\S+/g, '').replace(/https?:\/\/\S+/g, '').trim();
+              body = esc(cleaned.slice(0, 200));
+            } else {
+              body = esc(n.content.slice(0, 200));
+            }
+            return `
+              <div style="padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 15%,transparent);font-family:'Courier New',monospace;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  ${label}
+                  <span style="color:var(--nd-subtext);font-size:9px;opacity:0.45;">${ago}</span>
+                </div>
+                <div style="color:var(--nd-text);font-size:11px;line-height:1.5;opacity:0.85;word-break:break-word;">${body}</div>
+              </div>`;
+          }).join('');
+        });
+      }
+
     } catch (_) {
       modal.innerHTML = `
         <div style="color:var(--nd-accent);font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">PROFILE</div>

@@ -280,6 +280,47 @@ export async function loginAsGuest(): Promise<void> {
   });
 }
 
+export interface UserNote {
+  id:        string;
+  kind:      number;   // 1 = note, 6 = repost, 1 with 'q' tag = quote
+  content:   string;
+  createdAt: number;
+  quotedId?: string;   // for quote reposts
+  repostOf?: string;   // for kind 6 reposts
+}
+
+/**
+ * Fetch a user's recent kind 1 notes, kind 6 reposts, and quote-reposts.
+ * Returns up to `limit` events sorted newest-first.
+ */
+export async function fetchUserNotes(pubkey: string, limit = 20): Promise<UserNote[]> {
+  if (!pool) await loadNostrTools();
+  try {
+    const events: any[] = await pool.querySync(RELAYS, {
+      kinds: [1, 6],
+      authors: [pubkey],
+      limit,
+    });
+    return events
+      .sort((a: any, b: any) => b.created_at - a.created_at)
+      .map((ev: any): UserNote => {
+        const qTag = ev.tags?.find((t: string[]) => t[0] === 'q');
+        const eTag = ev.tags?.find((t: string[]) => t[0] === 'e');
+        return {
+          id:        ev.id,
+          kind:      ev.kind,
+          content:   ev.content || '',
+          createdAt: ev.created_at,
+          quotedId:  qTag?.[1],
+          repostOf:  ev.kind === 6 ? (eTag?.[1] ?? undefined) : undefined,
+        };
+      });
+  } catch (e) {
+    console.warn('[Nostr] fetchUserNotes failed:', e);
+    return [];
+  }
+}
+
 export function logout(): void {
   clearLocalKey();
   clearChannelKey();

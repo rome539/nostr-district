@@ -13,6 +13,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { MuteList } from '../ui/MuteList';
 import { RpsGame } from '../ui/RpsGame';
+import { SoundEngine } from '../audio/SoundEngine';
 import { ProfileModal } from '../ui/ProfileModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { SettingsPanel } from '../ui/SettingsPanel';
@@ -100,6 +101,8 @@ export class HubScene extends Phaser.Scene {
   private pollBoard = new PollBoard();
   private muteList = new MuteList();
   private rpsGame = new RpsGame();
+  private snd = SoundEngine.get();
+  private footTimer = 0;
   private nearBulletinBoard = false;
   private readonly BULLETIN_X = 1095;
 
@@ -127,6 +130,7 @@ export class HubScene extends Phaser.Scene {
     const loginScreen = new LoginScreen({
       onExtensionLogin: async () => {
         try {
+          this.snd.startBoot();
           await loginWithExtension();
           loginScreen.destroy();
           this.finishLogin();
@@ -136,6 +140,7 @@ export class HubScene extends Phaser.Scene {
       },
       onNsecLogin: async (nsec: string) => {
         try {
+          this.snd.startBoot();
           await loginWithNsec(nsec);
           loginScreen.destroy();
           this.finishLogin();
@@ -144,6 +149,7 @@ export class HubScene extends Phaser.Scene {
         }
       },
       onGuestLogin: async () => {
+        this.snd.startBoot();
         await loginAsGuest();
         loginScreen.destroy();
         this.finishLogin();
@@ -159,6 +165,7 @@ export class HubScene extends Phaser.Scene {
       },
       onBunkerClientFlow: async () => {
         try {
+          this.snd.startBoot();
           const qrContainer = loginScreen.getQRContainer();
           const { connectUri, waitForConnect } = await startBunkerFlow(
             (status, msg) => {
@@ -215,6 +222,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   private startGame(): void {
+    this.snd.stopBoot();
     // Ensure registry has current auth state (covers guest + returning from room)
     const auth = authStore.getState();
     if (!this.registry.get('playerPubkey') && auth.pubkey) {
@@ -283,6 +291,8 @@ export class HubScene extends Phaser.Scene {
     // Walk animation — bob up/down and alternate leg frame
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
+      this.footTimer += delta;
+      if (this.footTimer >= 300) { this.footTimer = 0; this.snd.footstep(); }
       this.walkTime += delta;
       // Bob: full cycle every 300ms, 2px up then back
       const bobOffset = Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
@@ -371,6 +381,8 @@ export class HubScene extends Phaser.Scene {
   private closePlayerPicker(): void { if (this.playerPickerEl) { const h = (this.playerPickerEl as any)._eh; if (h) document.removeEventListener('keydown', h); this.playerPickerEl.remove(); this.playerPickerEl = null; } setOnlinePlayersHandler(null); }
   private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
   private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
+    this.snd.roomEnter();
+    this.snd.setRoom('');
     this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
     const f2 = this.add.graphics().setDepth(201); f2.fillStyle(0xffffff, 0.15); f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
     this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op, ownerRoomConfig }); } });
@@ -388,12 +400,12 @@ export class HubScene extends Phaser.Scene {
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
-        if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => this.chatUI.addMessage('system', msg, P.teal))) return; }
+        if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => { this.chatUI.addMessage('system', msg, P.teal); if (msg.includes('wins') && msg.includes(myName2)) this.snd.rpsWin(); else if (msg.includes('wins')) this.snd.rpsLose(); else this.snd.rpsTie(); })) return; }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
         if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, P.teal);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); }
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); this.snd.chatPing(); }
       },
       onAvatarUpdate: (pk: string, avatarStr: string) => {
         const o = this.otherPlayers.get(pk); if (!o) return;
@@ -418,6 +430,7 @@ export class HubScene extends Phaser.Scene {
     };
     if (!this.isReturning) connectPresence(cb);
     else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on')); }
+    this.snd.setRoom('hub');
   }
 
   // ── Other Players ──
@@ -678,7 +691,7 @@ export class HubScene extends Phaser.Scene {
       case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
       case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
-      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
+      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
         if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
         this.computerUI.open(
@@ -702,6 +715,7 @@ export class HubScene extends Phaser.Scene {
       }
       case 'polls': { this.pollBoard.toggle(); break; }
       case 'flip': case 'coin': {
+        this.snd.coinFlip();
         const result = Math.random() < 0.5 ? '👑 HEADS' : '🦅 TAILS';
         sendChat(`🪙 flipped a coin: ${result}`);
         break;
@@ -736,6 +750,9 @@ export class HubScene extends Phaser.Scene {
         const jackpot = a === b && b === c;
         const two = !jackpot && (a === b || b === c || a === c);
         const result = jackpot ? '🎉 JACKPOT!' : two ? '✨ Two of a kind!' : '💸 No match.';
+        this.snd.slotSpin();
+        if (jackpot) setTimeout(() => this.snd.slotJackpot(), 680);
+        else if (two) setTimeout(() => this.snd.slotTwoMatch(), 680);
         sendChat(`🎰 [ ${a} | ${b} | ${c} ] — ${result}`);
         break;
       }

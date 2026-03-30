@@ -24,6 +24,7 @@ import { sendAvatarUpdate, sendNameUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
+import { SoundEngine } from '../audio/SoundEngine';
 import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../stores/petStore';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
@@ -193,6 +194,7 @@ export class RoomScene extends Phaser.Scene {
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
+        if (!isMe) SoundEngine.get().chatPing();
         if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 155, text, P.teal);
         else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 155, text, P.lpurp); }
       },
@@ -218,6 +220,8 @@ export class RoomScene extends Phaser.Scene {
     });
     sendRoomChange(this.roomConfig.id, GAME_WIDTH / 2, this.playerY);
     if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on'));
+    const _roomSoundId = this.roomConfig.id.startsWith('myroom:') ? 'myroom' : this.roomConfig.id;
+    SoundEngine.get().setRoom(_roomSoundId as any);
 
     // When background profile fetch completes, update name text + presence
     const unsubProfile = authStore.subscribe(() => {
@@ -821,6 +825,8 @@ export class RoomScene extends Phaser.Scene {
     // Stop accepting new player joins before broadcasting hub presence
     // so hub players don't flash as ghosts during the fade-out
     setPresenceCallbacks({ ...({} as any), onPlayerJoin: () => {} });
+    SoundEngine.get().roomLeave();
+    SoundEngine.get().setRoom('');
     sendRoomChange('hub');
     this.computerUI.close();
     this.destroyStickyNote();

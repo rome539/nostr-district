@@ -8,6 +8,7 @@
  */
 
 import { sendDirectMessage, onDMReceived, canUseDMs, DMMessage } from '../nostr/dmService';
+import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
 import { shouldFilter } from '../nostr/moderationService';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
@@ -196,6 +197,9 @@ export class DMPanel {
     } else if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
       const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
       this.showToast(convPubkey, senderName, msg.content);
+    }
+    if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
+      SoundEngine.get().dmPing();
     }
   }
 
