@@ -15,6 +15,7 @@ import {
   setNostrThemeEnabled, onNostrThemeChange,
 } from '../nostr/nostrThemeService';
 import { NostrThemeBrowser } from './NostrThemeBrowser';
+import { HotkeyModal } from './HotkeyModal';
 
 const GEAR_ID = 'settings-gear';
 const PANEL_ID = 'settings-panel';
@@ -29,6 +30,7 @@ export class SettingsPanel {
   private closeHandler:    ((e: MouseEvent) => void) | null = null;
   private nostrThemeUnsub: (() => void) | null = null;
   private themeBrowser =   new NostrThemeBrowser();
+  private hotkeyModal  =   new HotkeyModal();
 
   create(): void {
     this.destroy();
@@ -164,6 +166,33 @@ export class SettingsPanel {
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
+      <button id="sp-hotkeys-btn" style="
+        width:100%;padding:8px 10px;margin-bottom:8px;
+        background:color-mix(in srgb,var(--nd-dpurp) 12%,transparent);
+        border:1px solid color-mix(in srgb,var(--nd-dpurp) 28%,transparent);
+        border-radius:5px;cursor:pointer;
+        color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;
+        text-align:left;display:flex;align-items:center;justify-content:space-between;
+        transition:border-color 0.15s,color 0.15s;
+      ">
+        <span>Hotkeys & Commands</span>
+        <span style="opacity:0.5;">↗</span>
+      </button>
+
+      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+
+      <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:7px 10px;border-radius:5px;text-decoration:none;
+        color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;
+        transition:color 0.15s;
+      " onmouseover="this.style.color='var(--nd-text)'" onmouseout="this.style.color='var(--nd-subtext)'">
+        <span>GitHub</span>
+        <span style="opacity:0.4;font-size:10px;">rome539/nostr-district ↗</span>
+      </a>
+
+      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+
       <div id="settings-logout" style="padding:10px 10px;color:${P.red};font-size:13px;cursor:pointer;border-radius:4px;transition:background 0.15s;">
         \u23FB Logout
       </div>
@@ -180,6 +209,12 @@ export class SettingsPanel {
     this.panelEl.addEventListener('mousedown', (e) => e.stopPropagation());
     this.panelEl.addEventListener('click', (e) => e.stopPropagation());
     document.body.appendChild(this.panelEl);
+
+    // Hotkeys & commands button
+    const hkBtn = this.panelEl.querySelector('#sp-hotkeys-btn') as HTMLElement;
+    hkBtn?.addEventListener('mouseenter', () => { hkBtn.style.color = 'var(--nd-text)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 35%,transparent)`; });
+    hkBtn?.addEventListener('mouseleave', () => { hkBtn.style.color = 'var(--nd-subtext)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-dpurp) 28%,transparent)`; });
+    hkBtn?.addEventListener('click', () => { this.closePanel(); this.hotkeyModal.show(); });
 
     // Hover effects
     const logoutBtn = this.panelEl.querySelector('#settings-logout') as HTMLElement;

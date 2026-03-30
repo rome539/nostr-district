@@ -162,8 +162,15 @@ export function parseKind16767(event: { tags: string[][] }): NostrTheme | null {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
+// Cache in-flight and recently resolved fetches by pubkey to avoid duplicate relay connections
+const _fetchCache = new Map<string, { promise: Promise<NostrTheme | null>; ts: number }>();
+const FETCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /** Fetch a user's kind 16767 using raw WebSockets in parallel (no SimplePool). */
 export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
+  const cached = _fetchCache.get(pubkey);
+  if (cached && Date.now() - cached.ts < FETCH_CACHE_TTL) return cached.promise;
+
   const relays = [
     'wss://relay.ditto.pub',
     ...FALLBACK_RELAYS,
@@ -173,11 +180,10 @@ export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
   ].filter((r, i, a) => a.indexOf(r) === i);
 
   const filter = { kinds: [16767], authors: [pubkey], limit: 1 };
-  console.log('[nostrTheme] fetchKind16767 — pubkey:', pubkey, 'relays:', relays);
 
-  return new Promise<NostrTheme | null>((resolve) => {
+  const promise = new Promise<NostrTheme | null>((resolve) => {
     let done = false;
-    let eoseCount = 0;
+    const counted = new Set<WebSocket>();
     const sockets: WebSocket[] = [];
 
     const finish = (result: NostrTheme | null) => {
@@ -188,10 +194,13 @@ export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
       resolve(result);
     };
 
-    const timer = setTimeout(() => {
-      console.warn('[nostrTheme] timeout — no kind 16767 found');
-      finish(null);
-    }, 8000);
+    const markDone = (ws: WebSocket) => {
+      if (counted.has(ws)) return;
+      counted.add(ws);
+      if (counted.size >= relays.length) finish(null);
+    };
+
+    const timer = setTimeout(() => finish(null), 8000);
 
     relays.forEach(url => {
       try {
@@ -199,34 +208,33 @@ export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
         const sub = 'nd_' + Math.random().toString(36).slice(2, 8);
         sockets.push(ws);
 
-        ws.onopen = () => {
-          ws.send(JSON.stringify(['REQ', sub, filter]));
-        };
+        ws.onopen = () => { ws.send(JSON.stringify(['REQ', sub, filter])); };
 
         ws.onmessage = (e: MessageEvent) => {
           try {
             const msg = JSON.parse(e.data as string);
             if (msg[0] === 'EVENT' && msg[2] && msg[2].kind === 16767) {
-              console.log('[nostrTheme] got event from', url, msg[2]);
               const theme = parseKind16767(msg[2]);
-              console.log('[nostrTheme] parsed:', theme);
               if (theme) finish(theme);
             } else if (msg[0] === 'EOSE') {
-              try { ws.close(); } catch { /* ignore */ }
-              eoseCount++;
-              if (eoseCount >= relays.length) finish(null);
+              markDone(ws);
             }
           } catch { /* ignore */ }
         };
 
-        ws.onerror  = () => { eoseCount++; if (eoseCount >= relays.length) finish(null); };
-        ws.onclose  = () => { eoseCount++; if (eoseCount >= relays.length) finish(null); };
+        ws.onerror = () => markDone(ws);
+        ws.onclose = () => markDone(ws);
       } catch {
-        eoseCount++;
-        if (eoseCount >= relays.length) finish(null);
+        // Count failed connections via a dummy sentinel
+        const dummy = {} as WebSocket;
+        sockets.push(dummy);
+        markDone(dummy);
       }
     });
   });
+
+  _fetchCache.set(pubkey, { promise, ts: Date.now() });
+  return promise;
 }
 
 // ── Colour helpers ────────────────────────────────────────────────────────────

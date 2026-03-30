@@ -96,12 +96,14 @@ function fetchEventsRaw(
   timeoutMs: number,
   onCard: (card: ThemeCard) => void,
 ): Promise<void> {
-  const seen    = new Set<string>();
+  // Deduplicate by event ID (cross-relay) and by pubkey+colors (same theme republished)
+  const seenIds    = new Set<string>();
+  const seenThemes = new Set<string>();
   const sockets: WebSocket[] = [];
 
   return new Promise<void>((resolve) => {
-    let finished  = false;
-    let eoseCount = 0;
+    let finished = false;
+    const counted = new Set<WebSocket>();
 
     const finish = () => {
       if (finished) return;
@@ -109,6 +111,12 @@ function fetchEventsRaw(
       clearTimeout(timer);
       sockets.forEach(ws => { try { ws.close(); } catch { /* ignore */ } });
       resolve();
+    };
+
+    const markDone = (ws: WebSocket) => {
+      if (counted.has(ws)) return;
+      counted.add(ws);
+      if (counted.size >= relays.length) finish();
     };
 
     const timer = setTimeout(() => finish(), timeoutMs);
@@ -126,26 +134,28 @@ function fetchEventsRaw(
             const msg = JSON.parse(e.data as string);
             if (msg[0] === 'EVENT' && msg[2]) {
               const ev = msg[2];
-              if (seen.has(ev.id)) return;
-              seen.add(ev.id);
+              if (seenIds.has(ev.id)) return;
+              seenIds.add(ev.id);
               const theme = parseKind16767(ev);
               if (!theme) return;
+              const themeKey = `${ev.pubkey || ''}:${theme.background}:${theme.text}:${theme.primary}`;
+              if (seenThemes.has(themeKey)) return;
+              seenThemes.add(themeKey);
               const id = ev.tags?.find((t: string[]) => t[0] === 'd')?.[1]
                 || `${ev.kind}-${ev.id.slice(0, 8)}`;
               onCard({ theme, id, pubkey: ev.pubkey || '', kind: ev.kind });
             } else if (msg[0] === 'EOSE') {
-              try { ws.close(); } catch { /* ignore */ }
-              eoseCount++;
-              if (eoseCount >= relays.length) finish();
+              markDone(ws);
             }
           } catch { /* ignore */ }
         };
 
-        ws.onerror  = () => { eoseCount++; if (eoseCount >= relays.length) finish(); };
-        ws.onclose  = () => { eoseCount++; if (eoseCount >= relays.length) finish(); };
+        ws.onerror = () => markDone(ws);
+        ws.onclose = () => markDone(ws);
       } catch {
-        eoseCount++;
-        if (eoseCount >= relays.length) finish();
+        const dummy = {} as WebSocket;
+        sockets.push(dummy);
+        markDone(dummy);
       }
     });
   });
@@ -305,15 +315,11 @@ export class NostrThemeBrowser {
       this.renderPager(pagesEl, cards.length, this.mineePage, p => { this.mineePage = p; refresh(); });
     };
 
-    const seen = new Set<string>();
-
     fetchEventsRaw(
       { kinds: [16767, 36767], authors: [auth.pubkey], limit: 50 },
       ALL_RELAYS,
       8000,
       (card) => {
-        if (seen.has(card.id)) return;
-        seen.add(card.id);
         cards.push(card);
         refresh();
       },
@@ -371,7 +377,6 @@ export class NostrThemeBrowser {
       this.globalPage = 0;
 
       const cards: ThemeCard[] = [];
-      const seen = new Set<string>();
 
       let filter: object;
 
@@ -383,9 +388,11 @@ export class NostrThemeBrowser {
           btn.disabled = false;
           return;
         }
+        // Search by pubkey: include both kinds so you can browse someone's active theme too
         filter = { kinds: [16767, 36767], authors: [pubkey], limit: 50 };
       } else {
-        filter = { kinds: [16767, 36767], limit: 100 };
+        // General browse: only kind 36767 (published/shared themes, not everyone's active profile theme)
+        filter = { kinds: [36767], limit: 100 };
       }
 
       const refresh = () => {
@@ -395,8 +402,6 @@ export class NostrThemeBrowser {
       };
 
       await fetchEventsRaw(filter, ALL_RELAYS, 10000, (card) => {
-        if (seen.has(card.id)) return;
-        seen.add(card.id);
         cards.push(card);
         refresh();
       });
@@ -501,7 +506,7 @@ export class NostrThemeBrowser {
 
       const isFav = isFavorite(theme);
 
-      const title = theme.title || (card.kind === 16767 ? 'Active Theme' : 'Untitled');
+      const title = theme.title || (card.pubkey ? `Theme by ${shortPk(card.pubkey)}` : 'Untitled');
       const meta  = [
         card.pubkey ? shortPk(card.pubkey) : '',
         theme.bodyFont?.name || '',

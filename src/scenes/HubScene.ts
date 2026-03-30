@@ -11,6 +11,8 @@ import { DMPanel } from '../ui/DMPanel';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
+import { MuteList } from '../ui/MuteList';
+import { RpsGame } from '../ui/RpsGame';
 import { ProfileModal } from '../ui/ProfileModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { SettingsPanel } from '../ui/SettingsPanel';
@@ -96,6 +98,8 @@ export class HubScene extends Phaser.Scene {
   private settingsPanel = new SettingsPanel();
   private computerUI = new ComputerUI();
   private pollBoard = new PollBoard();
+  private muteList = new MuteList();
+  private rpsGame = new RpsGame();
   private nearBulletinBoard = false;
   private readonly BULLETIN_X = 1095;
 
@@ -244,6 +248,7 @@ export class HubScene extends Phaser.Scene {
     this.events.on('shutdown', () => unsubProfile());
 
     this.chatUI = new ChatUI();
+    this.rpsGame.setChatUI(this.chatUI);
     const chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => {
       const op = this.otherPlayers.get(pubkey);
@@ -264,9 +269,10 @@ export class HubScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-B', () => { if (document.activeElement === this.chatUI.getInput()) return; this.pollBoard.toggle(); });
+    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
   }
 
   update(time: number, delta: number): void {
@@ -382,6 +388,7 @@ export class HubScene extends Phaser.Scene {
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
+        if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => this.chatUI.addMessage('system', msg, P.teal))) return; }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
@@ -644,15 +651,31 @@ export class HubScene extends Phaser.Scene {
     this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor);
   }
 
+  // ── Helpers ──
+  private async resolvePlayerPubkey(arg: string): Promise<string | null> {
+    if (arg.startsWith('npub1')) {
+      try {
+        const { nip19 } = await import('nostr-tools');
+        const decoded = nip19.decode(arg);
+        if (decoded.type === 'npub') return decoded.data as string;
+      } catch {}
+      return null;
+    }
+    let found: string | null = null;
+    this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) found = pk; });
+    return found;
+  }
+
   // ── Commands ──
   private handleCommand(text: string): void {
     const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
     switch (cmd) {
-      case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players online', P.teal); return; } let tp: string | null = null; const tn = arg.toLowerCase(); this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(tn)) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
-      case 'visit': { if (!arg) return; let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
+      case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players online', P.teal); return; } this.resolvePlayerPubkey(arg).then(tp => { if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
+      case 'visit': { if (!arg) return; this.resolvePlayerPubkey(arg).then(tp => { if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} online: ${ps.join(', ')}` : 'No players online', P.teal); break; }
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: relay, feed, myroom, lounge, market', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'myroom', my:'myroom', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; if (rid === 'myroom') this.showPlayerPicker(); else this.enterRoom(b.id, b.name, b.neonColor); break; }
       case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Chat muted' : 'Unmuted', s ? P.amber : P.teal); break; }
+      case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
       case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
       case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
@@ -697,9 +720,42 @@ export class HubScene extends Phaser.Scene {
         sendChat(`🎱 ${arg} — ${answer}`);
         break;
       }
+      case 'rps': {
+        const choices = ['rock', 'paper', 'scissors'] as const;
+        const choice = arg.toLowerCase() as typeof choices[number];
+        if (!choices.includes(choice)) { this.chatUI.addMessage('system', 'Usage: /rps <rock|paper|scissors>', P.teal); return; }
+        const myName3 = this.registry.get('playerName') || 'Player';
+        this.rpsGame.challenge(choice, myName3);
+        this.chatUI.addMessage('system', '🎮 RPS challenge sent! Waiting for someone to accept...', P.teal);
+        break;
+      }
+      case 'slots': {
+        const reels = ['🍒','🍋','🍊','🍇','💎','🍀','⭐','🎰'];
+        const r = () => reels[Math.floor(Math.random() * reels.length)];
+        const [a, b, c] = [r(), r(), r()];
+        const jackpot = a === b && b === c;
+        const two = !jackpot && (a === b || b === c || a === c);
+        const result = jackpot ? '🎉 JACKPOT!' : two ? '✨ Two of a kind!' : '💸 No match.';
+        sendChat(`🎰 [ ${a} | ${b} | ${c} ] — ${result}`);
+        break;
+      }
+      case 'ship': {
+        const spaceIdx = arg.indexOf(' ');
+        const n1 = spaceIdx > -1 ? arg.slice(0, spaceIdx).trim() : arg.trim();
+        const n2 = spaceIdx > -1 ? arg.slice(spaceIdx + 1).trim() : '';
+        if (!n1 || !n2) { this.chatUI.addMessage('system', 'Usage: /ship <name1> <name2>', P.teal); return; }
+        const seed = [n1.toLowerCase(), n2.toLowerCase()].sort().join('|');
+        let hash = 0; for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) & 0xfffffff;
+        const pct = hash % 101;
+        const label = pct >= 90 ? '💕 Soulmates!' : pct >= 70 ? '💖 Great match!' : pct >= 50 ? '💛 Good vibes.' : pct >= 30 ? '🤝 Could work.' : '😬 Rough road ahead.';
+        const d1 = n1.startsWith('npub1') ? n1.slice(0, 13) + '…' : n1;
+        const d2 = n2.startsWith('npub1') ? n2.slice(0, 13) + '…' : n2;
+        sendChat(`💘 ${d1} + ${d2}: ${pct}% compatible — ${label}`);
+        break;
+      }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'status': { const myStatus = localStorage.getItem('nd_status') || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/mute', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }
     this.chatUI.flashLog();

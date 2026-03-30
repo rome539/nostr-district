@@ -129,6 +129,37 @@ export class ChatUI {
     this.scheduleHide(12000);
   }
 
+  /** Add an RPS challenge row with inline accept buttons */
+  addRpsChallenge(challengerName: string, onAccept: (choice: 'rock' | 'paper' | 'scissors') => void): void {
+    const msg = document.createElement('div');
+    msg.style.cssText = `margin-bottom:5px;line-height:1.4;padding:2px 0;`;
+    msg.innerHTML = `
+      <span style="color:var(--nd-subtext);font-size:12px;">
+        ⚔️ <strong style="color:var(--nd-text);">${escapeHtml(challengerName)}</strong> challenges to RPS —
+        <button class="rps-inline" data-c="rock">🪨</button>
+        <button class="rps-inline" data-c="paper">📄</button>
+        <button class="rps-inline" data-c="scissors">✂️</button>
+        <span class="rps-done" style="display:none;opacity:0.45;font-size:11px;">sent</span>
+      </span>`;
+    const btns = msg.querySelectorAll<HTMLButtonElement>('.rps-inline');
+    const done = msg.querySelector<HTMLSpanElement>('.rps-done')!;
+    btns.forEach(btn => {
+      btn.style.cssText = `background:none;border:1px solid color-mix(in srgb,var(--nd-accent) 30%,transparent);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:12px;margin:0 1px;color:var(--nd-text);`;
+      btn.addEventListener('mouseenter', () => { btn.style.borderColor = 'var(--nd-accent)'; });
+      btn.addEventListener('mouseleave', () => { btn.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 30%,transparent)'; });
+      btn.addEventListener('click', () => {
+        onAccept(btn.dataset.c as 'rock' | 'paper' | 'scissors');
+        btns.forEach(b => b.remove());
+        done.style.display = 'inline';
+      });
+    });
+    this.log.appendChild(msg);
+    this.log.scrollTop = this.log.scrollHeight;
+    while (this.log.children.length > 50) this.log.removeChild(this.log.firstChild!);
+    this.showLog();
+    this.scheduleHide(20000);
+  }
+
   /** Show log temporarily (e.g. after a command) */
   flashLog(duration = 12000): void {
     this.showLog();

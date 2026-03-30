@@ -45,6 +45,15 @@ export class PollBoard {
   // list loading
   private isLoading = false;
 
+  private cleanAuthorName(name: string): string {
+    const cleaned = name
+      .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, '')
+      .replace(/[\u200D\uFE0F]/g, '')
+      .trim()
+      .replace(/\s{2,}/g, ' ');
+    return cleaned || name;
+  }
+
   constructor() {
     this.myPubkey = authStore.getState().pubkey || null;
     this.loadVotedFromStorage();
@@ -111,7 +120,7 @@ export class PollBoard {
       if (this.authorNames.has(pk)) continue;
       fetchProfile(pk).then(profile => {
         if (!profile) return;
-        const name = profile.display_name || profile.name || pk.slice(0, 10) + '…';
+        const name = this.cleanAuthorName(profile.display_name || profile.name || pk.slice(0, 10) + '…');
         this.authorNames.set(pk, name);
         if (profile.picture) this.authorPics.set(pk, profile.picture);
         if (this.isOpen && this.view === 'list') this.renderView();
@@ -156,7 +165,7 @@ export class PollBoard {
     return `
       <div class="pb-panel">
         <div class="pb-header">
-          <span class="pb-title">📋 POLLS BOARD</span>
+          <span class="pb-title">POLLS BOARD</span>
           <div class="pb-header-actions">
             ${canCreate ? `<button class="pb-btn-create" id="pb-open-create">+ New Poll</button>` : ''}
             <button class="pb-close" id="pb-close">✕</button>
@@ -231,7 +240,7 @@ export class PollBoard {
     if (!this.authorNames.has(poll.pubkey)) {
       fetchProfile(poll.pubkey).then(profile => {
         if (!profile) return;
-        this.authorNames.set(poll.pubkey, profile.display_name || profile.name || poll.pubkey.slice(0, 10) + '…');
+        this.authorNames.set(poll.pubkey, this.cleanAuthorName(profile.display_name || profile.name || poll.pubkey.slice(0, 10) + '…'));
         if (profile.picture) this.authorPics.set(poll.pubkey, profile.picture);
         if (this.isOpen && this.view === 'detail') this.renderView();
       }).catch(() => {});

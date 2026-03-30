@@ -528,8 +528,8 @@ export class ComputerUI {
       { key: 'lighting',  label: 'Lights' },
       { key: 'furniture', label: 'Furniture' },
       { key: 'posters',   label: 'Posters' },
-      { key: 'pets',      label: '🐾 Pets' },
-      { key: 'note',      label: '📌 Note' },
+      { key: 'pets',      label: 'Pets' },
+      { key: 'note',      label: 'Note' },
     ];
 
     container.innerHTML = sections.map(s => `
@@ -719,7 +719,6 @@ export class ComputerUI {
                 padding:8px 10px;display:flex;align-items:center;gap:8px;
                 cursor:${isDesk ? 'default' : 'pointer'};
               ">
-                <span style="font-size:15px;">${data.emoji}</span>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'var(--nd-subtext)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
                   <div style="font-size:9px;opacity:0.45;">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
@@ -839,7 +838,6 @@ export class ComputerUI {
               background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
               color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};
             ">
-              <span style="font-size:16px;">${data.emoji}</span><br/>
               <span style="font-size:9px;">${esc(data.label)}</span>
             </button>
           `;

@@ -195,33 +195,18 @@ export class ProfileModal {
       const nip05 = profile?.nip05 || '';
       const picture = profile?.picture || '';
       const npub = npubFull || pubkey.slice(0, 16) + '...';
-      const npubShort = npub.length > 20 ? npub.slice(0, 12) + '...' + npub.slice(-6) : npub;
-
       let isFollowing = contactList ? contactList.follows.has(pubkey) : false;
       let contactTags: string[][] = contactList ? contactList.tags : [];
 
       // Inline score row for the header — subtle, clickable stars that link to pubscore
       let scoreInlineHtml = '';
-      if (!isGuest && npubFull) {
-        const starsHtml = score
-          ? renderStars(score.avgRating)
-          : `<span style="color:var(--nd-subtext);font-size:13px;opacity:0.22;">\u2605\u2605\u2605\u2605\u2605</span>`;
-        const labelParts: string[] = [];
-        if (score) {
-          labelParts.push(`${score.avgRating.toFixed(1)}`);
-          labelParts.push(`${score.count} review${score.count !== 1 ? 's' : ''}`);
-          if (score.votes.trusted > 0) labelParts.push(`\u2713 ${score.votes.trusted}`);
-          if (score.votes.avoid > 0)   labelParts.push(`\u2717 ${score.votes.avoid}`);
-        } else {
-          labelParts.push('no reviews');
-        }
+      if (!isGuest && npubFull && score) {
         scoreInlineHtml = `
           <a href="${PUBSCORE_URL}/?npub=${npubFull}" target="_blank" rel="noopener" style="
-            display:inline-flex;align-items:center;gap:4px;text-decoration:none;
-            opacity:0.55;transition:opacity 0.15s;margin-top:2px;
-          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">
-            ${starsHtml}
-            <span style="color:var(--nd-subtext);font-size:10px;">${labelParts.join(' \u00B7 ')}</span>
+            display:inline-flex;align-items:center;gap:2px;text-decoration:none;
+            opacity:0.65;transition:opacity 0.15s;margin-top:2px;
+          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.65'">
+            ${renderStars(score.avgRating)}
           </a>
         `;
       }

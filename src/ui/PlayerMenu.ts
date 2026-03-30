@@ -11,8 +11,42 @@ import { ProfileModal } from './ProfileModal';
 
 const MENU_ID = 'player-context-menu';
 
-/** Set of pubkeys the local user has muted (persists in memory for the session) */
+const MUTE_STORAGE_KEY = 'nd_muted_players';
+
+/** Set of pubkeys the local user has muted — persisted in localStorage */
 export const mutedPlayers = new Set<string>();
+
+/** Map of pubkey → display name for muted players */
+export const mutedNames = new Map<string, string>();
+
+// Load from localStorage on init
+try {
+  const stored = localStorage.getItem(MUTE_STORAGE_KEY);
+  if (stored) {
+    const obj = JSON.parse(stored) as Record<string, string>;
+    Object.entries(obj).forEach(([pk, name]) => { mutedPlayers.add(pk); mutedNames.set(pk, name); });
+  }
+} catch (_) {}
+
+function saveMutes(): void {
+  try {
+    const obj: Record<string, string> = {};
+    mutedPlayers.forEach(pk => { obj[pk] = mutedNames.get(pk) || pk.slice(0, 10); });
+    localStorage.setItem(MUTE_STORAGE_KEY, JSON.stringify(obj));
+  } catch (_) {}
+}
+
+export function mutePlayer(pubkey: string, name: string): void {
+  mutedPlayers.add(pubkey);
+  mutedNames.set(pubkey, name);
+  saveMutes();
+}
+
+export function unmutePlayer(pubkey: string): void {
+  mutedPlayers.delete(pubkey);
+  mutedNames.delete(pubkey);
+  saveMutes();
+}
 
 interface MenuCallbacks {
   onChat: (text: string, color: string) => void;
@@ -84,10 +118,10 @@ export function showPlayerMenu(
   menu.querySelector('.ctx-mute')!.addEventListener('click', () => {
     close();
     if (mutedPlayers.has(pubkey)) {
-      mutedPlayers.delete(pubkey);
+      unmutePlayer(pubkey);
       callbacks.onChat(`Unmuted ${name}`, P.teal);
     } else {
-      mutedPlayers.add(pubkey);
+      mutePlayer(pubkey, name);
       callbacks.onChat(`Muted ${name}`, P.amber);
     }
   });
