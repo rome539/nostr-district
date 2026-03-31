@@ -413,6 +413,14 @@ if (_enabled && _cached) {
 }
 
 /**
+ * Preview a theme visually without persisting to localStorage.
+ * Call applyThemeObject to commit it, or clearNostrThemeCss to revert.
+ */
+export function previewThemeObject(theme: NostrTheme): void {
+  injectCss(buildThemeCss(theme));
+}
+
+/**
  * Apply any NostrTheme object directly (e.g. from the theme browser).
  * Sets it as the active cached theme, enables the nostr theme, and injects CSS.
  */

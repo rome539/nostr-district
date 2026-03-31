@@ -93,7 +93,7 @@ export class SettingsPanel {
       : '';
 
     const nostrThemeHtml = `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
+      <div id="sp-nostr-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
         background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
         ${nt
           ? `<div style="display:flex;gap:3px;">${dots}</div>
@@ -268,9 +268,53 @@ export class SettingsPanel {
       else this.themeBrowser.open();
     });
 
-    // Re-render panel when nostr theme loads / changes while open
+    // Re-render only the nostr theme row when theme changes (avoid destroying the browser)
     this.nostrThemeUnsub = onNostrThemeChange(() => {
-      if (this.panelEl) { this.closePanel(); this.openPanel(); }
+      if (!this.panelEl) return;
+      const nt        = getNostrTheme();
+      const ntEnabled = isNostrThemeEnabled();
+      const dots = nt
+        ? [nt.background, nt.text, nt.primary].map(c =>
+            `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+              background:${esc(c)};border:1px solid rgba(255,255,255,0.15);"></span>`
+          ).join('')
+        : '';
+      const row = this.panelEl.querySelector('#sp-nostr-row') as HTMLElement | null;
+      if (!row) return;
+      row.innerHTML = nt
+        ? `<div style="display:flex;gap:3px;">${dots}</div>
+           <div style="flex:1;min-width:0;">
+             <div style="color:var(--nd-text);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+               ${nt.title ? esc(nt.title) : 'Profile theme'}
+             </div>
+           </div>
+           <button id="sp-nostr-toggle" style="
+             padding:3px 8px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
+             cursor:pointer;flex-shrink:0;
+             background:${ntEnabled ? 'color-mix(in srgb,var(--nd-accent) 18%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 22%,transparent)'};
+             border:1px solid ${ntEnabled ? 'color-mix(in srgb,var(--nd-accent) 44%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 44%,transparent)'};
+             color:${ntEnabled ? 'var(--nd-accent)' : 'var(--nd-subtext)'};"
+           >${ntEnabled ? 'On' : 'Off'}</button>
+           <button id="sp-nostr-browse" style="
+             padding:3px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
+             cursor:pointer;flex-shrink:0;
+             background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
+             border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
+             color:var(--nd-accent);">Browse</button>`
+        : `<div style="color:var(--nd-subtext);font-size:11px;flex:1;opacity:0.5;">No theme loaded</div>
+           <button id="sp-nostr-browse" style="
+             padding:3px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
+             cursor:pointer;flex-shrink:0;
+             background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
+             border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
+             color:var(--nd-accent);">Browse</button>`;
+      row.querySelector('#sp-nostr-toggle')?.addEventListener('click', () => {
+        setNostrThemeEnabled(!isNostrThemeEnabled());
+      });
+      row.querySelector('#sp-nostr-browse')?.addEventListener('click', () => {
+        if (this.themeBrowser.isOpen()) this.themeBrowser.close();
+        else this.themeBrowser.open();
+      });
     });
 
     // Logout flow

@@ -5,7 +5,7 @@
  */
 
 import {
-  NostrTheme, parseKind16767, applyThemeObject,
+  NostrTheme, parseKind16767, applyThemeObject, previewThemeObject,
   getNostrTheme, isNostrThemeEnabled, FALLBACK_RELAYS,
 } from '../nostr/nostrThemeService';
 import { authStore } from '../stores/authStore';
@@ -184,6 +184,7 @@ export class NostrThemeBrowser {
   private mineePage     = 0;
   private globalPage    = 0;
   private favPage       = 0;
+  private previewIdx:   number | null = null;
 
   open(): void {
     this.close();
@@ -268,6 +269,7 @@ export class NostrThemeBrowser {
   }
 
   private switchTab(tab: Tab): void {
+    this.previewIdx = null;
     this.activeTab = tab;
     this.mineePage = 0;
     this.globalPage = 0;
@@ -504,6 +506,7 @@ export class NostrThemeBrowser {
         && curTheme.primary    === theme.primary
         && curTheme.text       === theme.text;
 
+      const isPreviewing = this.previewIdx === i;
       const isFav = isFavorite(theme);
 
       const title = theme.title || (card.pubkey ? `Theme by ${shortPk(card.pubkey)}` : 'Untitled');
@@ -525,14 +528,30 @@ export class NostrThemeBrowser {
           color:var(--nd-accent);padding:2px 4px;">♥</button>
       `;
 
+      const actionBtn = isApplied
+        ? `<span style="color:var(--nd-accent);font-size:9px;flex-shrink:0;opacity:0.8;">applied</span>`
+        : isPreviewing
+          ? `<button class="ntb-apply-btn" data-idx="${i}" style="
+              padding:4px 10px;border-radius:4px;flex-shrink:0;
+              font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+              background:color-mix(in srgb,var(--nd-accent) 22%,transparent);
+              border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);
+              color:var(--nd-accent);font-weight:bold;">Apply</button>`
+          : `<button class="ntb-preview-btn" data-idx="${i}" style="
+              padding:4px 10px;border-radius:4px;flex-shrink:0;
+              font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+              background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
+              border:1px solid color-mix(in srgb,var(--nd-dpurp) 40%,transparent);
+              color:var(--nd-subtext);">Preview</button>`;
+
       return `
         <div class="ntb-card" style="
           display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;
           border-radius:6px;
-          background:${isApplied
+          background:${isApplied || isPreviewing
             ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)'
             : 'color-mix(in srgb,var(--nd-dpurp) 12%,transparent)'};
-          border:1px solid ${isApplied
+          border:1px solid ${isApplied || isPreviewing
             ? 'color-mix(in srgb,var(--nd-accent) 33%,transparent)'
             : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
         ">
@@ -544,25 +563,28 @@ export class NostrThemeBrowser {
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(meta)}</div>
           </div>
           ${favBtn}
-          ${isApplied
-            ? `<span style="color:var(--nd-accent);font-size:9px;flex-shrink:0;opacity:0.8;">applied</span>`
-            : `<button class="ntb-apply-btn" data-idx="${i}" style="
-                padding:4px 10px;border-radius:4px;flex-shrink:0;
-                font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
-                background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
-                border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
-                color:var(--nd-accent);">Apply</button>`
-          }
+          ${actionBtn}
         </div>
       `;
     }).join('');
+
+    container.querySelectorAll('.ntb-preview-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt((btn as HTMLElement).dataset.idx || '0', 10);
+        this.previewIdx = idx;
+        previewThemeObject(cards[idx].theme);
+        this.renderCards(container, cards, showFavBtn, page);
+      });
+    });
 
     container.querySelectorAll('.ntb-apply-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         const idx = parseInt((btn as HTMLElement).dataset.idx || '0', 10);
+        this.previewIdx = null;
         applyThemeObject(cards[idx].theme);
-        this.renderCards(container, cards, showFavBtn, page);
+        this.close();
       });
     });
 
