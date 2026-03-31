@@ -62,6 +62,17 @@ export class SoundEngine {
     }
   }
 
+  /** Apply a track immediately while staying in myroom — used for visitor sync */
+  applyMyRoomTrack(id: MyRoomTrackId): void {
+    this._myRoomTrack = id;
+    if (this.currentRoom === 'myroom') {
+      this._stopStream();
+      if (id !== 'off') {
+        this._startStream(MYROOM_TRACKS.find(t => t.id === id)!.url);
+      }
+    }
+  }
+
   private _startStream(url: string): void {
     this._stopStream();
     const el = new Audio();
@@ -80,9 +91,10 @@ export class SoundEngine {
     }
   }
 
-  get muted()     { return this._muted; }
-  get sfxVolume() { return this._sfxVol; }
-  get ambVolume() { return this._ambVol; }
+  get muted()       { return this._muted; }
+  get sfxVolume()   { return this._sfxVol; }
+  get ambVolume()   { return this._ambVol; }
+  get currentRoomId() { return this.currentRoom; }
 
   setMuted(v: boolean): void {
     this._muted = v;

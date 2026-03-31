@@ -362,6 +362,13 @@ function buildThemeCss(theme: NostrTheme): string {
     `;
   }
 
+  // Cap font sizes — set a hard 14px ceiling on html/body so relative units
+  // (em/rem) used by theme fonts can't blow up the layout. Our panel inline
+  // styles use explicit px values and are unaffected by this root cap.
+  css += `
+    html, body { font-size: 14px !important; }
+  `;
+
   // Body font — applies to all UI text
   if (theme.bodyFont) {
     const { name, url } = theme.bodyFont;

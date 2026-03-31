@@ -410,6 +410,7 @@ export class BootScene extends Phaser.Scene {
       }
     });
 
+
     // ═══════════════════════════════════════════════
     // HANGING SIGNS — drawn before building name signs so they don't overlap
     // ═══════════════════════════════════════════════

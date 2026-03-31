@@ -5,6 +5,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config/game.config';
 import { LoginScreen } from './ui/LoginScreen';
 import { authStore } from './stores/authStore';
 import { RoomScene } from './scenes/RoomScene';
+import { WoodsScene } from './scenes/WoodsScene';
 import './stores/themeStore'; // init theme CSS vars early
 import {
   loginWithExtension,
@@ -52,7 +53,7 @@ function startGame(): void {
             mode: Phaser.Scale.FIT,
             autoCenter: Phaser.Scale.CENTER_BOTH,
           },
-          scene: [BootScene, HubScene, RoomScene],
+          scene: [BootScene, HubScene, RoomScene, WoodsScene],
           callbacks: {
             preBoot: (g) => {
               const state = authStore.getState();

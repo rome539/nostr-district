@@ -182,8 +182,18 @@ export class RoomScene extends Phaser.Scene {
 
     // Presence
     setPresenceCallbacks({
-      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addRoomPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
-      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
+      onPlayerJoin: (p) => {
+        if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return;
+        if (mutedPlayers.has(p.pubkey)) return;
+        const ry = Phaser.Math.Clamp(p.y, 350, 445);
+        this.addRoomPlayer(p.pubkey, p.name, p.x, ry, (p as any).avatar, (p as any).status);
+        sendAvatarUpdate();
+        // Re-broadcast music track to the new joiner if we're the owner
+        if (this.isOwner && this.roomConfig.id.startsWith('myroom:')) {
+          this.time.delayedCall(300, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
+        }
+      },
+      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 350, 445); } },
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
       onChat: (pk, name, text) => {
@@ -191,6 +201,14 @@ export class RoomScene extends Phaser.Scene {
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
+        // Room music sync — owner broadcasts track, visitors follow
+        if (text.startsWith('/game:music:')) {
+          if (this.roomConfig.id.startsWith('myroom:') && pk === this.roomConfig.ownerPubkey) {
+            const trackId = text.slice('/game:music:'.length) as any;
+            SoundEngine.get().applyMyRoomTrack(trackId);
+          }
+          return;
+        }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
@@ -220,6 +238,10 @@ export class RoomScene extends Phaser.Scene {
     });
     sendRoomChange(this.roomConfig.id, GAME_WIDTH / 2, this.playerY);
     if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on'));
+    // If this is the owner's room, broadcast current track to anyone who joins
+    if (this.isOwner && this.roomConfig.id.startsWith('myroom:')) {
+      this.time.delayedCall(500, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
+    }
     const _roomSoundId = this.roomConfig.id.startsWith('myroom:') ? 'myroom' : this.roomConfig.id;
     SoundEngine.get().setRoom(_roomSoundId as any);
 
@@ -351,6 +373,9 @@ export class RoomScene extends Phaser.Scene {
                       (newStatus) => {
                         this.playerStatusText.setText(newStatus.slice(0, 30));
                         this.playerStatusText.setAlpha(newStatus ? 1 : 0);
+                      },
+                      (trackId) => {
+                        if (this.isOwner) sendChat(`/game:music:${trackId}`);
                       },
                     );
                   },
@@ -898,6 +923,10 @@ export class RoomScene extends Phaser.Scene {
       (newStatus) => {
         this.playerStatusText.setText(newStatus.slice(0, 30));
         this.playerStatusText.setAlpha(newStatus ? 1 : 0);
+      },
+      (trackId) => {
+        // Owner changed track — broadcast to room so visitors hear it
+        if (this.isOwner) sendChat(`/game:music:${trackId}`);
       },
     );
   }

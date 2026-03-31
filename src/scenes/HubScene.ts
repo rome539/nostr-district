@@ -54,6 +54,7 @@ interface OtherPlayer {
 }
 
 export class HubScene extends Phaser.Scene {
+  private static readonly WOODS_OPEN = false;
   private player!: Phaser.GameObjects.Image;
   private playerName!: Phaser.GameObjects.Text;
   private playerStatusText!: Phaser.GameObjects.Text;
@@ -112,9 +113,11 @@ export class HubScene extends Phaser.Scene {
   private toastEl: HTMLDivElement | null = null;
   private waitingForAccess = false;
   private returnFromRoom: string | null = null;
+  private isLeavingToWoods = false;
+  private lastWoodsClosedNotice = 0;
 
   constructor() { super({ key: 'HubScene' }); }
-  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.smokeEmote.stop(); }
+  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.smokeEmote.stop(); this.isLeavingToWoods = false; }
 
   create(): void {
     // ── Login gate ──
@@ -324,6 +327,18 @@ export class HubScene extends Phaser.Scene {
 
     this.smokeGraphics.clear();
     if (this.smokeEmote.active) { if (isWalking) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
+
+    // ── Woods transition: walk off the left edge ──
+    if (this.player.x <= 24 && !this.isLeavingToWoods) {
+      if (!HubScene.WOODS_OPEN) {
+        this.player.x = 24;
+        this.notifyWoodsClosed();
+      } else {
+        this.isLeavingToWoods = true;
+        this.enterWoods();
+      }
+    }
+
     this.playerName.setPosition(this.player.x, this.player.y - 44);
     this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
     sendPosition(this.player.x, this.player.y);
@@ -386,6 +401,28 @@ export class HubScene extends Phaser.Scene {
     this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
     const f2 = this.add.graphics().setDepth(201); f2.fillStyle(0xffffff, 0.15); f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
     this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op, ownerRoomConfig }); } });
+  }
+
+  private enterWoods(): void {
+    if (!HubScene.WOODS_OPEN) {
+      this.notifyWoodsClosed();
+      return;
+    }
+    this.snd.roomEnter();
+    this.snd.setRoom('');
+    this.chatUI.destroy();
+    this.cameras.main.fadeOut(400, 4, 8, 10);
+    this.time.delayedCall(400, () => {
+      if (!this.scene.isActive()) return;
+      this.scene.start('WoodsScene');
+    });
+  }
+
+  private notifyWoodsClosed(): void {
+    const now = Date.now();
+    if (now - this.lastWoodsClosedNotice < 1500) return;
+    this.lastWoodsClosedNotice = now;
+    this.chatUI.addMessage('system', 'The woods are temporarily closed.', P.amber);
   }
 
   // ── Presence ──
@@ -686,7 +723,7 @@ export class HubScene extends Phaser.Scene {
       case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players online', P.teal); return; } this.resolvePlayerPubkey(arg).then(tp => { if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'visit': { if (!arg) return; this.resolvePlayerPubkey(arg).then(tp => { if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} online: ${ps.join(', ')}` : 'No players online', P.teal); break; }
-      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: relay, feed, myroom, lounge, market', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'myroom', my:'myroom', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; if (rid === 'myroom') this.showPlayerPicker(); else this.enterRoom(b.id, b.name, b.neonColor); break; }
+      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'myroom', my:'myroom', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; if (rid === 'myroom') this.showPlayerPicker(); else this.enterRoom(b.id, b.name, b.neonColor); break; }
       case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Chat muted' : 'Unmuted', s ? P.amber : P.teal); break; }
       case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }

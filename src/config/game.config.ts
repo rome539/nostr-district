@@ -93,6 +93,7 @@ export const ROOM_THEMES: Record<string, { accent: string; ambient: string; floo
   myroom: { accent: P.teal,   ambient: '#140c2a', floorTint: '#1e1040' },
   lounge: { accent: P.purp,   ambient: '#0b0020', floorTint: '#1a0a3e' },
   market: { accent: P.amber,  ambient: '#120828', floorTint: '#1a0c38' },
+  woods:  { accent: '#aaff44', ambient: '#040810', floorTint: '#0a1008' },
 };
 
 export function hexToNum(hex: string): number {

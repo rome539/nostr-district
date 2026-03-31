@@ -27,6 +27,7 @@ type OnAvatarChange   = (avatar: AvatarConfig) => void;
 type OnRoomChange     = (config: RoomConfig) => void;
 type OnPetChange      = (sel: PetSelection) => void;
 type OnStatusUpdate   = (status: string) => void;
+type OnMusicChange    = (trackId: MyRoomTrackId) => void;
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -41,31 +42,34 @@ export class ComputerUI {
   private onRoomChange: OnRoomChange | null = null;
   private onPetChange: OnPetChange | null = null;
   private onStatusUpdate: OnStatusUpdate | null = null;
+  private onMusicChange: OnMusicChange | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
   private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
 
-  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate): void {
+  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
     this.onPetChange = onPetChange || null;
     this.onStatusUpdate = onStatusUpdate || null;
+    this.onMusicChange = onMusicChange || null;
     this.currentTab = 'wardrobe';
     this.buildPanel();
   }
 
   /** Open directly to the Room tab (for first-time setup) */
-  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate): void {
+  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
     this.onRoomChange = onRoomChange || null;
     this.onPetChange = onPetChange || null;
     this.onStatusUpdate = onStatusUpdate || null;
+    this.onMusicChange = onMusicChange || null;
     this.currentTab = 'room';
     this.currentRoomSection = 'walls';
     this.buildPanel();
@@ -1044,7 +1048,9 @@ export class ComputerUI {
             (el as HTMLElement).style.background = 'transparent';
         });
         (el as HTMLElement).addEventListener('click', () => {
-          snd.setMyRoomTrack((el as HTMLElement).dataset.trackid as MyRoomTrackId);
+          const tid = (el as HTMLElement).dataset.trackid as MyRoomTrackId;
+          snd.setMyRoomTrack(tid);
+          this.onMusicChange?.(tid);
           render();
         });
       });
