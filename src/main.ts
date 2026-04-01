@@ -29,10 +29,6 @@ let gameStarting = false;
 function startGame(): void {
   if (gameStarting || game) return;
   gameStarting = true;
-  if (game) {
-    game.destroy(true);
-    game = null;
-  }
 
   let container = document.getElementById('game-container');
   if (!container) {
