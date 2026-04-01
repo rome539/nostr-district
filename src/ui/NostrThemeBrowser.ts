@@ -222,7 +222,7 @@ export class NostrThemeBrowser {
       display:flex;flex-direction:column;overflow:hidden;
       font-family:'Courier New',monospace;
     `;
-    el.addEventListener('mousedown', e => e.stopPropagation());
+    el.addEventListener('pointerdown', e => e.stopPropagation());
 
     el.innerHTML = `
       <div style="display:flex;align-items:center;padding:10px 14px 0;flex-shrink:0;

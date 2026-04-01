@@ -92,7 +92,7 @@ export function showPlayerMenu(
     <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : '#f0b040'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
   `;
 
-  menu.addEventListener('mousedown', (e) => e.stopPropagation());
+  menu.addEventListener('pointerdown', (e) => e.stopPropagation());
   menu.addEventListener('click', (e) => e.stopPropagation());
   document.body.appendChild(menu);
 

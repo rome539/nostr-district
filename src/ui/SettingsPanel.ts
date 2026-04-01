@@ -214,7 +214,7 @@ export class SettingsPanel {
       </div>
     `;
 
-    this.panelEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.panelEl.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.panelEl.addEventListener('click', (e) => e.stopPropagation());
     document.body.appendChild(this.panelEl);
 

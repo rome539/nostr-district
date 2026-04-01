@@ -120,7 +120,7 @@ export class ComputerUI {
     `;
 
     this.panel.addEventListener('keydown', (e) => e.stopPropagation());
-    this.panel.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.panel.addEventListener('pointerdown', (e) => e.stopPropagation());
     document.body.appendChild(this.panel);
 
     this.keydownHandler = (e: KeyboardEvent) => {

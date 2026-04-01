@@ -115,7 +115,7 @@ export class ZapModal {
       `}
     `;
 
-    modal.addEventListener('mousedown', e => e.stopPropagation());
+    modal.addEventListener('pointerdown', e => e.stopPropagation());
     document.body.appendChild(modal);
     ZapModal.el = modal;
 
