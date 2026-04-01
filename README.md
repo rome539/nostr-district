@@ -128,6 +128,42 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | NIP-59 | Gift wraps | Seals and gift wraps for NIP-17 DM privacy |
 | NIP-88 | Polls | Create polls and record votes in rooms |
 
+## Security
+
+Nostr District ships with a built-in security kit (`src/nostr-auth-security-kit.js`) that handles key protection, input sanitization, and session safety across all login methods.
+
+### Key Handling
+
+| Method | How the key is handled |
+|--------|----------------------|
+| NIP-07 Extension | Private key never touches the app — signing happens inside the extension |
+| NIP-46 Bunker | Key stays on the remote signer; app only holds a temporary session token |
+| nsec | Stored in a closure-based `SecureKeyStore` with no `.get()` method — XSS cannot extract the raw key |
+| Guest | Ephemeral key generated locally, never persisted |
+
+### SecureKeyStore
+
+The `SecureKeyStore` holds the nsec private key inside a JavaScript closure. There is no public getter — external scripts can only call `.signEvent()`, which returns a signed event but never exposes the key bytes. On logout or page unload the key bytes are zeroed out in memory.
+
+### Auto-Logout
+
+nsec sessions automatically log out after **15 minutes of inactivity** (mouse, keyboard, scroll, touch). If the tab is hidden and the timeout elapses while away, logout triggers on return.
+
+### Input Sanitization
+
+All user-generated content (display names, bios, NIP-05, chat messages) is passed through:
+- **HTML escaping** — prevents XSS injection via `innerHTML`
+- **URL sanitization** — blocks `javascript:`, `data:`, `vbscript:`, and `file:` protocols
+- **Length capping** — prevents DOM bloat from maliciously long profile fields
+
+### Encrypted Messaging
+
+DMs use **NIP-17 + NIP-59** (gift wraps with NIP-44 encryption). Messages are sealed and wrapped before being published — relay operators cannot read them.
+
+### NWC
+
+The wallet connection string is stored in `localStorage` and only transmitted to your own wallet relay over an encrypted NIP-04 channel. It is never sent to any Nostr District server.
+
 ## Running Locally
 
 ```bash
