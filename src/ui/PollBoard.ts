@@ -91,8 +91,9 @@ export class PollBoard {
     this.container.addEventListener('mousedown', (e) => {
       if (e.target === this.container) this.close();
     });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen) this.close();
+    this.container.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') this.close();
     });
   }
 
@@ -186,7 +187,7 @@ export class PollBoard {
     const expired = !!(poll.endsAt && poll.endsAt < now);
     const myVote = this.votedLocal.get(poll.id) ?? this.resultsCache.get(poll.id)?.myVote ?? null;
     const results = this.resultsCache.get(poll.id);
-    const showResults = !!(myVote || expired || results);
+    const showResults = !!(myVote || expired);
     const canVote = !myVote && !expired && !!this.myPubkey && authStore.getState().loginMethod !== 'guest';
     const totalVotes = results?.totalVoters ?? 0;
 
@@ -225,7 +226,7 @@ export class PollBoard {
       return `<div class="pb-opt-result"><div class="pb-opt-label">${this.esc(opt.label)}</div></div>`;
     }).join('');
 
-    const loadingHtml = this.isLoadingResults
+    const loadingHtml = this.isLoadingResults && showResults
       ? `<div class="pb-loading">Loading results…</div>`
       : '';
 
