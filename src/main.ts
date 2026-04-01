@@ -51,7 +51,7 @@ function startGame(): void {
           antialias: false,
           scale: {
             mode: Phaser.Scale.FIT,
-            autoCenter: Phaser.Scale.CENTER_BOTH,
+            autoCenter: Phaser.Scale.NO_CENTER,
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
           },

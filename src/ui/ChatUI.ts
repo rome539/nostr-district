@@ -40,10 +40,10 @@ export class ChatUI {
     this.onCommand = onCommand;
 
     this.container = document.createElement('div');
-    this.container.style.cssText = `position:fixed;bottom:max(12px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);width:520px;max-width:92vw;z-index:1000;font-family:'Courier New',monospace;pointer-events:none;`;
+    this.container.style.cssText = `position:fixed;bottom:8px;left:50%;transform:translateX(-50%);width:520px;max-width:92vw;z-index:1000;font-family:'Courier New',monospace;pointer-events:none;`;
 
     this.log = document.createElement('div');
-    this.log.style.cssText = `max-height:160px;overflow-y:auto;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;`;
+    this.log.style.cssText = `max-height:min(160px,30dvh);overflow-y:auto;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;`;
     this.container.appendChild(this.log);
 
     const inputRow = document.createElement('div');
