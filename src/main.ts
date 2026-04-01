@@ -24,8 +24,11 @@ if (w.__nostr_district_started) {
 } else {
 
 let game: Phaser.Game | null = null;
+let gameStarting = false;
 
 function startGame(): void {
+  if (gameStarting || game) return;
+  gameStarting = true;
   if (game) {
     game.destroy(true);
     game = null;
@@ -41,6 +44,7 @@ function startGame(): void {
   setTimeout(() => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        gameStarting = false;
         game = new Phaser.Game({
           type: Phaser.AUTO,
           parent: 'game-container',

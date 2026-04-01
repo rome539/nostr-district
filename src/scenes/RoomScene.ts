@@ -165,6 +165,10 @@ export class RoomScene extends Phaser.Scene {
     this.computerPrompt = this.add.text(0, 0, '[E] Use Computer', {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.computerPrompt.setInteractive();
+    this.computerPrompt.on('pointerdown', () => {
+      if (!this.introActive && this.nearComputer && this.isMyRoom()) this.openComputer();
+    });
 
     this.input.keyboard?.on('keydown-E', () => {
       if (this.introActive) return;
