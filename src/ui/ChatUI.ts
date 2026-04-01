@@ -6,6 +6,7 @@
 import Phaser from 'phaser';
 import { sendChat } from '../nostr/presenceService';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
+import { renderEmojis } from '../nostr/emojiService';
 
 function escapeHtml(text: string): string {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
@@ -22,7 +23,7 @@ function renderContent(text: string): string {
     const label = escapeHtml(t.length > 55 ? t.slice(0, 52) + '…' : t);
     return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
   }
-  return `<span style="color:#f5e8d0;opacity:0.85;">${escapeHtml(text)}</span>`;
+  return `<span style="color:#f5e8d0;opacity:0.85;">${renderEmojis(escapeHtml(text))}</span>`;
 }
 
 export class ChatUI {

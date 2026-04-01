@@ -12,6 +12,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
 import { shouldFilter } from '../nostr/moderationService';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
+import { renderEmojis } from '../nostr/emojiService';
 
 interface Conversation {
   pubkey: string;
@@ -441,7 +442,7 @@ export class DMPanel {
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
           ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
-          : this.escapeHtml(msg.content);
+          : renderEmojis(this.escapeHtml(msg.content));
 
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">

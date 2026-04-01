@@ -139,7 +139,7 @@ export class SettingsPanel {
             <div style="width:10px;height:10px;border-radius:50%;background:${t.accent};"></div>
           </div>
           <span style="color:${isActive ? t.accent : 'var(--nd-subtext)'};font-size:12px;">${t.name}</span>
-          ${isActive ? `<span style="color:${t.accent};font-size:10px;margin-left:auto;opacity:0.7;">active</span>` : ''}
+          <span class="sp-active-tag" style="color:${t.accent};font-size:10px;margin-left:auto;opacity:0.7;display:${isActive ? 'inline' : 'none'};">active</span>
         </div>
       `;
     }).join('');
@@ -162,7 +162,7 @@ export class SettingsPanel {
       <div style="margin-bottom:10px;">${nostrThemeHtml}</div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE${ntEnabled ? ' <span style="opacity:0.45;">(overridden by nostr theme)</span>' : ''}</div>
+      <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE${ntEnabled ? ' <span style="opacity:0.45;">(overridden by nostr theme)</span>' : ''}</div>
       <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
         ${themeSwatches}
       </div>
@@ -392,6 +392,29 @@ export class SettingsPanel {
         if (this.themeBrowser.isOpen()) this.themeBrowser.close();
         else this.themeBrowser.open();
       });
+
+      // Also update the preset swatches active state and overridden label
+      const appearanceHeader = this.panelEl?.querySelector('#sp-appearance-header') as HTMLElement | null;
+      if (appearanceHeader) {
+        appearanceHeader.innerHTML = `APPEARANCE${ntEnabled ? ' <span style="opacity:0.45;">(overridden by nostr theme)</span>' : ''}`;
+      }
+      const themesEl = this.panelEl?.querySelector('#settings-themes') as HTMLElement | null;
+      if (themesEl) {
+        themesEl.style.opacity = ntEnabled ? '0.5' : '1';
+        const activeId = themeStore.current.id;
+        themesEl.querySelectorAll<HTMLElement>('.sp-theme-swatch').forEach(el => {
+          const tid = el.dataset.tid;
+          const t = THEMES.find(x => x.id === tid);
+          if (!t) return;
+          const isActive = !ntEnabled && tid === activeId;
+          el.style.border = `1px solid ${isActive ? t.accent + '66' : 'transparent'}`;
+          el.style.background = isActive ? t.accent + '11' : 'transparent';
+          const label = el.querySelector('span') as HTMLElement | null;
+          if (label) label.style.color = isActive ? t.accent : 'var(--nd-subtext)';
+          const activeTag = el.querySelector('.sp-active-tag') as HTMLElement | null;
+          if (activeTag) activeTag.style.display = isActive ? 'inline' : 'none';
+        });
+      }
     });
 
     // Logout flow

@@ -414,10 +414,18 @@ if (_enabled && _cached) {
 
 /**
  * Preview a theme visually without persisting to localStorage.
- * Call applyThemeObject to commit it, or clearNostrThemeCss to revert.
+ * Call applyThemeObject to commit it, or revertPreview to revert.
  */
 export function previewThemeObject(theme: NostrTheme): void {
   injectCss(buildThemeCss(theme));
+}
+
+/**
+ * Revert a preview back to the active theme (or clear if no theme is enabled).
+ */
+export function revertPreview(): void {
+  if (_enabled && _cached) injectCss(buildThemeCss(_cached));
+  else clearNostrThemeCss();
 }
 
 /**

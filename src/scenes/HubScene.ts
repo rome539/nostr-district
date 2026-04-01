@@ -23,6 +23,7 @@ import { sendAvatarUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { loadNostrTheme } from '../nostr/nostrThemeService';
+import { initEmojiService } from '../nostr/emojiService';
 import { subscribeToZapReceipts } from '../nostr/zapService';
 import { ZapModal } from '../ui/ZapModal';
 import { showZapToast } from '../ui/ZapToast';
@@ -223,7 +224,10 @@ export class HubScene extends Phaser.Scene {
     this.registry.set('playerPubkey', auth.pubkey || '');
     this.registry.set('playerName', auth.displayName || 'anon');
     // Fetch kind 16767 for panel theming (fire-and-forget)
-    if (auth.pubkey) void loadNostrTheme(auth.pubkey);
+    if (auth.pubkey) {
+      void loadNostrTheme(auth.pubkey);
+      void initEmojiService(auth.pubkey);
+    }
     this.startGame();
   }
 

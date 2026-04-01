@@ -5,7 +5,7 @@
  */
 
 import {
-  NostrTheme, parseKind16767, applyThemeObject, previewThemeObject,
+  NostrTheme, parseKind16767, applyThemeObject, previewThemeObject, revertPreview,
   getNostrTheme, isNostrThemeEnabled, FALLBACK_RELAYS,
 } from '../nostr/nostrThemeService';
 import { authStore } from '../stores/authStore';
@@ -198,6 +198,10 @@ export class NostrThemeBrowser {
   }
 
   close(): void {
+    if (this.previewIdx !== null) {
+      revertPreview();
+      this.previewIdx = null;
+    }
     this.el?.remove();
     this.el = null;
     if (this.outsideHandler) {

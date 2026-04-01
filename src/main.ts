@@ -25,6 +25,7 @@ if (w.__nostr_district_started) {
 
 let game: Phaser.Game | null = null;
 let gameStarting = false;
+let loginInProgress = false;
 
 function startGame(): void {
   if (gameStarting || game) return;
@@ -71,26 +72,34 @@ function startGame(): void {
 
 const loginScreen = new LoginScreen({
   onExtensionLogin: async () => {
+    if (loginInProgress) return;
+    loginInProgress = true;
     try {
       await loginWithExtension();
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
+      loginInProgress = false;
       loginScreen.setStatus(e.message, true);
     }
   },
   onNsecLogin: async (nsec: string) => {
+    if (loginInProgress) return;
+    loginInProgress = true;
     try {
       await loginWithNsec(nsec);
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
+      loginInProgress = false;
       loginScreen.setStatus(e.message, true);
     }
   },
   onBunkerLogin: async (url: string) => {
+    if (loginInProgress) return;
+    loginInProgress = true;
     // Signer-initiated: user pasted a bunker:// URL
     try {
       await loginWithBunkerUrl(url);
@@ -98,10 +107,13 @@ const loginScreen = new LoginScreen({
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
+      loginInProgress = false;
       loginScreen.setStatus(e.message, true);
     }
   },
   onBunkerClientFlow: async () => {
+    if (loginInProgress) return;
+    loginInProgress = true;
     // Client-initiated: generate QR code for signer app
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
@@ -141,6 +153,7 @@ const loginScreen = new LoginScreen({
       startGame();
     } catch (e: any) {
       if (timeoutId) clearTimeout(timeoutId);
+      loginInProgress = false;
       if (e.message === 'timeout') {
         cancelBunkerFlow();
         loginScreen.setBunkerStatus('Connection expired. Click Back and try again.');
@@ -150,15 +163,19 @@ const loginScreen = new LoginScreen({
     }
   },
   onBunkerCancel: () => {
+    loginInProgress = false;
     cancelBunkerFlow();
   },
   onGuestLogin: async () => {
+    if (loginInProgress) return;
+    loginInProgress = true;
     try {
       await loginAsGuest();
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
+      loginInProgress = false;
       loginScreen.setStatus(e.message, true);
     }
   },
