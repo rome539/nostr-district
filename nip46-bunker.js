@@ -15,7 +15,7 @@ async function _loadNip44() {
         _nip44mod = globalThis.__nip44mod;
         return _nip44mod;
     }
-    _nip44mod = await import('https://esm.sh/nostr-tools@2.7.2/nip44');
+    _nip44mod = await import('nostr-tools/nip44');
     return _nip44mod;
 }
 
@@ -151,7 +151,7 @@ export async function renderQR(container, data, opts = {}) {
     container.innerHTML = '';
     try {
         if (!window.qrcode) {
-            const mod = await import('https://esm.sh/qrcode-generator@1.4.4');
+            const mod = await import('qrcode-generator');
             window.qrcode = mod.default || mod;
         }
         const qr = window.qrcode(0, 'L'); qr.addData(data); qr.make();

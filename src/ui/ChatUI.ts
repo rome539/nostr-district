@@ -186,6 +186,10 @@ export class ChatUI {
 
   getInput(): HTMLInputElement { return this.input; }
 
+  isFocused(): boolean {
+    return document.activeElement === this.input;
+  }
+
   destroy(): void {
     this.gifPicker?.close();
     if (this.container) this.container.remove();

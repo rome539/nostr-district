@@ -458,7 +458,7 @@ export class HubScene extends Phaser.Scene {
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
         if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, P.teal);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); this.snd.chatPing(); }
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); if (!this.chatUI.isFocused()) this.snd.chatPing(); }
       },
       onAvatarUpdate: (pk: string, avatarStr: string) => {
         const o = this.otherPlayers.get(pk); if (!o) return;

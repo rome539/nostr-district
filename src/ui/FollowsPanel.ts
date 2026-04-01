@@ -33,6 +33,9 @@ interface OnlinePlayer {
 const PAGE_SIZE  = 20;
 const META_BATCH = 10;
 
+let _followChangeHandler: (() => void) | null = null;
+export function notifyFollowChange(): void { _followChangeHandler?.(); }
+
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
 }
@@ -50,6 +53,7 @@ export class FollowsPanel {
   private metaFetching  = false;
   private loaded        = false;
   private activeTab:    'follows' | 'online' = 'follows';
+  private onlineProfileCache = new Map<string, string>(); // pubkey → picture url
 
   constructor() { this.injectStyles(); }
 
@@ -61,6 +65,11 @@ export class FollowsPanel {
     this.isOpen = true;
 
     setOnlinePlayersHandler((players) => {
+      // Drop cache entries for players who left
+      const incoming = new Set(players.map(p => p.pubkey));
+      for (const pk of this.onlineProfileCache.keys()) {
+        if (!incoming.has(pk)) this.onlineProfileCache.delete(pk);
+      }
       this.onlinePubkeys = new Set(players.map(p => p.pubkey));
       this.onlinePlayers = players.map(p => ({
         pubkey: p.pubkey,
@@ -72,6 +81,7 @@ export class FollowsPanel {
       if (!this.loading) this.render();
     });
 
+    _followChangeHandler = () => this.refresh();
     if (!this.loaded) this.load();
     else requestOnlinePlayers();
   }
@@ -79,11 +89,19 @@ export class FollowsPanel {
   close(): void {
     this.container?.classList.remove('fp-open');
     this.isOpen = false;
+    _followChangeHandler = null;
     setOnlinePlayersHandler(null);
   }
 
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
   isVisible(): boolean { return this.isOpen; }
+
+  refresh(): void {
+    this.loaded = false;
+    this.follows = [];
+    this.metaQueue = [];
+    if (this.isOpen) this.load();
+  }
 
   destroy(): void {
     setOnlinePlayersHandler(null);
@@ -198,10 +216,14 @@ export class FollowsPanel {
     let html = `<div class="fp-section-label" style="color:var(--nd-accent);">ACTIVE (${players.length})</div>`;
     for (const p of players) {
       const isSelf = p.pubkey === myPubkey;
+      const pic = this.onlineProfileCache.get(p.pubkey);
+      const avatarHtml = pic
+        ? `<img src="${esc(pic)}" class="fp-avatar" data-pk="${p.pubkey}" onerror="this.outerHTML='<div class=\\'fp-avatar fp-avatar-placeholder\\' style=\\'font-size:11px;\\'>👤</div>'">`
+        : `<div class="fp-avatar fp-avatar-placeholder" data-pk="${p.pubkey}" style="font-size:11px;">👤</div>`;
       html += `
         <div class="fp-row fp-row-online" data-pubkey="${p.pubkey}" data-name="${esc(p.name)}">
           <span class="fp-dot fp-dot-on"></span>
-          <div class="fp-avatar fp-avatar-placeholder" style="font-size:11px;">👤</div>
+          ${avatarHtml}
           <div class="fp-info">
             <div class="fp-name" style="color:${isSelf ? 'var(--nd-accent)' : 'var(--nd-text)'};">${esc(p.name)}${isSelf ? ' <span style="color:var(--nd-accent);font-size:9px;opacity:0.6;">(you)</span>' : ''}</div>
             ${p.status ? `<div class="fp-nip05" style="color:var(--nd-subtext);font-style:italic;">${esc(p.status)}</div>` : ''}
@@ -219,6 +241,32 @@ export class FollowsPanel {
         ProfileModal.show(pk, name, player?.avatar, player?.status);
       });
     });
+
+    // Fetch profiles for any online player not yet cached
+    const missing = players.filter(p => !this.onlineProfileCache.has(p.pubkey));
+    if (missing.length > 0) this.fetchOnlineProfiles(missing.map(p => p.pubkey), body);
+  }
+
+  private async fetchOnlineProfiles(pubkeys: string[], body: HTMLDivElement): Promise<void> {
+    await Promise.allSettled(pubkeys.map(async (pubkey) => {
+      try {
+        const p = await fetchProfile(pubkey);
+        const pic = p?.picture || '';
+        this.onlineProfileCache.set(pubkey, pic);
+        if (!pic) return;
+        // Patch the avatar in place without a full re-render
+        const el = body.querySelector(`[data-pk="${pubkey}"]`);
+        if (!el) return;
+        const img = document.createElement('img');
+        img.src = pic;
+        img.className = 'fp-avatar';
+        img.dataset.pk = pubkey;
+        img.onerror = () => { img.outerHTML = `<div class="fp-avatar fp-avatar-placeholder" style="font-size:11px;">👤</div>`; };
+        el.replaceWith(img);
+      } catch (_) {
+        this.onlineProfileCache.set(pubkey, '');
+      }
+    }));
   }
 
   private renderFollowsTab(body: HTMLDivElement): void {

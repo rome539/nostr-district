@@ -13,6 +13,7 @@ import { ZapModal } from './ZapModal';
 import type { DMPanel } from './DMPanel';
 import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
+import { notifyFollowChange } from './FollowsPanel';
 import { fetchKind16767, NostrTheme } from '../nostr/nostrThemeService';
 
 // ── Minimal colour helpers (scoped to this file) ──────────────────────────────
@@ -331,6 +332,7 @@ export class ProfileModal {
               followBtn.style.background   = isFollowing ? 'none' : `color-mix(in srgb,var(--nd-accent) 13%,transparent)`;
               followBtn.style.border       = isFollowing ? `1px solid #e8545455` : `1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent)`;
               followBtn.style.color        = isFollowing ? '#e85454' : 'var(--nd-accent)';
+              notifyFollowChange();
             }
           } catch (err) {
             console.warn('[ProfileModal] follow/unfollow failed:', err);

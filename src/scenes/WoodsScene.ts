@@ -148,7 +148,7 @@ export class WoodsScene extends Phaser.Scene {
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? WOODS_ACCENT : P.lpurp, pk);
-        if (!isMe) this.snd.chatPing();
+        if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
         if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, WOODS_ACCENT);
         else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); }
       },
