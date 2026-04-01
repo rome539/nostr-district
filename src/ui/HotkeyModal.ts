@@ -135,8 +135,12 @@ export class HotkeyModal {
       .hk-body {
         display:grid;grid-template-columns:1fr 1px 1fr;
         gap:0;padding:20px;
-        max-height:70vh;overflow-y:auto;
+        max-height:70dvh;overflow-y:auto;
         scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-text) 15%,transparent) transparent;
+      }
+      @media (max-width:520px) {
+        .hk-body { grid-template-columns:1fr; padding:14px; }
+        .hk-divider { display:none; }
       }
       .hk-col { display:flex;flex-direction:column;gap:4px; }
       .hk-divider { background:color-mix(in srgb,var(--nd-text) 8%,transparent);margin:0 18px; }

@@ -103,7 +103,7 @@ export class ComputerUI {
       border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:10px;
       font-family:'Courier New',monospace;
       box-shadow:0 8px 30px rgba(0,0,0,0.8),0 0 40px color-mix(in srgb,var(--nd-accent) 3%,transparent);
-      width:460px;max-width:94vw;max-height:88vh;overflow:hidden;
+      width:min(460px,96vw);max-height:min(88dvh,680px);overflow:hidden;
       display:flex;flex-direction:column;
     `;
 
@@ -427,9 +427,16 @@ export class ComputerUI {
           color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;resize:vertical;
         ">${esc(profile.about || '')}</textarea>
       </div>
-      <div style="margin-bottom:14px;">
+      <div style="margin-bottom:10px;">
         <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Picture URL</label>
         <input id="prof-pic" type="text" value="${esc(profile.picture || '')}" style="
+          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
+          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
+        "/>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Lightning Address</label>
+        <input id="prof-lnaddr" type="text" value="${esc(profile.lud16 || '')}" placeholder="you@wallet.com" style="
           width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
           color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
@@ -466,14 +473,16 @@ export class ComputerUI {
       statusEl.style.color = 'var(--nd-accent)';
       statusEl.textContent = 'Publishing...';
       try {
-        const name = (body.querySelector('#prof-name') as HTMLInputElement).value.trim();
-        const about = (body.querySelector('#prof-about') as HTMLTextAreaElement).value.trim();
-        const picture = (body.querySelector('#prof-pic') as HTMLInputElement).value.trim();
+        const name    = (body.querySelector('#prof-name')   as HTMLInputElement).value.trim();
+        const about   = (body.querySelector('#prof-about')  as HTMLTextAreaElement).value.trim();
+        const picture = (body.querySelector('#prof-pic')    as HTMLInputElement).value.trim();
+        const lnaddr  = (body.querySelector('#prof-lnaddr') as HTMLInputElement).value.trim();
         const existing = authStore.getState().profile;
         const content: Record<string, any> = { ...existing };
         if (name) { content.name = name; content.display_name = name; }
         if (about) content.about = about;
         if (picture) content.picture = picture;
+        if (lnaddr) { content.lud16 = lnaddr; } else { delete content.lud16; }
 
         const event: any = {
           kind: 0, created_at: Math.floor(Date.now() / 1000),

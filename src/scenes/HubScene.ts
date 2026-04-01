@@ -23,6 +23,9 @@ import { sendAvatarUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { loadNostrTheme } from '../nostr/nostrThemeService';
+import { subscribeToZapReceipts } from '../nostr/zapService';
+import { ZapModal } from '../ui/ZapModal';
+import { showZapToast } from '../ui/ZapToast';
 import { LoginScreen } from '../ui/LoginScreen';
 import {
   loginWithExtension, loginWithNsec, loginAsGuest,
@@ -258,6 +261,19 @@ export class HubScene extends Phaser.Scene {
     });
     this.events.on('shutdown', () => unsubProfile());
 
+    // ── Zap receipt subscription ──
+    const zapAuth = authStore.getState();
+    if (zapAuth.pubkey && !zapAuth.isGuest) {
+      const unsubZap = subscribeToZapReceipts(zapAuth.pubkey, (senderPubkey, amountSats, comment) => {
+        // Resolve sender name from known players
+        const senderName = this.otherPlayers.get(senderPubkey)?.name
+          || this.playerNames?.get(senderPubkey)
+          || senderPubkey.slice(0, 8) + '…';
+        showZapToast(senderName, amountSats, comment || undefined, 'incoming');
+      });
+      this.events.once('shutdown', unsubZap);
+    }
+
     this.chatUI = new ChatUI();
     this.rpsGame.setChatUI(this.chatUI);
     const chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
@@ -419,9 +435,8 @@ export class HubScene extends Phaser.Scene {
   }
 
   private notifyWoodsClosed(): void {
-    const now = Date.now();
-    if (now - this.lastWoodsClosedNotice < 1500) return;
-    this.lastWoodsClosedNotice = now;
+    if (this.lastWoodsClosedNotice !== 0) return;
+    this.lastWoodsClosedNotice = Date.now();
     this.chatUI.addMessage('system', 'The woods are temporarily closed.', P.amber);
   }
 
@@ -437,6 +452,7 @@ export class HubScene extends Phaser.Scene {
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
+        if (text.startsWith('/zap:')) { const sats = parseInt(text.slice(5), 10); if (!isNaN(sats)) { const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite; if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000); } return; }
         if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => { this.chatUI.addMessage('system', msg, P.teal); if (msg.includes('wins') && msg.includes(myName2)) this.snd.rpsWin(); else if (msg.includes('wins')) this.snd.rpsLose(); else this.snd.rpsTie(); })) return; }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
@@ -728,6 +744,7 @@ export class HubScene extends Phaser.Scene {
       case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
       case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
+      case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const auth2 = authStore.getState(); if (!auth2.pubkey || auth2.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zapTarget: string | null = null; let zapName = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; } }); if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zapTarget, zapName); break; }
       case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
         if (this.computerUI.isOpen()) { this.computerUI.close(); return; }

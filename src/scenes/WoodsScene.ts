@@ -24,6 +24,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
+import { ZapModal } from '../ui/ZapModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderHubSprite } from '../entities/AvatarRenderer';
@@ -471,6 +472,7 @@ export class WoodsScene extends Phaser.Scene {
     const parts=text.slice(1).split(' ');const cmd=parts[0].toLowerCase();const arg=parts.slice(1).join(' ').trim();
     switch(cmd){
       case 'dm':{if(!canUseDMs()){this.chatUI.addMessage('system','DMs need a key',P.amber);return;}if(!arg){const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`Online: ${ps.join(', ')}`:'No players here',WOODS_ACCENT);return;}let tp:string|null=null;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase()))tp=pk;});if(tp){this.dmPanel.open(tp);this.chatUI.addMessage('system','Opening DM...',WOODS_ACCENT);}else this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);break;}
+      case 'zap':{if(!arg){this.chatUI.addMessage('system','Usage: /zap <name>',WOODS_ACCENT);return;}const za=authStore.getState();if(!za.pubkey||za.isGuest){this.chatUI.addMessage('system','Login to zap',P.amber);return;}let zt:string|null=null;let zn=arg;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase())){zt=pk;zn=o.name;}});if(!zt){this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);return;}ZapModal.show(zt,zn);break;}
       case 'smoke':{if(this.smokeEmote.active){this.smokeEmote.stop();this.chatUI.addMessage('system','Put it out',P.dpurp);sendChat('/emote smoke_off');}else{this.smokeEmote.start();this.snd.lighterFlick();ChatUI.showBubble(this,this.player.x,this.player.y-48,'*lights a cigarette*',P.dpurp);sendChat('/emote smoke_on');}break;}
       case 'tp':case 'teleport':case 'go':{if(!arg){this.chatUI.addMessage('system','Rooms: hub, relay, feed, myroom, lounge, market',WOODS_ACCENT);return;}const al:Record<string,string>={hub:'hub',relay:'relay',feed:'feed',thefeed:'feed',lounge:'lounge',rooftop:'lounge',market:'market',shop:'market'};const rid=al[arg.toLowerCase().replace(/\s+/g,'')];if(rid==='hub'){this.leaveToDistrict();return;}if(rid){sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:rid,name:rid.charAt(0).toUpperCase()+rid.slice(1),neonColor:P.teal});return;}this.chatUI.addMessage('system',`Unknown room "${arg}"`,P.amber);break;}
       case 'players':case 'who':case 'online':{const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`${ps.length} here: ${ps.join(', ')}`:'No other players',WOODS_ACCENT);break;}
@@ -478,7 +480,7 @@ export class WoodsScene extends Phaser.Scene {
       case 'mute':{const s=toggleMute();this.chatUI.addMessage('system',s?'Muted':'Unmuted',s?P.amber:WOODS_ACCENT);break;}
       case 'filter':{if(!arg){const w=getCustomBannedWords();this.chatUI.addMessage('system',w.length?`Filtered: ${w.join(', ')}`:'No filters',WOODS_ACCENT);return;}addBannedWord(arg);this.chatUI.addMessage('system',`Added "${arg}"`,WOODS_ACCENT);break;}
       case 'unfilter':{if(!arg)return;removeBannedWord(arg);this.chatUI.addMessage('system',`Removed "${arg}"`,WOODS_ACCENT);break;}
-      case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/smoke','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
+      case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
       default:this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);
     }
     this.chatUI.flashLog();

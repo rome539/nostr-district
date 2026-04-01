@@ -9,6 +9,7 @@
 import { P } from '../config/game.config';
 import { fetchProfile, fetchContactList, signEvent, publishEvent, fetchUserNotes, UserNote } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
+import { ZapModal } from './ZapModal';
 import type { DMPanel } from './DMPanel';
 import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
@@ -145,8 +146,8 @@ export class ProfileModal {
       background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
       border: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent); border-radius: 10px;
       padding: 24px 28px 20px; font-family: 'Courier New', monospace;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.7); min-width: 400px; max-width: 480px;
-      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.7); width: min(480px, 96vw);
+      max-height: 90vh; overflow-y: auto; overflow-x: hidden;
     `;
     modal.innerHTML = `
       <div style="color:var(--nd-accent);font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">PROFILE</div>
@@ -154,14 +155,14 @@ export class ProfileModal {
     `;
     document.body.appendChild(modal);
 
-    const closeModal = (e: MouseEvent) => {
-      if (!modal.contains(e.target as Node)) { modal.remove(); document.removeEventListener('mousedown', closeModal); }
+    const closeModal = (e: PointerEvent) => {
+      if (!modal.contains(e.target as Node)) { modal.remove(); document.removeEventListener('pointerdown', closeModal); }
     };
-    setTimeout(() => document.addEventListener('mousedown', closeModal), 300);
+    setTimeout(() => document.addEventListener('pointerdown', closeModal), 300);
 
     const addCloseBtn = (npubToCopy?: string, npubDisplayShort?: string) => {
       modal.querySelector('#profile-close')?.addEventListener('click', () => {
-        modal.remove(); document.removeEventListener('mousedown', closeModal);
+        modal.remove(); document.removeEventListener('pointerdown', closeModal);
       });
       const npubEl = modal.querySelector('#profile-copy-npub') as HTMLElement | null;
       if (npubEl && npubToCopy) {
@@ -258,7 +259,10 @@ export class ProfileModal {
                 ${nip05 ? `<div style="color:var(--nd-accent);font-size:10px;margin-top:1px;">\u2713 ${esc(nip05.length > 28 ? nip05.slice(0, 26) + '..' : nip05)}</div>` : ''}
                 ${scoreInlineHtml}
               </div>
-              ${!isSelf ? `<button id="profile-dm" title="Send DM" style="background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);border-radius:6px;color:var(--nd-accent);font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">\u2709 DM</button>` : ''}
+              ${!isSelf ? `
+                <button id="profile-dm" title="Send DM" style="background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);border-radius:6px;color:var(--nd-accent);font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">✉ DM</button>
+                <button id="profile-zap" title="Send Zap" style="background:rgba(0,0,0,0.50);border:1px solid rgba(240,176,64,0.55);border-radius:6px;color:#f0b040;font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">⚡ Zap</button>
+              ` : ''}
             </div>
             ${playerStatus ? `<div style="color:var(--nd-accent);font-size:11px;font-style:italic;opacity:0.9;">\u25CF ${esc(playerStatus)}</div>` : ''}
           </div>
@@ -295,7 +299,13 @@ export class ProfileModal {
 
       modal.querySelector('#profile-dm')?.addEventListener('click', () => {
         const panel = ProfileModal._dmPanel;
-        if (panel) { modal.remove(); document.removeEventListener('mousedown', closeModal); panel.open(pubkey); }
+        if (panel) { modal.remove(); document.removeEventListener('pointerdown', closeModal); panel.open(pubkey); }
+      });
+
+      modal.querySelector('#profile-zap')?.addEventListener('click', () => {
+        modal.remove();
+        document.removeEventListener('pointerdown', closeModal);
+        ZapModal.show(pubkey, displayName);
       });
 
       // Follow / Unfollow handler

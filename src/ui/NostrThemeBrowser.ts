@@ -193,7 +193,7 @@ export class NostrThemeBrowser {
     this.outsideHandler = (e: MouseEvent) => {
       if (!this.el?.contains(e.target as Node)) this.close();
     };
-    setTimeout(() => document.addEventListener('mousedown', this.outsideHandler!), 100);
+    setTimeout(() => document.addEventListener('pointerdown', this.outsideHandler!), 100);
     this.loadTab(this.activeTab);
   }
 
@@ -201,7 +201,7 @@ export class NostrThemeBrowser {
     this.el?.remove();
     this.el = null;
     if (this.outsideHandler) {
-      document.removeEventListener('mousedown', this.outsideHandler);
+      document.removeEventListener('pointerdown', this.outsideHandler);
       this.outsideHandler = null;
     }
   }
@@ -214,8 +214,8 @@ export class NostrThemeBrowser {
     const el = document.createElement('div');
     el.id = 'ntb-panel';
     el.style.cssText = `
-      position:fixed;top:52px;right:310px;z-index:2002;
-      width:370px;max-height:520px;
+      position:fixed;top:52px;right:calc(min(280px,100vw - 28px) + 22px);z-index:2002;
+      width:min(370px,calc(100vw - 28px));max-height:calc(100dvh - 66px);
       background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
       border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);
       border-radius:10px;box-shadow:0 4px 28px rgba(0,0,0,0.75);

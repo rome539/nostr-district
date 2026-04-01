@@ -359,7 +359,7 @@ export class FollowsPanel {
     s.id = 'fp-styles';
     s.textContent = `
       .fp-panel {
-        position: fixed; top: 0; left: -360px; width: 320px; height: 100vh;
+        position: fixed; top: 0; left: -100vw; width: min(320px, 100vw); height: 100dvh;
         background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
         border-right: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
         z-index: 2000; font-family: 'Courier New', monospace;

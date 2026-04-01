@@ -70,13 +70,16 @@ export function showPlayerMenu(
 
   const menu = document.createElement('div');
   menu.id = MENU_ID;
+  const menuW = Math.min(200, window.innerWidth - 16);
+  const clampX = Math.min(screenX, window.innerWidth  - menuW - 8);
+  const clampY = Math.min(screenY - 10, window.innerHeight - 160);
   menu.style.cssText = `
     position: fixed; z-index: 3000;
-    left: ${screenX}px; top: ${screenY - 10}px;
+    left: ${Math.max(8, clampX)}px; top: ${Math.max(8, clampY)}px;
     background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
     border: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent); border-radius: 8px;
     padding: 6px 0; font-family: 'Courier New', monospace;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6); min-width: 200px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6); min-width: ${menuW}px;
   `;
 
   const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
@@ -99,7 +102,7 @@ export function showPlayerMenu(
     el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent');
   });
 
-  const close = () => { menu.remove(); document.removeEventListener('mousedown', closeHandler); };
+  const close = () => { menu.remove(); document.removeEventListener('pointerdown', closeHandler); };
 
   // View Profile
   menu.querySelector('.ctx-profile')!.addEventListener('click', () => {
@@ -130,7 +133,7 @@ export function showPlayerMenu(
   const closeHandler = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node)) close();
   };
-  setTimeout(() => document.addEventListener('mousedown', closeHandler), 300);
+  setTimeout(() => document.addEventListener('pointerdown', closeHandler), 300);
 }
 
 /** Remove any open menu (call on scene shutdown) */

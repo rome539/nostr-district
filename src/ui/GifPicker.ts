@@ -154,13 +154,13 @@ export class GifPicker {
     document.body.appendChild(this.el);
     this.wire();
 
-    const outside = (e: MouseEvent) => {
+    const outside = (e: PointerEvent) => {
       if (!this.el?.contains(e.target as Node) && e.target !== anchor) {
         this.close();
-        document.removeEventListener('mousedown', outside);
+        document.removeEventListener('pointerdown', outside);
       }
     };
-    setTimeout(() => document.addEventListener('mousedown', outside), 150);
+    setTimeout(() => document.addEventListener('pointerdown', outside), 150);
     this.doGifSearch('');
   }
 

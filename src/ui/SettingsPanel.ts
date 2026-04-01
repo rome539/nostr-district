@@ -8,6 +8,7 @@
 
 import { P } from '../config/game.config';
 import { authStore } from '../stores/authStore';
+import { getNWCUri, setNWCUri, hasWebLN } from '../nostr/nwcService';
 import { logout } from '../nostr/nostrService';
 import { themeStore, THEMES } from '../stores/themeStore';
 import {
@@ -78,7 +79,9 @@ export class SettingsPanel {
       border: 1px solid color-mix(in srgb, var(--nd-dpurp) 44%, transparent); border-radius: 8px;
       padding: 14px 16px; font-family: 'Courier New', monospace;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-      min-width: 230px; max-width: 280px;
+      width: min(280px, calc(100vw - 28px));
+      max-height: calc(100dvh - 66px); overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: color-mix(in srgb,var(--nd-dpurp) 33%,transparent) transparent;
     `;
 
     // ── Nostr theme section ──
@@ -147,7 +150,7 @@ export class SettingsPanel {
         <span style="color:var(--nd-subtext);font-size:11px;font-weight:normal;margin-left:6px;">${esc(method)}</span>
       </div>
 
-      <div id="settings-npub" style="padding:8px 10px;margin-bottom:10px;background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);border-radius:4px;cursor:pointer;transition:border-color 0.15s;">
+      <div id="settings-npub" style="padding:8px 10px;margin-bottom:8px;background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);border-radius:4px;cursor:pointer;transition:border-color 0.15s;">
         <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:3px;">NPUB</div>
         <div style="color:var(--nd-text);font-size:11px;word-break:break-all;opacity:0.7;">${esc(displayNpub)}</div>
         <div id="settings-copy-hint" style="color:var(--nd-accent);font-size:10px;margin-top:4px;opacity:0.5;">click to copy</div>
@@ -163,6 +166,11 @@ export class SettingsPanel {
       <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
         ${themeSwatches}
       </div>
+
+      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">LIGHTNING WALLET</div>
+      <div id="sp-wallet-row" style="margin-bottom:10px;"></div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
@@ -215,6 +223,75 @@ export class SettingsPanel {
     hkBtn?.addEventListener('mouseenter', () => { hkBtn.style.color = 'var(--nd-text)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 35%,transparent)`; });
     hkBtn?.addEventListener('mouseleave', () => { hkBtn.style.color = 'var(--nd-subtext)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-dpurp) 28%,transparent)`; });
     hkBtn?.addEventListener('click', () => { this.closePanel(); this.hotkeyModal.show(); });
+
+    // ── Wallet row ──
+    const walletRow = this.panelEl.querySelector('#sp-wallet-row') as HTMLElement;
+    const renderWalletRow = () => {
+      const nwc = getNWCUri();
+      const webln = hasWebLN();
+      if (nwc) {
+        walletRow.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
+            background:color-mix(in srgb,var(--nd-accent) 8%,transparent);
+            border:1px solid color-mix(in srgb,var(--nd-accent) 22%,transparent);">
+            <span style="color:var(--nd-accent);font-size:11px;flex:1;">✓ Wallet connected</span>
+            <button id="sp-wallet-disconnect" style="padding:3px 8px;border-radius:4px;
+              font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+              background:color-mix(in srgb,${P.red} 14%,transparent);
+              border:1px solid color-mix(in srgb,${P.red} 33%,transparent);
+              color:${P.red};">Disconnect</button>
+          </div>`;
+        walletRow.querySelector('#sp-wallet-disconnect')?.addEventListener('click', () => {
+          setNWCUri(''); renderWalletRow();
+        });
+      } else if (webln) {
+        walletRow.innerHTML = `
+          <div style="padding:6px 8px;border-radius:5px;
+            background:color-mix(in srgb,var(--nd-accent) 8%,transparent);
+            border:1px solid color-mix(in srgb,var(--nd-accent) 22%,transparent);
+            color:var(--nd-accent);font-size:11px;">✓ Browser wallet detected</div>`;
+      } else {
+        walletRow.innerHTML = `
+          <div style="color:var(--nd-subtext);font-size:10px;line-height:1.5;margin-bottom:6px;opacity:0.7;">
+            Nostr Wallet Connect stores your connection secret in browser storage. Set a spending limit in your wallet first.
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;">
+            <input id="sp-nwc-ack" type="checkbox" style="accent-color:var(--nd-accent);cursor:pointer;">
+            <span style="color:var(--nd-subtext);font-size:10px;">I understand, I have a spending limit set</span>
+          </label>
+          <div id="sp-nwc-form" style="display:none;">
+            <div style="display:flex;gap:5px;">
+              <input id="sp-nwc-input" type="text" placeholder="nostr+walletconnect://…" autocomplete="off" spellcheck="false"
+                style="flex:1;min-width:0;background:color-mix(in srgb,var(--nd-dpurp) 14%,transparent);
+                border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);border-radius:4px;
+                color:var(--nd-text);font-family:'Courier New',monospace;font-size:10px;
+                padding:5px 7px;outline:none;">
+              <button id="sp-nwc-connect" style="padding:5px 10px;border-radius:4px;flex-shrink:0;
+                font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+                background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
+                border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
+                color:var(--nd-accent);">Connect</button>
+            </div>
+            <div id="sp-nwc-err" style="color:#f0b040;font-size:10px;margin-top:4px;display:none;">Invalid URI</div>
+          </div>`;
+
+        const ack = walletRow.querySelector('#sp-nwc-ack') as HTMLInputElement;
+        const form = walletRow.querySelector('#sp-nwc-form') as HTMLElement;
+        ack.addEventListener('change', () => { form.style.display = ack.checked ? 'block' : 'none'; });
+
+        const inp = walletRow.querySelector('#sp-nwc-input') as HTMLInputElement;
+        inp.addEventListener('keydown', e => e.stopPropagation());
+        inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');
+        inp.addEventListener('blur',  () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)');
+        walletRow.querySelector('#sp-nwc-connect')?.addEventListener('click', () => {
+          const err = walletRow.querySelector('#sp-nwc-err') as HTMLElement;
+          const ok = setNWCUri(inp.value.trim());
+          if (ok) { renderWalletRow(); }
+          else { err.style.display = 'block'; }
+        });
+      }
+    };
+    renderWalletRow();
 
     // Hover effects
     const logoutBtn = this.panelEl.querySelector('#settings-logout') as HTMLElement;
@@ -344,13 +421,13 @@ export class SettingsPanel {
         this.closePanel();
       }
     };
-    setTimeout(() => document.addEventListener('mousedown', this.closeHandler!), 50);
+    setTimeout(() => document.addEventListener('pointerdown', this.closeHandler!), 50);
   }
 
   private closePanel(): void {
     this.themeBrowser.close();
     if (this.panelEl) { this.panelEl.remove(); this.panelEl = null; }
-    if (this.closeHandler) { document.removeEventListener('mousedown', this.closeHandler); this.closeHandler = null; }
+    if (this.closeHandler) { document.removeEventListener('pointerdown', this.closeHandler); this.closeHandler = null; }
     if (this.nostrThemeUnsub) { this.nostrThemeUnsub(); this.nostrThemeUnsub = null; }
     if (this.gearEl) { this.gearEl.style.color = 'var(--nd-dpurp)'; this.gearEl.style.borderColor = `color-mix(in srgb, var(--nd-dpurp) 33%, transparent)`; }
   }

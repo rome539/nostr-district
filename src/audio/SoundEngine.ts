@@ -246,6 +246,18 @@ export class SoundEngine {
 
   // ── SFX ───────────────────────────────────────────────────────────────────────
 
+  zapSound(): void {
+    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+    // Electric crackle — noise burst with high-freq filter
+    this.noiseShot(0.06, 'highpass', 4000, 2.0, 0.18, d);
+    this.noiseShot(0.12, 'bandpass', 2200, 1.5, 0.10, d, 0.03);
+    // Rising tone ⚡
+    this.osc(220, 'sawtooth', t,        0.10, 0.04, d);
+    this.osc(440, 'sawtooth', t + 0.04, 0.10, 0.04, d);
+    this.osc(880, 'sine',     t + 0.08, 0.12, 0.06, d);
+    this.osc(1320,'sine',     t + 0.11, 0.10, 0.05, d);
+  }
+
   chatPing(): void {
     const t = this.ac().currentTime; const d = this.sfx();
     this.osc(880,  'sine', t,        0.13, 0.07, d);

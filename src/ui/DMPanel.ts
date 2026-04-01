@@ -217,7 +217,7 @@ export class DMPanel {
       border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent); border-radius: 10px;
       padding: 12px 16px; font-family: 'Courier New', monospace;
       box-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 12px color-mix(in srgb,var(--nd-accent) 13%,transparent);
-      max-width: 280px; cursor: pointer;
+      max-width: min(280px, calc(100vw - 40px)); cursor: pointer;
       animation: dm-toast-in 0.2s ease;
     `;
     toast.innerHTML = `
@@ -525,14 +525,14 @@ export class DMPanel {
     style.id = 'dm-panel-styles';
     style.textContent = `
       .dm-panel {
-        position: fixed; top: 0; right: -400px; width: 390px; height: 100vh;
+        position: fixed; top: 0; right: -100vw; width: min(390px, 100vw); height: 100dvh;
         background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
         border-left: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
         z-index: 2000; font-family: 'Courier New', monospace;
         display: flex; flex-direction: column;
         transition: right 0.25s ease; box-shadow: -4px 0 20px rgba(0,0,0,0.5);
       }
-      .dm-panel.dm-open { right: 0; }
+      .dm-panel.dm-open { right: 0 !important; }
 
       .dm-header {
         display: flex; justify-content: space-between; align-items: center;

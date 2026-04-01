@@ -529,7 +529,7 @@ export class PollBoard {
       .pb-panel {
         background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
         border: 1px solid color-mix(in srgb, var(--nd-text) 12%, transparent);
-        border-radius: 10px; width: 520px; max-width: 94vw; max-height: 82vh;
+        border-radius: 10px; width: min(520px, 96vw); max-height: 82dvh;
         display: flex; flex-direction: column;
         box-shadow: 0 8px 40px rgba(0,0,0,0.75);
         font-family: 'Courier New', monospace;

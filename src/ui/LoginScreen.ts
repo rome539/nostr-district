@@ -33,7 +33,6 @@ export class LoginScreen {
   private shootingStar: ShootingStar | null = null;
   private shootingStarNext = 0;
   // 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter — random each session
-  private moonPhase = Math.random();
   private handleResize = (): void => {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
@@ -159,7 +158,7 @@ export class LoginScreen {
       }
       .login-box {
         position: relative; z-index: 1;
-        width: 440px; max-width: 92vw; padding: 36px; text-align: center;
+        width: min(440px, 96vw); padding: clamp(16px, 5vw, 36px); text-align: center;
         background: color-mix(in srgb, var(--nd-bg) 82%, transparent);
         border: 1px solid color-mix(in srgb, var(--nd-dpurp) 40%, transparent);
         border-radius: 12px;
@@ -423,80 +422,6 @@ export class LoginScreen {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-
-    // ── Moon with phase ───────────────────────────────────────────────────────
-    { const mx = Math.floor(W * 0.72);
-      const my = Math.floor(H * 0.12);
-      const mr = 18;
-      const ph = this.moonPhase; // 0–1
-
-      // Outer glow
-      const moonGlow = ctx.createRadialGradient(mx, my, mr, mx, my, mr + 36);
-      moonGlow.addColorStop(0, 'rgba(210,200,160,0.20)');
-      moonGlow.addColorStop(0.5, 'rgba(180,170,140,0.06)');
-      moonGlow.addColorStop(1, 'rgba(180,170,140,0)');
-      ctx.fillStyle = moonGlow;
-      ctx.beginPath(); ctx.arc(mx, my, mr + 36, 0, Math.PI * 2); ctx.fill();
-
-      // Draw lit portion via clipping phase shape
-      // Phase 0=new, 0.5=full. We draw the lit disc then cut out the shadow.
-      // The terminator is an ellipse whose x-radius goes from -mr (new) → 0 (quarter) → +mr (full) → 0 → -mr
-      const angle = ph * Math.PI * 2; // 0→2π
-      // lit side: right half (waxing) or left half (waning)
-      // terminator ellipse x-scale: cos(angle), positive=bulges right (waxing), negative=bulges left (waning)
-      const termX = Math.cos(angle); // -1 → 1 → -1
-
-      ctx.save();
-      ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.clip();
-
-      // Dark sky behind moon (new moon / dark half)
-      ctx.fillStyle = '#030110';
-      ctx.fillRect(mx - mr - 2, my - mr - 2, (mr + 2) * 2, (mr + 2) * 2);
-
-      // Lit half
-      ctx.fillStyle = '#cdc4a0';
-      // Draw lit semicircle (right half for waxing 0→0.5, left half for waning 0.5→1)
-      const litRight = ph <= 0.5;
-      ctx.beginPath();
-      ctx.arc(mx, my, mr, -Math.PI / 2, Math.PI / 2, !litRight);
-      ctx.closePath();
-      ctx.fill();
-
-      // Terminator ellipse overtop — fills the "non-lit" zone of the lit semicircle
-      // termX == 1: full (no coverage), termX == 0: quarter, termX == -1: new (full coverage)
-      const tx = termX * mr; // horizontal radius of terminator ellipse (negative = opposite bulge)
-      ctx.beginPath();
-      ctx.save();
-      ctx.translate(mx, my);
-      ctx.scale(litRight ? tx / mr : -tx / mr, 1);
-      ctx.arc(0, 0, mr, -Math.PI / 2, Math.PI / 2, litRight);
-      ctx.restore();
-      ctx.closePath();
-      if (litRight) {
-        // Waxing: terminator ellipse on left side covers part of lit half
-        ctx.fillStyle = ph < 0.25 ? '#030110' : '#cdc4a0';
-        // Actually: paint dark over the crescent-to-gibbous transition
-        ctx.fillStyle = '#030110';
-        ctx.fill();
-      } else {
-        ctx.fillStyle = '#030110';
-        ctx.fill();
-      }
-
-      // Craters (only on lit portion — drawn after phase so they sit on top)
-      ctx.fillStyle = 'rgba(0,0,18,0.22)';
-      [{ cx: mx + 5, cy: my - 4, r: 3 }, { cx: mx - 6, cy: my + 5, r: 2.5 }, { cx: mx + 3, cy: my + 7, r: 2 }]
-        .forEach(c => { ctx.beginPath(); ctx.arc(c.cx, c.cy, c.r, 0, Math.PI * 2); ctx.fill(); });
-
-      // Highlight
-      const moonHL = ctx.createRadialGradient(mx - 6, my - 6, 0, mx, my, mr);
-      moonHL.addColorStop(0, 'rgba(255,252,230,0.18)');
-      moonHL.addColorStop(0.6, 'rgba(255,252,230,0)');
-      ctx.fillStyle = moonHL;
-      ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
-
-      ctx.restore();
-    }
 
     // ── Shooting star ────────────────────────────────────────────────────────
     if (!this.shootingStar && time >= this.shootingStarNext) {
