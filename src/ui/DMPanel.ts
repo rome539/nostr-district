@@ -10,9 +10,10 @@
 import { sendDirectMessage, onDMReceived, canUseDMs, DMMessage } from '../nostr/dmService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
-import { shouldFilter } from '../nostr/moderationService';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { ProfileModal } from './ProfileModal';
+import { nip19 } from 'nostr-tools';
 
 interface Conversation {
   pubkey: string;
@@ -38,6 +39,11 @@ export class DMPanel {
   private gifPicker: GifPicker | null = null;
   private hiddenConvs = new Set<string>();
   private showHidden = false;
+  private fetchedNames = new Set<string>();
+
+  private toNpub(pubkey: string): string {
+    try { return nip19.npubEncode(pubkey).slice(0, 16) + '...'; } catch { return pubkey.slice(0, 12) + '...'; }
+  }
 
   private readKey(convPubkey: string): string {
     return `nd_dm_read_${this.myPubkey}_${convPubkey}`;
@@ -152,8 +158,7 @@ export class DMPanel {
   private handleMessage(msg: DMMessage): void {
     const convPubkey = msg.conversationPubkey;
 
-    // Filter incoming messages (always show your own)
-    if (!msg.isOwn && shouldFilter(msg.content)) return;
+    // No content filtering in DMs — private conversations between two people
 
     // Store message
     if (!this.messages.has(convPubkey)) {
@@ -180,7 +185,7 @@ export class DMPanel {
     const existing = this.conversations.get(convPubkey);
     this.conversations.set(convPubkey, {
       pubkey: convPubkey,
-      name: msg.senderName || existing?.name || convPubkey.slice(0, 12) + '...',
+      name: msg.senderName || existing?.name || this.toNpub(convPubkey),
       lastMessage: isGifUrl(msg.content.trim()) ? '[GIF]' : /^https?:\/\//i.test(msg.content.trim()) ? '[Link]' : msg.content.slice(0, 50),
       lastTime: msg.createdAt,
       unread: (this.activePubkey === convPubkey) ? 0 : (existing?.unread || 0) + (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey) ? 1 : 0),
@@ -295,14 +300,19 @@ export class DMPanel {
     try {
       const profile = await fetchProfile(pubkey);
       if (profile) {
-        const name = profile.display_name || profile.name || pubkey.slice(0, 12) + '...';
+        const name = profile.display_name || profile.name || this.toNpub(pubkey);
         const conv = this.conversations.get(pubkey);
         if (conv) {
           conv.name = name;
           if (this.isOpen) this.renderConversationList();
         }
+      } else {
+        // Allow retry next time if fetch returned nothing
+        this.fetchedNames.delete(pubkey);
       }
-    } catch (_) {}
+    } catch (_) {
+      this.fetchedNames.delete(pubkey);
+    }
   }
 
   // ════════════════════════════════════════════
@@ -370,6 +380,14 @@ export class DMPanel {
 
     const all = Array.from(this.conversations.values())
       .sort((a, b) => b.lastTime - a.lastTime);
+
+    // Eagerly resolve any names still showing as hex (once per pubkey)
+    all.forEach(conv => {
+      if ((!conv.name || conv.name.includes('...')) && !this.fetchedNames.has(conv.pubkey)) {
+        this.fetchedNames.add(conv.pubkey);
+        this.fetchAndSetName(conv.pubkey);
+      }
+    });
 
     const visible = all.filter(c => !this.hiddenConvs.has(c.pubkey));
     const hidden  = all.filter(c =>  this.hiddenConvs.has(c.pubkey));
@@ -466,7 +484,7 @@ export class DMPanel {
     if (!this.conversations.has(pubkey)) {
       this.conversations.set(pubkey, {
         pubkey,
-        name: pubkey.slice(0, 12) + '...',
+        name: this.toNpub(pubkey),
         lastMessage: '',
         lastTime: Date.now() / 1000,
         unread: 0,
@@ -476,11 +494,14 @@ export class DMPanel {
 
     const headerEl = this.container?.querySelector('.dm-chat-header');
     if (headerEl) {
-      const name = this.conversations.get(pubkey)?.name || pubkey.slice(0, 12) + '...';
+      const name = this.conversations.get(pubkey)?.name || this.toNpub(pubkey);
       headerEl.innerHTML = `
         <button class="dm-back">\u2190</button>
-        <span class="dm-chat-name">${this.escapeHtml(name)}</span>
+        <span class="dm-chat-name dm-chat-name-link">${this.escapeHtml(name)}</span>
       `;
+      headerEl.querySelector('.dm-chat-name-link')?.addEventListener('click', () => {
+        ProfileModal.show(pubkey, this.conversations.get(pubkey)?.name || this.toNpub(pubkey));
+      });
       headerEl.querySelector('.dm-back')?.addEventListener('click', () => {
         this.activePubkey = null;
         this.renderConversationList();
@@ -505,14 +526,70 @@ export class DMPanel {
     const text = this.inputEl.value.trim();
     if (!text) return;
 
-    const recipientPubkey = this.activePubkey;
     this.inputEl.value = '';
 
-    sendDirectMessage(recipientPubkey, text).catch(e => {
+    if (text.startsWith('/')) {
+      const result = this.handleDMCommand(text);
+      if (result) {
+        sendDirectMessage(this.activePubkey, result).catch(() => {});
+      }
+      this.inputEl.focus();
+      return;
+    }
+
+    sendDirectMessage(this.activePubkey, text).catch(e => {
       console.error('[DM] Send error:', e);
     });
 
     this.inputEl.focus();
+  }
+
+  private handleDMCommand(text: string): string | null {
+    const space = text.indexOf(' ');
+    const cmd = (space > -1 ? text.slice(1, space) : text.slice(1)).toLowerCase();
+    const arg = space > -1 ? text.slice(space + 1).trim() : '';
+
+    switch (cmd) {
+      case 'flip': case 'coin': {
+        const result = Math.random() < 0.5 ? '👑 HEADS' : '🦅 TAILS';
+        return `🪙 flipped a coin: ${result}`;
+      }
+      case '8ball': {
+        if (!arg) return '🎱 Usage: /8ball <question>';
+        const responses = [
+          'It is certain.', 'Without a doubt.', 'Yes, definitely.', 'You may rely on it.',
+          'As I see it, yes.', 'Most likely.', 'Outlook good.', 'Signs point to yes.',
+          'Reply hazy, try again.', 'Ask again later.', 'Better not tell you now.',
+          'Cannot predict now.', 'Concentrate and ask again.',
+          "Don't count on it.", 'My reply is no.', 'My sources say no.',
+          'Outlook not so good.', 'Very doubtful.', 'Absolutely not.', 'The stars say no.',
+        ];
+        const answer = responses[Math.floor(Math.random() * responses.length)];
+        return `🎱 ${arg} — ${answer}`;
+      }
+      case 'slots': {
+        const reels = ['🍒','🍋','🍊','🍇','💎','🍀','⭐','🎰'];
+        const r = () => reels[Math.floor(Math.random() * reels.length)];
+        const [a, b, c] = [r(), r(), r()];
+        const jackpot = a === b && b === c;
+        const two = !jackpot && (a === b || b === c || a === c);
+        const result = jackpot ? '🎉 JACKPOT!' : two ? '✨ Two of a kind!' : '💸 No match.';
+        return `🎰 [ ${a} | ${b} | ${c} ] — ${result}`;
+      }
+      case 'ship': {
+        const spaceIdx = arg.indexOf(' ');
+        const n1 = spaceIdx > -1 ? arg.slice(0, spaceIdx).trim() : arg.trim();
+        const n2 = spaceIdx > -1 ? arg.slice(spaceIdx + 1).trim() : '';
+        if (!n1 || !n2) return '💘 Usage: /ship <name1> <name2>';
+        const seed = [n1.toLowerCase(), n2.toLowerCase()].sort().join('|');
+        let hash = 0; for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) & 0xfffffff;
+        const pct = hash % 101;
+        const label = pct >= 90 ? '💕 Soulmates!' : pct >= 70 ? '💖 Great match!' : pct >= 50 ? '💛 Good vibes.' : pct >= 30 ? '🤝 Could work.' : '😬 Rough road ahead.';
+        return `💘 ${n1} + ${n2}: ${pct}% compatible — ${label}`;
+      }
+      default:
+        return null;
+    }
   }
 
   // ════════════════════════════════════════════
@@ -620,6 +697,10 @@ export class DMPanel {
         color: var(--nd-text); font-size: 14px; font-weight: bold;
         text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
+      .dm-chat-name-link {
+        cursor: pointer; transition: color 0.15s;
+      }
+      .dm-chat-name-link:hover { color: var(--nd-accent); }
 
       .dm-messages {
         flex: 1; overflow-y: auto; padding: 12px 14px;

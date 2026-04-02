@@ -1,8 +1,11 @@
 /**
- * emojiService.ts — NIP-30 custom emoji support (kind:30030)
+ * emojiService.ts — NIP-30 custom emoji support
  *
- * Fetches the logged-in user's custom emoji packs and provides
- * a helper to render :shortcode: tokens as inline <img> tags.
+ * kind:10030 — user's emoji list (which packs they've selected)
+ * kind:30030 — emoji pack definition (contains the actual shortcode → URL tags)
+ *
+ * Flow: fetch kind:10030 → read `a` tag references → fetch those kind:30030 packs
+ * Also loads any inline `emoji` tags directly on the 10030 event.
  */
 
 const emojiMap = new Map<string, string>(); // shortcode (lowercase) → image URL
@@ -18,21 +21,63 @@ export async function initEmojiService(pubkey: string): Promise<void> {
   try {
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
-    const events: any[] = await (pool as any).querySync(
+
+    // Step 1: fetch the user's emoji list (kind:10030)
+    const listEvents: any[] = await (pool as any).querySync(
       EMOJI_RELAYS,
-      { kinds: [30030], authors: [pubkey] },
+      { kinds: [10030], authors: [pubkey] },
+      { maxWait: 5000 },
+    );
+
+    emojiMap.clear();
+
+    if (listEvents.length === 0) {
+      pool.close(EMOJI_RELAYS);
+      console.log('[Emoji] No kind:10030 emoji list found');
+      return;
+    }
+
+    // Use the most recent 10030 event
+    const listEvent = listEvents.sort((a, b) => b.created_at - a.created_at)[0];
+
+    // Load any inline emoji tags directly on the list event
+    for (const tag of listEvent.tags as string[][]) {
+      if (tag[0] === 'emoji' && tag[1] && tag[2]) {
+        emojiMap.set(tag[1].toLowerCase(), tag[2]);
+      }
+    }
+
+    // Step 2: collect referenced kind:30030 pack identifiers from `a` tags
+    const aTags = (listEvent.tags as string[][]).filter(t => t[0] === 'a' && t[1]?.startsWith('30030:'));
+    if (aTags.length === 0) {
+      pool.close(EMOJI_RELAYS);
+      console.log(`[Emoji] Loaded ${emojiMap.size} inline emoji(s), no pack references`);
+      return;
+    }
+
+    // Parse `30030:<pubkey>:<d-tag>` references
+    const packFilters = aTags.map(t => {
+      const parts = t[1].split(':');
+      return { kinds: [30030], authors: [parts[1]], '#d': [parts[2]] };
+    });
+
+    // Step 3: fetch all referenced packs
+    const packEvents: any[] = await (pool as any).querySync(
+      EMOJI_RELAYS,
+      packFilters,
       { maxWait: 6000 },
     );
     pool.close(EMOJI_RELAYS);
-    emojiMap.clear();
-    for (const e of events) {
-      for (const tag of e.tags as string[][]) {
+
+    for (const pack of packEvents) {
+      for (const tag of pack.tags as string[][]) {
         if (tag[0] === 'emoji' && tag[1] && tag[2]) {
           emojiMap.set(tag[1].toLowerCase(), tag[2]);
         }
       }
     }
-    console.log(`[Emoji] Loaded ${emojiMap.size} custom emoji(s) from ${events.length} pack(s)`);
+
+    console.log(`[Emoji] Loaded ${emojiMap.size} custom emoji(s) from ${packEvents.length} pack(s)`);
   } catch (err) {
     console.warn('[Emoji] init failed:', err);
   }

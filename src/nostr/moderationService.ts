@@ -6,13 +6,7 @@
  * - Persisted in localStorage
  */
 
-// ── Default banned words (basic list — players can add their own) ──
-const DEFAULT_BANNED: string[] = [
-  // Slurs and hate speech
-  'nigger', 'nigga', 'faggot', 'fag', 'retard', 'tranny', 'kike', 'spic', 'chink', 'wetback',
-  // Spam patterns
-  'buy now', 'free bitcoin', 'click here', 'make money fast', 'send btc',
-];
+const DEFAULT_BANNED: string[] = [];
 
 const STORAGE_KEY_WORDS = 'nostr_district_banned_words';
 const STORAGE_KEY_MUTE = 'nostr_district_mute_chat';
