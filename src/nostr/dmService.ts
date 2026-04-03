@@ -38,6 +38,23 @@ let localKey: Uint8Array | null = null;
 let listeners: DMListener[] = [];
 let lastSyncTime = Math.floor(Date.now() / 1000) - 86400; // 24h ago
 
+// ── Initial-load state ──
+let _historyLoading = false;
+let _loadingListeners: ((loading: boolean) => void)[] = [];
+
+function setHistoryLoading(val: boolean): void {
+  if (_historyLoading === val) return;
+  _historyLoading = val;
+  for (const cb of _loadingListeners) { try { cb(val); } catch (_) {} }
+}
+
+export function isDMHistoryLoading(): boolean { return _historyLoading; }
+
+export function onDMHistoryLoading(cb: (loading: boolean) => void): () => void {
+  _loadingListeners.push(cb);
+  return () => { _loadingListeners = _loadingListeners.filter(l => l !== cb); };
+}
+
 // Retry queue (modeled on NYM's pendingDMs)
 interface PendingDM {
   wrappedEvents: any[];     // The actual gift-wrap events to re-publish
@@ -103,11 +120,36 @@ export function startDMSubscription(): void {
   const pubkey = state.pubkey;
   const since = Math.floor(Date.now() / 1000) - 604800; // 7 days back (same as NYM)
 
+  let preEoseBuffer: any[] = [];
+  let eoseFired = false;
+  setHistoryLoading(true);
+
   relayManager.subscribe(
     'dm-giftwraps',
     [{ kinds: [1059], '#p': [pubkey], since, limit: 500 }],
-    async (event, relayUrl) => {
-      await handleGiftWrap(event);
+    async (event) => {
+      if (!eoseFired) {
+        preEoseBuffer.push(event); // hold until EOSE so we can batch-process
+      } else {
+        await handleGiftWrap(event); // live event after initial load — process immediately
+      }
+    },
+    async () => {
+      if (eoseFired) return; // only process first EOSE
+      eoseFired = true;
+      const buffer = preEoseBuffer;
+      preEoseBuffer = [];
+
+      // Process in batches of 20 with yield points to keep UI responsive
+      const BATCH = 20;
+      for (let i = 0; i < buffer.length; i += BATCH) {
+        await Promise.all(buffer.slice(i, i + BATCH).map(e => handleGiftWrap(e)));
+        if (i + BATCH < buffer.length) {
+          await new Promise(r => setTimeout(r, 0)); // yield to browser
+        }
+      }
+      setHistoryLoading(false);
+      console.log(`[DM] History loaded — ${buffer.length} events processed`);
     }
   );
 
@@ -120,6 +162,7 @@ export function startDMSubscription(): void {
 }
 
 export function stopDMSubscription(): void {
+  setHistoryLoading(false);
   if (relayManager) {
     relayManager.unsubscribe('dm-giftwraps');
     relayManager.destroy();

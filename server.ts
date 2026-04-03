@@ -207,6 +207,10 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     if (myPubkey) {
       const player = players.get(myPubkey);
+
+      // If a newer connection already took over this pubkey, don't touch their entry
+      if (player && player.ws !== ws) return;
+
       console.log(`[Presence] ${player?.name} left (${players.size - 1} online)`);
 
       if (player && player.room === `myroom:${myPubkey}`) {

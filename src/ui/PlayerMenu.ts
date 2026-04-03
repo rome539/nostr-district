@@ -8,6 +8,8 @@
 import { P } from '../config/game.config';
 import { sendRoomRequest } from '../nostr/presenceService';
 import { ProfileModal } from './ProfileModal';
+import { ZapModal } from './ZapModal';
+import type { DMPanel } from './DMPanel';
 
 const MENU_ID = 'player-context-menu';
 
@@ -50,7 +52,7 @@ export function unmutePlayer(pubkey: string): void {
 
 interface MenuCallbacks {
   onChat: (text: string, color: string) => void;
-  getDMPanel?: () => unknown;
+  getDMPanel?: () => DMPanel | null;
 }
 
 export function showPlayerMenu(
@@ -72,7 +74,7 @@ export function showPlayerMenu(
   menu.id = MENU_ID;
   const menuW = Math.min(200, window.innerWidth - 16);
   const clampX = Math.min(screenX, window.innerWidth  - menuW - 8);
-  const clampY = Math.min(screenY - 10, window.innerHeight - 160);
+  const clampY = Math.min(screenY - 10, window.innerHeight - 220);
   menu.style.cssText = `
     position: fixed; z-index: 3000;
     left: ${Math.max(8, clampX)}px; top: ${Math.max(8, clampY)}px;
@@ -87,9 +89,11 @@ export function showPlayerMenu(
   menu.innerHTML = `
     <div style="color:var(--nd-text);font-size:13px;font-weight:bold;padding:8px 16px 10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);">${esc(name)}</div>
     <div class="ctx-profile" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDC64 View Profile</div>
-    <div class="ctx-visit" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
+    <div class="ctx-dm" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;">\u2709 Send DM</div>
+    <div class="ctx-zap" style="padding:10px 16px;color:#f0b040;font-size:13px;cursor:pointer;transition:background 0.15s;">\u26A1 Zap</div>
+    <div class="ctx-visit" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
     <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 13%,transparent);margin:2px 0;"></div>
-    <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : '#f0b040'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
+    <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : 'var(--nd-subtext)'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>
   `;
 
   menu.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -97,7 +101,7 @@ export function showPlayerMenu(
   document.body.appendChild(menu);
 
   // Hover effects
-  menu.querySelectorAll('.ctx-profile,.ctx-visit,.ctx-mute').forEach(el => {
+  menu.querySelectorAll('.ctx-profile,.ctx-dm,.ctx-zap,.ctx-visit,.ctx-mute').forEach(el => {
     el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `color-mix(in srgb,var(--nd-dpurp) 13%,transparent)`);
     el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent');
   });
@@ -108,6 +112,19 @@ export function showPlayerMenu(
   menu.querySelector('.ctx-profile')!.addEventListener('click', () => {
     close();
     ProfileModal.show(pubkey, name, avatar, status);
+  });
+
+  // Send DM
+  menu.querySelector('.ctx-dm')!.addEventListener('click', () => {
+    close();
+    const dmPanel = callbacks.getDMPanel?.();
+    if (dmPanel) dmPanel.toggle(pubkey);
+  });
+
+  // Zap
+  menu.querySelector('.ctx-zap')!.addEventListener('click', () => {
+    close();
+    ZapModal.show(pubkey, name);
   });
 
   // Visit Room

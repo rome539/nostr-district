@@ -7,9 +7,10 @@
  * - Styled to match Nostr District neon cyberpunk aesthetic
  */
 
-import { sendDirectMessage, onDMReceived, canUseDMs, DMMessage } from '../nostr/dmService';
+import { sendDirectMessage, onDMReceived, canUseDMs, isDMHistoryLoading, onDMHistoryLoading, DMMessage } from '../nostr/dmService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
+import { authStore } from '../stores/authStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 import { ProfileModal } from './ProfileModal';
@@ -40,6 +41,17 @@ export class DMPanel {
   private hiddenConvs = new Set<string>();
   private showHidden = false;
   private fetchedNames = new Set<string>();
+
+  private static readonly MSG_PAGE = 30;
+  private static readonly CONV_PAGE = 15;
+  // Index into the sorted messages array where the current view starts
+  private msgViewStart = new Map<string, number>();
+  // How many conversations to show in the list
+  private convLimit = DMPanel.CONV_PAGE;
+
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
+  private unsubLoading: (() => void) | null = null;
+  private historyLoading = false;
 
   private toNpub(pubkey: string): string {
     try { return nip19.npubEncode(pubkey).slice(0, 16) + '...'; } catch { return pubkey.slice(0, 12) + '...'; }
@@ -92,6 +104,19 @@ export class DMPanel {
 
     // Listen for incoming DMs
     this.unsubscribe = onDMReceived((msg) => this.handleMessage(msg));
+
+    // Track history-load state so we can debounce renders during the initial burst
+    this.historyLoading = isDMHistoryLoading();
+    this.unsubLoading = onDMHistoryLoading((loading) => {
+      this.historyLoading = loading;
+      if (!loading && this.isOpen) {
+        // History just finished — do one full render now
+        if (this.activePubkey) this.renderMessages();
+        this.renderConversationList();
+      } else if (loading && this.isOpen) {
+        this.renderConversationList(); // show the loading indicator
+      }
+    });
   }
 
   // ════════════════════════════════════════════
@@ -101,7 +126,10 @@ export class DMPanel {
   /** Open the DM panel, optionally focused on a specific user */
   open(targetPubkey?: string): void {
     if (!canUseDMs()) {
-      console.warn('[DM] DMs not available — must be logged in with a key');
+      const loginMethod = authStore.getState().loginMethod;
+      if (loginMethod === 'extension') {
+        this.showExtensionUnsupported();
+      }
       return;
     }
 
@@ -145,8 +173,56 @@ export class DMPanel {
     return this.isOpen;
   }
 
+  private showExtensionUnsupported(): void {
+    const existing = document.getElementById('dm-unsupported-notice');
+    if (existing) { existing.remove(); return; }
+
+    const panel = document.createElement('div');
+    panel.id = 'dm-unsupported-notice';
+    panel.style.cssText = `
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 4000; width: min(360px, 90vw);
+      background: var(--nd-bg); border: 1px solid color-mix(in srgb,var(--nd-dpurp) 50%,transparent);
+      border-radius: 10px; padding: 24px 20px;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    `;
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <span style="color:var(--nd-accent);font-size:14px;font-weight:bold;">✉ Direct Messages</span>
+        <button id="dm-unsupported-close" style="background:none;border:none;color:var(--nd-subtext);font-size:16px;cursor:pointer;padding:2px 6px;">✕</button>
+      </div>
+      <div style="color:#f0b040;font-size:13px;margin-bottom:10px;">⚠ Your extension doesn't support NIP-44</div>
+      <div style="color:var(--nd-subtext);font-size:12px;line-height:1.6;">
+        NIP-17 encrypted DMs require NIP-44 encryption support in your signer.<br><br>
+        <strong style="color:var(--nd-text);">Your extension may not support it.</strong><br><br>
+        Try one of these instead:<br>
+        <span style="color:var(--nd-accent);">• Alby</span> (browser extension)<br>
+        <span style="color:var(--nd-accent);">• Amber / Primal / nsec.app</span> (NIP-46 bunker)<br>
+        <span style="color:var(--nd-accent);">• Private key</span> (nsec login)
+      </div>
+    `;
+    document.body.appendChild(panel);
+    document.getElementById('dm-unsupported-close')!.addEventListener('click', () => panel.remove());
+  }
+
+  // Debounce renders during bulk history load — coalesces many rapid handleMessage
+  // calls into a single render pass instead of re-rendering for every event.
+  private scheduleRender(): void {
+    if (this.historyLoading) return; // suppress entirely during initial burst; onDMHistoryLoading fires one final render
+    if (this.renderTimer) clearTimeout(this.renderTimer);
+    this.renderTimer = setTimeout(() => {
+      this.renderTimer = null;
+      if (!this.isOpen) return;
+      if (this.activePubkey) this.renderMessages();
+      this.renderConversationList();
+    }, 40);
+  }
+
   destroy(): void {
     if (this.unsubscribe) this.unsubscribe();
+    if (this.unsubLoading) this.unsubLoading();
+    if (this.renderTimer) clearTimeout(this.renderTimer);
     if (this.container) this.container.remove();
     this.container = null;
   }
@@ -197,9 +273,15 @@ export class DMPanel {
 
     if (this.isOpen) {
       if (this.activePubkey === convPubkey) {
-        this.renderMessages();
+        // Keep view pinned to the bottom as new messages arrive
+        const updatedList = this.messages.get(convPubkey) || [];
+        const currentStart = this.msgViewStart.get(convPubkey) ?? 0;
+        const maxStart = Math.max(0, updatedList.length - DMPanel.MSG_PAGE);
+        if (currentStart >= maxStart - 1) {
+          this.msgViewStart.set(convPubkey, maxStart);
+        }
       }
-      this.renderConversationList();
+      this.scheduleRender();
     } else if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
       const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
       this.showToast(convPubkey, senderName, msg.content);
@@ -392,6 +474,11 @@ export class DMPanel {
     const visible = all.filter(c => !this.hiddenConvs.has(c.pubkey));
     const hidden  = all.filter(c =>  this.hiddenConvs.has(c.pubkey));
 
+    if (this.historyLoading) {
+      this.convListEl.innerHTML = `<div class="dm-empty">Loading messages…</div>`;
+      return;
+    }
+
     if (all.length === 0) {
       this.convListEl.innerHTML = `<div class="dm-empty">No conversations yet.<br/>Click a player to start a DM.</div>`;
       return;
@@ -406,7 +493,14 @@ export class DMPanel {
       </div>
     `;
 
-    const visibleHtml = visible.map(c => renderItem(c, false)).join('');
+    const visiblePage = visible.slice(0, this.convLimit);
+    const hasMore = visible.length > this.convLimit;
+    const visibleHtml = visiblePage.map(c => renderItem(c, false)).join('');
+    const showMoreHtml = hasMore ? `
+      <div class="dm-show-more" id="dm-show-more">
+        Show ${Math.min(DMPanel.CONV_PAGE, visible.length - this.convLimit)} more (${visible.length - this.convLimit} remaining)
+      </div>
+    ` : '';
     const hiddenHtml  = this.showHidden ? hidden.map(c => renderItem(c, true)).join('') : '';
     const footerHtml  = hidden.length > 0 ? `
       <div class="dm-hidden-toggle" id="dm-hidden-toggle">
@@ -414,7 +508,7 @@ export class DMPanel {
       </div>
     ` : '';
 
-    this.convListEl.innerHTML = visibleHtml + footerHtml + hiddenHtml;
+    this.convListEl.innerHTML = visibleHtml + showMoreHtml + footerHtml + hiddenHtml;
 
     this.convListEl.querySelectorAll('.dm-conv-item').forEach(el => {
       el.addEventListener('click', (e) => {
@@ -434,13 +528,18 @@ export class DMPanel {
       });
     });
 
+    document.getElementById('dm-show-more')?.addEventListener('click', () => {
+      this.convLimit += DMPanel.CONV_PAGE;
+      this.renderConversationList();
+    });
+
     document.getElementById('dm-hidden-toggle')?.addEventListener('click', () => {
       this.showHidden = !this.showHidden;
       this.renderConversationList();
     });
   }
 
-  private renderMessages(): void {
+  private renderMessages(preserveScroll = false): void {
     if (!this.messagesEl || !this.activePubkey) return;
 
     const msgs = this.messages.get(this.activePubkey) || [];
@@ -450,7 +549,21 @@ export class DMPanel {
       return;
     }
 
-    this.messagesEl.innerHTML = msgs.map(msg => {
+    // Default view start: last MSG_PAGE messages
+    if (!this.msgViewStart.has(this.activePubkey)) {
+      this.msgViewStart.set(this.activePubkey, Math.max(0, msgs.length - DMPanel.MSG_PAGE));
+    }
+    const viewStart = this.msgViewStart.get(this.activePubkey)!;
+    const slice = msgs.slice(viewStart);
+    const hasOlder = viewStart > 0;
+
+    const loadOlderHtml = hasOlder ? `
+      <div class="dm-load-older" id="dm-load-older">
+        ↑ Load older messages (${viewStart} more)
+      </div>
+    ` : '';
+
+    const msgsHtml = slice.map(msg => {
       const time = new Date(msg.createdAt * 1000);
       const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const t = msg.content.trim();
@@ -470,11 +583,32 @@ export class DMPanel {
       `;
     }).join('');
 
-    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    // Preserve scroll position when loading older messages
+    const prevScrollHeight = this.messagesEl.scrollHeight;
+    const prevScrollTop = this.messagesEl.scrollTop;
+
+    this.messagesEl.innerHTML = loadOlderHtml + msgsHtml;
+
+    if (preserveScroll && hasOlder) {
+      this.messagesEl.scrollTop = prevScrollTop + (this.messagesEl.scrollHeight - prevScrollHeight);
+    } else {
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    }
+
+    document.getElementById('dm-load-older')?.addEventListener('click', () => {
+      const pk = this.activePubkey!;
+      const current = this.msgViewStart.get(pk) ?? 0;
+      this.msgViewStart.set(pk, Math.max(0, current - DMPanel.MSG_PAGE));
+      this.renderMessages(true);
+    });
   }
 
   private openConversation(pubkey: string): void {
     this.activePubkey = pubkey;
+
+    // Reset to bottom of message history when opening a conversation
+    const msgs = this.messages.get(pubkey) || [];
+    this.msgViewStart.set(pubkey, Math.max(0, msgs.length - DMPanel.MSG_PAGE));
 
     // Clear unread and persist read state
     const conv = this.conversations.get(pubkey);
@@ -670,6 +804,20 @@ export class DMPanel {
       .dm-conv-item:has(.dm-unread) .dm-hide-btn { right: 46px; }
       .dm-conv-hidden { opacity: 0.45; }
       .dm-conv-hidden .dm-hide-btn { color: var(--nd-accent); }
+      .dm-load-older {
+        padding: 8px 16px; font-size: 11px; text-align: center;
+        color: var(--nd-subtext); cursor: pointer;
+        border-bottom: 1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);
+        margin-bottom: 6px; transition: color 0.15s;
+      }
+      .dm-load-older:hover { color: var(--nd-accent); }
+      .dm-show-more {
+        padding: 8px 16px; font-size: 11px; text-align: center;
+        color: var(--nd-subtext); cursor: pointer;
+        border-top: 1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);
+        margin-top: 4px; transition: color 0.15s;
+      }
+      .dm-show-more:hover { color: var(--nd-accent); }
       .dm-hidden-toggle {
         padding: 8px 16px; font-size: 11px;
         color: var(--nd-subtext); cursor: pointer;
