@@ -55,7 +55,17 @@ wss.on('connection', (ws) => {
 
         const oldRoom = player.room;
         const newRoom = msg.room || 'hub';
-        if (oldRoom === newRoom) return;
+        if (oldRoom === newRoom) {
+          // Client re-sent same room (e.g. returning scene re-syncing) — resend players list
+          const others: any[] = [];
+          players.forEach((p, key) => {
+            if (key !== myPubkey && p.room === newRoom) {
+              others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
+            }
+          });
+          ws.send(JSON.stringify({ type: 'players', players: others }));
+          return;
+        }
 
         console.log(`[Presence] ${player.name} moved ${oldRoom} → ${newRoom}`);
 

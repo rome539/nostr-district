@@ -887,10 +887,13 @@ export class ComputerUI {
     const petCard = (species: PetSpecies, breed: number, name: string, scale = 1.0) => {
       const isSelected = current.species === species && current.breed === breed;
       const imgUrl = `pets/${species}-${breed}-idle.png`;
-      const baseH  = species === 'dog' ? 60 : 52;
-      const dispH  = Math.round(baseH * scale);
-      const dispW  = dispH; // frames are square
-      const bgSize = `${dispW}px ${dispH}px`;
+      const baseH      = species === 'dog' ? 60 : 52;
+      const dispH      = Math.round(baseH * scale);
+      const dispW      = dispH; // frames are square
+      const nativeSize = species === 'dog' ? 100 : 50;
+      const idleFrames = 10; // both dogs and cats have 10 idle frames
+      const bgW        = Math.round(nativeSize * idleFrames * (dispH / nativeSize));
+      const bgSize     = `${bgW}px ${dispH}px`;
       return `
         <button class="pet-btn" data-species="${species}" data-breed="${breed}" style="
           display:flex;flex-direction:column;align-items:center;gap:4px;
