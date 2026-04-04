@@ -13,6 +13,7 @@
 
 import { authStore } from '../stores/authStore';
 import { RelayManager } from './relayManager';
+import { getBunkerClient } from './nostrService';
 
 // ── Types ──
 
@@ -86,10 +87,11 @@ export function getLocalKey(): Uint8Array | null {
   return localKey;
 }
 
-/** Can we send/receive DMs? Need either a local key or NIP-07 extension */
+/** Can we send/receive DMs? Need either a local key, NIP-07 extension, or bunker */
 export function canUseDMs(): boolean {
   if (localKey) return true;
   if (typeof window !== 'undefined' && (window as any).nostr?.nip44?.encrypt) return true;
+  if (authStore.getState().loginMethod === 'bunker' && getBunkerClient()?.connected) return true;
   return false;
 }
 
@@ -288,6 +290,63 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
         // Self-wrap failed — non-critical
       }
     }
+  }
+  // ── Path 3: NIP-46 bunker (nip44_encrypt + sign_event via remote signer) ──
+  else if (authStore.getState().loginMethod === 'bunker') {
+    const bunker = getBunkerClient();
+    if (!bunker?.connected) throw new Error('Bunker signer not connected');
+
+    // Seal (kind:13) — encrypt rumor content via bunker's nip44_encrypt
+    let sealContent: string;
+    try {
+      sealContent = await bunker.nip44Encrypt(recipientPubkey, JSON.stringify(rumor));
+    } catch (e: any) {
+      const reason = e?.message || 'unknown';
+      throw new Error(`Signer rejected nip44_encrypt: ${reason}. Try Amber or nsec.app.`);
+    }
+    const sealUnsigned = {
+      kind: 13,
+      content: sealContent,
+      created_at: randomTimestamp(),
+      tags: [],
+    };
+    const seal = await bunker.signEvent(sealUnsigned);
+
+    // Gift wrap with local ephemeral key
+    const ephSk = NT.generateSecretKey();
+    const ckWrap = NT.nip44.getConversationKey(ephSk, recipientPubkey);
+    const wrapContent = NT.nip44.encrypt(JSON.stringify(seal), ckWrap);
+    const wrapUnsigned = {
+      kind: 1059,
+      content: wrapContent,
+      created_at: randomTimestamp(),
+      tags: [['p', recipientPubkey]],
+      pubkey: NT.getPublicKey(ephSk),
+    };
+    const recipientWrap = NT.finalizeEvent(wrapUnsigned, ephSk);
+    wrappedEvents.push(recipientWrap);
+
+    // Self-wrap
+    if (recipientPubkey !== myPubkey) {
+      try {
+        const selfSealContent = await bunker.nip44Encrypt(myPubkey, JSON.stringify(rumor));
+        const selfSealUnsigned = { kind: 13, content: selfSealContent, created_at: randomTimestamp(), tags: [] };
+        const selfSeal = await bunker.signEvent(selfSealUnsigned);
+        const selfEphSk = NT.generateSecretKey();
+        const selfCkWrap = NT.nip44.getConversationKey(selfEphSk, myPubkey);
+        const selfWrapContent = NT.nip44.encrypt(JSON.stringify(selfSeal), selfCkWrap);
+        const selfWrap = NT.finalizeEvent({
+          kind: 1059,
+          content: selfWrapContent,
+          created_at: randomTimestamp(),
+          tags: [['p', myPubkey]],
+          pubkey: NT.getPublicKey(selfEphSk),
+        }, selfEphSk);
+        wrappedEvents.push(selfWrap);
+      } catch (_) {
+        // Self-wrap failed — non-critical
+      }
+    }
   } else {
     throw new Error('No signing/encryption available for NIP-17');
   }
@@ -375,6 +434,16 @@ async function handleGiftWrap(event: any): Promise<void> {
       seal = JSON.parse(sealJson);
 
       const rumorJson = await nostrExt.nip44.decrypt(seal.pubkey, seal.content);
+      rumor = JSON.parse(rumorJson);
+    } else if (authStore.getState().loginMethod === 'bunker') {
+      // Bunker path — decrypt via nip44_decrypt RPC
+      const bunker = getBunkerClient();
+      if (!bunker?.connected) return;
+
+      const sealJson = await bunker.nip44Decrypt(event.pubkey, event.content);
+      seal = JSON.parse(sealJson);
+
+      const rumorJson = await bunker.nip44Decrypt(seal.pubkey, seal.content);
       rumor = JSON.parse(rumorJson);
     } else {
       return; // no way to decrypt

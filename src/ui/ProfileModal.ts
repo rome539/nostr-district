@@ -156,15 +156,21 @@ export class ProfileModal {
     `;
     document.body.appendChild(modal);
 
-    const closeModal = (e: PointerEvent) => {
-      if (!modal.contains(e.target as Node)) { modal.remove(); document.removeEventListener('pointerdown', closeModal); }
+    let escHandler: ((e: KeyboardEvent) => void) | null = null;
+    const destroyModal = () => {
+      modal.remove();
+      document.removeEventListener('pointerdown', closeModal);
+      if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
     };
+    const closeModal = (e: PointerEvent) => {
+      if (!modal.contains(e.target as Node)) destroyModal();
+    };
+    escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') destroyModal(); };
+    document.addEventListener('keydown', escHandler);
     setTimeout(() => document.addEventListener('pointerdown', closeModal), 300);
 
     const addCloseBtn = (npubToCopy?: string, npubDisplayShort?: string) => {
-      modal.querySelector('#profile-close')?.addEventListener('click', () => {
-        modal.remove(); document.removeEventListener('pointerdown', closeModal);
-      });
+      modal.querySelector('#profile-close')?.addEventListener('click', () => destroyModal());
       const npubEl = modal.querySelector('#profile-copy-npub') as HTMLElement | null;
       if (npubEl && npubToCopy) {
         npubEl.addEventListener('click', () => {
@@ -300,12 +306,11 @@ export class ProfileModal {
 
       modal.querySelector('#profile-dm')?.addEventListener('click', () => {
         const panel = ProfileModal._dmPanel;
-        if (panel) { modal.remove(); document.removeEventListener('pointerdown', closeModal); panel.open(pubkey); }
+        if (panel) { destroyModal(); panel.open(pubkey); }
       });
 
       modal.querySelector('#profile-zap')?.addEventListener('click', () => {
-        modal.remove();
-        document.removeEventListener('pointerdown', closeModal);
+        destroyModal();
         ZapModal.show(pubkey, displayName);
       });
 

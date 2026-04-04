@@ -455,6 +455,8 @@ export class SettingsPanel {
     if (this.gearEl) { this.gearEl.style.color = 'var(--nd-dpurp)'; this.gearEl.style.borderColor = `color-mix(in srgb, var(--nd-dpurp) 33%, transparent)`; }
   }
 
+  isOpen(): boolean { return !!this.panelEl; }
+
   toggle(): void {
     if (this.panelEl) this.closePanel();
     else this.openPanel();

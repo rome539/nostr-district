@@ -182,7 +182,7 @@ export async function startBunkerFlow(
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:14,sign_event:20000',
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onStatusChange: (status: string, msg: string) => {
       console.log(`[Bunker] ${status}: ${msg}`);
@@ -244,7 +244,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:14,sign_event:20000',
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onDisconnect: () => {
       console.warn('[Bunker] Signer disconnected');

@@ -21,6 +21,7 @@ function esc(s: string): string {
 export class ZapModal {
   private static el: HTMLElement | null = null;
   private static closeHandler: ((e: PointerEvent) => void) | null = null;
+  private static escHandler: ((e: KeyboardEvent) => void) | null = null;
 
   static show(recipientPubkey: string, displayName: string): void {
     ZapModal.destroy();
@@ -119,6 +120,9 @@ export class ZapModal {
     document.body.appendChild(modal);
     ZapModal.el = modal;
 
+    ZapModal.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') ZapModal.destroy(); };
+    document.addEventListener('keydown', ZapModal.escHandler);
+
     modal.querySelector('#zap-close')?.addEventListener('click', () => ZapModal.destroy());
 
     // Fetch lightning address and show it in the subtitle (click to copy)
@@ -154,7 +158,7 @@ export class ZapModal {
     const amountInput = modal.querySelector('#zap-amount') as HTMLInputElement;
     const commentInput = modal.querySelector('#zap-comment') as HTMLInputElement;
     [amountInput, commentInput].forEach(inp => {
-      inp.addEventListener('keydown', e => e.stopPropagation());
+      inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') ZapModal.destroy(); });
       inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');
       inp.addEventListener('blur',  () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)');
     });
@@ -268,6 +272,10 @@ export class ZapModal {
     if (ZapModal.closeHandler) {
       document.removeEventListener('pointerdown', ZapModal.closeHandler);
       ZapModal.closeHandler = null;
+    }
+    if (ZapModal.escHandler) {
+      document.removeEventListener('keydown', ZapModal.escHandler);
+      ZapModal.escHandler = null;
     }
   }
 }

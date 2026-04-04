@@ -746,6 +746,10 @@ export class RoomScene extends Phaser.Scene {
         this.setComputerPromptVisible(this.nearComputer);
         return;
       }
+      if (this.settingsPanel.isOpen()) {
+        this.settingsPanel.toggle();
+        return;
+      }
       this.leaveRoom();
     });
   }

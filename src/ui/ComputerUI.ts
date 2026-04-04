@@ -48,6 +48,7 @@ export class ComputerUI {
   private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
+  private previewPill: HTMLDivElement | null = null;
 
   open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange): void {
     if (this.panel) this.close();
@@ -80,6 +81,8 @@ export class ComputerUI {
       document.removeEventListener('keydown', this.keydownHandler);
       this.keydownHandler = null;
     }
+    this.previewPill?.remove();
+    this.previewPill = null;
     if (this.backdrop) { this.backdrop.remove(); this.backdrop = null; }
     if (this.panel) { this.panel.remove(); this.panel = null; }
   }
@@ -127,7 +130,11 @@ export class ComputerUI {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        this.close();
+        if (this.previewPill) {
+          this.exitPreview();
+        } else {
+          this.close();
+        }
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
@@ -518,15 +525,56 @@ export class ComputerUI {
   }
 
   // ══════════════════════════════════════
+  // ROOM PREVIEW — temporarily hide panel so user can see live result
+  private previewRoom(): void {
+    if (!this.panel || !this.backdrop) return;
+    this.panel.style.display = 'none';
+    this.backdrop.style.display = 'none';
+
+    this.previewPill = document.createElement('div');
+    this.previewPill.style.cssText = `
+      position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:4000;
+      background:color-mix(in srgb,var(--nd-accent) 18%,var(--nd-bg));
+      border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);
+      border-radius:24px;padding:10px 22px;
+      font-family:'Courier New',monospace;font-size:13px;font-weight:bold;
+      color:var(--nd-accent);cursor:pointer;
+      box-shadow:0 4px 20px rgba(0,0,0,0.6);
+      backdrop-filter:blur(4px);
+    `;
+    this.previewPill.textContent = '↩ Back to Terminal';
+    this.previewPill.addEventListener('click', () => this.exitPreview());
+    document.body.appendChild(this.previewPill);
+  }
+
+  private exitPreview(): void {
+    if (this.panel)   this.panel.style.display = '';
+    if (this.backdrop) this.backdrop.style.display = '';
+    this.previewPill?.remove();
+    this.previewPill = null;
+  }
+
   // ROOM TAB — Full Customization
   // ══════════════════════════════════════
   private renderRoom(body: HTMLElement): void {
     const cfg = getRoomConfig();
 
     body.innerHTML = `
-      <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;">
+        <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;flex:1;"></div>
+        <button id="room-preview-btn" style="
+          flex-shrink:0;padding:6px 11px;border-radius:4px;cursor:pointer;
+          font-family:'Courier New',monospace;font-size:11px;
+          background:color-mix(in srgb,var(--nd-dpurp) 14%,transparent);
+          border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);
+          color:var(--nd-subtext);white-space:nowrap;
+          transition:all 0.12s;
+        " onmouseover="this.style.borderColor='color-mix(in srgb,var(--nd-accent) 45%,transparent)';this.style.color='var(--nd-accent)'" onmouseout="this.style.borderColor='color-mix(in srgb,var(--nd-dpurp) 30%,transparent)';this.style.color='var(--nd-subtext)'">Preview</button>
+      </div>
       <div id="room-section-body"></div>
     `;
+
+    body.querySelector('#room-preview-btn')?.addEventListener('click', () => this.previewRoom());
 
     this.renderRoomSectionTabs(body);
     this.renderRoomSectionBody(body);

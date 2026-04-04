@@ -390,6 +390,24 @@ export class BunkerClient {
 
     async ping() { return this._request('ping'); }
 
+    /**
+     * NIP-44 encrypt via remote signer (NIP-46 nip44_encrypt method).
+     * Not all signers support this — throws the original error on failure.
+     */
+    async nip44Encrypt(recipientPubkey, plaintext) {
+        if (!this.connected) throw new Error('Bunker not connected');
+        return this._request('nip44_encrypt', [recipientPubkey, plaintext]);
+    }
+
+    /**
+     * NIP-44 decrypt via remote signer (NIP-46 nip44_decrypt method).
+     * Not all signers support this — throws the original error on failure.
+     */
+    async nip44Decrypt(senderPubkey, ciphertext) {
+        if (!this.connected) throw new Error('Bunker not connected');
+        return this._request('nip44_decrypt', [senderPubkey, ciphertext]);
+    }
+
     // ------------------------------------------------------------------
     // HEARTBEAT
     // ------------------------------------------------------------------

@@ -185,6 +185,7 @@ export class NostrThemeBrowser {
   private globalPage    = 0;
   private favPage       = 0;
   private previewIdx:   number | null = null;
+  private searchGen     = 0; // incremented on each new search to cancel stale callbacks
 
   open(): void {
     this.close();
@@ -375,6 +376,8 @@ export class NostrThemeBrowser {
 
     const doSearch = async () => {
       const q = inp.value.trim();
+      const gen = ++this.searchGen; // claim this generation; stale callbacks will bail out
+
       btn.textContent = 'Searching…';
       btn.disabled    = true;
       res.innerHTML   = '';
@@ -388,36 +391,48 @@ export class NostrThemeBrowser {
 
       if (looksLikePubkey(q)) {
         const pubkey = await resolveHexPubkey(q);
+        if (gen !== this.searchGen) return; // superseded
         if (!pubkey) {
-          status.textContent = 'Invalid pubkey';
+          status.textContent = 'Invalid npub / pubkey';
           btn.textContent = 'Search';
           btn.disabled = false;
           return;
         }
-        // Search by pubkey: include both kinds so you can browse someone's active theme too
         filter = { kinds: [16767, 36767], authors: [pubkey], limit: 50 };
       } else {
-        // General browse: only kind 36767 (published/shared themes, not everyone's active profile theme)
         filter = { kinds: [36767], limit: 100 };
       }
 
       const refresh = () => {
-        if (!this.el) return;
+        if (!this.el || gen !== this.searchGen) return;
         this.renderCards(res, cards, true, this.globalPage);
         this.renderPager(pages, cards.length, this.globalPage, p => { this.globalPage = p; refresh(); });
       };
 
       await fetchEventsRaw(filter, ALL_RELAYS, 10000, (card) => {
+        if (gen !== this.searchGen) return; // superseded — discard
         cards.push(card);
         refresh();
       });
 
-      if (!this.el) return;
+      if (!this.el || gen !== this.searchGen) return;
       btn.textContent    = 'Search';
       btn.disabled       = false;
       status.textContent = cards.length ? `${cards.length} theme(s) found` : 'No themes found';
       refresh();
     };
+
+    // Re-enable search button immediately when input is cleared so user isn't stuck
+    inp.addEventListener('input', () => {
+      if (btn.disabled && inp.value.trim() === '') {
+        this.searchGen++; // cancel in-flight search
+        btn.textContent = 'Search';
+        btn.disabled    = false;
+        res.innerHTML   = '';
+        pages.innerHTML = '';
+        status.textContent = '';
+      }
+    });
 
     btn.addEventListener('click', doSearch);
     doSearch();

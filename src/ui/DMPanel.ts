@@ -208,6 +208,14 @@ export class DMPanel {
 
   // Debounce renders during bulk history load — coalesces many rapid handleMessage
   // calls into a single render pass instead of re-rendering for every event.
+  private showSendError(msg: string): void {
+    const el = this.container?.querySelector('#dm-send-error') as HTMLElement | null;
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; el.textContent = ''; }, 5000);
+  }
+
   private scheduleRender(): void {
     if (this.historyLoading) return; // suppress entirely during initial burst; onDMHistoryLoading fires one final render
     if (this.renderTimer) clearTimeout(this.renderTimer);
@@ -414,6 +422,7 @@ export class DMPanel {
         <div class="dm-chat">
           <div class="dm-chat-header"></div>
           <div class="dm-messages"></div>
+          <div id="dm-send-error" style="display:none;padding:6px 14px 0;font-family:'Courier New',monospace;font-size:11px;color:#e85454;"></div>
           <div class="dm-input-row">
             <input type="text" class="dm-input" placeholder="Type a message..." maxlength="500" />
             <button class="dm-gif-btn">GIF</button>
@@ -631,9 +640,10 @@ export class DMPanel {
       const name = this.conversations.get(pubkey)?.name || this.toNpub(pubkey);
       headerEl.innerHTML = `
         <button class="dm-back">\u2190</button>
-        <span class="dm-chat-name dm-chat-name-link">${this.escapeHtml(name)}</span>
+        <span class="dm-chat-name">${this.escapeHtml(name)}</span>
+        <button class="dm-view-profile" title="View profile" style="margin-left:auto;background:none;border:none;color:var(--nd-subtext);cursor:pointer;font-size:13px;padding:2px 6px;opacity:0.55;transition:opacity 0.15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">&#9432;</button>
       `;
-      headerEl.querySelector('.dm-chat-name-link')?.addEventListener('click', () => {
+      headerEl.querySelector('.dm-view-profile')?.addEventListener('click', () => {
         ProfileModal.show(pubkey, this.conversations.get(pubkey)?.name || this.toNpub(pubkey));
       });
       headerEl.querySelector('.dm-back')?.addEventListener('click', () => {
@@ -673,6 +683,7 @@ export class DMPanel {
 
     sendDirectMessage(this.activePubkey, text).catch(e => {
       console.error('[DM] Send error:', e);
+      this.showSendError(e?.message || 'Failed to send');
     });
 
     this.inputEl.focus();
@@ -845,10 +856,7 @@ export class DMPanel {
         color: var(--nd-text); font-size: 14px; font-weight: bold;
         text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
-      .dm-chat-name-link {
-        cursor: pointer; transition: color 0.15s;
-      }
-      .dm-chat-name-link:hover { color: var(--nd-accent); }
+
 
       .dm-messages {
         flex: 1; overflow-y: auto; padding: 12px 14px;
