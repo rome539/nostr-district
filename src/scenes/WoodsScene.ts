@@ -712,6 +712,11 @@ export class WoodsScene extends Phaser.Scene {
   // PLAYER
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
+    const avatar = getAvatar();
+    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
+    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
+    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
+    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY - 44, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);

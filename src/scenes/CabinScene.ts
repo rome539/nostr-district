@@ -24,7 +24,7 @@ import { ZapModal } from '../ui/ZapModal';
 import { SmokeEmote } from '../entities/SmokeEmote';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderHubSprite } from '../entities/AvatarRenderer';
-import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
+import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
 import { SoundEngine } from '../audio/SoundEngine';
 import { ComputerUI } from '../ui/ComputerUI';
@@ -485,6 +485,11 @@ export class CabinScene extends Phaser.Scene {
   // PLAYER
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
+    const avatar = getAvatar();
+    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
+    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
+    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
+    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
     this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(1.5).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY - 68, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
