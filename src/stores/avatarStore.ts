@@ -8,13 +8,13 @@ export interface AvatarConfig {
   skinColor: string;
   hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'bun' | 'curtains' | 'mullet';
   hairColor: string;
-  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey';
+  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe';
   topColor: string;
-  bottom: 'pants' | 'shorts' | 'skirt' | 'joggers' | 'cargopants' | 'overalls';
+  bottom: 'pants' | 'shorts' | 'skirt' | 'joggers' | 'cargopants' | 'overalls' | 'leggings' | 'jeans' | 'miniskirt';
   bottomColor: string;
-  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown';
+  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy';
   hatColor: string;
-  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones';
+  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring';
   accessoryColor: string;
   eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow';
   eyeColor: string;
@@ -92,10 +92,10 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'bun', 'curtains', 'mullet'] as const,
-  top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey'] as const,
-  bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls'] as const,
-  hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown'] as const,
-  accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones'] as const,
+  top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe'] as const,
+  bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls', 'leggings', 'jeans', 'miniskirt'] as const,
+  hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy'] as const,
+  accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones', 'watch', 'mask', 'monocle', 'ring'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow'] as const,
 };
 
@@ -127,11 +127,25 @@ export function deleteOutfit(index: number): OutfitPreset[] {
 }
 
 export const COLOR_PRESETS = [
-  '#2a1858', '#1a1040', '#3a2878', '#4a3888',
-  '#e87aab', '#c4568a', '#f5b8d0', '#ff4090',
-  '#7b68ee', '#4a2d8e', '#b8a8f8', '#9a6eff',
-  '#5dcaa5', '#2a8a6e', '#8aecd0', '#40e8ff',
-  '#e85454', '#f0b040', '#fad480', '#ffe060',
-  '#f5e8d0', '#fff5e6', '#e8a878', '#f0a090',
-  '#0a0014', '#0e0828', '#18103a', '#140c30',
+  // Neutrals & basics
+  '#f0ece4', '#d4cfc8', '#a89f96', '#7a7270',
+  '#4a4540', '#2e2a28', '#1a1614', '#080604',
+  // Grays & slate
+  '#e0e4e8', '#b0b8c4', '#6e7c8a', '#3a4550',
+  // Denim & navy
+  '#1e3a5a', '#2a5280', '#3a6ea0', '#4e8cbe',
+  // Khaki, olive, army
+  '#8a7a50', '#6a6030', '#4a5030', '#2e3820',
+  // Browns & leather
+  '#6e4020', '#8e5a2a', '#a87040', '#c49060',
+  // Burgundy, wine, maroon
+  '#5a1020', '#7a1830', '#a02040', '#c03050',
+  // Forest & sage green
+  '#1e4028', '#2e5c3a', '#4a7850', '#6a9868',
+  // Cream, tan, sand
+  '#f5e8c8', '#e0c898', '#c8a870', '#a88850',
+  // Classic bright row
+  '#e87aab', '#c4568a', '#ff4090', '#e85454',
+  '#f0b040', '#ffe060', '#5dcaa5', '#40e8ff',
+  '#7b68ee', '#9a6eff', '#2a1858', '#0a0014',
 ];

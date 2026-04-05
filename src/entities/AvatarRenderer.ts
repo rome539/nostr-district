@@ -22,7 +22,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
 
   // ── Skin ──
   x.fillStyle = a.skinColor;
-  x.fillRect(cx - 1.5 * s, headY, 3 * s, 2 * s);
+  x.fillRect(cx - 1.5 * s, headY + 1 * s, 3 * s, 1 * s);
   x.fillRect(cx - 2 * s, headY + 2 * s, 4 * s, 3 * s);
   x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1 * s);
 
@@ -43,10 +43,11 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillRect(cx - 2 * s, headY + 16 * s + legLY, 1.5 * s, 3 * s);
     x.fillRect(cx + 0.5 * s, headY + 16 * s + legRY, 1.5 * s, 3 * s);
   } else if (a.bottom === 'skirt') {
-    x.fillRect(cx - 2.5 * s, headY + 13 * s, 5 * s, 2 * s);
     x.fillStyle = a.skinColor;
-    x.fillRect(cx - 2 * s, headY + 14 * s + legLY, 1.5 * s, 5 * s);
-    x.fillRect(cx + 0.5 * s, headY + 14 * s + legRY, 1.5 * s, 5 * s);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 1.5 * s, 6 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 1.5 * s, 6 * s);
+    x.fillStyle = a.bottomColor;
+    x.fillRect(cx - 2.5 * s, headY + 13 * s, 5 * s, 2 * s);
   } else if (a.bottom === 'joggers') {
     x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
     x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
@@ -61,6 +62,27 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   } else if (a.bottom === 'overalls') {
     x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
     x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
+  } else if (a.bottom === 'leggings') {
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
+    x.fillStyle = lighten(a.bottomColor, 12);
+    x.fillRect(cx - 2 * s, headY + 13 * s + legLY, 0.5 * s, 5 * s);
+    x.fillRect(cx + 0.5 * s, headY + 13 * s + legRY, 0.5 * s, 5 * s);
+  } else if (a.bottom === 'jeans') {
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
+    x.fillStyle = darken(a.bottomColor, 18);
+    x.fillRect(cx - 2 * s, headY + 15 * s + legLY, 1.5 * s, 1 * s);
+    x.fillRect(cx + 0.5 * s, headY + 15 * s + legRY, 1.5 * s, 1 * s);
+    x.fillStyle = lighten(a.bottomColor, 15); x.globalAlpha = 0.4;
+    x.fillRect(cx - 1.5 * s, headY + 12 * s + legLY, 0.5 * s, 7 * s);
+    x.globalAlpha = 1;
+  } else if (a.bottom === 'miniskirt') {
+    x.fillStyle = a.skinColor;
+    x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
+    x.fillStyle = a.bottomColor;
+    x.fillRect(cx - 2.5 * s, headY + 12 * s, 5 * s, 1.5 * s);
   } else {
     x.fillRect(cx - 2 * s, headY + 12 * s + legLY, 1.5 * s, 7 * s);
     x.fillRect(cx + 0.5 * s, headY + 12 * s + legRY, 1.5 * s, 7 * s);
@@ -79,10 +101,14 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
     x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
   } else if (a.top === 'hoodie') {
-    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 8 * s);
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);     // body + full sleeves
     x.fillStyle = topDark;
-    x.fillRect(cx - 1 * s, headY + 9 * s, 2 * s, 2 * s);
-    x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1.5 * s);
+    x.fillRect(cx - 1 * s, headY + 6 * s, 2 * s, 1 * s);   // ribbed collar
+    x.fillRect(cx - 1.5 * s, headY + 9 * s, 3 * s, 2 * s); // kangaroo pocket
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(cx - 0.5 * s, headY + 7 * s, 0.5 * s, 2 * s); // drawstring L
+    x.fillRect(cx, headY + 7 * s, 0.5 * s, 2 * s);            // drawstring R
+    x.globalAlpha = 1;
   } else if (a.top === 'jacket') {
     x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
     x.fillStyle = '#0e0a18';
@@ -99,19 +125,21 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillStyle = a.skinColor;
     x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
     x.fillStyle = a.topColor;
-    x.fillRect(cx - tw, headY + 6 * s, 1 * s, 7 * s);
-    x.fillRect(cx + tw - 1 * s, headY + 6 * s, 1 * s, 7 * s);
+    x.fillRect(cx - tw, headY + 6 * s, 1.5 * s, 7 * s);   // left panel
+    x.fillRect(cx + tw - 1.5 * s, headY + 6 * s, 1.5 * s, 7 * s); // right panel
     x.fillStyle = topDark;
     x.fillRect(cx - 0.5 * s, headY + 7 * s, 1 * s, 5 * s);
   } else if (a.top === 'trenchcoat') {
-    x.fillRect(cx - tw - 0.5 * s, headY + 5 * s, (tw + 0.5 * s) * 2, 9 * s);
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);         // upper coat
+    x.fillRect(cx - tw, headY + 13 * s, tw * 2, 5 * s);        // long skirt
     x.fillStyle = topDark;
-    x.fillRect(cx - 0.5 * s, headY + 6 * s, 1 * s, 7 * s);
-    x.fillRect(cx - tw - 0.5 * s, headY + 5 * s, tw + 0.5 * s, 2 * s);
-    x.fillRect(cx, headY + 5 * s, tw + 0.5 * s, 2 * s);
-    x.fillStyle = topLight; x.globalAlpha = 0.4;
-    x.fillRect(cx - tw, headY + 5 * s, 1 * s, 1 * s);
-    x.fillRect(cx + tw - 1 * s, headY + 5 * s, 1 * s, 1 * s);
+    x.fillRect(cx - 0.5 * s, headY + 6 * s, 1 * s, 12 * s);               // center seam
+    x.fillStyle = topLight;
+    x.fillRect(cx - tw, headY + 6 * s, 2 * s, 4 * s);                      // left lapel
+    x.fillRect(cx + tw - 2 * s, headY + 6 * s, 2 * s, 4 * s);             // right lapel
+    x.fillStyle = darken(a.topColor, 35);
+    x.fillRect(cx - tw, headY + 11 * s, tw * 2, 1 * s);                    // belt
+    x.fillRect(cx - 0.5 * s, headY + 10 * s, 1 * s, 3 * s);               // buckle
     x.globalAlpha = 1;
   } else if (a.top === 'croptop') {
     x.fillRect(cx - tw, headY + 6 * s, tw * 2, 4 * s);
@@ -129,10 +157,67 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillStyle = topDark;
     x.fillRect(cx - tw, headY + 7 * s, 0.5 * s, 2 * s);
     x.fillRect(cx + tw - 0.5 * s, headY + 7 * s, 0.5 * s, 2 * s);
+  } else if (a.top === 'longsleeve') {
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
+  } else if (a.top === 'polo') {
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillStyle = a.skinColor;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 0.5 * s, headY + 6 * s, 1 * s, 3 * s);
+    x.fillStyle = topLight; x.globalAlpha = 0.6;
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 0.5 * s);
+    x.globalAlpha = 1;
+  } else if (a.top === 'flannel') {
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
+    // Horizontal stripes
+    x.fillStyle = topLight; x.globalAlpha = 0.55;
+    x.fillRect(cx - tw, headY + 7 * s, tw * 2, 1 * s);
+    x.fillRect(cx - tw, headY + 9 * s, tw * 2, 1 * s);
+    x.fillRect(cx - tw, headY + 11 * s, tw * 2, 1 * s);
+    // Vertical stripes (plaid grid)
+    x.fillRect(cx - 1.5 * s, headY + 6 * s, 1 * s, 7 * s);
+    x.fillRect(cx + 0.5 * s, headY + 6 * s, 1 * s, 7 * s);
+    x.globalAlpha = 1;
+    // Center button placket
+    x.fillStyle = topDark;
+    x.fillRect(cx - 0.5 * s, headY + 6 * s, 1 * s, 7 * s);
+  } else if (a.top === 'bomber') {
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 12 * s, tw * 2, 1 * s);
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 1 * s);
+    x.fillStyle = topLight; x.globalAlpha = 0.35;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
+    x.globalAlpha = 1;
+  } else if (a.top === 'turtleneck') {
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillRect(cx - 1.5 * s, headY + 4 * s, 3 * s, 2 * s);
+    x.fillStyle = a.skinColor;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 0.5 * s);
+  } else if (a.top === 'robe') {
+    // Full shoulder-width long robe — covers body all the way to floor
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 14 * s);          // full column to floor
+    x.fillStyle = topDark;
+    x.fillRect(cx - 0.5 * s, headY + 6 * s, 1 * s, 13 * s);     // center seam
+    x.fillStyle = topLight; x.globalAlpha = 0.25;
+    x.fillRect(cx - tw, headY + 6 * s, 0.5 * s, 13 * s);         // left edge highlight
+    x.globalAlpha = 1;
   }
 
   // ── Overalls straps — only visible over open tops (not coats/hoodie/vest) ──
-  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest'].includes(a.top);
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe'].includes(a.top);
   if (a.bottom === 'overalls' && strapOverTop) {
     x.fillStyle = a.bottomColor;
     x.fillRect(cx - 1 * s,   headY + 6 * s, 0.5 * s, 7 * s);
@@ -141,6 +226,13 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillRect(cx - 1 * s,   headY + 8 * s, 0.5 * s, 1 * s);
     x.fillRect(cx + 0.5 * s, headY + 8 * s, 0.5 * s, 1 * s);
     x.globalAlpha = 1;
+  }
+
+  // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
+  const hubWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
+  if ((a.accessory === 'ring' || a.accessory === 'watch') && hubWristExposed) {
+    x.fillStyle = a.accessoryColor;
+    drawHubAccessory(x, a.accessory, cx, headY, s);
   }
 
   // ── Headphones drawn before hair so hair renders on top ──
@@ -173,8 +265,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
   // ── Eyes (before accessories so acc draws on top) ──
   drawHubEyes(x, a, cx, headY, s);
 
-  // ── Accessory (non-headphones already drawn above) ──
-  if (a.accessory !== 'none' && a.accessory !== 'headphones') {
+  // ── Accessory (ring/watch/headphones already drawn above) ──
+  if (a.accessory !== 'none' && !['headphones', 'ring', 'watch'].includes(a.accessory)) {
     x.fillStyle = a.accessoryColor;
     drawHubAccessory(x, a.accessory, cx, headY, s);
   }
@@ -205,6 +297,10 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 
   // ── Bottom ──
   x.fillStyle = a.bottomColor;
+  // Waistband — fills crotch gap between the two legs
+  if (!['skirt', 'miniskirt', 'dress'].includes(a.bottom) && a.top !== 'dress') {
+    x.fillRect(7, oY + 28, 10, 2);
+  }
   if (a.top === 'dress') {
     x.fillRect(7, oY + 29 + lY, 4, 15);
     x.fillRect(13, oY + 29 + rY, 4, 15);
@@ -215,10 +311,11 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(7, oY + 36 + lY, 4, 8);
     x.fillRect(13, oY + 36 + rY, 4, 8);
   } else if (a.bottom === 'skirt') {
-    x.fillRect(5, oY + 28, 14, 6);
     x.fillStyle = a.skinColor;
-    x.fillRect(7, oY + 33 + lY, 4, 11);
-    x.fillRect(13, oY + 33 + rY, 4, 11);
+    x.fillRect(7, oY + 28 + lY, 4, 16);
+    x.fillRect(13, oY + 28 + rY, 4, 16);
+    x.fillStyle = a.bottomColor;
+    x.fillRect(5, oY + 28, 14, 6);
   } else if (a.bottom === 'joggers') {
     x.fillRect(7, oY + 29 + lY, 4, 15);
     x.fillRect(13, oY + 29 + rY, 4, 15);
@@ -237,8 +334,28 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   } else if (a.bottom === 'overalls') {
     x.fillRect(7, oY + 29 + lY, 4, 15);
     x.fillRect(13, oY + 29 + rY, 4, 15);
-    // Waistband
     x.fillStyle = darken(a.bottomColor, 10);
+    x.fillRect(5, oY + 28, 14, 3);
+  } else if (a.bottom === 'leggings') {
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
+    x.fillStyle = lighten(a.bottomColor, 14);
+    x.fillRect(8, oY + 30 + lY, 1, 13);
+    x.fillRect(14, oY + 30 + rY, 1, 13);
+  } else if (a.bottom === 'jeans') {
+    x.fillRect(7, oY + 29 + lY, 4, 15);
+    x.fillRect(13, oY + 29 + rY, 4, 15);
+    x.fillStyle = darken(a.bottomColor, 20);
+    x.fillRect(7, oY + 35 + lY, 4, 2);
+    x.fillRect(13, oY + 35 + rY, 4, 2);
+    x.fillStyle = lighten(a.bottomColor, 18); x.globalAlpha = 0.35;
+    x.fillRect(8, oY + 29 + lY, 1, 15);
+    x.globalAlpha = 1;
+  } else if (a.bottom === 'miniskirt') {
+    x.fillStyle = a.skinColor;
+    x.fillRect(7, oY + 30 + lY, 4, 14);
+    x.fillRect(13, oY + 30 + rY, 4, 14);
+    x.fillStyle = a.bottomColor;
     x.fillRect(5, oY + 28, 14, 3);
   } else {
     x.fillRect(7, oY + 29 + lY, 4, 15);
@@ -254,37 +371,39 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   x.fillStyle = a.topColor;
   if (a.top === 'tank') {
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 14, 18, 14);
+    x.fillRect(4, oY + 14, 16, 14);
     x.fillStyle = a.topColor;
     x.fillRect(7, oY + 14, 2, 2);
     x.fillRect(15, oY + 14, 2, 2);
     x.fillRect(7, oY + 16, 10, 12);
-    x.fillRect(7, oY + 28, 10, 2);
   } else if (a.top === 'tshirt') {
-    x.fillRect(3, oY + 14, 18, 4);
-    x.fillRect(5, oY + 18, 14, 10);
-    x.fillRect(7, oY + 28, 10, 2);
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(6, oY + 18, 12, 10);
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 18, 2, 10);
-    x.fillRect(19, oY + 18, 2, 10);
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
-    x.fillRect(8, oY + 14, 8, 1);
+    x.fillRect(9, oY + 14, 6, 1);
   } else if (a.top === 'hoodie') {
-    x.fillRect(3, oY + 14, 18, 4);    // shoulders + sleeves
-    x.fillRect(3, oY + 18, 18, 10);   // body
-    x.fillRect(6, oY + 28, 12, 2);    // hem
+    x.fillRect(4, oY + 14, 16, 4);    // shoulders + sleeves
+    x.fillRect(6, oY + 18, 12, 10);   // body
     x.fillStyle = topDark;
-    x.fillRect(9, oY + 14, 6, 1);     // subtle collar line only — matches hub
-    x.fillRect(9, oY + 22, 6, 3);     // pocket
-    x.fillStyle = topLight; x.globalAlpha = 0.5;
-    x.fillRect(11, oY + 18, 1, 3);    // drawstring L
-    x.fillRect(13, oY + 18, 1, 3);    // drawstring R
+    x.fillRect(4, oY + 18, 2, 10);    // left sleeve (full, darker)
+    x.fillRect(18, oY + 18, 2, 10);   // right sleeve (full, darker)
+    x.fillRect(9, oY + 14, 6, 1);     // collar line
+    x.fillRect(9, oY + 22, 6, 4);     // kangaroo pocket
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(11, oY + 14, 1, 4);    // drawstring L
+    x.fillRect(13, oY + 14, 1, 4);    // drawstring R
     x.globalAlpha = 1;
   } else if (a.top === 'jacket') {
-    x.fillRect(3, oY + 14, 18, 4);    // shoulders
-    x.fillRect(3, oY + 18, 18, 10);   // body
-    x.fillRect(6, oY + 28, 12, 2);    // hem
-    x.fillStyle = '#0e0a18';           // dark neutral undershirt (not purple)
+    x.fillRect(4, oY + 14, 16, 4);    // shoulders
+    x.fillRect(6, oY + 18, 12, 10);   // body
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);    // left arm skin
+    x.fillRect(18, oY + 18, 2, 10);   // right arm skin
+    x.fillStyle = a.topColor;
+    x.fillStyle = '#0e0a18';
     x.fillRect(11, oY + 17, 2, 11);   // narrow center gap
     x.fillStyle = topLight;
     x.fillRect(7, oY + 15, 4, 5);     // left lapel
@@ -293,65 +412,139 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(12, oY + 18, 1, 10);   // zipper
     x.globalAlpha = 1;
     x.fillStyle = topDark;
-    x.fillRect(3, oY + 27, 18, 1);    // bottom hem line
+    x.fillRect(4, oY + 27, 16, 1);    // bottom hem line
   } else if (a.top === 'dress') {
-    x.fillRect(5, oY + 14, 14, 4);
-    x.fillRect(5, oY + 18, 14, 10);
-    x.fillRect(3, oY + 28, 18, 8);
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(6, oY + 18, 12, 10);
+    x.fillRect(4, oY + 28, 16, 8);
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 14, 2, 14);
-    x.fillRect(19, oY + 14, 2, 14);
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
-    x.fillRect(5, oY + 27, 14, 2);
+    x.fillRect(4, oY + 27, 16, 2);
   } else if (a.top === 'vest') {
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 14, 18, 16);
+    x.fillRect(4, oY + 14, 16, 14);
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = a.topColor;
-    x.fillRect(5, oY + 14, 6, 16);
-    x.fillRect(13, oY + 14, 6, 16);
+    x.fillRect(6, oY + 14, 5, 14);
+    x.fillRect(13, oY + 14, 5, 14);
     x.fillStyle = topDark;
-    x.fillRect(11, oY + 15, 2, 14);
-    x.fillRect(5, oY + 14, 14, 2);
+    x.fillRect(11, oY + 15, 2, 12);
+    x.fillRect(6, oY + 14, 12, 2);
   } else if (a.top === 'trenchcoat') {
-    x.fillRect(1, oY + 14, 22, 4);
-    x.fillRect(1, oY + 18, 22, 10);
-    x.fillRect(4, oY + 28, 16, 4);
+    x.fillRect(4, oY + 14, 16, 4);   // shoulders
+    x.fillRect(4, oY + 18, 16, 10);  // body
+    x.fillRect(4, oY + 18, 2, 10);   // left sleeve
+    x.fillRect(18, oY + 18, 2, 10);  // right sleeve
+    x.fillRect(4, oY + 28, 16, 16);  // long coat skirt
     x.fillStyle = topDark;
-    x.fillRect(10, oY + 15, 4, 13);
+    x.fillRect(11, oY + 15, 2, 29);  // center seam
     x.fillStyle = topLight;
-    x.fillRect(5, oY + 14, 5, 6);
-    x.fillRect(14, oY + 14, 5, 6);
+    x.fillRect(4, oY + 14, 4, 5);    // left lapel
+    x.fillRect(16, oY + 14, 4, 5);   // right lapel
     x.fillStyle = topDark;
-    x.fillRect(3, oY + 27, 18, 1);
+    x.fillRect(4, oY + 27, 16, 1);   // waist hem line
     x.fillStyle = darken(a.topColor, 35);
-    x.fillRect(3, oY + 24, 18, 2); // belt
-    x.fillRect(11, oY + 23, 2, 4); // buckle
+    x.fillRect(4, oY + 32, 16, 2);   // belt
+    x.fillRect(11, oY + 31, 2, 4);   // buckle
   } else if (a.top === 'croptop') {
-    x.fillRect(3, oY + 14, 18, 4);
-    x.fillRect(5, oY + 18, 14, 6);
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(6, oY + 18, 12, 6);
     x.fillStyle = a.skinColor;
-    x.fillRect(3, oY + 18, 2, 10);
-    x.fillRect(19, oY + 18, 2, 10);
-    x.fillRect(5, oY + 24, 14, 6);
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillRect(6, oY + 24, 12, 4);
     x.fillStyle = topDark;
-    x.fillRect(8, oY + 14, 8, 1);
+    x.fillRect(9, oY + 14, 6, 1);
   } else if (a.top === 'jersey') {
-    x.fillRect(3, oY + 14, 18, 4);
-    x.fillRect(3, oY + 18, 18, 10);
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
     x.fillRect(6, oY + 28, 12, 2);
     x.fillStyle = topDark;
     x.fillRect(11, oY + 15, 2, 13);
-    x.fillRect(3, oY + 17, 2, 2);
-    x.fillRect(19, oY + 17, 2, 2);
+    x.fillRect(4, oY + 17, 2, 2);
+    x.fillRect(18, oY + 17, 2, 2);
     x.fillStyle = topLight; x.globalAlpha = 0.45;
-    x.fillRect(3, oY + 22, 18, 2);
+    x.fillRect(4, oY + 22, 16, 2);
     x.globalAlpha = 1;
     x.fillStyle = topDark;
     x.fillRect(8, oY + 14, 8, 1);
+  } else if (a.top === 'longsleeve') {
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillRect(8, oY + 14, 8, 1);
+  } else if (a.top === 'polo') {
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(11, oY + 15, 2, 6);
+    x.fillStyle = topLight; x.globalAlpha = 0.6;
+    x.fillRect(8, oY + 14, 8, 1);
+    x.globalAlpha = 1;
+  } else if (a.top === 'flannel') {
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    // Horizontal stripes
+    x.fillStyle = topLight; x.globalAlpha = 0.55;
+    x.fillRect(4, oY + 17, 16, 2);
+    x.fillRect(4, oY + 21, 16, 2);
+    x.fillRect(4, oY + 25, 16, 2);
+    // Vertical stripes (plaid grid)
+    x.fillRect(7, oY + 14, 2, 16);
+    x.fillRect(15, oY + 14, 2, 16);
+    x.globalAlpha = 1;
+    // Center button placket
+    x.fillStyle = topDark;
+    x.fillRect(11, oY + 15, 2, 13);
+  } else if (a.top === 'bomber') {
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 27, 16, 1);
+    x.fillRect(8, oY + 14, 8, 1);
+    x.fillStyle = topLight; x.globalAlpha = 0.35;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.globalAlpha = 1;
+  } else if (a.top === 'turtleneck') {
+    x.fillRect(4, oY + 14, 16, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillRect(8, oY + 10, 8, 4);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(8, oY + 13, 8, 1);
+  } else if (a.top === 'robe') {
+    // Full shoulder-width long robe — covers body all the way to floor
+    x.fillRect(4, oY + 14, 16, 4);     // shoulders
+    x.fillRect(4, oY + 18, 16, 28);    // full-width body to floor (oY+46)
+    x.fillStyle = topDark;
+    x.fillRect(8, oY + 14, 8, 1);      // collar
+    x.fillRect(11, oY + 15, 2, 31);    // center seam full length
+    x.fillStyle = topLight; x.globalAlpha = 0.25;
+    x.fillRect(4, oY + 18, 1, 27);     // left edge highlight
+    x.globalAlpha = 1;
   }
 
   // ── Overalls straps — only visible over open tops (not coats/hoodie/vest) ──
-  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest'].includes(a.top);
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe'].includes(a.top);
   if (a.bottom === 'overalls' && strapOverTop) {
     x.fillStyle = a.bottomColor;
     x.fillRect(8,  oY + 14, 3, 16);
@@ -360,6 +553,13 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(8,  oY + 19, 3, 2);
     x.fillRect(13, oY + 19, 3, 2);
     x.globalAlpha = 1;
+  }
+
+  // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
+  const roomWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
+  if ((a.accessory === 'ring' || a.accessory === 'watch') && roomWristExposed) {
+    x.fillStyle = a.accessoryColor;
+    drawRoomAccessory(x, a.accessory, oY);
   }
 
   // ── Headphones drawn before hair so hair renders on top ──
@@ -389,8 +589,8 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   // ── Eyes (before accessories so acc draws on top) ──
   drawRoomEyes(x, a, oY);
 
-  // ── Accessory (non-headphones already drawn above) ──
-  if (a.accessory !== 'none' && a.accessory !== 'headphones') {
+  // ── Accessory (ring/watch/headphones already drawn above) ──
+  if (a.accessory !== 'none' && !['headphones', 'ring', 'watch'].includes(a.accessory)) {
     x.fillStyle = a.accessoryColor;
     drawRoomAccessory(x, a.accessory, oY);
   }
@@ -589,6 +789,47 @@ function drawHubHat(x: CanvasRenderingContext2D, hat: string, cx: number, hy: nu
       x.fillStyle = crSave;
       break;
     }
+    case 'visor':
+      // Just a wide brim with a small sweatband nub — no crown
+      x.fillRect(cx - 1.5 * s, hatY - 1.75 * s, 3 * s, 0.75 * s); // sweatband nub
+      x.fillRect(cx - 3 * s,   hatY - 1 * s,     6 * s, 0.75 * s); // wide brim
+      break;
+    case 'fedora': {
+      const fedSave = x.fillStyle as string;
+      x.fillRect(cx - 1.5 * s, hatY - 4.5 * s, 3 * s, 3 * s);    // crown
+      x.fillRect(cx - 3 * s,   hatY - 1.5 * s,  6 * s, 1 * s);   // wide brim
+      x.fillStyle = darken(fedSave, 20);
+      x.fillRect(cx - 1.5 * s, hatY - 4.5 * s, 3 * s, 0.5 * s);  // top crease indent
+      x.fillStyle = fedSave;
+      break;
+    }
+    case 'wizard':
+      // Tall pointed hat — hatY=8, canvas top=0, so max upward is 4*s
+      x.fillRect(cx - 0.5 * s, hatY - 3.5 * s, 1 * s, 1.5 * s); // tip
+      x.fillRect(cx - 1 * s,   hatY - 2 * s,   2 * s, 1 * s);   // narrow mid
+      x.fillRect(cx - 1.5 * s, hatY - 1 * s,   3 * s, 1 * s);   // wider mid
+      x.fillRect(cx - 2.5 * s, hatY,           5 * s, 0.5 * s); // brim
+      break;
+    case 'hardhat': {
+      const hhSave = x.fillStyle as string;
+      x.fillRect(cx - 2 * s,   hatY - 3.5 * s, 4 * s,   3 * s);   // dome
+      x.fillRect(cx - 2.5 * s, hatY - 0.5 * s, 5 * s,   0.75 * s); // brim
+      x.fillStyle = lighten(hhSave, 22); x.globalAlpha = 0.45;
+      x.fillRect(cx - 0.5 * s, hatY - 3.5 * s, 1 * s,   2.5 * s); // highlight stripe
+      x.globalAlpha = 1;
+      x.fillStyle = hhSave;
+      break;
+    }
+    case 'newsboy': {
+      const nbSave = x.fillStyle as string;
+      x.fillRect(cx - 2 * s,   hatY - 3 * s,   4 * s,   2.5 * s); // puffed crown
+      x.fillRect(cx - 2.5 * s, hatY - 0.5 * s, 5 * s,   0.75 * s); // band
+      x.fillRect(cx - 2.5 * s, hatY - 1.25 * s, 3 * s,  0.75 * s); // asymmetric visor
+      x.fillStyle = darken(nbSave, 18);
+      x.fillRect(cx - 2 * s,   hatY - 0.75 * s, 4 * s,  0.5 * s);  // crease shadow
+      x.fillStyle = nbSave;
+      break;
+    }
   }
 }
 
@@ -643,6 +884,47 @@ function drawRoomHat(x: CanvasRenderingContext2D, hat: string, oY: number): void
       x.fillRect(13, oY - 3, 2, 2);
       x.globalAlpha = 1;
       x.fillStyle = crSave;
+      break;
+    }
+    case 'visor':
+      x.fillRect(5, oY - 2, 14, 3);  // sweatband
+      x.fillRect(2, oY + 1, 20, 2);  // wide brim
+      break;
+    case 'fedora': {
+      const fedSave = x.fillStyle as string;
+      x.fillRect(7, oY - 8, 10, 8);  // crown
+      x.fillRect(3, oY - 1, 18, 3);  // wide brim
+      x.fillStyle = darken(fedSave, 20);
+      x.fillRect(7, oY - 8,  10, 1); // top crease
+      x.fillRect(3, oY - 1,  18, 1); // brim shadow edge
+      x.fillStyle = fedSave;
+      break;
+    }
+    case 'wizard':
+      // oY=8, canvas top=0, max upward = 8px
+      x.fillRect(10, oY - 7, 4,  3);  // tip
+      x.fillRect(8,  oY - 4, 8,  2);  // narrow mid
+      x.fillRect(6,  oY - 2, 12, 2);  // wider mid
+      x.fillRect(3,  oY,     18, 2);  // brim
+      break;
+    case 'hardhat': {
+      const hhSave = x.fillStyle as string;
+      x.fillRect(6, oY - 6, 12, 7);  // dome
+      x.fillRect(4, oY + 1, 16, 2);  // brim
+      x.fillStyle = lighten(hhSave, 22); x.globalAlpha = 0.45;
+      x.fillRect(9, oY - 5,  3, 5);  // highlight
+      x.globalAlpha = 1;
+      x.fillStyle = hhSave;
+      break;
+    }
+    case 'newsboy': {
+      const nbSave = x.fillStyle as string;
+      x.fillRect(5, oY - 6,  14, 7);  // puffed crown
+      x.fillRect(4, oY + 1,  16, 2);  // band
+      x.fillRect(3, oY - 1,  12, 2);  // asymmetric visor brim
+      x.fillStyle = darken(nbSave, 18);
+      x.fillRect(5, oY,      14, 1);  // crease shadow
+      x.fillStyle = nbSave;
       break;
     }
   }
@@ -718,6 +1000,43 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       x.fillRect(cx - 2.25 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
       x.fillRect(cx + 1.75 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
       x.fillStyle = savedColor; x.globalAlpha = 1;
+      break;
+    }
+    case 'watch': {
+      // Left arm: x = cx-2.5*s, w = 1*s. Strap: 1px overhang left only.
+      x.fillStyle = darken(savedColor, 18);
+      x.fillRect(cx - 2.5 * s - 1, hy + 12 * s, 1 * s + 1, 1); // strap (no right overflow)
+      x.fillStyle = savedColor;
+      x.fillRect(cx - 2.5 * s, hy + 12 * s, 1 * s, 1);          // watch face
+      x.globalAlpha = 1;
+      break;
+    }
+    case 'mask':
+      // Cloth mask over lower face (nose to chin)
+      x.fillRect(cx - 1.5 * s, hy + 4 * s, 3 * s, 1.5 * s); // main body (narrower)
+      x.fillStyle = lighten(savedColor, 18); x.globalAlpha = 0.4;
+      x.fillRect(cx - 1.5 * s, hy + 4 * s, 3 * s, 0.5 * s);  // top fold crease
+      x.fillStyle = darken(savedColor, 18); x.globalAlpha = 0.5;
+      x.fillRect(cx - 0.5 * s, hy + 5 * s, 1 * s, 0.5 * s); // center pleat
+      x.globalAlpha = 1;
+      x.fillStyle = savedColor;
+      break;
+    case 'monocle':
+      // Single-lens monocle over left eye + thin chain
+      x.globalAlpha = 0.85;
+      x.fillRect(cx - 1.5 * s, hy + 2.5 * s, 1.5 * s, 1.5 * s); // lens frame
+      x.fillStyle = lighten(savedColor, 35); x.globalAlpha = 0.4;
+      x.fillRect(cx - 1.5 * s, hy + 2.5 * s, 0.5 * s, 0.5 * s);  // lens glint
+      x.fillStyle = savedColor; x.globalAlpha = 0.55;
+      x.fillRect(cx - 0.5 * s, hy + 4 * s,   0.25 * s, 1.5 * s); // chain
+      x.globalAlpha = 1;
+      break;
+    case 'ring': {
+      // Right arm: x = cx+tw-1*s = 13, w=2. Last arm pixel at hy+12*s.
+      x.fillStyle = '#d4af37'; x.globalAlpha = 0.9;
+      x.fillRect(cx + 1.5 * s, hy + 12 * s, 1 * s, 1); // ring within arm (not below it)
+      x.globalAlpha = 1;
+      x.fillStyle = savedColor;
       break;
     }
   }
@@ -801,6 +1120,44 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       x.fillRect(3, oY + 4, 1, 2);
       x.fillRect(20, oY + 4, 1, 2);
       x.fillStyle = savedColor; x.globalAlpha = 1;
+      break;
+    }
+    case 'watch': {
+      // Left arm: x=4, w=2. Strap: 1px overhang left only (no right overflow).
+      x.fillStyle = darken(savedColor, 25);
+      x.fillRect(3, oY + 26, 3, 1);  // strap (arm x=4-6, 1px left overhang only)
+      x.fillStyle = savedColor;
+      x.fillRect(4, oY + 26, 2, 1);  // watch face (exact arm width)
+      break;
+    }
+    case 'mask':
+      // Cloth mask — lower face only (nose to chin)
+      x.fillRect(7, oY + 7, 10, 3);   // mask body (narrower, 3px tall)
+      x.fillStyle = lighten(savedColor, 18); x.globalAlpha = 0.35;
+      x.fillRect(7, oY + 7, 10, 1);   // top fold crease
+      x.fillStyle = darken(savedColor, 18); x.globalAlpha = 0.5;
+      x.fillRect(10, oY + 8, 4, 1);   // center pleat
+      x.fillStyle = savedColor; x.globalAlpha = 0.45;
+      x.fillRect(5,  oY + 7, 2, 2);   // left ear strap
+      x.fillRect(17, oY + 7, 2, 2);   // right ear strap
+      x.globalAlpha = 1;
+      break;
+    case 'monocle':
+      // Monocle on left eye + hanging chain
+      x.globalAlpha = 0.9;
+      x.fillRect(6, oY + 4, 5, 4);    // lens frame
+      x.fillStyle = lighten(savedColor, 35); x.globalAlpha = 0.4;
+      x.fillRect(7, oY + 4, 2, 2);    // lens glint
+      x.fillStyle = savedColor; x.globalAlpha = 0.6;
+      x.fillRect(10, oY + 8, 1, 4);   // chain
+      x.globalAlpha = 1;
+      break;
+    case 'ring': {
+      // Right arm skin is at x=18, w=2 — ring must start at x=18 not x=17
+      x.fillStyle = '#d4af37'; x.globalAlpha = 0.9;
+      x.fillRect(18, oY + 27, 2, 1);
+      x.globalAlpha = 1;
+      x.fillStyle = savedColor;
       break;
     }
   }

@@ -45,7 +45,7 @@ export class ComputerUI {
   private onMusicChange: OnMusicChange | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private currentSlot = 'top';
-  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'note' | 'music' = 'walls';
+  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
   private previewPill: HTMLDivElement | null = null;
@@ -560,17 +560,17 @@ export class ComputerUI {
     const cfg = getRoomConfig();
 
     body.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;">
-        <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;flex:1;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">ROOM CUSTOMIZATION</span>
         <button id="room-preview-btn" style="
-          flex-shrink:0;padding:6px 11px;border-radius:4px;cursor:pointer;
+          padding:5px 12px;border-radius:4px;cursor:pointer;
           font-family:'Courier New',monospace;font-size:11px;
-          background:color-mix(in srgb,var(--nd-dpurp) 14%,transparent);
-          border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);
-          color:var(--nd-subtext);white-space:nowrap;
-          transition:all 0.12s;
-        " onmouseover="this.style.borderColor='color-mix(in srgb,var(--nd-accent) 45%,transparent)';this.style.color='var(--nd-accent)'" onmouseout="this.style.borderColor='color-mix(in srgb,var(--nd-dpurp) 30%,transparent)';this.style.color='var(--nd-subtext)'">Preview</button>
+          background:color-mix(in srgb,var(--nd-accent) 10%,transparent);
+          border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);
+          color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
+        " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">Preview</button>
       </div>
+      <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;"></div>
       <div id="room-section-body"></div>
     `;
 
@@ -591,7 +591,6 @@ export class ComputerUI {
       { key: 'furniture', label: 'Furniture' },
       { key: 'posters',   label: 'Posters' },
       { key: 'pets',      label: 'Pets' },
-      { key: 'note',      label: 'Note' },
       { key: 'music',     label: 'Music' },
     ];
 
@@ -624,7 +623,6 @@ export class ComputerUI {
       case 'furniture': this.renderFurniturePicker(container, body); break;
       case 'posters':   this.renderPosterPicker(container, body);    break;
       case 'pets':      this.renderPets(container);                  break;
-      case 'note':      this.renderNotePicker(container);            break;
       case 'music':     this.renderMusicPicker(container);           break;
     }
   }
@@ -636,17 +634,20 @@ export class ComputerUI {
     container.innerHTML = `
       <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Theme</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-        ${themes.map(([key, theme]) => `
+        ${themes.map(([key, theme]) => {
+          const active = cfg.wallTheme === key;
+          return `
           <button class="wt" data-wall="${key}" style="
-            padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
+            padding:8px 6px 7px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.wallTheme === key ? 'var(--nd-accent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-            background:${theme.bg};color:${cfg.wallTheme === key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
+            border:2px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
+            background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,rgba(0,0,0,0.4))' : 'rgba(0,0,0,0.3)'};
+            color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.55)'};
           ">
-            <div style="width:100%;height:28px;border-radius:3px;margin-bottom:6px;background:${theme.brick};border:1px solid ${theme.accent};"></div>
+            <div style="width:100%;height:28px;border-radius:3px;margin-bottom:5px;background:${theme.brick};border:1px solid ${theme.accent};box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04);"></div>
             ${esc(theme.label)}
-          </button>
-        `).join('')}
+          </button>`;
+        }).join('')}
       </div>
     `;
 
@@ -682,17 +683,20 @@ export class ComputerUI {
     container.innerHTML = `
       <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Floor Style</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${floors.map(([key, style]) => `
+        ${floors.map(([key, style]) => {
+          const active = cfg.floorStyle === key;
+          return `
           <button class="ft" data-floor="${key}" style="
-            padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
+            padding:8px 6px 7px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.floorStyle === key ? 'var(--nd-accent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-            background:transparent;color:${cfg.floorStyle === key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
+            border:2px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
+            background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,rgba(0,0,0,0.4))' : 'rgba(0,0,0,0.3)'};
+            color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.55)'};
           ">
-            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:6px;border:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);${floorPreview(key)}"></div>
+            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:5px;border:1px solid rgba(255,255,255,0.08);${floorPreview(key)}"></div>
             ${esc(style.label)}
-          </button>
-        `).join('')}
+          </button>`;
+        }).join('')}
       </div>
     `;
 
@@ -713,18 +717,21 @@ export class ComputerUI {
     container.innerHTML = `
       <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Lighting Mood</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${moods.map(([key, mood]) => `
+        ${moods.map(([key, mood]) => {
+          const active = cfg.lighting === key;
+          return `
           <button class="lt" data-light="${key}" style="
             padding:12px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${cfg.lighting === key ? mood.primary : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-            background:${cfg.lighting === key ? mood.primary + '15' : 'transparent'};
-            color:${cfg.lighting === key ? mood.primary : 'var(--nd-subtext)'};
+            border:2px solid ${active ? mood.primary : 'rgba(255,255,255,0.08)'};
+            background:${active ? mood.primary + '30' : 'rgba(0,0,0,0.25)'};
+            color:${active ? mood.primary : 'rgba(255,255,255,0.45)'};
+            box-shadow:${active ? `0 0 14px ${mood.primary}44` : 'none'};
           ">
-            <div style="width:20px;height:20px;border-radius:50%;margin:0 auto 6px;background:${mood.primary};box-shadow:0 0 12px ${mood.primary}66;"></div>
+            <div style="width:22px;height:22px;border-radius:50%;margin:0 auto 6px;background:${mood.primary};box-shadow:0 0 ${active ? '16px' : '8px'} ${mood.primary}${active ? 'aa' : '55'};"></div>
             ${esc(mood.label)}
-          </button>
-        `).join('')}
+          </button>`;
+        }).join('')}
       </div>
     `;
 
@@ -775,17 +782,17 @@ export class ComputerUI {
           return `
             <div style="
               border-radius:6px;overflow:hidden;
-              border:1px solid ${isExpanded ? 'color-mix(in srgb,var(--nd-accent) 53%,transparent)' : active ? 'color-mix(in srgb,var(--nd-accent) 27%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 13%,transparent)'};
-              background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 3%,transparent)' : 'transparent'};
-              opacity:${isDesk ? '0.7' : '1'};
+              border:1px solid ${isExpanded ? 'var(--nd-accent)' : active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 55%,transparent)' : 'rgba(255,255,255,0.07)'};
+              background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 12%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
+              opacity:${isDesk ? '0.75' : '1'};
             ">
               <div class="fur-row" data-fid="${id}" style="
                 padding:8px 10px;display:flex;align-items:center;gap:8px;
                 cursor:${isDesk ? 'default' : 'pointer'};
               ">
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'var(--nd-subtext)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
-                  <div style="font-size:9px;opacity:0.45;">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
+                  <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
+                  <div style="font-size:9px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};opacity:${active || isDesk ? '0.6' : '0.8'};">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
                 </div>
                 ${active || isDesk ? `
                   <div class="fur-palette-btn" data-fid="${id}" style="
@@ -880,15 +887,17 @@ export class ComputerUI {
     container.innerHTML = `
       <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Posters</div>
       <div style="display:flex;gap:4px;margin-bottom:12px;">
-        ${[0, 1, 2].map(i => `
+        ${[0, 1, 2].map(i => {
+          const slotActive = this.activePosterSlot === i;
+          return `
           <button class="ps" data-pslot="${i}" style="
-            flex:1;padding:6px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
+            flex:1;padding:7px 6px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
             cursor:pointer;text-align:center;
-            border:1px solid ${this.activePosterSlot === i ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-            background:${this.activePosterSlot === i ? 'color-mix(in srgb,var(--nd-accent) 15%,transparent)' : 'transparent'};
-            color:${this.activePosterSlot === i ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
-          ">${slotLabels[i]}<br/><span style="font-size:9px;opacity:0.6;">${POSTER_DATA[cfg.posters[i]].label}</span></button>
-        `).join('')}
+            border:1px solid ${slotActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.1)'};
+            background:${slotActive ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.25)'};
+            color:${slotActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};
+          ">${slotLabels[i]}<br/><span style="font-size:9px;opacity:0.7;">${POSTER_DATA[cfg.posters[i]].label}</span></button>`;
+        }).join('')}
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${ALL_POSTERS.map(id => {
@@ -898,13 +907,12 @@ export class ComputerUI {
             <button class="po" data-pid="${id}" style="
               padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
               cursor:pointer;text-align:center;transition:all 0.15s;
-              border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-              background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
-              color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};
+              border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
+              background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
+              color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.5)'};
             ">
               <span style="font-size:9px;">${esc(data.label)}</span>
-            </button>
-          `;
+            </button>`;
         }).join('')}
       </div>
     `;
@@ -1078,15 +1086,16 @@ export class ComputerUI {
               return `
                 <div class="mu-track" data-trackid="${t.id}" style="
                   display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;
-                  border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 44%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 22%,transparent)'};
-                  background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)' : 'transparent'};
+                  border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
+                  background:${active ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
                   transition:background 0.15s,border-color 0.15s;
                 ">
                   <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
                     background:${active ? 'var(--nd-accent)' : 'transparent'};
-                    border:1px solid ${active ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
+                    border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};
+                    box-shadow:${active ? '0 0 6px var(--nd-accent)' : 'none'};
                   "></span>
-                  <span style="color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};font-size:12px;">${esc(t.label)}</span>
+                  <span style="color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.6)'};font-size:12px;">${esc(t.label)}</span>
                   ${active ? `<span style="color:var(--nd-accent);font-size:10px;margin-left:auto;opacity:0.7;">${t.id === 'off' ? 'silent' : 'playing'}</span>` : ''}
                 </div>
               `;
