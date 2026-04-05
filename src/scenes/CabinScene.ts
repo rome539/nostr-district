@@ -157,15 +157,15 @@ export class CabinScene extends Phaser.Scene {
       onCountUpdate: () => {},
       onChat: (pk, name, text) => {
         const isMe = pk === myPubkey;
-        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
+        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 94, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
         if (isMe && text.startsWith('/emote ')) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? CABIN_ACCENT : P.lpurp, pk);
         if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
-        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, CABIN_ACCENT);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); }
+        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 94, text, CABIN_ACCENT);
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 94, text, P.lpurp); }
       },
       onAvatarUpdate: (pk, avatarStr) => { const o = this.otherPlayers.get(pk); if (!o) return; o.avatar = avatarStr; const cfg = deserializeAvatar(avatarStr) || getDefaultAvatar(); const texKey = `avatar_hub_${pk}`; if (this.textures.exists(texKey)) this.textures.remove(texKey); this.textures.addCanvas(texKey, renderHubSprite(cfg)); o.sprite.setTexture(texKey).setTint(0xffffff); },
       onNameUpdate: (pk, name) => { const o = this.otherPlayers.get(pk); if (o) { o.nameText.setText(name.slice(0, 14)); o.name = name; } },
@@ -220,21 +220,21 @@ export class CabinScene extends Phaser.Scene {
     r(DOOR_X - 20, 0, 4, GAME_HEIGHT, '#181208');
 
     // ── Exit door (left side) ──
-    const dW = 34, dH = 56;
+    const dW = 46, dH = 75;
     const dX = DOOR_X - dW / 2;
     r(dX - 3, FLOOR_Y - dH - 3, dW + 6, 3, '#2e2010'); // top frame
     r(dX - 3, FLOOR_Y - dH - 3, 3, dH + 3, '#2e2010'); // left frame
     r(dX + dW, FLOOR_Y - dH - 3, 3, dH + 3, '#2e2010'); // right frame
     r(dX, FLOOR_Y - dH, dW, dH, '#1a1008');
     r(dX + 1, FLOOR_Y - dH + 1, dW - 2, dH - 2, '#211608');
-    r(dX + dW - 10, FLOOR_Y - dH / 2 - 2, 5, 5, '#4a3018'); // handle
+    r(dX + dW - 13, FLOOR_Y - dH / 2 - 3, 7, 7, '#4a3018'); // handle
     // Small window in door (hint of forest outside)
-    r(dX + 7, FLOOR_Y - dH + 8, dW - 14, 18, '#040c14');
-    r(dX + 7, FLOOR_Y - dH + 8, dW - 14, 1, '#0a1218');
-    r(dX + 7 + (dW - 14) / 2 - 1, FLOOR_Y - dH + 8, 1, 18, '#0a1218');
-    r(dX + 7, FLOOR_Y - dH + 17, dW - 14, 1, '#0a1218');
+    r(dX + 9, FLOOR_Y - dH + 11, dW - 18, 24, '#040c14');
+    r(dX + 9, FLOOR_Y - dH + 11, dW - 18, 1, '#0a1218');
+    r(dX + 9 + (dW - 18) / 2 - 1, FLOOR_Y - dH + 11, 1, 24, '#0a1218');
+    r(dX + 9, FLOOR_Y - dH + 23, dW - 18, 1, '#0a1218');
     // Faint green light hinting forest beyond
-    x.globalAlpha = 0.12; r(dX + 7, FLOOR_Y - dH + 8, dW - 14, 18, '#1a4010'); x.globalAlpha = 1;
+    x.globalAlpha = 0.12; r(dX + 9, FLOOR_Y - dH + 11, dW - 18, 24, '#1a4010'); x.globalAlpha = 1;
 
     // ── Wall lantern above door ──
     const lnX = DOOR_X, lnY = FLOOR_Y - dH - 28;
@@ -274,37 +274,37 @@ export class CabinScene extends Phaser.Scene {
     }
 
     // ── Window (center, moonlight) ──
-    const winX = 480, winY = FLOOR_Y - 78, winW = 48, winH = 52;
+    const winX = 480, winY = FLOOR_Y - 96, winW = 64, winH = 70;
     r(winX, winY, winW, winH, '#040c14');
     r(winX - 3, winY - 3, winW + 6, 3, '#2e2010'); r(winX - 3, winY + winH, winW + 6, 3, '#2e2010');
     r(winX - 3, winY - 3, 3, winH + 6, '#2e2010'); r(winX + winW, winY - 3, 3, winH + 6, '#2e2010');
     r(winX + winW / 2 - 1, winY, 2, winH, '#2e2010'); r(winX, winY + winH / 2 - 1, winW, 2, '#2e2010');
     // Moonlight beam
     x.globalAlpha = 0.06; x.fillStyle = '#b0c8e0';
-    x.beginPath(); x.moveTo(winX, winY); x.lineTo(winX + winW, winY); x.lineTo(winX + winW + 60, FLOOR_Y + 30); x.lineTo(winX - 60, FLOOR_Y + 30); x.closePath(); x.fill(); x.globalAlpha = 1;
+    x.beginPath(); x.moveTo(winX, winY); x.lineTo(winX + winW, winY); x.lineTo(winX + winW + 80, FLOOR_Y + 30); x.lineTo(winX - 80, FLOOR_Y + 30); x.closePath(); x.fill(); x.globalAlpha = 1;
 
     // ── Table & chairs ──
     const tabX = 620, tabY = FLOOR_Y;
     // Table — top raised to match chair seat height
-    r(tabX - 36, tabY - 30, 72, 7, '#2e2010');
-    r(tabX - 34, tabY - 23, 68, 3, '#3a2810');
-    r(tabX - 30, tabY - 23, 7, 23, '#241808');
-    r(tabX + 23, tabY - 23, 7, 23, '#241808');
+    r(tabX - 48, tabY - 40, 96, 9, '#2e2010');
+    r(tabX - 46, tabY - 31, 92, 4, '#3a2810');
+    r(tabX - 40, tabY - 31, 9, 31, '#241808');
+    r(tabX + 31, tabY - 31, 9, 31, '#241808');
     // Left chair
-    r(tabX - 62, tabY - 16, 24, 5, '#2e2010');                          // seat
-    r(tabX - 60, tabY - 11, 4, 11, '#241808'); r(tabX - 42, tabY - 11, 4, 11, '#241808'); // front legs to floor
-    r(tabX - 62, tabY - 30, 24, 4, '#2e2010');                          // back rail
-    r(tabX - 62, tabY - 30, 2, 14, '#241808'); r(tabX - 40, tabY - 30, 2, 14, '#241808'); // back uprights (rail to seat only)
+    r(tabX - 82, tabY - 21, 32, 7, '#2e2010');                          // seat
+    r(tabX - 80, tabY - 14, 5, 14, '#241808'); r(tabX - 56, tabY - 14, 5, 14, '#241808'); // front legs to floor
+    r(tabX - 82, tabY - 40, 32, 5, '#2e2010');                          // back rail
+    r(tabX - 82, tabY - 40, 3, 19, '#241808'); r(tabX - 54, tabY - 40, 3, 19, '#241808'); // back uprights (rail to seat only)
     // Right chair
-    r(tabX + 38, tabY - 16, 24, 5, '#2e2010');                          // seat
-    r(tabX + 40, tabY - 11, 4, 11, '#241808'); r(tabX + 58, tabY - 11, 4, 11, '#241808'); // front legs to floor
-    r(tabX + 38, tabY - 30, 24, 4, '#2e2010');                          // back rail
-    r(tabX + 38, tabY - 30, 2, 14, '#241808'); r(tabX + 60, tabY - 30, 2, 14, '#241808'); // back uprights (rail to seat only)
+    r(tabX + 50, tabY - 21, 32, 7, '#2e2010');                          // seat
+    r(tabX + 53, tabY - 14, 5, 14, '#241808'); r(tabX + 75, tabY - 14, 5, 14, '#241808'); // front legs to floor
+    r(tabX + 50, tabY - 40, 32, 5, '#2e2010');                          // back rail
+    r(tabX + 50, tabY - 40, 3, 19, '#241808'); r(tabX + 79, tabY - 40, 3, 19, '#241808'); // back uprights (rail to seat only)
     // Candle on table (raised with table)
-    r(tabX - 4, tabY - 42, 7, 13, '#ddd0a0');
-    r(tabX - 3, tabY - 31, 5, 2, '#a09060');
+    r(tabX - 5, tabY - 56, 9, 17, '#ddd0a0');
+    r(tabX - 4, tabY - 39, 7, 3, '#a09060');
     x.globalAlpha = 0.12; x.fillStyle = '#f8c040';
-    x.beginPath(); x.arc(tabX, tabY - 44, 22, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+    x.beginPath(); x.arc(tabX, tabY - 59, 29, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
 
     // ── Fireplace (right side) ──
     const fpX = FP_X, fpW = 88, fpH = 90;
@@ -352,10 +352,10 @@ export class CabinScene extends Phaser.Scene {
     r(fpX + 21, antY - 8, 3, 6, '#2a1c0c');
 
     // ── Coat peg near door ──
-    r(DOOR_X + 26, FLOOR_Y - 100, 3, 6, '#2a1c0c');   // peg
+    r(DOOR_X + 35, FLOOR_Y - 130, 4, 8, '#2a1c0c');   // peg
     // Hat on peg
-    r(DOOR_X + 20, FLOOR_Y - 102, 16, 4, '#1a1008');  // brim
-    r(DOOR_X + 23, FLOOR_Y - 110, 10, 9, '#1a1008');  // crown
+    r(DOOR_X + 27, FLOOR_Y - 133, 21, 5, '#1a1008');  // brim
+    r(DOOR_X + 31, FLOOR_Y - 146, 13, 12, '#1a1008'); // crown
 
     // ── Barrel in right corner ──
     const barX = W - 80, barY = FLOOR_Y;
@@ -416,8 +416,8 @@ export class CabinScene extends Phaser.Scene {
     this.smokeGraphics.clear();
     if (this.smokeEmote.active) { if (isWalking) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
 
-    this.playerName.setPosition(this.player.x, this.player.y - 68);
-    this.playerStatusText.setPosition(this.player.x, this.player.y - 80);
+    this.playerName.setPosition(this.player.x, this.player.y - 90);
+    this.playerStatusText.setPosition(this.player.x, this.player.y - 102);
     sendPosition(this.player.x, this.player.y);
 
     this.otherPlayers.forEach(o => {
@@ -471,7 +471,7 @@ export class CabinScene extends Phaser.Scene {
       if (!near) this.tweens.killTweensOf(this.doorPromptArrow);
     }
     if (near) {
-      const px = DOOR_X, py = FLOOR_Y - 100;
+      const px = DOOR_X, py = FLOOR_Y - 120;
       this.doorPromptBg.setPosition(px - 69, py - 2);
       this.doorPromptText.setPosition(px, py + 8);
       this.doorPromptArrow.setPosition(px, py + 22);
@@ -490,11 +490,11 @@ export class CabinScene extends Phaser.Scene {
     if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
     this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
-    this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(1.5).setDepth(10);
+    this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY - 68, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.add.text(this.player.x, this.playerY - 90, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
     const ms = localStorage.getItem('nd_status') || '';
-    this.playerStatusText = this.add.text(this.player.x, this.playerY - 80, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
+    this.playerStatusText = this.add.text(this.player.x, this.playerY - 102, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -514,10 +514,10 @@ export class CabinScene extends Phaser.Scene {
     const dying = this.dyingSprites.get(pk); if (dying) { this.tweens.killTweensOf([dying.sprite, dying.nameText, dying.statusText]); dying.sprite.destroy(); dying.nameText.destroy(); dying.statusText.destroy(); if (dying.clickZone) dying.clickZone.destroy(); this.dyingSprites.delete(pk); }
     const texKey = `avatar_hub_${pk}`; const cfg = avatarStr ? (deserializeAvatar(avatarStr) || getDefaultAvatar()) : getDefaultAvatar();
     if (this.textures.exists(texKey)) this.textures.remove(texKey); this.textures.addCanvas(texKey, renderHubSprite(cfg));
-    const sp = this.add.image(px, py, texKey).setOrigin(0.5, 1).setScale(1.5).setDepth(8);
+    const sp = this.add.image(px, py, texKey).setOrigin(0.5, 1).setScale(2).setDepth(8);
     if (!avatarStr) { const h = name.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0); sp.setTint([0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8][h % 5]); }
-    const nt = this.add.text(px, py - 68, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(9);
-    const ss = (status || '').slice(0, 30); const st = this.add.text(px, py - 80, ss, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(ss ? 1 : 0);
+    const nt = this.add.text(px, py - 90, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(9);
+    const ss = (status || '').slice(0, 30); const st = this.add.text(px, py - 102, ss, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(ss ? 1 : 0);
     const cz = this.add.zone(px, py - 28, 40, 60).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); const op2 = this.otherPlayers.get(pk); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status); });
     this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name, avatar: avatarStr, status: status || '', clickZone: cz });
@@ -538,7 +538,7 @@ export class CabinScene extends Phaser.Scene {
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: hub, woods, relay, feed, myroom, lounge, market, cabin', CABIN_ACCENT); return; } const al: Record<string, string> = { hub: 'hub', woods: 'woods', cabin: 'cabin', relay: 'relay', feed: 'feed', thefeed: 'feed', myroom: 'myroom', room: 'picker', lounge: 'lounge', rooftop: 'lounge', market: 'market', shop: 'market', store: 'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'woods') { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } return; } if (rid === 'cabin') { this.chatUI.addMessage('system', 'Already in the cabin!', CABIN_ACCENT); return; } if (rid === 'hub') { if (!this.isLeavingScene) { this.isLeavingScene = true; sendRoomChange('hub'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('HubScene', { _returning: true }); }); } return; } if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { sendRoomChange(opk); this.chatUI.addMessage('system', 'Requesting access...', CABIN_ACCENT); }); return; } if (rid) { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); break; }
       case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players here', CABIN_ACCENT); return; } let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', CABIN_ACCENT); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', CABIN_ACCENT); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.name; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
-      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
+      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 94, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', CABIN_ACCENT); break; }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Muted' : 'Unmuted', s ? P.amber : CABIN_ACCENT); break; }
