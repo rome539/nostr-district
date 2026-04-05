@@ -110,7 +110,10 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.fillRect(cx, headY + 7 * s, 0.5 * s, 2 * s);            // drawstring R
     x.globalAlpha = 1;
   } else if (a.top === 'jacket') {
-    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
+    x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);   // body + sleeves (full length)
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);    // left sleeve darker
+    x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s); // right sleeve darker
     x.fillStyle = '#0e0a18';
     x.fillRect(cx - 0.5 * s, headY + 7 * s, 1 * s, 5 * s);
     x.fillStyle = '#c8c8c8'; x.globalAlpha = 0.5;
@@ -399,10 +402,9 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   } else if (a.top === 'jacket') {
     x.fillRect(4, oY + 14, 16, 4);    // shoulders
     x.fillRect(6, oY + 18, 12, 10);   // body
-    x.fillStyle = a.skinColor;
-    x.fillRect(4, oY + 18, 2, 10);    // left arm skin
-    x.fillRect(18, oY + 18, 2, 10);   // right arm skin
-    x.fillStyle = a.topColor;
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 18, 2, 10);    // left sleeve (full, darker)
+    x.fillRect(18, oY + 18, 2, 10);   // right sleeve (full, darker)
     x.fillStyle = '#0e0a18';
     x.fillRect(11, oY + 17, 2, 11);   // narrow center gap
     x.fillStyle = topLight;
@@ -979,11 +981,24 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       x.fillRect(cx + 0.5 * s, hy + 3 * s, 1.5 * s, 1 * s);
       x.globalAlpha = 1;
       break;
-    case 'chain':
-      x.fillStyle = '#d4af37'; x.globalAlpha = 0.75;
-      for (let i = 0; i < 4; i++) x.fillRect(cx - 1.5 * s + i * 0.75 * s, hy + 5.5 * s, 0.5 * s, 0.5 * s);
+    case 'chain': {
+      // cx=10, headY=4, s=2. Neck top at headY+5*s=14. Body center x=10.
+      const hx = Math.round(cx);
+      const hY = Math.round(hy);
+      x.fillStyle = '#d4af37'; x.globalAlpha = 0.8;
+      // Left side: starts at left neck (x=7), steps inward going down
+      x.fillRect(hx - 3, hY + 10, 1, 2);  // y=14 — neck
+      x.fillRect(hx - 2, hY + 12, 1, 2);  // y=16
+      x.fillRect(hx - 1, hY + 14, 1, 2);  // y=18
+      // Right side: starts at right neck (x=12), steps inward going down
+      x.fillRect(hx + 2, hY + 10, 1, 2);  // y=14 — neck
+      x.fillRect(hx + 1, hY + 12, 1, 2);  // y=16
+      x.fillRect(hx,     hY + 14, 1, 2);  // y=18
+      // Pendant where both meet
+      x.fillRect(hx - 1, hY + 16, 2, 2);  // y=20
       x.fillStyle = savedColor; x.globalAlpha = 1;
       break;
+    }
     case 'earrings':
       x.globalAlpha = 0.9;
       x.fillRect(cx - 2.5 * s, hy + 4 * s, 0.5 * s, 1 * s);
@@ -1096,7 +1111,18 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       break;
     case 'chain':
       x.fillStyle = '#d4af37'; x.globalAlpha = 0.8;
-      for (let i = 0; i < 6; i++) x.fillRect(7 + i * 2, oY + 13, 2, 2);
+      // Left chain: emerges at left neck, steps diagonally inward down chest
+      x.fillRect(9,  oY + 13, 1, 1);
+      x.fillRect(9,  oY + 14, 1, 2);
+      x.fillRect(10, oY + 16, 1, 2);
+      x.fillRect(11, oY + 18, 1, 2);
+      // Right chain: emerges at right neck, steps diagonally inward down chest
+      x.fillRect(14, oY + 13, 1, 1);
+      x.fillRect(14, oY + 14, 1, 2);
+      x.fillRect(13, oY + 16, 1, 2);
+      x.fillRect(12, oY + 18, 1, 2);
+      // Pendant where both sides meet
+      x.fillRect(11, oY + 20, 2, 2);
       x.fillStyle = savedColor; x.globalAlpha = 1;
       break;
     case 'earrings':
