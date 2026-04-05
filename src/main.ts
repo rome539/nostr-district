@@ -6,6 +6,7 @@ import { LoginScreen } from './ui/LoginScreen';
 import { authStore } from './stores/authStore';
 import { RoomScene } from './scenes/RoomScene';
 import { WoodsScene } from './scenes/WoodsScene';
+import { CabinScene } from './scenes/CabinScene';
 import './stores/themeStore'; // init theme CSS vars early
 import {
   loginWithExtension,
@@ -56,7 +57,7 @@ function startGame(): void {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
           },
-          scene: [BootScene, HubScene, RoomScene, WoodsScene],
+          scene: [BootScene, HubScene, RoomScene, WoodsScene, CabinScene],
           callbacks: {
             preBoot: (g) => {
               const state = authStore.getState();

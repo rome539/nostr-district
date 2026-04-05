@@ -44,13 +44,14 @@ export class ComputerUI {
   private onStatusUpdate: OnStatusUpdate | null = null;
   private onMusicChange: OnMusicChange | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
+  private allowedTabs: ('wardrobe' | 'profile' | 'room')[] = ['wardrobe', 'profile', 'room'];
   private currentSlot = 'top';
   private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
   private previewPill: HTMLDivElement | null = null;
 
-  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange): void {
+  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange, allowedTabs?: ('wardrobe' | 'profile' | 'room')[]): void {
     if (this.panel) this.close();
     this.onAvatarChange = onAvatarChange || null;
     this.onProfileSave = onProfileSave || null;
@@ -58,7 +59,8 @@ export class ComputerUI {
     this.onPetChange = onPetChange || null;
     this.onStatusUpdate = onStatusUpdate || null;
     this.onMusicChange = onMusicChange || null;
-    this.currentTab = 'wardrobe';
+    this.allowedTabs = allowedTabs ?? ['wardrobe', 'profile', 'room'];
+    this.currentTab = this.allowedTabs[0];
     this.buildPanel();
   }
 
@@ -153,7 +155,7 @@ export class ComputerUI {
       { key: 'wardrobe', label: '\uD83D\uDC55 Wardrobe' },
       { key: 'room',     label: '\uD83C\uDFE0 Room' },
       { key: 'profile',  label: '\uD83D\uDC64 Profile' },
-    ];
+    ].filter(t => this.allowedTabs.includes(t.key as any));
 
     container.innerHTML = tabs.map(t => `
       <button class="comp-tab" data-tab="${t.key}" style="

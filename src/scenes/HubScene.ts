@@ -12,6 +12,7 @@ import { FollowsPanel } from '../ui/FollowsPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { MuteList } from '../ui/MuteList';
+import { PlayerPicker } from '../ui/PlayerPicker';
 import { RpsGame } from '../ui/RpsGame';
 import { SoundEngine } from '../audio/SoundEngine';
 import { ProfileModal } from '../ui/ProfileModal';
@@ -59,7 +60,7 @@ interface OtherPlayer {
 }
 
 export class HubScene extends Phaser.Scene {
-  private static readonly WOODS_OPEN = false;
+  private static readonly WOODS_OPEN = true;
   private player!: Phaser.GameObjects.Image;
   private playerName!: Phaser.GameObjects.Text;
   private playerStatusText!: Phaser.GameObjects.Text;
@@ -89,9 +90,6 @@ export class HubScene extends Phaser.Scene {
   private neonFrame = 0;
   private onlineCount = 0;
 
-  private shootingStar: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number } | null = null;
-  private shootingStarTimer = 0;
-  private shootingStarGraphics!: Phaser.GameObjects.Graphics;
   private smokeGraphics!: Phaser.GameObjects.Graphics;
   private chimneyGraphics!: Phaser.GameObjects.Graphics;
   private chimneyParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }[] = [];
@@ -106,6 +104,7 @@ export class HubScene extends Phaser.Scene {
   private computerUI = new ComputerUI();
   private pollBoard = new PollBoard();
   private muteList = new MuteList();
+  private playerPicker = new PlayerPicker();
   private rpsGame = new RpsGame();
   private snd = SoundEngine.get();
   private footTimer = 0;
@@ -114,7 +113,6 @@ export class HubScene extends Phaser.Scene {
 
   private playerY = GROUND_Y + 8;
   private isReturning = false;
-  private playerPickerEl: HTMLDivElement | null = null;
   private toastEl: HTMLDivElement | null = null;
   private waitingForAccess = false;
   private returnFromRoom: string | null = null;
@@ -243,8 +241,7 @@ export class HubScene extends Phaser.Scene {
     this.parallaxBg = this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'parallax_bg').setDepth(-2).setAlpha(0.6);
     this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
-    this.shootingStarGraphics = this.add.graphics().setDepth(-1);
-    this.chimneyGraphics = this.add.graphics().setDepth(1);
+this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.smokeGraphics = this.add.graphics().setDepth(15);
     this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard();
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
@@ -293,7 +290,7 @@ export class HubScene extends Phaser.Scene {
     ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
     this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open((newAvatar) => { if (this.textures.exists('player')) this.textures.remove('player'); this.textures.addCanvas('player', renderHubSprite(newAvatar, 0)); this.textures.addCanvas('player_walk1', renderHubSprite(newAvatar, 1)); }, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName); sendNameUpdate(newName); }); } });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
 
     let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
@@ -304,12 +301,12 @@ export class HubScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; } if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; this.playerPicker.close();if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
   }
 
   update(time: number, delta: number): void {
     this.updateMovement(); this.updateProximity(); this.updateParallax();
-    this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time); this.updateShootingStar(delta);
+    this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
     this.updateChimneySmoke(delta);
 
     // Walk animation — bob up/down and alternate leg frame
@@ -394,27 +391,12 @@ export class HubScene extends Phaser.Scene {
 
   // ── Player Picker ──
   private showPlayerPicker(): void {
-    if (this.playerPickerEl) { this.playerPickerEl.remove(); this.playerPickerEl = null; }
-    const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room';
-    this.playerPickerEl = document.createElement('div');
-    this.playerPickerEl.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,var(--nd-bg),var(--nd-navy));border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);min-width:300px;max-width:360px;`;
-    this.playerPickerEl.innerHTML = `<div style="color:var(--nd-accent);font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">MY ROOM</div><button class="pe" style="width:100%;padding:10px;margin-bottom:12px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;color:var(--nd-accent);font-size:13px;cursor:pointer;font-weight:bold;">Enter ${esc(myName)}'s Room</button><div style="color:var(--nd-subtext);font-size:12px;margin-bottom:10px;text-align:center;">\u2014 or visit someone \u2014</div><input class="ps" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:color-mix(in srgb,var(--nd-bg) 80%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-text);font-size:13px;outline:none;box-sizing:border-box;"/><div class="pl" style="max-height:200px;overflow-y:auto;border:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);border-radius:6px;"></div><button class="pc" style="width:100%;padding:8px;margin-top:12px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-subtext);font-size:12px;cursor:pointer;">Cancel</button>`;
-    document.body.appendChild(this.playerPickerEl);
-    this.playerPickerEl.querySelector('.pe')!.addEventListener('click', () => { this.closePlayerPicker(); this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); });
-    this.playerPickerEl.querySelector('.pc')!.addEventListener('click', () => this.closePlayerPicker());
-    const si = this.playerPickerEl.querySelector('.ps') as HTMLInputElement;
-    si.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') this.closePlayerPicker(); });
-    const eh = (e: KeyboardEvent) => { if (e.key === 'Escape') this.closePlayerPicker(); };
-    document.addEventListener('keydown', eh); (this.playerPickerEl as any)._eh = eh;
-    const ll = this.playerPickerEl.querySelector('.pl') as HTMLDivElement;
-    ll.innerHTML = `<div style="color:var(--nd-subtext);font-size:12px;text-align:center;padding:12px;">Loading...</div>`;
-    let ap: { pubkey: string; name: string }[] = [];
-    const rl = (f: string) => { const fl = f ? ap.filter(p => p.name.toLowerCase().includes(f.toLowerCase())) : ap; if (!fl.length) { ll.innerHTML = `<div style="color:var(--nd-subtext);font-size:12px;text-align:center;padding:12px;">${f ? 'No matches' : 'No players online'}</div>`; return; } ll.innerHTML = fl.map(p => `<div class="pp" data-pk="${p.pubkey}" style="padding:10px 14px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 8%,transparent);cursor:pointer;display:flex;justify-content:space-between;align-items:center;"><span style="color:var(--nd-text);font-size:13px;">${esc(p.name)}</span><span style="color:var(--nd-accent);font-size:11px;opacity:0.6;">Request \u2192</span></div>`).join(''); ll.querySelectorAll('.pp').forEach(el => { el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `color-mix(in srgb,var(--nd-dpurp) 10%,transparent)`); el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent'); el.addEventListener('click', () => { const pk = (el as HTMLElement).dataset.pk; if (pk) { this.closePlayerPicker(); this.requestRoomAccess(pk); } }); }); };
-    si.addEventListener('input', () => rl(si.value));
-    setOnlinePlayersHandler((p) => { setOnlinePlayersHandler(null); ap = p; rl(si.value); }); requestOnlinePlayers();
+    this.playerPicker.open(myPk, myName,
+      () => this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk),
+      (pk) => this.requestRoomAccess(pk),
+    );
   }
-  private closePlayerPicker(): void { if (this.playerPickerEl) { const h = (this.playerPickerEl as any)._eh; if (h) document.removeEventListener('keydown', h); this.playerPickerEl.remove(); this.playerPickerEl = null; } setOnlinePlayersHandler(null); }
   private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
   private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
     this.snd.roomEnter();
@@ -538,54 +520,6 @@ export class HubScene extends Phaser.Scene {
   private updateParallax(): void { this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor; }
   private initDustParticles(): void { const c = [P.pink, P.purp, P.amber, P.teal, P.lcream]; for (let i = 0; i < 40; i++) this.dustParticles.push({ x: Math.random() * WORLD_WIDTH, y: 50 + Math.random() * (GROUND_Y - 60), vx: -0.1 + Math.random() * 0.2, vy: -0.05 + Math.random() * 0.1, alpha: 0.05 + Math.random() * 0.12, size: Math.random() > 0.8 ? 2 : 1, color: c[Math.floor(Math.random() * c.length)] }); }
   private updateDustParticles(d: number): void { this.dustGraphics.clear(); const dt = d / 16; this.dustParticles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; if (p.x < 0) p.x = WORLD_WIDTH; if (p.x > WORLD_WIDTH) p.x = 0; if (p.y < 40) p.y = GROUND_Y - 20; if (p.y > GROUND_Y - 10) p.y = 50; const rgb = hexToRgb(p.color); this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha); this.dustGraphics.fillRect(p.x, p.y, p.size, p.size); }); }
-  private updateShootingStar(d: number): void {
-    this.shootingStarGraphics.clear();
-    if (!this.shootingStar) {
-      this.shootingStarTimer += d;
-      if (this.shootingStarTimer > 8000 + Math.random() * 12000) {
-        this.shootingStarTimer = 0;
-        const goRight = Math.random() > 0.5;
-        this.shootingStar = {
-          x: goRight ? Math.random() * WORLD_WIDTH * 0.4 : WORLD_WIDTH * 0.6 + Math.random() * WORLD_WIDTH * 0.4,
-          y: 8 + Math.random() * 35,
-          vx: goRight ? 4.5 + Math.random() * 3 : -(4.5 + Math.random() * 3),
-          vy: 1.2 + Math.random() * 1.4,
-          life: 0,
-          maxLife: 450 + Math.random() * 350,
-        };
-      }
-      return;
-    }
-    const s = this.shootingStar;
-    const dt = d / 16;
-    s.x += s.vx * dt;
-    s.y += s.vy * dt;
-    s.life += d;
-    const pr = s.life / s.maxLife;
-    const a = pr < 0.15 ? pr / 0.15 : pr > 0.65 ? (1 - pr) / 0.35 : 1;
-    // Wide glow trail (outer layer)
-    for (let i = 1; i <= 10; i++) {
-      const tx = s.x - s.vx * i * 2.0;
-      const ty = s.y - s.vy * i * 2.0;
-      const ta = a * (0.22 - i * 0.018);
-      if (ta > 0) { this.shootingStarGraphics.fillStyle(0xc8b8ff, ta); this.shootingStarGraphics.fillRect(tx - 1, ty, 3, 2); }
-    }
-    // Bright core trail
-    for (let i = 1; i <= 10; i++) {
-      const tx = s.x - s.vx * i * 1.8;
-      const ty = s.y - s.vy * i * 1.8;
-      const ta = a * (0.65 - i * 0.06);
-      if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 4 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 4 ? 2 : 1, 1); }
-    }
-    // Head with bloom layers
-    this.shootingStarGraphics.fillStyle(0xddd0ff, a * 0.2);
-    this.shootingStarGraphics.fillRect(s.x - 2, s.y - 2, 6, 6);
-    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.5);
-    this.shootingStarGraphics.fillRect(s.x - 1, s.y - 1, 4, 4);
-    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.95);
-    this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
-    if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > WORLD_WIDTH + 20) this.shootingStar = null;
-  }
   private updateChimneySmoke(delta: number): void {
     this.chimneySpawnTimer += delta;
     if (this.chimneySpawnTimer > 90) {
@@ -627,7 +561,7 @@ export class HubScene extends Phaser.Scene {
   // ── Player ──
   private createPlayer(): void {
     this.playerGlow = this.add.graphics().setDepth(9);
-    let sx = 400; if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
+    let sx = 400; if (this.returnFromRoom === 'woods') { sx = 60; } else if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY - 44, n, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
@@ -744,7 +678,7 @@ export class HubScene extends Phaser.Scene {
       case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players online', P.teal); return; } this.resolvePlayerPubkey(arg).then(tp => { if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'visit': { if (!arg) return; this.resolvePlayerPubkey(arg).then(tp => { if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} online: ${ps.join(', ')}` : 'No players online', P.teal); break; }
-      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'myroom', my:'myroom', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; if (rid === 'myroom') this.showPlayerPicker(); else this.enterRoom(b.id, b.name, b.neonColor); break; }
+      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } if (rid === 'picker') { this.showPlayerPicker(); return; } if (rid === 'myroom') { const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room'; this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; this.enterRoom(b.id, b.name, b.neonColor); break; }
       case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Chat muted' : 'Unmuted', s ? P.amber : P.teal); break; }
       case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
@@ -753,23 +687,7 @@ export class HubScene extends Phaser.Scene {
       case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
         if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
-        this.computerUI.open(
-          (newAvatar) => {
-            if (this.textures.exists('player')) this.textures.remove('player');
-            this.textures.addCanvas('player', renderHubSprite(newAvatar));
-            this.player.setTexture('player');
-            this.generateWalkFrames(newAvatar);
-            if (this.textures.exists('player_room')) this.textures.remove('player_room');
-            this.textures.addCanvas('player_room', renderRoomSprite(newAvatar));
-            sendAvatarUpdate();
-          },
-          (newName) => {
-            this.registry.set('playerName', newName);
-            this.playerName.setText(newName);
-            sendNameUpdate(newName);
-          }
-        );
-        this.chatUI.addMessage('system', 'Terminal opened', P.teal);
+        this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
         break;
       }
       case 'polls': { this.pollBoard.toggle(); break; }

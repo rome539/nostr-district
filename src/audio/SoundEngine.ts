@@ -3,7 +3,7 @@
  * Singleton — call SoundEngine.get() anywhere.
  */
 
-export type RoomId = 'hub' | 'lounge' | 'relay' | 'feed' | 'myroom' | 'market';
+export type RoomId = 'hub' | 'lounge' | 'relay' | 'feed' | 'myroom' | 'market' | 'woods' | 'cabin';
 
 const STORAGE_KEY = 'nd_sound';
 const MYROOM_TRACK_KEY = 'nd_myroom_track';
@@ -384,7 +384,14 @@ export class SoundEngine {
     this._stopAmbient();
     this.currentRoom = room;
     if (!room) return;
-    if (room === 'lounge') {
+    if (room === 'hub') {
+      this._startStream('/assets/audio/hub-ambient.ogg');
+      return;
+    } else if (room === 'woods') {
+      this._startStream('/assets/audio/woods-night.mp3');
+    } else if (room === 'cabin') {
+      this._startStream('/assets/audio/cabin-fire.m4a');
+    } else if (room === 'lounge') {
       this._startStream(`${BASE}Backbay%20Lounge.mp3`);
     } else if (room === 'myroom') {
       if (this._myRoomTrack !== 'off') {
@@ -458,4 +465,5 @@ export class SoundEngine {
     this.oscLoop(165, 'sine', 0.018);
     this.oscLoop(220, 'sine', 0.009);
   }
+
 }

@@ -23,6 +23,8 @@ import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
 import { sendAvatarUpdate, sendNameUpdate } from '../nostr/presenceService';
 import { ComputerUI } from '../ui/ComputerUI';
+import { MuteList } from '../ui/MuteList';
+import { PlayerPicker } from '../ui/PlayerPicker';
 import { authStore } from '../stores/authStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
@@ -53,6 +55,8 @@ export class RoomScene extends Phaser.Scene {
   private smokeGraphics!: Phaser.GameObjects.Graphics;
   private smokeEmote = new SmokeEmote();
   private settingsPanel = new SettingsPanel();
+  private muteList = new MuteList();
+  private playerPicker = new PlayerPicker();
   private computerUI = new ComputerUI();
   private roomRenderer = new RoomRenderer();
   private pet: PetSprite | null = null;
@@ -162,6 +166,8 @@ export class RoomScene extends Phaser.Scene {
     this.followsPanel = rfp;
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -289,6 +295,8 @@ export class RoomScene extends Phaser.Scene {
       this.chatUI.destroy();
       this.settingsPanel.destroy();
       this.computerUI.close();
+      this.muteList.destroy();
+      this.playerPicker.close();
       this.pet?.destroy(); this.pet = null;
       if (this.introOverlay) { this.introOverlay.destroy(); this.introOverlay = null; }
       if (this.introText) { this.introText.destroy(); this.introText = null; }
@@ -750,6 +758,10 @@ export class RoomScene extends Phaser.Scene {
         this.settingsPanel.toggle();
         return;
       }
+      if (this.playerPicker.isOpen()) {
+        this.playerPicker.close();
+        return;
+      }
       this.leaveRoom();
     });
   }
@@ -864,11 +876,15 @@ export class RoomScene extends Phaser.Scene {
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.nameText.text; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
       case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.chatUI.addMessage('system', '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': case 'computer': {
-        if (!this.isMyRoom()) { this.chatUI.addMessage('system', 'Only works in your own room', P.amber); return; }
+        if (!this.isMyRoom()) {
+          if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
+          this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
+          return;
+        }
         this.openComputer();
         break;
       }
-      case 'visit': case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /tp <room> or /tp <player>', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', hub:'hub', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'hub') { this.leaveRoom(); return; } if (rid) { sendRoomChange('hub'); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } let target: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) target = pk; }); if (target) { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(target); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); } else this.chatUI.addMessage('system', `Unknown room or player "${arg}"`, P.amber); break; }
+      case 'visit': case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /tp <room> or /tp <player>', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', hub:'hub', woods:'woods', cabin:'cabin', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(opk); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); }); return; } if (rid === 'hub') { this.leaveRoom(); return; } if (rid === 'woods') { sendRoomChange('woods'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('WoodsScene'); }); return; } if (rid === 'cabin') { sendRoomChange('cabin'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 4, 2, 0); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); }); return; } if (rid) { sendRoomChange('hub'); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } let target: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) target = pk; }); if (target) { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(target); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); } else this.chatUI.addMessage('system', `Unknown room or player "${arg}"`, P.amber); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.nameText?.text) ps.push(o.nameText.text); }); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', P.teal); break; }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/dm', '/zap <name>', '/smoke', '/terminal', '/tp <room|player>', '/players', '/follows', '/mute', '/filter <w>'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }

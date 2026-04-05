@@ -31,6 +31,9 @@ import { renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
 import { SoundEngine } from '../audio/SoundEngine';
+import { ComputerUI } from '../ui/ComputerUI';
+import { MuteList } from '../ui/MuteList';
+import { PlayerPicker } from '../ui/PlayerPicker';
 
 const WOODS_ACCENT = '#aaff44';
 const W = WORLD_WIDTH; // 1600
@@ -38,16 +41,20 @@ const W = WORLD_WIDTH; // 1600
 // ── Layout constants ──
 const FLOOR_Y     = GROUND_Y;       // ground level (340)
 const LAKE_LEFT   = 0;
-const LAKE_RIGHT  = 310;
-const DOCK_X      = 120;
+const LAKE_RIGHT  = 600;
+const DOCK_X      = 380;
 const DOCK_END_X  = LAKE_RIGHT; // dock right end connects to shore
 const FIRE_X      = 720;
 const FIRE_Y      = FLOOR_Y + 12;
+const CABIN_X     = 900;   // cabin left wall
+const CABIN_W     = 116;   // cabin body width
+const CABIN_DOOR_X = CABIN_X + 78; // door center x (978)
 
 // ── Particles ──
 interface Firefly { x: number; y: number; vx: number; vy: number; phase: number; size: number; }
 interface Ember { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; }
 interface Ripple { x: number; y: number; radius: number; maxRadius: number; alpha: number; }
+interface ChimneyPuff { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; }
 
 interface OtherPlayer {
   sprite: Phaser.GameObjects.Image;
@@ -82,6 +89,9 @@ export class WoodsScene extends Phaser.Scene {
   private smokeGraphics!: Phaser.GameObjects.Graphics;
   private smokeEmote = new SmokeEmote();
   private snd = SoundEngine.get();
+  private computerUI = new ComputerUI();
+  private muteList = new MuteList();
+  private playerPicker = new PlayerPicker();
   private isLeavingScene = false;
 
   private parallaxBg!: Phaser.GameObjects.Image;
@@ -93,9 +103,19 @@ export class WoodsScene extends Phaser.Scene {
   private embers: Ember[] = [];
   private ripples: Ripple[] = [];
   private rippleTimer = 0;
+  private chimneyPuffs: ChimneyPuff[] = [];
+  private chimneyGraphics!: Phaser.GameObjects.Graphics;
+  private shootingStar: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number } | null = null;
+  private shootingStarTimer = 0;
+  private shootingStarGraphics!: Phaser.GameObjects.Graphics;
+  private spawnX = 1400;
+  private nearCabin = false;
+  private cabinPromptBg!: Phaser.GameObjects.Graphics;
+  private cabinPromptText!: Phaser.GameObjects.Text;
+  private cabinPromptArrow!: Phaser.GameObjects.Text;
 
   constructor() { super({ key: 'WoodsScene' }); }
-  init(): void { this.smokeEmote.stop(); this.isLeavingScene = false; }
+  init(data?: { fromCabin?: boolean }): void { this.smokeEmote.stop(); this.isLeavingScene = false; this.spawnX = data?.fromCabin ? CABIN_DOOR_X - 60 : 1400; }
 
   create(): void {
     this.renderParallaxLayer();
@@ -103,8 +123,10 @@ export class WoodsScene extends Phaser.Scene {
     this.parallaxBg = this.add.image(W / 2, GAME_HEIGHT / 2, 'woods_parallax').setDepth(-2).setAlpha(0.6);
     this.add.image(W / 2, GAME_HEIGHT / 2, 'woods_bg').setDepth(-1);
 
+    this.shootingStarGraphics = this.add.graphics().setDepth(-1);
     this.waterGraphics = this.add.graphics().setDepth(1);
     this.campfireGraphics = this.add.graphics().setDepth(3);
+    this.chimneyGraphics = this.add.graphics().setDepth(4);
     this.fireflyGraphics = this.add.graphics().setDepth(12);
     this.smokeGraphics = this.add.graphics().setDepth(15);
 
@@ -120,6 +142,7 @@ export class WoodsScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { const wx = this.cameras.main.scrollX + p.x; if (p.y < FLOOR_Y - 10 || p.y > 455) return; if (wx < DOCK_X) return; this.targetX = Phaser.Math.Clamp(wx, DOCK_X, W - 20); this.isMoving = true; });
 
     const myPubkey = this.registry.get('playerPubkey');
+    this.snd.setRoom('woods');
     this.chatUI = new ChatUI();
     const chatInput = this.chatUI.create('Chat in the woods...', WOODS_ACCENT, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
@@ -134,6 +157,19 @@ export class WoodsScene extends Phaser.Scene {
     this.followsPanel = rfp;
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
+    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    this.input.keyboard?.on('keydown-ESC', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; } });
+
+    // Cabin door prompt
+    this.cabinPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.cabinPromptBg.fillStyle(0x080502, 0.9); this.cabinPromptBg.fillRoundedRect(0, 0, 128, 28, 5);
+    this.cabinPromptBg.lineStyle(1, 0x6a3c10, 0.6); this.cabinPromptBg.strokeRoundedRect(0, 0, 128, 28, 5);
+    this.cabinPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Enter CABIN' : '[E] Enter CABIN', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#f0a030', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.cabinPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#f0a030' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.cabinPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 128, 28), Phaser.Geom.Rectangle.Contains);
+    this.cabinPromptBg.on('pointerdown', () => { if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); } });
+    this.input.keyboard?.on('keydown-E', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); } });
 
     setPresenceCallbacks({
       onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
@@ -163,9 +199,10 @@ export class WoodsScene extends Phaser.Scene {
     this.settingsPanel.create();
 
     this.events.on('shutdown', () => {
-      unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy();
+      unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.muteList.destroy(); this.playerPicker.close();
       if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
+      this.cabinPromptBg?.destroy(); this.cabinPromptText?.destroy(); this.cabinPromptArrow?.destroy();
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
       setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
@@ -214,17 +251,6 @@ export class WoodsScene extends Phaser.Scene {
     x.fillStyle = '#f5e8d0';
     [0.04,0.08,0.2,0.45,0.7].forEach((a,i) => { x.globalAlpha=a; x.beginPath(); x.arc(moonX,55,40-i*7,0,Math.PI*2); x.fill(); });
     x.globalAlpha = 1;
-    // Moon face — random variant each scene load
-    { const mf = Math.floor(Math.random() * 4);
-      x.fillStyle = '#7a6030'; x.globalAlpha = 0.65;
-      x.fillRect(moonX-7,49,3,3); x.fillRect(moonX+5,49,3,3); // eyes
-      if (mf === 2) { x.fillStyle='#f5e8d0'; x.fillRect(moonX-7,49,3,1); x.fillRect(moonX+5,49,3,1); x.fillStyle='#7a6030'; } // sleepy lids
-      if (mf===0) { x.fillRect(moonX-5,59,2,2);x.fillRect(moonX-3,60,2,2);x.fillRect(moonX-1,61,3,2);x.fillRect(moonX+2,60,2,2);x.fillRect(moonX+4,59,2,2); } // smile
-      else if (mf===1) { x.fillRect(moonX-5,60,11,2); } // neutral
-      else if (mf===2) { x.fillRect(moonX-5,61,2,2);x.fillRect(moonX-3,60,2,2);x.fillRect(moonX-1,59,3,2);x.fillRect(moonX+2,60,2,2);x.fillRect(moonX+4,61,2,2); } // frown
-      else { x.fillRect(moonX-3,57,7,2);x.fillRect(moonX-4,58,2,5);x.fillRect(moonX+3,58,2,5);x.fillRect(moonX-3,63,7,2); } // surprised O
-      x.globalAlpha = 1;
-    }
 
     // Mid treeline
     x.fillStyle = '#050c08';
@@ -282,22 +308,83 @@ export class WoodsScene extends Phaser.Scene {
     for (let gx=0;gx<W;gx+=5+Math.random()*7) { if(gx>LAKE_LEFT-20&&gx<LAKE_RIGHT+20) continue; x.globalAlpha=0.25+Math.random()*0.3; const gh=3+Math.random()*7; x.fillRect(gx,FLOOR_Y-gh,1,gh); if(Math.random()>0.5) x.fillRect(gx+1,FLOOR_Y-gh+2,1,gh-2); }
     x.globalAlpha=1;
 
+
     // Dirt path
     x.fillStyle='#1a1408'; x.globalAlpha=0.08; x.fillRect(350,FLOOR_Y,300,16); x.fillRect(380,FLOOR_Y+14,240,10); x.globalAlpha=1;
 
-    // Lake
+    // Lake — full left edge, sloping beach on right
     const lg = x.createLinearGradient(0,FLOOR_Y-5,0,GAME_HEIGHT);
     lg.addColorStop(0,'#081828'); lg.addColorStop(0.4,'#061420'); lg.addColorStop(1,'#040e18');
     x.fillStyle = lg;
-    x.beginPath(); x.moveTo(LAKE_LEFT,FLOOR_Y+20); x.quadraticCurveTo(LAKE_LEFT+50,FLOOR_Y-5,LAKE_LEFT+130,FLOOR_Y-5); x.lineTo(LAKE_RIGHT-30,FLOOR_Y-5); x.quadraticCurveTo(LAKE_RIGHT,FLOOR_Y-5,LAKE_RIGHT,FLOOR_Y+20); x.lineTo(LAKE_RIGHT,GAME_HEIGHT); x.lineTo(LAKE_LEFT,GAME_HEIGHT); x.closePath(); x.fill();
-    x.strokeStyle='#1a3020'; x.lineWidth=2; x.globalAlpha=0.4;
-    x.beginPath(); x.moveTo(LAKE_LEFT,FLOOR_Y+20); x.quadraticCurveTo(LAKE_LEFT+50,FLOOR_Y-5,LAKE_LEFT+130,FLOOR_Y-5); x.lineTo(LAKE_RIGHT-30,FLOOR_Y-5); x.quadraticCurveTo(LAKE_RIGHT,FLOOR_Y-5,LAKE_RIGHT,FLOOR_Y+20); x.stroke(); x.globalAlpha=1;
+    x.beginPath();
+    x.moveTo(0, FLOOR_Y - 5);
+    x.lineTo(0, GAME_HEIGHT);
+    x.lineTo(LAKE_RIGHT + 60, GAME_HEIGHT);             // water laps further right at bottom
+    x.quadraticCurveTo(LAKE_RIGHT + 38, FLOOR_Y + 46, LAKE_RIGHT, FLOOR_Y + 30); // diagonal slope — no vertical wall
+    x.quadraticCurveTo(LAKE_RIGHT + 16, FLOOR_Y + 12, LAKE_RIGHT - 10, FLOOR_Y + 4);
+    x.quadraticCurveTo(LAKE_RIGHT - 28, FLOOR_Y - 4, LAKE_RIGHT - 58, FLOOR_Y + 3);
+    x.quadraticCurveTo(LAKE_RIGHT - 88, FLOOR_Y + 11, LAKE_RIGHT - 122, FLOOR_Y - 1);
+    x.quadraticCurveTo(LAKE_RIGHT - 160, FLOOR_Y - 8, LAKE_RIGHT - 200, FLOOR_Y - 3);
+    x.lineTo(0, FLOOR_Y - 5);
+    x.closePath();
+    x.fill();
+
+    // Sandy beach overlay — warm gradient over the shore transition zone
+    const beachG = x.createLinearGradient(LAKE_RIGHT - 30, 0, LAKE_RIGHT + 85, 0);
+    beachG.addColorStop(0,   'rgba(0,0,0,0)');
+    beachG.addColorStop(0.1, 'rgba(18,13,6,0.5)');
+    beachG.addColorStop(0.3, 'rgba(44,33,14,0.88)');
+    beachG.addColorStop(0.55,'rgba(54,43,19,0.92)');
+    beachG.addColorStop(0.8, 'rgba(38,28,12,0.65)');
+    beachG.addColorStop(1,   'rgba(0,0,0,0)');
+    x.fillStyle = beachG;
+    x.beginPath();
+    x.moveTo(LAKE_RIGHT - 30, FLOOR_Y - 6);
+    x.quadraticCurveTo(LAKE_RIGHT + 15, FLOOR_Y - 3, LAKE_RIGHT + 85, FLOOR_Y);
+    x.lineTo(LAKE_RIGHT + 85, GAME_HEIGHT);
+    x.lineTo(LAKE_RIGHT - 30, GAME_HEIGHT);
+    x.closePath();
+    x.fill();
+
+    // Sand grain texture along the waterline
+    for (let sx = LAKE_RIGHT - 18; sx < LAKE_RIGHT + 70; sx += 3) {
+      for (let sy = FLOOR_Y - 3; sy < FLOOR_Y + 38; sy += 4) {
+        if (Math.random() < 0.28) {
+          x.fillStyle = ['#2e2210','#3c2e16','#221a0a','#4a3c1e'][Math.floor(Math.random()*4)];
+          x.globalAlpha = 0.18 + Math.random() * 0.28;
+          x.fillRect(sx, sy, Math.random() > 0.65 ? 2 : 1, 1);
+        }
+      }
+    }
+    x.globalAlpha = 1;
+
+    // Waterline stroke — follows the diagonal beach slope
+    x.strokeStyle='#1a3020'; x.lineWidth=1; x.globalAlpha=0.5;
+    x.beginPath();
+    x.moveTo(LAKE_RIGHT + 60, GAME_HEIGHT);
+    x.quadraticCurveTo(LAKE_RIGHT + 38, FLOOR_Y + 46, LAKE_RIGHT, FLOOR_Y + 30);
+    x.quadraticCurveTo(LAKE_RIGHT + 16, FLOOR_Y + 12, LAKE_RIGHT - 10, FLOOR_Y + 4);
+    x.quadraticCurveTo(LAKE_RIGHT - 28, FLOOR_Y - 4, LAKE_RIGHT - 58, FLOOR_Y + 3);
+    x.quadraticCurveTo(LAKE_RIGHT - 88, FLOOR_Y + 11, LAKE_RIGHT - 122, FLOOR_Y - 1);
+    x.quadraticCurveTo(LAKE_RIGHT - 160, FLOOR_Y - 8, LAKE_RIGHT - 200, FLOOR_Y - 3);
+    x.stroke(); x.globalAlpha=1;
 
     // Dock
     r(DOCK_X+20,FLOOR_Y+4,6,30,'#2a1a08'); r(DOCK_X+120,FLOOR_Y+4,6,25,'#2a1a08'); r(DOCK_END_X-20,FLOOR_Y+4,6,20,'#2a1a08');
     for (let py=FLOOR_Y-1;py<FLOOR_Y+18;py+=7) { r(DOCK_X,py,DOCK_END_X-DOCK_X,5,py%14===0?'#3a2810':'#2e2008'); x.fillStyle='#081828'; x.globalAlpha=0.4; x.fillRect(DOCK_X,py+5,DOCK_END_X-DOCK_X,2); x.globalAlpha=1; }
     r(DOCK_X-2,FLOOR_Y-3,DOCK_END_X-DOCK_X+4,3,'#3a2810');
     r(DOCK_X+1,FLOOR_Y-24,5,22,'#3a2810'); r(DOCK_X-1,FLOOR_Y-26,12,3,'#2e2008');
+    // Dock lantern post at left (water) end
+    r(DOCK_X+1,FLOOR_Y-50,4,44,'#3a2810');   // tall post
+    r(DOCK_X+5,FLOOR_Y-48,9,2,'#2e2008');    // bracket arm
+    r(DOCK_X+5,FLOOR_Y-57,9,11,'#1a1008');   // lantern frame
+    r(DOCK_X+6,FLOOR_Y-56,7,9,'#f0b030');    // amber glass
+    r(DOCK_X+5,FLOOR_Y-58,9,2,'#2a1c0c');    // top cap
+    r(DOCK_X+5,FLOOR_Y-47,9,2,'#2a1c0c');    // bottom cap
+    x.globalAlpha=0.15; x.fillStyle='#f0a030';
+    x.beginPath(); x.arc(DOCK_X+9,FLOOR_Y-52,20,0,Math.PI*2); x.fill();
+    x.globalAlpha=0.07; x.beginPath(); x.arc(DOCK_X+9,FLOOR_Y-52,34,0,Math.PI*2); x.fill();
+    x.globalAlpha=1;
 
     // Campfire pit
     const fx=FIRE_X, fy=FIRE_Y;
@@ -310,7 +397,161 @@ export class WoodsScene extends Phaser.Scene {
 
     // Rocks
     const rock = (rx: number, ry: number, rw: number, rh: number) => { x.fillStyle='#1a1818'; x.globalAlpha=0.6; x.fillRect(rx,ry,rw,rh); x.fillStyle='#2a2828'; x.globalAlpha=0.3; x.fillRect(rx+1,ry,rw-2,2); x.globalAlpha=1; };
-    rock(420,FLOOR_Y+2,12,6); rock(620,FLOOR_Y+4,10,5); rock(900,FLOOR_Y+1,14,7); rock(1350,FLOOR_Y+3,8,4);
+    rock(420,FLOOR_Y+2,12,6); rock(620,FLOOR_Y+4,10,5); rock(1350,FLOOR_Y+3,8,4);
+
+    // ── Cabin exterior ──
+    { const cbX=CABIN_X, cbY=FLOOR_Y, cbW=CABIN_W, cbH=66;
+      // Foundation
+      r(cbX-4,cbY-2,cbW+8,6,'#181008');
+      // Wall body
+      r(cbX,cbY-cbH,cbW,cbH,'#2e2210');
+      // Log texture — horizontal lines
+      x.globalAlpha=0.45;
+      for(let ly=cbY-cbH+8;ly<cbY-2;ly+=10){r(cbX,ly,cbW,2,'#201608');r(cbX,ly+2,cbW,1,'#3a2c14');}
+      x.globalAlpha=1;
+      // Side shading (depth illusion)
+      r(cbX,cbY-cbH,9,cbH,'#1a1008'); r(cbX+cbW-9,cbY-cbH,9,cbH,'#1a1008');
+      // Chimney — trapezoid whose base follows the right roof slope exactly, drawn before roof
+      x.fillStyle='#201408';
+      x.beginPath();
+      x.moveTo(cbX+cbW-30, cbY-cbH-58); // top-left
+      x.lineTo(cbX+cbW-10, cbY-cbH-58); // top-right
+      x.lineTo(cbX+cbW-10, cbY-cbH-14); // bottom-right  (slope y at x-offset 106: peak+28*42/73≈14)
+      x.lineTo(cbX+cbW-30, cbY-cbH-26); // bottom-left   (slope y at x-offset 86:  peak+28*42/73≈26)
+      x.closePath(); x.fill();
+      r(cbX+cbW-32,cbY-cbH-60,24,6,'#2a1c0a'); // chimney cap
+      // Roof (dark triangle) — drawn over chimney base so it follows the diagonal
+      x.fillStyle='#141008';
+      x.beginPath();x.moveTo(cbX-15,cbY-cbH);x.lineTo(cbX+cbW/2,cbY-cbH-42);x.lineTo(cbX+cbW+15,cbY-cbH);x.closePath();x.fill();
+      // Roof shingle overlay
+      x.fillStyle='#0e0c06';
+      x.beginPath();x.moveTo(cbX-13,cbY-cbH);x.lineTo(cbX+cbW/2,cbY-cbH-40);x.lineTo(cbX+cbW+13,cbY-cbH);x.lineTo(cbX+cbW+13,cbY-cbH+6);x.lineTo(cbX+cbW/2,cbY-cbH-34);x.lineTo(cbX-13,cbY-cbH+6);x.closePath();x.fill();
+      // Window — warm amber glow
+      x.globalAlpha=0.7; r(cbX+14,cbY-cbH+28,26,20,'#f0a030');
+      x.globalAlpha=0.14; r(cbX+6,cbY-cbH+20,42,32,'#f0a030');
+      x.globalAlpha=0.06; r(cbX-2,cbY-cbH+14,56,40,'#f0a030');
+      x.globalAlpha=1;
+      // Window frame + panes
+      r(cbX+13,cbY-cbH+27,28,2,'#1a1008'); r(cbX+13,cbY-cbH+47,28,2,'#1a1008');
+      r(cbX+13,cbY-cbH+27,2,22,'#1a1008'); r(cbX+39,cbY-cbH+27,2,22,'#1a1008');
+      r(cbX+13,cbY-cbH+37,28,1,'#1a1008'); r(cbX+26,cbY-cbH+27,1,22,'#1a1008');
+      // Door
+      const dX=cbX+70,dW=22,dH=34;
+      r(dX-2,cbY-dH-2,dW+4,2,'#2e2010'); r(dX-2,cbY-dH-2,2,dH+2,'#2e2010'); r(dX+dW,cbY-dH-2,2,dH+2,'#2e2010');
+      r(dX,cbY-dH,dW,dH,'#1a1008'); r(dX+1,cbY-dH+1,dW-2,dH-1,'#211608');
+      r(dX+dW-8,cbY-14,4,5,'#3a2810'); // handle
+      // Small sign above door
+      r(dX+3,cbY-dH-12,dW-6,10,'#2e2010'); r(dX+4,cbY-dH-11,dW-8,8,'#3a2c14');
+    }
+
+    // ── Fish drying rack (left of cabin) ──
+    const fsX = 845;
+    r(fsX-18, FLOOR_Y-42, 4, 42, '#2a1c0c');       // left post
+    r(fsX+14, FLOOR_Y-42, 4, 42, '#2a1c0c');       // right post
+    r(fsX-18, FLOOR_Y-42, 36, 4, '#2e2010');       // top crossbar
+    r(fsX-18, FLOOR_Y-26, 36, 4, '#2e2010');       // bottom crossbar
+    // Fish row 1
+    const fishColors = ['#4a6858','#3a5870','#506050','#486068'];
+    [fsX-12, fsX-3, fsX+6, fsX+14].forEach((fx2, i) => {
+      r(fx2, FLOOR_Y-38, 2, 6, '#3a3028');          // string
+      r(fx2-3, FLOOR_Y-32, 8, 5, fishColors[i]);    // body
+      r(fx2-5, FLOOR_Y-30, 3, 3, fishColors[i]);    // tail fin
+      r(fx2+4, FLOOR_Y-31, 2, 2, '#1a2018');        // eye
+      r(fx2-3, FLOOR_Y-27, 8, 2, '#3a5048');        // belly shine
+    });
+    // Fish row 2 (smaller fish, different colors)
+    const fishColors2 = ['#506858','#4a6070','#3a5848','#507060'];
+    [fsX-12, fsX-3, fsX+6, fsX+14].forEach((fx2, i) => {
+      r(fx2, FLOOR_Y-22, 2, 4, '#3a3028');          // string
+      r(fx2-2, FLOOR_Y-18, 7, 4, fishColors2[i]);   // body
+      r(fx2-4, FLOOR_Y-16, 3, 2, fishColors2[i]);   // tail fin
+      r(fx2+3, FLOOR_Y-17, 2, 2, '#1a2018');        // eye
+    });
+
+    // ── Fishing rods on the dock ──
+    x.strokeStyle='#3a2c10'; x.lineWidth=1.5;
+    x.beginPath(); x.moveTo(DOCK_X+4,FLOOR_Y-2); x.lineTo(DOCK_X-14,FLOOR_Y-54); x.stroke();
+    x.beginPath(); x.moveTo(DOCK_X+6,FLOOR_Y-2); x.lineTo(DOCK_X+2,FLOOR_Y-58); x.stroke();
+    x.strokeStyle='#60584a'; x.lineWidth=0.5;
+    x.beginPath(); x.moveTo(DOCK_X-14,FLOOR_Y-54); x.lineTo(DOCK_X-20,FLOOR_Y-40); x.stroke();
+    x.beginPath(); x.moveTo(DOCK_X+2,FLOOR_Y-58); x.lineTo(DOCK_X+8,FLOOR_Y-44); x.stroke();
+    x.lineWidth=1;
+
+    // ── Stone well (right clearing) ──
+    const wlX = 1220;
+    // Stone base
+    r(wlX-14, FLOOR_Y-24, 28, 24, '#1e1c16');
+    r(wlX-16, FLOOR_Y-28, 32, 6, '#2a2820');        // upper ring
+    r(wlX-16, FLOOR_Y-8,  32, 6, '#242218');        // lower ring
+    // Stone texture
+    x.globalAlpha=0.5;
+    r(wlX-12,FLOOR_Y-22,10,5,'#28261c'); r(wlX+2,FLOOR_Y-22,8,5,'#201e16');
+    r(wlX-10,FLOOR_Y-14,8,4,'#28261c'); r(wlX+4,FLOOR_Y-14,9,4,'#201e16');
+    x.globalAlpha=1;
+    // Dark water inside
+    r(wlX-10, FLOOR_Y-26, 20, 4, '#060c10');
+    x.globalAlpha=0.3; r(wlX-8,FLOOR_Y-25,6,2,'#1a3040'); x.globalAlpha=1; // water glint
+    // Wooden frame posts
+    r(wlX-16, FLOOR_Y-52, 5, 52, '#2a1c0c');
+    r(wlX+11, FLOOR_Y-52, 5, 52, '#2a1c0c');
+    // Crossbeam + winch roller
+    r(wlX-16, FLOOR_Y-52, 32, 4, '#2e2010');
+    r(wlX-10, FLOOR_Y-49, 20, 5, '#3a2810');        // winch roller
+    // Rope
+    r(wlX-1, FLOOR_Y-44, 2, 20, '#3a3028');
+    // Roof
+    x.fillStyle='#181208';
+    x.beginPath(); x.moveTo(wlX-20,FLOOR_Y-52); x.lineTo(wlX,FLOOR_Y-68); x.lineTo(wlX+20,FLOOR_Y-52); x.closePath(); x.fill();
+    x.fillStyle='#0e0c06';
+    x.beginPath(); x.moveTo(wlX-18,FLOOR_Y-52); x.lineTo(wlX,FLOOR_Y-66); x.lineTo(wlX+18,FLOOR_Y-52); x.lineTo(wlX+18,FLOOR_Y-47); x.lineTo(wlX,FLOOR_Y-61); x.lineTo(wlX-18,FLOOR_Y-47); x.closePath(); x.fill();
+
+    // ── Woodpile to the right of cabin ──
+    const wpX = CABIN_X + CABIN_W + 12;
+    r(wpX-2,FLOOR_Y-30,3,30,'#201408'); r(wpX+39,FLOOR_Y-30,3,30,'#201408'); // support posts
+    r(wpX,FLOOR_Y-14,38,8,'#2a1808'); r(wpX+1,FLOOR_Y-14,36,2,'#3a2410'); r(wpX,FLOOR_Y-14,3,8,'#1e1006'); r(wpX+35,FLOOR_Y-14,3,8,'#1e1006'); // bottom row
+    r(wpX+2,FLOOR_Y-22,34,8,'#2e1c0a'); r(wpX+2,FLOOR_Y-22,32,2,'#3e2814'); r(wpX+2,FLOOR_Y-22,3,8,'#1e1006'); r(wpX+33,FLOOR_Y-22,3,8,'#1e1006'); // mid row
+    r(wpX+4,FLOOR_Y-30,30,8,'#261408'); r(wpX+4,FLOOR_Y-30,28,2,'#362010'); r(wpX+4,FLOOR_Y-30,3,8,'#1e1006'); r(wpX+31,FLOOR_Y-30,3,8,'#1e1006'); // top row
+    // Rain barrel beside woodpile
+    const rbX = wpX + 50;
+    r(rbX,FLOOR_Y-28,18,28,'#281808'); r(rbX+2,FLOOR_Y-26,14,22,'#301c0c');
+    r(rbX-1,FLOOR_Y-30,20,4,'#1a1008'); r(rbX-1,FLOOR_Y-16,20,3,'#1a1008'); r(rbX-1,FLOOR_Y-4,20,3,'#1a1008');
+
+    // ── Fallen log (x~1320) ──
+    r(1290, FLOOR_Y-14, 80, 14, '#2a1808');
+    r(1290, FLOOR_Y-14, 80, 3, '#362010');
+    r(1290, FLOOR_Y-14, 8, 14, '#1e1006');
+    r(1292, FLOOR_Y-12, 4, 10, '#2a1a0c');
+    r(1366, FLOOR_Y-14, 8, 14, '#1e1006');
+    x.globalAlpha=0.5;
+    for(let mx=1295;mx<1368;mx+=9){r(mx,FLOOR_Y-17,6,4,'#1a3010');}
+    x.globalAlpha=1;
+
+
+    // ── Path lantern post (x~1460) ──
+    r(1458,FLOOR_Y-48,4,48,'#3a2810');           // post
+    r(1462,FLOOR_Y-46,9,2,'#2e2008');            // bracket
+    r(1462,FLOOR_Y-55,9,11,'#1a1008');           // lantern frame
+    r(1463,FLOOR_Y-54,7,9,'#f0b030');            // amber glass
+    r(1462,FLOOR_Y-56,9,2,'#2a1c0c');            // top cap
+    r(1462,FLOOR_Y-45,9,2,'#2a1c0c');            // bottom cap
+    x.globalAlpha=0.14; x.fillStyle='#f0a030';
+    x.beginPath(); x.arc(1466,FLOOR_Y-50,20,0,Math.PI*2); x.fill();
+    x.globalAlpha=0.06; x.beginPath(); x.arc(1466,FLOOR_Y-50,34,0,Math.PI*2); x.fill();
+    x.globalAlpha=1;
+
+    // ── Tree stumps scattered right of cabin ──
+    // helper: stump(x, w, h)
+    const stump = (sx: number, sw: number, sh: number) => {
+      r(sx, FLOOR_Y-sh, sw, sh, '#241608');
+      r(sx, FLOOR_Y-sh, sw, 3, '#3a2410');          // top face
+      r(sx+3, FLOOR_Y-sh+1, Math.floor(sw*0.6), 2, '#2e1c0e'); // ring
+      r(sx+Math.floor(sw*0.4), FLOOR_Y-sh+2, Math.floor(sw*0.2), 1, '#281808'); // inner
+      r(sx-2, FLOOR_Y-sh+3, 3, sh-3, '#1a1006');   // left bark
+      r(sx+sw-1, FLOOR_Y-sh+3, 3, sh-3, '#1a1006');// right bark
+    };
+    stump(1170, 18, 14);   // small, between barrel and fallen log
+    stump(1430, 16, 14);   // small, between log and lantern
+    stump(1538, 22, 18);   // far right
 
     // Right edge — district buildings peeking
     x.fillStyle='#0e0828'; x.globalAlpha=0.15;
@@ -335,8 +576,11 @@ export class WoodsScene extends Phaser.Scene {
     this.updateMovement();
     this.parallaxBg.x = W / 2 - this.cameras.main.scrollX * 0.4;
     this.updateCampfire(time, delta);
+    this.updateChimneySmoke(delta);
     this.updateFireflies(time, delta);
     this.updateWater(time, delta);
+    this.updateShootingStar(delta);
+    this.updateCabinProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
@@ -375,6 +619,42 @@ export class WoodsScene extends Phaser.Scene {
     this.player.x = Phaser.Math.Clamp(this.player.x, DOCK_X, W - 20);
     if (this.player.x < DOCK_X) { this.player.x = DOCK_X; this.targetX = null; this.isMoving = false; }
     this.player.setFlipX(!this.facingRight);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // CHIMNEY SMOKE
+  // ══════════════════════════════════════════════════════════════════
+  private updateChimneySmoke(delta: number): void {
+    // Chimney center: CABIN_X + CABIN_W - 20, top of cap: FLOOR_Y - cbH(66) - 60 = FLOOR_Y - 126
+    const cx = CABIN_X + CABIN_W - 20;
+    const cy = FLOOR_Y - 126;
+    if (Math.random() > 0.82) {
+      this.chimneyPuffs.push({
+        x: cx + (Math.random() - 0.5) * 6,
+        y: cy,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: -0.4 - Math.random() * 0.4,
+        life: 0,
+        maxLife: 1800 + Math.random() * 1200,
+        size: 3 + Math.random() * 3,
+      });
+    }
+    this.chimneyGraphics.clear();
+    for (let i = this.chimneyPuffs.length - 1; i >= 0; i--) {
+      const p = this.chimneyPuffs[i];
+      p.x += p.vx * (delta / 16);
+      p.y += p.vy * (delta / 16);
+      p.vx += (Math.random() - 0.5) * 0.04;
+      p.vy *= 0.998;
+      p.life += delta;
+      const t = p.life / p.maxLife;
+      if (t >= 1) { this.chimneyPuffs.splice(i, 1); continue; }
+      const alpha = t < 0.15 ? t / 0.15 : (1 - t) / 0.85;
+      const radius = p.size * (1 + t * 3);
+      this.chimneyGraphics.fillStyle(0x888880, alpha * 0.18);
+      this.chimneyGraphics.fillCircle(p.x, p.y, radius);
+    }
+    if (this.chimneyPuffs.length > 40) this.chimneyPuffs = this.chimneyPuffs.slice(-30);
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -432,17 +712,65 @@ export class WoodsScene extends Phaser.Scene {
   // PLAYER
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
-    this.player = this.add.image(1400, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
+    this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY - 44, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
     const ms = localStorage.getItem('nd_status') || '';
     this.playerStatusText = this.add.text(this.player.x, this.playerY - 59, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
 
+  private updateShootingStar(d: number): void {
+    this.shootingStarGraphics.clear();
+    if (!this.shootingStar) {
+      this.shootingStarTimer += d;
+      if (this.shootingStarTimer > 8000 + Math.random() * 12000) {
+        this.shootingStarTimer = 0;
+        const goRight = Math.random() > 0.5;
+        this.shootingStar = { x: goRight ? Math.random() * W * 0.4 : W * 0.6 + Math.random() * W * 0.4, y: 8 + Math.random() * 35, vx: goRight ? 4.5 + Math.random() * 3 : -(4.5 + Math.random() * 3), vy: 1.2 + Math.random() * 1.4, life: 0, maxLife: 450 + Math.random() * 350 };
+      }
+      return;
+    }
+    const s = this.shootingStar;
+    const dt = d / 16;
+    s.x += s.vx * dt; s.y += s.vy * dt; s.life += d;
+    const pr = s.life / s.maxLife;
+    const a = pr < 0.15 ? pr / 0.15 : pr > 0.65 ? (1 - pr) / 0.35 : 1;
+    for (let i = 1; i <= 10; i++) { const tx = s.x - s.vx * i * 2.0, ty = s.y - s.vy * i * 2.0, ta = a * (0.22 - i * 0.018); if (ta > 0) { this.shootingStarGraphics.fillStyle(0xc8b8ff, ta); this.shootingStarGraphics.fillRect(tx - 1, ty, 3, 2); } }
+    for (let i = 1; i <= 10; i++) { const tx = s.x - s.vx * i * 1.8, ty = s.y - s.vy * i * 1.8, ta = a * (0.65 - i * 0.06); if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 4 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 4 ? 2 : 1, 1); } }
+    this.shootingStarGraphics.fillStyle(0xddd0ff, a * 0.2); this.shootingStarGraphics.fillRect(s.x - 2, s.y - 2, 6, 6);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.5); this.shootingStarGraphics.fillRect(s.x - 1, s.y - 1, 4, 4);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.95); this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
+    if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > W + 20) this.shootingStar = null;
+  }
+
   private leaveToDistrict(): void {
     this.snd.roomLeave(); this.snd.setRoom(''); sendRoomChange('hub'); this.chatUI.destroy();
     this.cameras.main.fadeOut(300, 10, 0, 20);
     this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('HubScene', { _returning: true, fromRoom: 'woods' }); });
+  }
+
+  private enterCabin(): void {
+    this.snd.roomLeave(); sendRoomChange('cabin'); this.chatUI.destroy();
+    this.cameras.main.fadeOut(300, 4, 2, 0);
+    this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); });
+  }
+
+  private updateCabinProximity(): void {
+    const near = Math.abs(this.player.x - CABIN_DOOR_X) < 46;
+    if (near !== this.nearCabin) {
+      this.nearCabin = near;
+      this.cabinPromptBg.setVisible(near); this.cabinPromptText.setVisible(near); this.cabinPromptArrow.setVisible(near);
+      if (!near) this.tweens.killTweensOf(this.cabinPromptArrow);
+    }
+    if (near) {
+      const px = CABIN_DOOR_X, py = FLOOR_Y - 96;
+      this.cabinPromptBg.setPosition(px - 64, py - 2);
+      this.cabinPromptText.setPosition(px, py + 8);
+      this.cabinPromptArrow.setPosition(px, py + 22);
+      if (!this.tweens.isTweening(this.cabinPromptArrow)) {
+        this.tweens.add({ targets: this.cabinPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -474,13 +802,14 @@ export class WoodsScene extends Phaser.Scene {
       case 'dm':{if(!canUseDMs()){this.chatUI.addMessage('system','DMs need a key',P.amber);return;}if(!arg){const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`Online: ${ps.join(', ')}`:'No players here',WOODS_ACCENT);return;}let tp:string|null=null;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase()))tp=pk;});if(tp){this.dmPanel.open(tp);this.chatUI.addMessage('system','Opening DM...',WOODS_ACCENT);}else this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);break;}
       case 'zap':{if(!arg){this.chatUI.addMessage('system','Usage: /zap <name>',WOODS_ACCENT);return;}const za=authStore.getState();if(!za.pubkey||za.isGuest){this.chatUI.addMessage('system','Login to zap',P.amber);return;}let zt:string|null=null;let zn=arg;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase())){zt=pk;zn=o.name;}});if(!zt){this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);return;}ZapModal.show(zt,zn);break;}
       case 'smoke':{if(this.smokeEmote.active){this.smokeEmote.stop();this.chatUI.addMessage('system','Put it out',P.dpurp);sendChat('/emote smoke_off');}else{this.smokeEmote.start();this.snd.lighterFlick();ChatUI.showBubble(this,this.player.x,this.player.y-48,'*lights a cigarette*',P.dpurp);sendChat('/emote smoke_on');}break;}
-      case 'tp':case 'teleport':case 'go':{if(!arg){this.chatUI.addMessage('system','Rooms: hub, relay, feed, myroom, lounge, market',WOODS_ACCENT);return;}const al:Record<string,string>={hub:'hub',relay:'relay',feed:'feed',thefeed:'feed',lounge:'lounge',rooftop:'lounge',market:'market',shop:'market'};const rid=al[arg.toLowerCase().replace(/\s+/g,'')];if(rid==='hub'){this.leaveToDistrict();return;}if(rid){sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:rid,name:rid.charAt(0).toUpperCase()+rid.slice(1),neonColor:P.teal});return;}this.chatUI.addMessage('system',`Unknown room "${arg}"`,P.amber);break;}
+      case 'tp':case 'teleport':case 'go':{if(!arg){this.chatUI.addMessage('system','Rooms: hub, cabin, relay, feed, myroom, lounge, market',WOODS_ACCENT);return;}const al:Record<string,string>={hub:'hub',cabin:'cabin',relay:'relay',feed:'feed',thefeed:'feed',myroom:'myroom',room:'picker',lounge:'lounge',rooftop:'lounge',market:'market',shop:'market',store:'market'};const rid=al[arg.toLowerCase().replace(/\s+/g,'')];if(rid==='hub'){this.leaveToDistrict();return;}if(rid==='cabin'){if(!this.isLeavingScene){this.isLeavingScene=true;this.enterCabin();}return;}if(rid==='myroom'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});return;}if(rid==='picker'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';this.playerPicker.open(pk,n,()=>{sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});},(opk)=>{sendRoomChange(opk);this.chatUI.addMessage('system','Requesting access...',WOODS_ACCENT);});return;}if(rid){sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:rid,name:rid.charAt(0).toUpperCase()+rid.slice(1),neonColor:P.teal});return;}this.chatUI.addMessage('system',`Unknown room "${arg}"`,P.amber);break;}
       case 'players':case 'who':case 'online':{const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`${ps.length} here: ${ps.join(', ')}`:'No other players',WOODS_ACCENT);break;}
       case 'follows':case 'following':case 'friends':{this.followsPanel.toggle();break;}
       case 'mute':{const s=toggleMute();this.chatUI.addMessage('system',s?'Muted':'Unmuted',s?P.amber:WOODS_ACCENT);break;}
       case 'filter':{if(!arg){const w=getCustomBannedWords();this.chatUI.addMessage('system',w.length?`Filtered: ${w.join(', ')}`:'No filters',WOODS_ACCENT);return;}addBannedWord(arg);this.chatUI.addMessage('system',`Added "${arg}"`,WOODS_ACCENT);break;}
       case 'unfilter':{if(!arg)return;removeBannedWord(arg);this.chatUI.addMessage('system',`Removed "${arg}"`,WOODS_ACCENT);break;}
-      case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
+      case 'terminal':case 'wardrobe':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName);sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
+      case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/terminal','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
       default:this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);
     }
     this.chatUI.flashLog();
