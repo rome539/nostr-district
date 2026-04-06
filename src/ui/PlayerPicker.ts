@@ -31,6 +31,9 @@ export class PlayerPicker {
     this.el.querySelector('.pp-mine')!.addEventListener('click', () => { this.close(); onMyRoom(); });
     this.el.querySelector('.pp-cancel')!.addEventListener('click', () => this.close());
 
+    this.kbHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this.kbHandler);
+
     const search = this.el.querySelector('.pp-search') as HTMLInputElement;
     search.addEventListener('keydown', (e) => { e.stopPropagation(); });
 

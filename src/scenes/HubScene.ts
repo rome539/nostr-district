@@ -109,7 +109,7 @@ export class HubScene extends Phaser.Scene {
   private snd = SoundEngine.get();
   private footTimer = 0;
   private nearBulletinBoard = false;
-  private readonly BULLETIN_X = 1095;
+  private readonly BULLETIN_X = 860;
 
   private playerY = GROUND_Y + 8;
   private isReturning = false;

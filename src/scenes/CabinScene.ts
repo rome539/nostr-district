@@ -431,11 +431,12 @@ export class CabinScene extends Phaser.Scene {
   }
 
   private updateMovement(): void {
+    const CABIN_SPEED = PLAYER_SPEED * 1.5;
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
-    if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
+    if (c) { if (c.left.isDown) vx = -CABIN_SPEED; else if (c.right.isDown) vx = CABIN_SPEED; }
     this.isKeyboardMoving = vx !== 0;
     if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } }
+    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * CABIN_SPEED / 60; this.facingRight = dx > 0; } }
     this.player.x = Phaser.Math.Clamp(this.player.x, DOOR_X + 8, W - 52);
     this.player.setFlipX(!this.facingRight);
   }
