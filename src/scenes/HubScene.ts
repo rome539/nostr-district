@@ -434,7 +434,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       onPlayerMove: (pk: string, x: number, y: number) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
       onPlayerLeave: (pk: string) => this.removeOtherPlayer(pk),
       onCountUpdate: (c: number) => { this.onlineCount = c; },
-      onChat: (pk: string, name: string, text: string) => {
+      onChat: (pk: string, name: string, text: string, emojis?: { code: string; url: string }[]) => {
         const isMe = pk === this.registry.get('playerPubkey');
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
@@ -443,9 +443,9 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
         if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => { this.chatUI.addMessage('system', msg, P.teal); if (msg.includes('wins') && msg.includes(myName2)) this.snd.rpsWin(); else if (msg.includes('wins')) this.snd.rpsLose(); else this.snd.rpsTie(); })) return; }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
-        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
-        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, P.teal);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp); if (!this.chatUI.isFocused()) this.snd.chatPing(); }
+        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk, emojis);
+        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 48, text, P.teal, 4000, emojis);
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, text, P.lpurp, 4000, emojis); if (!this.chatUI.isFocused()) this.snd.chatPing(); }
       },
       onAvatarUpdate: (pk: string, avatarStr: string) => {
         const o = this.otherPlayers.get(pk); if (!o) return;

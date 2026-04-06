@@ -17,7 +17,61 @@ const EMOJI_RELAYS = [
   'wss://purplepag.es',
 ];
 
+const LOCAL_PACKS_KEY = 'nd_emoji_packs';
+
+export interface StoredEmojiPack {
+  pubkey: string;
+  dTag:   string;
+  name:   string;
+  emojis: { code: string; url: string }[];
+}
+
+function getStoredPacks(): StoredEmojiPack[] {
+  try { return JSON.parse(localStorage.getItem(LOCAL_PACKS_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveStoredPacks(packs: StoredEmojiPack[]): void {
+  try { localStorage.setItem(LOCAL_PACKS_KEY, JSON.stringify(packs)); } catch { /* ignore */ }
+}
+
+function rebuildMapFromStorage(): void {
+  for (const pack of getStoredPacks()) {
+    for (const e of pack.emojis) emojiMap.set(e.code.toLowerCase(), e.url);
+  }
+}
+
+// Load stored packs immediately at module load — works for guests and logged-in users alike
+rebuildMapFromStorage();
+
+export function getEmojiCount(): number { return emojiMap.size; }
+
+export function getStoredEmojiPacks(): StoredEmojiPack[] { return getStoredPacks(); }
+
+export function isEmojiPackAdded(pubkey: string, dTag: string): boolean {
+  return getStoredPacks().some(p => p.pubkey === pubkey && p.dTag === dTag);
+}
+
+export function addEmojiPack(pack: StoredEmojiPack): void {
+  const packs = getStoredPacks();
+  if (!packs.some(p => p.pubkey === pack.pubkey && p.dTag === pack.dTag)) {
+    packs.unshift(pack);
+    saveStoredPacks(packs);
+  }
+  for (const e of pack.emojis) emojiMap.set(e.code.toLowerCase(), e.url);
+}
+
+export function removeEmojiPack(pubkey: string, dTag: string): void {
+  saveStoredPacks(getStoredPacks().filter(p => !(p.pubkey === pubkey && p.dTag === dTag)));
+  // Rebuild map — keep Nostr-sourced emojis too (they'll be re-added on next init)
+  emojiMap.clear();
+  rebuildMapFromStorage();
+}
+
 export async function initEmojiService(pubkey: string): Promise<void> {
+  // Always load locally-stored packs first so they're available immediately
+  rebuildMapFromStorage();
+
   try {
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
@@ -29,7 +83,9 @@ export async function initEmojiService(pubkey: string): Promise<void> {
       { maxWait: 5000 },
     );
 
+    // Reset and re-seed from local storage so manually-added packs are always kept
     emojiMap.clear();
+    rebuildMapFromStorage();
 
     if (listEvents.length === 0) {
       pool.close(EMOJI_RELAYS);
@@ -83,16 +139,33 @@ export async function initEmojiService(pubkey: string): Promise<void> {
   }
 }
 
+/** Extract emoji tags from a message — used by the sender to attach URLs to outgoing chat. */
+export function extractEmojiTags(text: string): { code: string; url: string }[] {
+  const results: { code: string; url: string }[] = [];
+  const seen = new Set<string>();
+  for (const [, code] of text.matchAll(/:([a-zA-Z0-9_]+):/g)) {
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    const url = emojiMap.get(key);
+    if (url) { results.push({ code, url }); seen.add(key); }
+  }
+  return results;
+}
+
 /**
  * Replace :shortcode: tokens in already-HTML-escaped text with inline images.
  * Call this AFTER escaping HTML so the <img> tags are not escaped.
+ * Pass `extra` to resolve shortcodes that aren't in the local map (e.g. from incoming messages).
  */
-export function renderEmojis(html: string): string {
-  if (emojiMap.size === 0) return html;
+export function renderEmojis(html: string, extra?: { code: string; url: string }[]): string {
+  const extraMap = extra && extra.length
+    ? new Map(extra.map(e => [e.code.toLowerCase(), e.url]))
+    : null;
+  if (emojiMap.size === 0 && !extraMap) return html;
   return html.replace(/:([a-zA-Z0-9_]+):/g, (match, code) => {
-    const url = emojiMap.get(code.toLowerCase());
+    const url = emojiMap.get(code.toLowerCase()) ?? extraMap?.get(code.toLowerCase());
     if (!url) return match;
     const safeUrl = url.replace(/"/g, '%22');
-    return `<img src="${safeUrl}" alt=":${code}:" title=":${code}:" style="height:1.2em;width:auto;vertical-align:middle;display:inline-block;margin:0 1px;" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${code}:'))">`;
+    return `<img src="${safeUrl}" alt=":${code}:" title=":${code}:" style="height:1.8em;width:auto;vertical-align:middle;display:inline-block;margin:0 2px;" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${code}:'))">`;
   });
 }

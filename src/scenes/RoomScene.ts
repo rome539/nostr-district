@@ -210,7 +210,7 @@ export class RoomScene extends Phaser.Scene {
       onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 350, 445); } },
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
-      onChat: (pk, name, text) => {
+      onChat: (pk, name, text, emojis) => {
         const isMe = pk === myPubkey;
         if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
         if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
@@ -225,10 +225,10 @@ export class RoomScene extends Phaser.Scene {
         }
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
-        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk);
+        this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk, emojis);
         if (!isMe && !this.chatUI.isFocused()) SoundEngine.get().chatPing();
-        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 155, text, P.teal);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 155, text, P.lpurp); }
+        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 155, text, P.teal, 4000, emojis);
+        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 155, text, P.lpurp, 4000, emojis); }
       },
       onAvatarUpdate: (pk, avatarStr) => {
         const o = this.otherPlayers.get(pk); if (!o) return;

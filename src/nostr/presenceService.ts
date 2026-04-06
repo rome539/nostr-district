@@ -1,5 +1,6 @@
 import { authStore } from '../stores/authStore';
 import { getAvatar, serializeAvatar } from '../stores/avatarStore';
+import { extractEmojiTags } from './emojiService';
 
 type PlayerData = {
   pubkey: string;
@@ -15,7 +16,7 @@ export type PresenceCallback = {
   onPlayerMove: (pubkey: string, x: number, y: number) => void;
   onPlayerLeave: (pubkey: string) => void;
   onCountUpdate: (count: number) => void;
-  onChat: (pubkey: string, name: string, text: string) => void;
+  onChat: (pubkey: string, name: string, text: string, emojis?: { code: string; url: string }[]) => void;
   onAvatarUpdate?: (pubkey: string, avatar: string) => void;
   onNameUpdate?: (pubkey: string, name: string) => void;
   onStatusUpdate?: (pubkey: string, status: string) => void;
@@ -87,7 +88,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y);
       if (msg.type === 'leave') callbacks?.onPlayerLeave(msg.pubkey);
       if (msg.type === 'count') callbacks?.onCountUpdate(msg.count);
-      if (msg.type === 'chat') callbacks?.onChat(msg.pubkey, msg.name, msg.text);
+      if (msg.type === 'chat') callbacks?.onChat(msg.pubkey, msg.name, msg.text, msg.emojis);
       if (msg.type === 'avatar_update') callbacks?.onAvatarUpdate?.(msg.pubkey, msg.avatar);
       if (msg.type === 'name_update') callbacks?.onNameUpdate?.(msg.pubkey, msg.name);
       if (msg.type === 'status_update') callbacks?.onStatusUpdate?.(msg.pubkey, msg.status);
@@ -157,7 +158,8 @@ export function sendPosition(x: number, y: number): void {
 
 export function sendChat(text: string): void {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'chat', text }));
+    const emojis = extractEmojiTags(text);
+    ws.send(JSON.stringify({ type: 'chat', text, ...(emojis.length ? { emojis } : {}) }));
   }
 }
 

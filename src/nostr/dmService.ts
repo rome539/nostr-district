@@ -14,6 +14,7 @@
 import { authStore } from '../stores/authStore';
 import { RelayManager } from './relayManager';
 import { getBunkerClient } from './nostrService';
+import { extractEmojiTags } from './emojiService';
 
 // ── Types ──
 
@@ -27,6 +28,7 @@ export interface DMMessage {
   isOwn: boolean;
   conversationPubkey: string;
   deliveryStatus?: 'sending' | 'sent' | 'failed';
+  emojis?: { code: string; url: string }[];
 }
 
 type DMListener = (msg: DMMessage) => void;
@@ -212,10 +214,11 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
   const myPubkey = state.pubkey;
 
   // ── Build the rumor (kind:14, unsigned) ──
+  const emojiTags = extractEmojiTags(content).map(e => ['emoji', e.code, e.url]);
   const rumor: any = {
     kind: 14,
     created_at: now,
-    tags: [['p', recipientPubkey]],
+    tags: [['p', recipientPubkey], ...emojiTags],
     content,
     pubkey: myPubkey,
   };
@@ -373,6 +376,7 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
   }
 
   // ── Notify UI optimistically ──
+  const sentEmojis = emojiTags.map(t => ({ code: t[1], url: t[2] }));
   notifyListeners({
     id: eventId,
     senderPubkey: myPubkey,
@@ -382,6 +386,7 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
     isOwn: true,
     conversationPubkey: recipientPubkey,
     deliveryStatus: 'sent',
+    ...(sentEmojis.length ? { emojis: sentEmojis } : {}),
   });
 }
 
@@ -473,6 +478,11 @@ async function handleGiftWrap(event: any): Promise<void> {
       }
     }
 
+    // Extract NIP-30 emoji tags from the rumor
+    const emojis: { code: string; url: string }[] = (rumor.tags || [])
+      .filter((t: string[]) => t[0] === 'emoji' && t[1] && t[2])
+      .map((t: string[]) => ({ code: t[1], url: t[2] }));
+
     // ── Notify listeners ──
     notifyListeners({
       id: event.id,
@@ -483,6 +493,7 @@ async function handleGiftWrap(event: any): Promise<void> {
       isOwn,
       conversationPubkey,
       deliveryStatus: 'sent',
+      ...(emojis.length ? { emojis } : {}),
     });
   } catch (e) {
     // Decryption failure — normal for events not meant for us

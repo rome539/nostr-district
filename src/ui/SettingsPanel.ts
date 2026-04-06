@@ -16,7 +16,9 @@ import {
   setNostrThemeEnabled, onNostrThemeChange,
 } from '../nostr/nostrThemeService';
 import { NostrThemeBrowser } from './NostrThemeBrowser';
+import { EmojiPackBrowser } from './EmojiPackBrowser';
 import { HotkeyModal } from './HotkeyModal';
+import { getEmojiCount, getStoredEmojiPacks } from '../nostr/emojiService';
 
 const GEAR_ID = 'settings-gear';
 const PANEL_ID = 'settings-panel';
@@ -30,8 +32,9 @@ export class SettingsPanel {
   private panelEl:         HTMLDivElement | null = null;
   private closeHandler:    ((e: MouseEvent) => void) | null = null;
   private nostrThemeUnsub: (() => void) | null = null;
-  private themeBrowser =   new NostrThemeBrowser();
-  private hotkeyModal  =   new HotkeyModal();
+  private themeBrowser   = new NostrThemeBrowser();
+  private emojiPackBrowser = new EmojiPackBrowser();
+  private hotkeyModal    = new HotkeyModal();
 
   create(): void {
     this.destroy();
@@ -145,26 +148,41 @@ export class SettingsPanel {
     }).join('');
 
     this.panelEl.innerHTML = `
-      <div style="color:var(--nd-text);font-size:13px;font-weight:bold;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
-        ${esc(state.displayName || 'guest')}
-        <span style="color:var(--nd-subtext);font-size:11px;font-weight:normal;margin-left:6px;">${esc(method)}</span>
+      <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+          <span style="color:var(--nd-text);font-size:13px;font-weight:bold;">${esc(state.displayName || 'guest')}</span>
+          <span style="color:var(--nd-subtext);font-size:11px;">${esc(method)}</span>
+        </div>
+        <div id="settings-npub" title="Click to copy npub" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;opacity:0.35;transition:opacity 0.15s;">
+          <span style="color:var(--nd-subtext);font-size:9px;font-family:'Courier New',monospace;">${esc(displayNpub)}</span>
+          <span id="settings-copy-hint" style="color:var(--nd-subtext);font-size:9px;">⎘</span>
+        </div>
       </div>
 
-      <div id="settings-npub" style="padding:8px 10px;margin-bottom:8px;background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);border-radius:4px;cursor:pointer;transition:border-color 0.15s;">
-        <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:3px;">NPUB</div>
-        <div style="color:var(--nd-text);font-size:11px;word-break:break-all;opacity:0.7;">${esc(displayNpub)}</div>
-        <div id="settings-copy-hint" style="color:var(--nd-accent);font-size:10px;margin-top:4px;opacity:0.5;">click to copy</div>
+      <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE</div>
+      <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
+        ${themeSwatches}
       </div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
-
       <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">NOSTR THEME</div>
       <div style="margin-bottom:10px;">${nostrThemeHtml}</div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
-      <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE${ntEnabled ? ' <span style="opacity:0.45;">(overridden by nostr theme)</span>' : ''}</div>
-      <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
-        ${themeSwatches}
+
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">CUSTOM EMOJIS</div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
+        background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin-bottom:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="color:var(--nd-text);font-size:11px;">${getEmojiCount()} emoji(s) loaded</div>
+          <div style="color:var(--nd-subtext);font-size:9px;opacity:0.5;margin-top:1px;">${getStoredEmojiPacks().length} pack(s) added · use :shortcode: in chat</div>
+        </div>
+        <button id="sp-emoji-browse" style="
+          padding:3px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
+          cursor:pointer;flex-shrink:0;
+          background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
+          border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
+          color:var(--nd-accent);">Browse</button>
       </div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
@@ -223,6 +241,14 @@ export class SettingsPanel {
     hkBtn?.addEventListener('mouseenter', () => { hkBtn.style.color = 'var(--nd-text)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 35%,transparent)`; });
     hkBtn?.addEventListener('mouseleave', () => { hkBtn.style.color = 'var(--nd-subtext)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-dpurp) 28%,transparent)`; });
     hkBtn?.addEventListener('click', () => { this.closePanel(); this.hotkeyModal.show(); });
+
+    // Emoji pack browser button (closes theme browser)
+    this.panelEl.querySelector('#sp-emoji-browse')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.emojiPackBrowser.isOpen()) { this.emojiPackBrowser.close(); return; }
+      this.themeBrowser.close();
+      this.emojiPackBrowser.open();
+    });
 
     // ── Wallet row ──
     const walletRow = this.panelEl.querySelector('#sp-wallet-row') as HTMLElement;
@@ -299,17 +325,21 @@ export class SettingsPanel {
     logoutBtn.addEventListener('mouseleave', () => logoutBtn.style.background = 'transparent');
 
     const npubEl = this.panelEl.querySelector('#settings-npub') as HTMLElement;
-    npubEl.addEventListener('mouseenter', () => npubEl.style.borderColor = `${P.teal}44`);
-    npubEl.addEventListener('mouseleave', () => npubEl.style.borderColor = `${P.dpurp}22`);
+    npubEl.addEventListener('mouseenter', () => npubEl.style.opacity = '1');
+    npubEl.addEventListener('mouseleave', () => npubEl.style.opacity = '0.4');
 
     // Copy npub
     npubEl.addEventListener('click', () => {
       if (!npub) return;
       navigator.clipboard.writeText(npub).then(() => {
-        const hint = this.panelEl?.querySelector('#settings-copy-hint');
-        if (hint) { hint.textContent = 'copied!'; hint.setAttribute('style', `color:var(--nd-accent);font-size:10px;margin-top:4px;opacity:1;`); }
+        const hint = this.panelEl?.querySelector('#settings-copy-hint') as HTMLElement | null;
+        if (hint) { hint.textContent = '✓'; hint.style.color = 'var(--nd-accent)'; }
+        npubEl.style.opacity = '1';
+        npubEl.style.color = 'var(--nd-accent)';
         setTimeout(() => {
-          if (hint) { hint.textContent = 'click to copy'; hint.setAttribute('style', `color:var(--nd-accent);font-size:10px;margin-top:4px;opacity:0.5;`); }
+          if (hint) { hint.textContent = '⎘'; hint.style.color = 'var(--nd-subtext)'; }
+          npubEl.style.color = '';
+          npubEl.style.opacity = '0.35';
         }, 2000);
       }).catch(() => {});
     });
@@ -338,11 +368,12 @@ export class SettingsPanel {
       this.openPanel();
     });
 
-    // Browse button — open/close the theme browser
+    // Browse button — open/close the theme browser (closes emoji browser)
     this.panelEl?.querySelector('#sp-nostr-browse')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (this.themeBrowser.isOpen()) this.themeBrowser.close();
-      else this.themeBrowser.open();
+      if (this.themeBrowser.isOpen()) { this.themeBrowser.close(); return; }
+      this.emojiPackBrowser.close();
+      this.themeBrowser.open();
     });
 
     // Re-render only the nostr theme row when theme changes (avoid destroying the browser)
@@ -389,14 +420,15 @@ export class SettingsPanel {
         setNostrThemeEnabled(!isNostrThemeEnabled());
       });
       row.querySelector('#sp-nostr-browse')?.addEventListener('click', () => {
-        if (this.themeBrowser.isOpen()) this.themeBrowser.close();
-        else this.themeBrowser.open();
+        if (this.themeBrowser.isOpen()) { this.themeBrowser.close(); return; }
+        this.emojiPackBrowser.close();
+        this.themeBrowser.open();
       });
 
       // Also update the preset swatches active state and overridden label
       const appearanceHeader = this.panelEl?.querySelector('#sp-appearance-header') as HTMLElement | null;
       if (appearanceHeader) {
-        appearanceHeader.innerHTML = `APPEARANCE${ntEnabled ? ' <span style="opacity:0.45;">(overridden by nostr theme)</span>' : ''}`;
+        appearanceHeader.innerHTML = `APPEARANCE`;
       }
       const themesEl = this.panelEl?.querySelector('#settings-themes') as HTMLElement | null;
       if (themesEl) {
@@ -449,6 +481,7 @@ export class SettingsPanel {
 
   private closePanel(): void {
     this.themeBrowser.close();
+    this.emojiPackBrowser.close();
     if (this.panelEl) { this.panelEl.remove(); this.panelEl = null; }
     if (this.closeHandler) { document.removeEventListener('pointerdown', this.closeHandler); this.closeHandler = null; }
     if (this.nostrThemeUnsub) { this.nostrThemeUnsub(); this.nostrThemeUnsub = null; }

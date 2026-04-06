@@ -12,7 +12,7 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
 }
 
-function renderContent(text: string): string {
+function renderContent(text: string, emojis?: { code: string; url: string }[]): string {
   const t = text.trim();
   if (isGifUrl(t)) {
     const src = gifSrcAttr(t);
@@ -23,7 +23,7 @@ function renderContent(text: string): string {
     const label = escapeHtml(t.length > 55 ? t.slice(0, 52) + '…' : t);
     return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
   }
-  return `<span style="color:#f5e8d0;opacity:0.85;">${renderEmojis(escapeHtml(text))}</span>`;
+  return `<span style="color:#f5e8d0;opacity:0.85;">${renderEmojis(escapeHtml(text), emojis)}</span>`;
 }
 
 export class ChatUI {
@@ -113,13 +113,13 @@ export class ChatUI {
   }
 
   /** Add a message to the chat log */
-  addMessage(name: string, text: string, color: string, pubkey?: string): void {
+  addMessage(name: string, text: string, color: string, pubkey?: string, emojis?: { code: string; url: string }[]): void {
     const msg = document.createElement('div');
     msg.style.cssText = `margin-bottom:5px;line-height:1.4;padding:2px 0;`;
     const nameHtml = (pubkey && this.onNameClick)
       ? `<span style="color:${color};font-weight:bold;cursor:pointer;" data-pk="${pubkey}">${escapeHtml(name)}</span>`
       : `<span style="color:${color};font-weight:bold;">${escapeHtml(name)}</span>`;
-    msg.innerHTML = `${nameHtml}: ${renderContent(text)}`;
+    msg.innerHTML = `${nameHtml}: ${renderContent(text, emojis)}`;
     if (pubkey && this.onNameClick) {
       msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));
     }
@@ -197,7 +197,7 @@ export class ChatUI {
   }
 
   /** Create a speech bubble above a position in a Phaser scene */
-  static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000): void {
+  static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000, emojis?: { code: string; url: string }[]): void {
     if (isGifUrl(text.trim())) {
       // World coords fixed at moment of posting — bubble stays in place as player walks away
       const worldX = bx;
@@ -236,7 +236,53 @@ export class ChatUI {
       }, lifetime - 400);
       return;
     }
-    const displayText = text.length > 40 ? text.slice(0, 40) + '...' : text;
+    // Use a DOM bubble if the message contains custom emojis (renderEmojis will swap :code: → <img>)
+    const truncated = text.length > 80 ? text.slice(0, 80) + '…' : text;
+    const rendered  = renderEmojis(escapeHtml(truncated), emojis);
+    const hasEmoji  = rendered.includes('<img');
+
+    if (hasEmoji) {
+      const worldX = bx;
+      const worldY = by - 16;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = `
+        position:fixed;z-index:200;pointer-events:none;opacity:0;
+        transition:opacity 0.2s ease;transform:translateX(-50%) translateY(-100%);
+        background:#0a0014cc;border-radius:6px;padding:4px 8px;
+        font-family:'Courier New',monospace;font-size:12px;color:${tint};
+        max-width:200px;text-align:center;line-height:1.5;
+        border:1px solid ${tint}33;
+      `;
+      wrap.innerHTML = rendered;
+      document.body.appendChild(wrap);
+
+      const updatePos = () => {
+        const cam    = scene.cameras.main;
+        const canvas = scene.sys.game.canvas;
+        const rect   = canvas.getBoundingClientRect();
+        const scaleX = rect.width  / canvas.width;
+        const scaleY = rect.height / canvas.height;
+        wrap.style.left = `${rect.left + (worldX - cam.scrollX) * cam.zoom * scaleX}px`;
+        wrap.style.top  = `${rect.top  + (worldY - cam.scrollY) * cam.zoom * scaleY}px`;
+      };
+
+      const cleanup = () => {
+        scene.events.off('prerender', updatePos);
+        scene.events.off('shutdown', cleanup);
+      };
+
+      scene.events.on('prerender', updatePos);
+      scene.events.once('shutdown', cleanup);
+      updatePos();
+      requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+      setTimeout(() => {
+        wrap.style.opacity = '0';
+        setTimeout(() => { cleanup(); wrap.remove(); }, 400);
+      }, lifetime - 400);
+      return;
+    }
+
+    const displayText = truncated;
     const bubbleText = scene.add.text(bx, by - 10, displayText, {
       fontFamily: '"Courier New", monospace', fontSize: '12px', color: tint, align: 'center',
       backgroundColor: '#0a0014cc', padding: { x: 6, y: 4 },

@@ -163,7 +163,10 @@ wss.on('connection', (ws) => {
         if (!player) return;
         const text = (msg.text || '').slice(0, 200);
         if (text.length > 0) {
-          broadcastToRoom(player.room, { type: 'chat', pubkey: myPubkey, name: player.name, text }, null);
+          const emojis = Array.isArray(msg.emojis)
+            ? msg.emojis.slice(0, 50).map((e: any) => ({ code: String(e.code || '').slice(0, 60), url: String(e.url || '').slice(0, 500) }))
+            : undefined;
+          broadcastToRoom(player.room, { type: 'chat', pubkey: myPubkey, name: player.name, text, ...(emojis?.length ? { emojis } : {}) }, null);
         }
       }
 
