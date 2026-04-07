@@ -115,7 +115,7 @@ export class SettingsPanel {
                border:1px solid ${ntEnabled ? 'color-mix(in srgb,var(--nd-accent) 44%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 44%,transparent)'};
                color:${ntEnabled ? 'var(--nd-accent)' : 'var(--nd-subtext)'};"
              >${ntEnabled ? 'On' : 'Off'}</button>`
-          : `<div style="color:var(--nd-subtext);font-size:11px;flex:1;opacity:0.5;">No theme loaded</div>`
+          : `<div style="color:var(--nd-subtext);font-size:11px;flex:1;">No theme loaded</div>`
         }
         <button id="sp-nostr-browse" style="
           padding:3px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
@@ -175,7 +175,7 @@ export class SettingsPanel {
         background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin-bottom:10px;">
         <div style="flex:1;min-width:0;">
           <div style="color:var(--nd-text);font-size:11px;">${getEmojiCount()} emoji(s) loaded</div>
-          <div style="color:var(--nd-subtext);font-size:9px;opacity:0.5;margin-top:1px;">${getStoredEmojiPacks().length} pack(s) added · use :shortcode: in chat</div>
+          <div style="color:var(--nd-subtext);font-size:9px;margin-top:1px;">${getStoredEmojiPacks().length} pack(s) added · use :shortcode: in chat</div>
         </div>
         <button id="sp-emoji-browse" style="
           padding:3px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;

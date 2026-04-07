@@ -288,7 +288,7 @@ function ensureContrast(color: string, bg: string, minRatio: number): string {
   const bgDark = luminance(bg) < 0.5;
   const target = bgDark ? '#ffffff' : '#000000';
   let c = color;
-  for (let i = 0; i < 20 && contrastRatio(c, bg) < minRatio; i++) {
+  for (let i = 0; i < 30 && contrastRatio(c, bg) < minRatio; i++) {
     c = mix(c, target, 0.25);
   }
   return c;
@@ -301,38 +301,42 @@ function buildThemeCss(theme: NostrTheme): string {
   let text    = theme.text;
   let primary = theme.primary;
 
-  // Adapt light themes to our dark UI.
-  // If the background is bright (lum > 0.18), preserve the hue but force it dark.
-  // If the text is light-on-dark already, leave it alone.
   const bgLum   = luminance(bg);
   const textLum = luminance(text);
 
+  // Force dark backgrounds — preserve hue/tint but kill brightness
   if (bgLum > 0.18) {
-    // Crush bg toward black while keeping its hue/tint
     bg = mix(bg, '#000000', 0.82);
   }
-  if (bgLum > 0.18 && textLum > 0.5) {
-    // Text was already light — fine as-is
-  } else if (bgLum > 0.18 && textLum < 0.5) {
-    // Text was dark (for a light bg) — flip it light
+
+  // Adapt text for light-background themes
+  if (bgLum > 0.18 && textLum < 0.5) {
+    // Dark text on a light bg — flip toward white for our dark UI
     text = mix(text, '#ffffff', 0.88);
+  }
+
+  // Pre-nudge: if bg is dark and text is also dark/saturated, push toward white
+  // before contrast enforcement so we don't end up with muddy mid-tones
+  const bgLumAfter = luminance(bg);
+  if (bgLumAfter < 0.25 && luminance(text) < 0.35) {
+    text = mix(text, '#ffffff', 0.65);
   }
 
   const [br, bg2, bb] = hexToRgb(bg);
 
-  // Enforce minimum contrast so no theme can make text unreadable.
-  // Main text: WCAG AA requires 4.5:1; we use 4.5 as the floor.
-  text    = ensureContrast(text,    bg, 4.5);
-  // Accent/primary used for buttons and highlights: minimum 3:1.
-  primary = ensureContrast(primary, bg, 3.0);
+  // Enforce strong contrast — well above WCAG AA so all themes are legible
+  text    = ensureContrast(text,    bg, 7.0);   // near-AAA
+  primary = ensureContrast(primary, bg, 3.5);
 
   // Derive the full --nd-* set from 3 source colours
-  const navy    = mix(bg, primary, 0.08);
-  const purp    = mix(bg, primary, 0.45);
-  const dpurp   = mix(bg, primary, 0.2);
-  // Subtext is a dimmed version of text — enforce at least 2.5:1 against bg.
-  let subtext   = mix(text, bg, 0.45);
-  subtext       = ensureContrast(subtext, bg, 2.5);
+  // navy: slight tint for panel gradients — needs a bit more than 8% to be distinguishable
+  const navy    = mix(bg, primary, 0.12);
+  const purp    = mix(bg, primary, 0.50);
+  // dpurp: used for borders and card backgrounds — needs to be noticeably different from bg
+  const dpurp   = mix(bg, primary, 0.30);
+  // Subtext: enforce 7:1 so it still has ~4:1 when UI overlays opacity:0.5
+  let subtext   = mix(text, bg, 0.35);
+  subtext       = ensureContrast(subtext, bg, 7.0);
 
   // Apply to :root so the nostr theme fully replaces the active preset
   let css = `
@@ -362,11 +366,11 @@ function buildThemeCss(theme: NostrTheme): string {
     `;
   }
 
-  // Cap font sizes — set a hard 14px ceiling on html/body so relative units
-  // (em/rem) used by theme fonts can't blow up the layout. Our panel inline
-  // styles use explicit px values and are unaffected by this root cap.
+  // Cap font sizes — clamp everything to a safe ceiling so theme fonts
+  // with aggressive sizing can't blow up the layout.
   css += `
-    html, body { font-size: 14px !important; }
+    html, body { font-size: 11px !important; }
+    *, *::before, *::after { font-size: clamp(8px, 1em, 14px) !important; }
   `;
 
   // Body font — applies to all UI text

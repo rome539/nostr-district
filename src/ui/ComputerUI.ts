@@ -51,6 +51,10 @@ export class ComputerUI {
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
   private previewPill: HTMLDivElement | null = null;
+  private draftAvatar: AvatarConfig | null = null;
+  private draftRoom: RoomConfig | null = null;
+  private previewBaseline: RoomConfig | null = null;
+  private previewSaved = false;
 
   open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange, allowedTabs?: ('wardrobe' | 'profile' | 'room')[]): void {
     if (this.panel) this.close();
@@ -86,6 +90,14 @@ export class ComputerUI {
     }
     this.previewPill?.remove();
     this.previewPill = null;
+    if (this.previewBaseline && !this.previewSaved) {
+      setRoomConfig(this.previewBaseline);
+      this.onRoomChange?.(getRoomConfig());
+    }
+    this.draftAvatar = null;
+    this.draftRoom = null;
+    this.previewBaseline = null;
+    this.previewSaved = false;
     if (this.backdrop) { this.backdrop.remove(); this.backdrop = null; }
     if (this.panel) { this.panel.remove(); this.panel = null; }
   }
@@ -191,7 +203,8 @@ export class ComputerUI {
   // WARDROBE TAB
   // ══════════════════════════════════════
   private renderWardrobe(body: HTMLElement): void {
-    const avatar = getAvatar();
+    if (!this.draftAvatar) this.draftAvatar = { ...getAvatar() };
+    const avatar = this.draftAvatar;
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">WARDROBE</span>
@@ -213,7 +226,7 @@ export class ComputerUI {
       <div id="ward-colors"></div>
       <div id="ward-outfits" style="margin-top:14px;"></div>
     `;
-    this.renderPreview(avatar);
+    this.renderPreview(this.draftAvatar);
     this.renderSlotTabs(body);
     this.renderOptions(body);
     this.renderColors(body);
@@ -223,14 +236,14 @@ export class ComputerUI {
     if (authStore.getState().isGuest) {
       if (wardSync) wardSync.style.display = 'none';
     } else {
-      wardSync?.addEventListener('click', async () => {
-        if (!wardSync) return;
-        const orig = wardSync.textContent;
-        wardSync.textContent = 'Saving...';
+      wardSync?.addEventListener('click', () => {
+        if (!wardSync || !this.draftAvatar) return;
+        const committed = setAvatar(this.draftAvatar);
+        this.onAvatarChange?.(committed);
+        publishAvatar(committed);
+        wardSync.textContent = 'Saved!';
         wardSync.disabled = true;
-        const ok = await publishAvatar(getAvatar());
-        wardSync.textContent = ok ? 'Saved!' : 'Failed';
-        setTimeout(() => { wardSync.textContent = orig; wardSync.disabled = false; }, 1800);
+        setTimeout(() => { if (wardSync.isConnected) { wardSync.textContent = 'Save'; wardSync.disabled = false; } }, 1500);
       });
     }
   }
@@ -280,7 +293,7 @@ export class ComputerUI {
   private renderOptions(body: HTMLElement): void {
     const container = body.querySelector('#ward-options');
     if (!container) return;
-    const avatar = getAvatar();
+    const avatar = this.draftAvatar ?? getAvatar();
     const optMap: Record<string, readonly string[]> = {
       hair: AVATAR_OPTIONS.hair, top: AVATAR_OPTIONS.top,
       bottom: AVATAR_OPTIONS.bottom, hat: AVATAR_OPTIONS.hat, accessory: AVATAR_OPTIONS.accessory,
@@ -306,10 +319,8 @@ export class ComputerUI {
     </div>`;
     container.querySelectorAll('.wo').forEach(el => {
       el.addEventListener('click', () => {
-        const update: any = {}; update[this.currentSlot] = (el as HTMLElement).dataset.v;
-        const newAvatar = setAvatar(update);
-        this.renderPreview(newAvatar); this.renderOptions(body);
-        this.onAvatarChange?.(newAvatar);
+        this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), [this.currentSlot]: (el as HTMLElement).dataset.v };
+        this.renderPreview(this.draftAvatar); this.renderOptions(body);
       });
     });
   }
@@ -317,7 +328,7 @@ export class ComputerUI {
   private renderColors(body: HTMLElement): void {
     const container = body.querySelector('#ward-colors');
     if (!container) return;
-    const avatar = getAvatar();
+    const avatar = this.draftAvatar ?? getAvatar();
     const keyMap: Record<string, string> = {
       hair: 'hairColor', top: 'topColor',
       bottom: 'bottomColor', hat: 'hatColor', accessory: 'accessoryColor',
@@ -340,10 +351,8 @@ export class ComputerUI {
     `;
     container.querySelectorAll('.wc').forEach(el => {
       el.addEventListener('click', () => {
-        const update: any = {}; update[colorKey] = (el as HTMLElement).dataset.c;
-        const newAvatar = setAvatar(update);
-        this.renderPreview(newAvatar); this.renderColors(body);
-        this.onAvatarChange?.(newAvatar);
+        this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), [colorKey]: (el as HTMLElement).dataset.c };
+        this.renderPreview(this.draftAvatar); this.renderColors(body);
       });
     });
   }
@@ -386,14 +395,13 @@ export class ComputerUI {
     if (authStore.getState().isGuest) {
       if (syncBtn) syncBtn.style.display = 'none';
     } else {
-      syncBtn?.addEventListener('click', async () => {
+      syncBtn?.addEventListener('click', () => {
         if (!syncBtn) return;
         const orig = syncBtn.textContent;
-        syncBtn.textContent = 'Syncing...';
+        syncBtn.textContent = 'Synced!';
         syncBtn.disabled = true;
-        const ok = await publishOutfits(getOutfits());
-        syncBtn.textContent = ok ? 'Synced!' : 'Failed';
-        setTimeout(() => { syncBtn.textContent = orig; syncBtn.disabled = false; }, 1800);
+        publishOutfits(getOutfits());
+        setTimeout(() => { if (syncBtn.isConnected) { syncBtn.textContent = orig; syncBtn.disabled = false; } }, 1500);
       });
     }
     container.querySelectorAll('.outfit-load').forEach(el => {
@@ -402,6 +410,8 @@ export class ComputerUI {
         const outfit = getOutfits()[i];
         if (!outfit) return;
         const newAvatar = setAvatar(outfit.avatar);
+        this.draftAvatar = { ...newAvatar };
+        this.onAvatarChange?.(newAvatar);
         if (!authStore.getState().isGuest) publishAvatar(newAvatar);
         this.renderPreview(newAvatar);
         this.renderOptions(body);
@@ -579,6 +589,13 @@ export class ComputerUI {
     if (!this.panel || !this.backdrop) return;
     this.panel.style.display = 'none';
     this.backdrop.style.display = 'none';
+    if (this.draftRoom) {
+      this.previewBaseline = getRoomConfig();
+      this.previewSaved = false;
+      setRoomConfig(this.draftRoom);
+      this.onRoomChange?.(getRoomConfig());
+      this.onPetChange?.(this.draftRoom.pet);
+    }
 
     this.previewPill = document.createElement('div');
     this.previewPill.style.cssText = `
@@ -601,12 +618,18 @@ export class ComputerUI {
     if (this.backdrop) this.backdrop.style.display = '';
     this.previewPill?.remove();
     this.previewPill = null;
+    if (this.previewBaseline && !this.previewSaved) {
+      setRoomConfig(this.previewBaseline);
+      this.onRoomChange?.(getRoomConfig());
+      this.onPetChange?.(this.previewBaseline.pet);
+      this.previewBaseline = null;
+    }
   }
 
   // ROOM TAB — Full Customization
   // ══════════════════════════════════════
   private renderRoom(body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    if (!this.draftRoom) this.draftRoom = getRoomConfig();
 
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -638,14 +661,18 @@ export class ComputerUI {
     if (authStore.getState().isGuest) {
       if (saveBtn) saveBtn.style.display = 'none';
     } else {
-      saveBtn?.addEventListener('click', async () => {
-        if (!saveBtn) return;
-        const orig = saveBtn.textContent;
-        saveBtn.textContent = 'Saving...';
+      saveBtn?.addEventListener('click', () => {
+        if (!saveBtn || !this.draftRoom) return;
+        const committed = setRoomConfig(this.draftRoom);
+        this.onRoomChange?.(committed);
+        this.onPetChange?.(this.draftRoom.pet);
+        publishRoomConfig(committed);
+        this.previewSaved = true;
+        this.previewBaseline = null;
+        this.draftRoom = getRoomConfig();
+        saveBtn.textContent = 'Saved!';
         saveBtn.disabled = true;
-        const ok = await publishRoomConfig(getRoomConfig());
-        saveBtn.textContent = ok ? 'Saved!' : 'Failed';
-        setTimeout(() => { saveBtn.textContent = orig; saveBtn.disabled = false; }, 1800);
+        setTimeout(() => { if (saveBtn.isConnected) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; } }, 1500);
       });
     }
 
@@ -701,7 +728,7 @@ export class ComputerUI {
   }
 
   private renderWallPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
     const themes = Object.entries(WALL_THEMES) as [WallTheme, typeof WALL_THEMES[WallTheme]][];
 
     container.innerHTML = `
@@ -726,16 +753,14 @@ export class ComputerUI {
 
     container.querySelectorAll('.wt').forEach(el => {
       el.addEventListener('click', () => {
-        const wallTheme = (el as HTMLElement).dataset.wall as WallTheme;
-        const newCfg = setRoomConfig({ wallTheme });
-        this.onRoomChange?.(newCfg);
+        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), wallTheme: (el as HTMLElement).dataset.wall as WallTheme };
         this.renderWallPicker(container, body);
       });
     });
   }
 
   private renderFloorPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
     const floors = Object.entries(FLOOR_STYLES) as [FloorStyle, typeof FLOOR_STYLES[FloorStyle]][];
 
     const floorPreview = (key: string): string => {
@@ -775,16 +800,14 @@ export class ComputerUI {
 
     container.querySelectorAll('.ft').forEach(el => {
       el.addEventListener('click', () => {
-        const floorStyle = (el as HTMLElement).dataset.floor as FloorStyle;
-        const newCfg = setRoomConfig({ floorStyle });
-        this.onRoomChange?.(newCfg);
+        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), floorStyle: (el as HTMLElement).dataset.floor as FloorStyle };
         this.renderFloorPicker(container, body);
       });
     });
   }
 
   private renderLightingPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
     const moods = Object.entries(LIGHTING_MOODS) as [LightingMood, typeof LIGHTING_MOODS[LightingMood]][];
 
     container.innerHTML = `
@@ -810,16 +833,14 @@ export class ComputerUI {
 
     container.querySelectorAll('.lt').forEach(el => {
       el.addEventListener('click', () => {
-        const lighting = (el as HTMLElement).dataset.light as LightingMood;
-        const newCfg = setRoomConfig({ lighting });
-        this.onRoomChange?.(newCfg);
+        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), lighting: (el as HTMLElement).dataset.light as LightingMood };
         this.renderLightingPicker(container, body);
       });
     });
   }
 
   private renderFurniturePicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
 
     // Curated palettes per furniture type
     const PALETTES: Record<FurnitureId, { label: string; colors: string[] }> = {
@@ -909,11 +930,14 @@ export class ComputerUI {
         if (fid === 'desk') return;
         // Don't toggle if clicking the color swatch
         if ((e.target as HTMLElement).classList.contains('fur-palette-btn')) return;
-        const newCfg = toggleFurniture(fid);
-        if (this.activeFurnitureColor === fid && !newCfg.furniture.includes(fid)) {
+        const base = this.draftRoom ?? getRoomConfig();
+        const furniture = [...base.furniture];
+        const idx = furniture.indexOf(fid);
+        if (idx >= 0) furniture.splice(idx, 1); else furniture.push(fid);
+        this.draftRoom = { ...base, furniture };
+        if (this.activeFurnitureColor === fid && !this.draftRoom.furniture.includes(fid)) {
           this.activeFurnitureColor = null;
         }
-        this.onRoomChange?.(newCfg);
         this.renderFurniturePicker(container, body);
       });
     });
@@ -934,8 +958,8 @@ export class ComputerUI {
         e.stopPropagation();
         const fid = (el as HTMLElement).dataset.fid as FurnitureId;
         const color = (el as HTMLElement).dataset.color!;
-        const newCfg = setFurnitureColor(fid, color);
-        this.onRoomChange?.(newCfg);
+        const base = this.draftRoom ?? getRoomConfig();
+        this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: color } };
         this.renderFurniturePicker(container, body);
       });
     });
@@ -945,15 +969,15 @@ export class ComputerUI {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         const fid = (el as HTMLElement).dataset.fid as FurnitureId;
-        const newCfg = setFurnitureColor(fid, DEFAULT_FURNITURE_COLORS[fid]);
-        this.onRoomChange?.(newCfg);
+        const base = this.draftRoom ?? getRoomConfig();
+        this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: DEFAULT_FURNITURE_COLORS[fid] } };
         this.renderFurniturePicker(container, body);
       });
     });
   }
 
   private renderPosterPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
 
     const slotLabels = ['Left Wall', 'Center Wall', 'Right Wall'];
 
@@ -1000,8 +1024,10 @@ export class ComputerUI {
     container.querySelectorAll('.po').forEach(el => {
       el.addEventListener('click', () => {
         const pid = (el as HTMLElement).dataset.pid as PosterId;
-        const newCfg = setPoster(this.activePosterSlot, pid);
-        this.onRoomChange?.(newCfg);
+        const base = this.draftRoom ?? getRoomConfig();
+        const posters = [...base.posters] as [PosterId, PosterId, PosterId];
+        posters[this.activePosterSlot] = pid;
+        this.draftRoom = { ...base, posters };
         this.renderPosterPicker(container, body);
       });
     });
@@ -1011,7 +1037,7 @@ export class ComputerUI {
   // PETS TAB
   // ══════════════════════════════════════
   private renderPets(container: HTMLElement): void {
-    const current = getPet();
+    const current = this.draftRoom ? this.draftRoom.pet : getPet();
 
     const petCard = (species: PetSpecies, breed: number, name: string, scale = 1.0) => {
       const isSelected = current.species === species && current.breed === breed;
@@ -1070,15 +1096,15 @@ export class ComputerUI {
       el.addEventListener('click', () => {
         const species = (el as HTMLElement).dataset.species as PetSpecies;
         const breed   = Number((el as HTMLElement).dataset.breed);
-        const sel = setPet({ species, breed });
-        this.onPetChange?.(sel);
+        const base = this.draftRoom ?? getRoomConfig();
+        this.draftRoom = { ...base, pet: { species, breed } };
         this.renderPets(container);
       });
     });
   }
 
   private renderNotePicker(container: HTMLElement): void {
-    const cfg = getRoomConfig();
+    const cfg = this.draftRoom ?? getRoomConfig();
     const current = cfg.pinnedNote || '';
     const MAX = 220;
 
@@ -1126,17 +1152,14 @@ export class ComputerUI {
 
     container.querySelector('#note-save')?.addEventListener('click', () => {
       const text = textarea.value.trim();
-      const newCfg = setRoomConfig({ pinnedNote: text || null });
-      this.onRoomChange?.(newCfg);
+      this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), pinnedNote: text || null };
       saved.style.opacity = '1';
       setTimeout(() => { saved.style.opacity = '0'; }, 2000);
-      // Re-render to show/hide the Remove button
       this.renderNotePicker(container);
     });
 
     container.querySelector('#note-clear')?.addEventListener('click', () => {
-      const newCfg = setRoomConfig({ pinnedNote: null });
-      this.onRoomChange?.(newCfg);
+      this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), pinnedNote: null };
       this.renderNotePicker(container);
     });
   }

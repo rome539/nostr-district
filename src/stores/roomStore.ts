@@ -139,6 +139,7 @@ export function setRoomConfig(config: Partial<RoomConfig>): RoomConfig {
   if (config.ceilingLightColor !== undefined) currentRoom.ceilingLightColor = config.ceilingLightColor;
   if (config.pinnedNote !== undefined) currentRoom.pinnedNote = config.pinnedNote;
   if (config.furnitureColors !== undefined) currentRoom.furnitureColors = { ...config.furnitureColors };
+  if (config.pet !== undefined) currentRoom.pet = { ...config.pet };
   save();
   return getRoomConfig();
 }

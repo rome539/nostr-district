@@ -305,7 +305,7 @@ export class NostrThemeBrowser {
     const cards: ThemeCard[] = [];
 
     container.innerHTML = `
-      <div id="ntb-mine-status" style="color:var(--nd-subtext);font-size:10px;padding:4px 2px 6px;opacity:0.5;">
+      <div id="ntb-mine-status" style="color:var(--nd-subtext);font-size:10px;padding:4px 2px 6px;">
         Searching relays for your themes…
       </div>
       <div id="ntb-mine-cards"></div>
@@ -359,7 +359,7 @@ export class NostrThemeBrowser {
           border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
           color:var(--nd-accent);">Search</button>
       </div>
-      <div id="ntb-gstatus" style="color:var(--nd-subtext);font-size:10px;padding:2px 2px 6px;opacity:0.5;"></div>
+      <div id="ntb-gstatus" style="color:var(--nd-subtext);font-size:10px;padding:2px 2px 6px;"></div>
       <div id="ntb-gresults"></div>
       <div id="ntb-gpages"></div>
     `;
@@ -578,7 +578,7 @@ export class NostrThemeBrowser {
           <div style="flex:1;min-width:0;">
             <div style="color:var(--nd-text);font-size:11px;
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(title)}</div>
-            <div style="color:var(--nd-subtext);font-size:9px;opacity:0.5;margin-top:1px;
+            <div style="color:var(--nd-subtext);font-size:9px;margin-top:1px;
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(meta)}</div>
           </div>
           ${favBtn}
