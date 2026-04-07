@@ -9,7 +9,8 @@ import { P } from '../config/game.config';
 import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
 import { authStore } from '../stores/authStore';
-import { publishEvent, signEvent, publishRoomConfig } from '../nostr/nostrService';
+import { publishEvent, signEvent, publishRoomConfig, publishOutfits, publishAvatar } from '../nostr/nostrService';
+import { getStatus, setStatus } from '../stores/statusStore';
 import {
   getRoomConfig, setRoomConfig, toggleFurniture, setPoster, markSetupComplete,
   setFurnitureColor, getFurnitureColor, DEFAULT_FURNITURE_COLORS,
@@ -192,6 +193,16 @@ export class ComputerUI {
   private renderWardrobe(body: HTMLElement): void {
     const avatar = getAvatar();
     body.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">WARDROBE</span>
+        <button id="ward-nostr-sync" style="
+          padding:5px 12px;border-radius:4px;cursor:pointer;
+          font-family:'Courier New',monospace;font-size:11px;
+          background:color-mix(in srgb,var(--nd-accent) 20%,transparent);
+          border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);
+          color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
+        " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
+      </div>
       <div style="display:flex;gap:16px;margin-bottom:14px;">
         <div id="ward-preview" style="width:96px;height:180px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-purp) 55%,var(--nd-navy)) 0%,var(--nd-navy) 68%,var(--nd-bg) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04),inset 0 -18px 28px rgba(0,0,0,0.3);position:relative;overflow:hidden;"></div>
         <div style="flex:1;">
@@ -207,6 +218,21 @@ export class ComputerUI {
     this.renderOptions(body);
     this.renderColors(body);
     this.renderOutfits(body);
+
+    const wardSync = body.querySelector('#ward-nostr-sync') as HTMLButtonElement | null;
+    if (authStore.getState().isGuest) {
+      if (wardSync) wardSync.style.display = 'none';
+    } else {
+      wardSync?.addEventListener('click', async () => {
+        if (!wardSync) return;
+        const orig = wardSync.textContent;
+        wardSync.textContent = 'Saving...';
+        wardSync.disabled = true;
+        const ok = await publishAvatar(getAvatar());
+        wardSync.textContent = ok ? 'Saved!' : 'Failed';
+        setTimeout(() => { wardSync.textContent = orig; wardSync.disabled = false; }, 1800);
+      });
+    }
   }
 
   private renderPreview(avatar: AvatarConfig): void {
@@ -328,7 +354,10 @@ export class ComputerUI {
     const outfits = getOutfits();
     const inputStyle = `width:100%;padding:6px 8px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;`;
     container.innerHTML = `
-      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:6px;opacity:0.5;">SAVED OUTFITS</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:var(--nd-subtext);font-size:10px;opacity:0.5;">SAVED OUTFITS</span>
+        <button id="outfit-nostr-sync" style="padding:3px 9px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 30%,transparent);border-radius:4px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;white-space:nowrap;">Sync to Nostr</button>
+      </div>
       <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input id="outfit-name" type="text" maxlength="20" placeholder="Outfit name..." style="${inputStyle}flex:1;"/>
         <button id="outfit-save" style="padding:6px 10px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:4px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
@@ -350,13 +379,30 @@ export class ComputerUI {
       saveOutfit(name);
       nameEl.value = '';
       this.renderOutfits(body);
+      if (!authStore.getState().isGuest) publishOutfits(getOutfits());
     });
+
+    const syncBtn = container.querySelector('#outfit-nostr-sync') as HTMLButtonElement | null;
+    if (authStore.getState().isGuest) {
+      if (syncBtn) syncBtn.style.display = 'none';
+    } else {
+      syncBtn?.addEventListener('click', async () => {
+        if (!syncBtn) return;
+        const orig = syncBtn.textContent;
+        syncBtn.textContent = 'Syncing...';
+        syncBtn.disabled = true;
+        const ok = await publishOutfits(getOutfits());
+        syncBtn.textContent = ok ? 'Synced!' : 'Failed';
+        setTimeout(() => { syncBtn.textContent = orig; syncBtn.disabled = false; }, 1800);
+      });
+    }
     container.querySelectorAll('.outfit-load').forEach(el => {
       el.addEventListener('click', () => {
         const i = parseInt((el as HTMLElement).dataset.i!);
         const outfit = getOutfits()[i];
         if (!outfit) return;
         const newAvatar = setAvatar(outfit.avatar);
+        if (!authStore.getState().isGuest) publishAvatar(newAvatar);
         this.renderPreview(newAvatar);
         this.renderOptions(body);
         this.renderColors(body);
@@ -367,6 +413,7 @@ export class ComputerUI {
       el.addEventListener('click', () => {
         deleteOutfit(parseInt((el as HTMLElement).dataset.i!));
         this.renderOutfits(body);
+        if (!authStore.getState().isGuest) publishOutfits(getOutfits());
       });
     });
   }
@@ -391,7 +438,7 @@ export class ComputerUI {
         </div>
         <div style="margin-top:10px;">
           <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
-          <input id="guest-status" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
+          <input id="guest-status" type="text" maxlength="60" value="${esc(getStatus())}" placeholder="vibing, afk, busy..." style="
             width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
             color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
           "/>
@@ -409,7 +456,7 @@ export class ComputerUI {
         const status = ((body.querySelector('#guest-status') as HTMLInputElement).value || '').trim().slice(0, 60);
         if (!name) return;
         localStorage.setItem('nostr_district_guest_name', name);
-        localStorage.setItem('nd_status', status);
+        setStatus(status);
         authStore.setDisplayName(name);
         this.onProfileSave?.(name);
         sendStatusUpdate(status);
@@ -452,13 +499,13 @@ export class ComputerUI {
       </div>
       <div style="margin-bottom:14px;">
         <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
-        <input id="prof-status-input" type="text" maxlength="60" value="${esc(localStorage.getItem('nd_status') || '')}" placeholder="vibing, afk, busy..." style="
+        <input id="prof-status-input" type="text" maxlength="60" value="${esc(getStatus())}" placeholder="vibing, afk, busy..." style="
           width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
           color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
         <button id="prof-status-save" style="
-          width:100%;margin-top:6px;padding:7px;background:color-mix(in srgb,var(--nd-purp) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-purp) 27%,transparent);border-radius:4px;
-          color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
+          width:100%;margin-top:6px;padding:7px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:4px;
+          color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
         ">Update Status</button>
       </div>
       <button id="prof-save" style="
@@ -470,7 +517,7 @@ export class ComputerUI {
 
     body.querySelector('#prof-status-save')?.addEventListener('click', () => {
       const status = ((body.querySelector('#prof-status-input') as HTMLInputElement).value || '').trim().slice(0, 60);
-      localStorage.setItem('nd_status', status);
+      setStatus(status);
       sendStatusUpdate(status);
       this.onStatusUpdate?.(status);
       const el = body.querySelector('#prof-status') as HTMLElement;
@@ -535,7 +582,7 @@ export class ComputerUI {
 
     this.previewPill = document.createElement('div');
     this.previewPill.style.cssText = `
-      position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:4000;
+      position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4000;
       background:color-mix(in srgb,var(--nd-accent) 18%,var(--nd-bg));
       border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);
       border-radius:24px;padding:10px 22px;
@@ -588,15 +635,19 @@ export class ComputerUI {
     body.querySelector('#room-preview-btn')?.addEventListener('click', () => this.previewRoom());
 
     const saveBtn = body.querySelector('#room-save-btn') as HTMLButtonElement | null;
-    saveBtn?.addEventListener('click', async () => {
-      if (!saveBtn) return;
-      const orig = saveBtn.textContent;
-      saveBtn.textContent = 'Saving...';
-      saveBtn.disabled = true;
-      const ok = await publishRoomConfig(getRoomConfig());
-      saveBtn.textContent = ok ? 'Saved!' : 'Failed';
-      setTimeout(() => { saveBtn.textContent = orig; saveBtn.disabled = false; }, 1800);
-    });
+    if (authStore.getState().isGuest) {
+      if (saveBtn) saveBtn.style.display = 'none';
+    } else {
+      saveBtn?.addEventListener('click', async () => {
+        if (!saveBtn) return;
+        const orig = saveBtn.textContent;
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+        const ok = await publishRoomConfig(getRoomConfig());
+        saveBtn.textContent = ok ? 'Saved!' : 'Failed';
+        setTimeout(() => { saveBtn.textContent = orig; saveBtn.disabled = false; }, 1800);
+      });
+    }
 
     this.renderRoomSectionTabs(body);
     this.renderRoomSectionBody(body);

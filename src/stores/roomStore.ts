@@ -1,9 +1,9 @@
 /**
  * roomStore.ts — Room customization state
- * Persisted in localStorage, used by RoomRenderer to draw dynamic rooms.
- *
- * Follows the same pattern as avatarStore.ts
+ * In-memory only — persisted via kind:30078 on demand.
  */
+
+import type { PetSelection } from './petStore';
 
 export type WallTheme =
   | 'default'    // dark purple brick (original)
@@ -85,9 +85,9 @@ export interface RoomConfig {
   ceilingLightColor: string | null;
   /** Pinned wall note text (null = no note) */
   pinnedNote: string | null;
+  /** Pet living in the room */
+  pet: PetSelection;
 }
-
-const STORAGE_KEY = 'nostr_district_room';
 
 const DEFAULT_ROOM: RoomConfig = {
   wallTheme: 'default',
@@ -99,35 +99,16 @@ const DEFAULT_ROOM: RoomConfig = {
   hasSetup: false,
   ceilingLightColor: null,
   pinnedNote: null,
+  pet: { species: 'none', breed: 1 },
 };
 
 let currentRoom: RoomConfig = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {} };
 
-// Load from localStorage
-try {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const parsed = JSON.parse(stored);
-    currentRoom = {
-      ...DEFAULT_ROOM,
-      ...parsed,
-      furniture: parsed.furniture ? [...parsed.furniture] : [...DEFAULT_ROOM.furniture],
-      posters: parsed.posters ? [parsed.posters[0] || 'none', parsed.posters[1] || 'none', parsed.posters[2] || 'none'] : [...DEFAULT_ROOM.posters],
-      furnitureColors: parsed.furnitureColors ? { ...parsed.furnitureColors } : {},
-    };
-  }
-} catch (_) {}
-
 function save(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentRoom));
-  } catch (_) {}
+  // in-memory only — persisted via kind:30078 on demand
 }
 
-/**
- * Apply a RoomConfig fetched from Nostr (e.g. on login from a different browser).
- * Merges into local state and saves to localStorage without re-publishing.
- */
+/** Apply a RoomConfig fetched from Nostr into in-memory state. */
 export function applyRemoteRoomConfig(remote: RoomConfig): void {
   currentRoom = {
     ...DEFAULT_ROOM,
@@ -135,8 +116,8 @@ export function applyRemoteRoomConfig(remote: RoomConfig): void {
     furniture: remote.furniture ? [...remote.furniture] : [...DEFAULT_ROOM.furniture],
     posters: remote.posters ? [remote.posters[0] || 'none', remote.posters[1] || 'none', remote.posters[2] || 'none'] as [PosterId, PosterId, PosterId] : [...DEFAULT_ROOM.posters] as [PosterId, PosterId, PosterId],
     furnitureColors: remote.furnitureColors ? { ...remote.furnitureColors } : {},
+    pet: remote.pet ?? DEFAULT_ROOM.pet,
   };
-  save();
 }
 
 export function getRoomConfig(): RoomConfig {

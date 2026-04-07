@@ -109,10 +109,34 @@ export class DMPanel {
     this.historyLoading = isDMHistoryLoading();
     this.unsubLoading = onDMHistoryLoading((loading) => {
       this.historyLoading = loading;
-      if (!loading && this.isOpen) {
-        // History just finished — do one full render now
-        if (this.activePubkey) this.renderMessages();
-        this.renderConversationList();
+      if (!loading) {
+        // History just finished — do one full render if open
+        if (this.isOpen) {
+          if (this.activePubkey) this.renderMessages();
+          this.renderConversationList();
+        }
+        // Show one summary notification for all unread messages accumulated during load
+        if (!this.isOpen) {
+          let totalUnread = 0;
+          let latestMsg: { pubkey: string; name: string; content: string } | null = null;
+          let latestTime = 0;
+          this.conversations.forEach((conv, pubkey) => {
+            const unread = conv.unread || 0;
+            if (unread > 0) {
+              totalUnread += unread;
+              if (conv.lastTime > latestTime) {
+                latestTime = conv.lastTime;
+                latestMsg = { pubkey, name: conv.name, content: conv.lastMessage };
+              }
+            }
+          });
+          if (latestMsg && totalUnread > 0) {
+            const { pubkey, name, content } = latestMsg as { pubkey: string; name: string; content: string };
+            const label = totalUnread === 1 ? name : `${name} +${totalUnread - 1} more`;
+            this.showToast(pubkey, label, content);
+            SoundEngine.get().dmPing();
+          }
+        }
       } else if (loading && this.isOpen) {
         this.renderConversationList(); // show the loading indicator
       }
@@ -291,11 +315,12 @@ export class DMPanel {
       }
       this.scheduleRender();
     } else if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
-      const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
-      this.showToast(convPubkey, senderName, msg.content);
-    }
-    if (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey)) {
-      SoundEngine.get().dmPing();
+      // During history load, suppress per-message toasts/pings — one summary fires when load ends
+      if (!this.historyLoading) {
+        const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
+        this.showToast(convPubkey, senderName, msg.content);
+        SoundEngine.get().dmPing();
+      }
     }
   }
 

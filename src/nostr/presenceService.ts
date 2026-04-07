@@ -1,6 +1,7 @@
 import { authStore } from '../stores/authStore';
 import { getAvatar, serializeAvatar } from '../stores/avatarStore';
 import { extractEmojiTags } from './emojiService';
+import { getStatus } from '../stores/statusStore';
 
 type PlayerData = {
   pubkey: string;
@@ -73,7 +74,7 @@ export function connectPresence(cb: PresenceCallback): void {
       y: 348,
       room: 'hub',
       avatar: serializeAvatar(getAvatar()),
-      status: localStorage.getItem('nd_status') || '',
+      status: getStatus(),
     }));
   };
 

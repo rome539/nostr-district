@@ -68,17 +68,15 @@ export const CAT_BREEDS = [
   { id: 4, name: 'Cat 4' }, { id: 5, name: 'Cat 5' }, { id: 6, name: 'Cat 6' },
 ];
 
-const STORAGE_KEY = 'nd_pet';
-const DEFAULT: PetSelection = { species: 'none', breed: 1 };
+import { getRoomConfig, setRoomConfig } from './roomStore';
 
 export function getPet(): PetSelection {
-  try { const s = localStorage.getItem(STORAGE_KEY); if (s) return { ...DEFAULT, ...JSON.parse(s) }; } catch {}
-  return { ...DEFAULT };
+  return getRoomConfig().pet;
 }
 
 export function setPet(p: Partial<PetSelection>): PetSelection {
   const updated = { ...getPet(), ...p };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  setRoomConfig({ pet: updated });
   return updated;
 }
 

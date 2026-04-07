@@ -10,6 +10,8 @@
  */
 
 import Phaser from 'phaser';
+import { getStatus } from '../stores/statusStore';
+import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
@@ -135,6 +137,16 @@ export class WoodsScene extends Phaser.Scene {
     }
 
     this.createPlayer();
+    onNextAvatarSync(() => {
+      const av = getAvatar();
+      if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
+      if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
+      this.textures.addCanvas('player_walk0', renderHubSprite(av, 0));
+      this.textures.addCanvas('player_walk1', renderHubSprite(av, 1));
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(av));
+      this.player?.setTexture('player');
+    });
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
@@ -157,7 +169,7 @@ export class WoodsScene extends Phaser.Scene {
     this.followsPanel = rfp;
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
     this.input.keyboard?.on('keydown-ESC', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; } });
 
@@ -209,7 +221,7 @@ export class WoodsScene extends Phaser.Scene {
     });
     sendRoomChange('woods', 1400, this.playerY);
 
-    const unsubProfile = authStore.subscribe(() => { const n = authStore.getState().displayName; if (n && n !== this.registry.get('playerName')) { this.registry.set('playerName', n); this.playerName?.setText(n); sendNameUpdate(n); } });
+    const unsubProfile = authStore.subscribe(() => { const n = authStore.getState().displayName; if (n && n !== this.registry.get('playerName')) { this.registry.set('playerName', n); this.playerName?.setText(n.slice(0, 14)); sendNameUpdate(n); } });
     this.cameras.main.fadeIn(400, 4, 8, 10);
     this.settingsPanel.create();
 
@@ -736,8 +748,8 @@ export class WoodsScene extends Phaser.Scene {
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY - 44, name, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
-    const ms = localStorage.getItem('nd_status') || '';
+    this.playerName = this.add.text(this.player.x, this.playerY - 44, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
+    const ms = getStatus();
     this.playerStatusText = this.add.text(this.player.x, this.playerY - 59, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
 
@@ -831,7 +843,7 @@ export class WoodsScene extends Phaser.Scene {
       case 'mute':{const s=toggleMute();this.chatUI.addMessage('system',s?'Muted':'Unmuted',s?P.amber:WOODS_ACCENT);break;}
       case 'filter':{if(!arg){const w=getCustomBannedWords();this.chatUI.addMessage('system',w.length?`Filtered: ${w.join(', ')}`:'No filters',WOODS_ACCENT);return;}addBannedWord(arg);this.chatUI.addMessage('system',`Added "${arg}"`,WOODS_ACCENT);break;}
       case 'unfilter':{if(!arg)return;removeBannedWord(arg);this.chatUI.addMessage('system',`Removed "${arg}"`,WOODS_ACCENT);break;}
-      case 'terminal':case 'wardrobe':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName);sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
+      case 'terminal':case 'wardrobe':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName.slice(0,14));sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
       case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/coffee','/music','/zzz','/think','/hearts','/angry','/sweat','/sparkle','/confetti','/fire','/ghost','/rain','/terminal','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
       default:this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);
     }

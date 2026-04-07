@@ -4,6 +4,8 @@ import { setChannelKey, clearChannelKey } from './channelService';
 import { DEFAULT_RELAYS } from './relayManager';
 import type { RoomConfig } from '../stores/roomStore';
 import { applyRemoteRoomConfig } from '../stores/roomStore';
+import type { AvatarConfig, OutfitPreset } from '../stores/avatarStore';
+import { applyRemoteAvatar, applyRemoteOutfits } from '../stores/avatarStore';
 // @ts-ignore — JS module, no types
 import { BunkerClient, renderQR } from '../../nip46-bunker.js';
 
@@ -122,10 +124,106 @@ export async function publishEvent(event: any): Promise<boolean> {
   return accepted > 0;
 }
 
-/** After login: fetch room config from Nostr and apply if found */
-function syncRoomFromRelays(pubkey: string): void {
+const AVATAR_D_TAG  = 'nostr-district-avatar';
+const OUTFITS_D_TAG = 'nostr-district-outfits';
+
+export async function publishAvatar(avatar: AvatarConfig): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', AVATAR_D_TAG]],
+      content: JSON.stringify(avatar),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishAvatar failed:', e);
+    return false;
+  }
+}
+
+export async function fetchAvatar(pubkey: string): Promise<AvatarConfig | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [AVATAR_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content) as AvatarConfig;
+  } catch (e) {
+    console.warn('[Nostr] fetchAvatar failed:', e);
+    return null;
+  }
+}
+
+
+
+export async function publishOutfits(outfits: OutfitPreset[]): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', OUTFITS_D_TAG]],
+      content: JSON.stringify(outfits),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishOutfits failed:', e);
+    return false;
+  }
+}
+
+export async function fetchOutfits(pubkey: string): Promise<OutfitPreset[] | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [OUTFITS_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content) as OutfitPreset[];
+  } catch (e) {
+    console.warn('[Nostr] fetchOutfits failed:', e);
+    return null;
+  }
+}
+
+let _onAvatarSynced: (() => void) | null = null;
+let _avatarSynced = false;
+
+/**
+ * Register a callback to run once the avatar is synced from relays.
+ * If the sync already completed, fires immediately.
+ */
+export function onNextAvatarSync(cb: () => void): void {
+  if (_avatarSynced) { cb(); return; }
+  _onAvatarSynced = cb;
+}
+
+/** After login: fetch keypair data from Nostr and apply */
+function syncFromRelays(pubkey: string): void {
   fetchRoomConfig(pubkey).then(remote => {
     if (remote) applyRemoteRoomConfig(remote);
+  }).catch(() => {});
+  fetchOutfits(pubkey).then(remote => {
+    if (remote) applyRemoteOutfits(remote);
+  }).catch(() => {});
+
+  fetchAvatar(pubkey).then(remote => {
+    if (remote) {
+      applyRemoteAvatar(remote);
+      _avatarSynced = true;
+      const cb = _onAvatarSynced;
+      _onAvatarSynced = null;
+      cb?.();
+    }
   }).catch(() => {});
 }
 
@@ -145,7 +243,7 @@ export async function loginWithExtension(): Promise<void> {
   fetchProfile(pubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
-  syncRoomFromRelays(pubkey);
+  syncFromRelays(pubkey);
 }
 
 export async function loginWithNsec(nsecString: string): Promise<void> {
@@ -168,7 +266,7 @@ export async function loginWithNsec(nsecString: string): Promise<void> {
   fetchProfile(pubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
-  syncRoomFromRelays(pubkey);
+  syncFromRelays(pubkey);
 }
 
 /**
@@ -213,7 +311,7 @@ export async function startBunkerFlow(
     fetchProfile(pubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
-    syncRoomFromRelays(pubkey);
+    syncFromRelays(pubkey);
     return { connectUri: '', waitForConnect: Promise.resolve(pubkey) };
   }
 
@@ -232,7 +330,7 @@ export async function startBunkerFlow(
     fetchProfile(userPubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
-    syncRoomFromRelays(userPubkey);
+    syncFromRelays(userPubkey);
     return userPubkey;
   });
 
@@ -271,7 +369,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
   fetchProfile(userPubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
-  syncRoomFromRelays(userPubkey);
+  syncFromRelays(userPubkey);
 }
 
 export async function loginAsGuest(): Promise<void> {
@@ -379,6 +477,8 @@ export async function fetchRoomConfig(pubkey: string): Promise<RoomConfig | null
 }
 
 export function logout(): void {
+  _avatarSynced = false;
+  _onAvatarSynced = null;
   clearLocalKey();
   clearChannelKey();
   if (bunkerClient) {

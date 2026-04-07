@@ -1,6 +1,6 @@
 /**
  * avatarStore.ts — Avatar customization state
- * Persisted in localStorage, synced via presence server
+ * In-memory only — persisted via kind:30078 on demand.
  */
 
 export interface AvatarConfig {
@@ -19,8 +19,6 @@ export interface AvatarConfig {
   eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow';
   eyeColor: string;
 }
-
-const STORAGE_KEY = 'nostr_district_avatar';
 
 const DEFAULT_AVATAR: AvatarConfig = {
   body: 'default',
@@ -41,33 +39,20 @@ const DEFAULT_AVATAR: AvatarConfig = {
 
 let currentAvatar: AvatarConfig = { ...DEFAULT_AVATAR };
 
-// Load from localStorage
-try {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const parsed = JSON.parse(stored);
-    currentAvatar = { ...DEFAULT_AVATAR, ...parsed };
-  }
-} catch (_) {}
-
-export function getAvatar(): AvatarConfig {
-  return { ...currentAvatar };
-}
+export function getAvatar(): AvatarConfig { return { ...currentAvatar }; }
 
 export function setAvatar(config: Partial<AvatarConfig>): AvatarConfig {
   currentAvatar = { ...currentAvatar, ...config };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAvatar));
-  } catch (_) {}
   return { ...currentAvatar };
 }
 
 export function resetAvatar(): AvatarConfig {
   currentAvatar = { ...DEFAULT_AVATAR };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAvatar));
-  } catch (_) {}
   return { ...currentAvatar };
+}
+
+export function applyRemoteAvatar(remote: Partial<AvatarConfig>): void {
+  currentAvatar = { ...DEFAULT_AVATAR, ...remote };
 }
 
 export function getDefaultAvatar(): AvatarConfig {
@@ -101,29 +86,27 @@ export const AVATAR_OPTIONS = {
 
 // ── Outfit presets ────────────────────────────────────────────────────────────
 
-const OUTFITS_KEY = 'nd_outfits';
-
 export interface OutfitPreset {
   name: string;
   avatar: AvatarConfig;
 }
 
-export function getOutfits(): OutfitPreset[] {
-  try { const s = localStorage.getItem(OUTFITS_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
-}
+let outfits: OutfitPreset[] = [];
+
+export function getOutfits(): OutfitPreset[] { return outfits; }
 
 export function saveOutfit(name: string): OutfitPreset[] {
-  const outfits = getOutfits();
-  outfits.push({ name, avatar: { ...currentAvatar } });
-  try { localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits)); } catch {}
+  outfits = [...outfits, { name, avatar: { ...currentAvatar } }];
   return outfits;
 }
 
 export function deleteOutfit(index: number): OutfitPreset[] {
-  const outfits = getOutfits();
-  outfits.splice(index, 1);
-  try { localStorage.setItem(OUTFITS_KEY, JSON.stringify(outfits)); } catch {}
+  outfits = outfits.filter((_, i) => i !== index);
   return outfits;
+}
+
+export function applyRemoteOutfits(remote: OutfitPreset[]): void {
+  outfits = remote;
 }
 
 export const COLOR_PRESETS = [

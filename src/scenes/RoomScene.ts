@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { getStatus } from '../stores/statusStore';
+import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
@@ -136,6 +138,15 @@ export class RoomScene extends Phaser.Scene {
     this.emoteGraphics = this.add.graphics().setDepth(15);
 
     this.createPlayer();
+    onNextAvatarSync(() => {
+      const av = getAvatar();
+      if (this.textures.exists('player_room')) this.textures.remove('player_room');
+      this.textures.addCanvas('player_room', renderRoomSprite(av));
+      this.player?.setTexture('player_room');
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(av));
+      sendAvatarUpdate();
+    });
     this.createBackButton();
     this.createRoomLabel();
 
@@ -167,7 +178,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
+    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -276,7 +287,7 @@ export class RoomScene extends Phaser.Scene {
       const newName = authStore.getState().displayName;
       if (newName && newName !== this.registry.get('playerName')) {
         this.registry.set('playerName', newName);
-        this.playerName?.setText(newName);
+        this.playerName?.setText(newName.slice(0, 14));
         sendNameUpdate(newName);
       }
     });
@@ -388,7 +399,7 @@ export class RoomScene extends Phaser.Scene {
                       },
                       (newName) => {
                         this.registry.set('playerName', newName);
-                        this.playerName.setText(newName);
+                        this.playerName.setText(newName.slice(0, 14));
                         sendNameUpdate(newName);
                       },
                       (newConfig) => {
@@ -712,9 +723,13 @@ export class RoomScene extends Phaser.Scene {
     const nt = this.add.text(px, py - 150, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
     const statusStr = (status || '').slice(0, 30);
     const st = this.add.text(px, py - 165, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
-    const cz = this.add.zone(px, py - 70, 70, 140).setInteractive({ useHandCursor: true }).setDepth(12);
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
-      ptr.event.stopPropagation();
+    const cz = this.add.zone(px, py - 70, 60, 120).setInteractive({ useHandCursor: true }).setDepth(12);
+    let czDownX = 0; let czDownY = 0;
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { czDownX = ptr.x; czDownY = ptr.y; });
+    cz.on('pointerup', (ptr: Phaser.Input.Pointer) => {
+      if (this.computerUI.isOpen()) return;
+      const dx = ptr.x - czDownX; const dy = ptr.y - czDownY;
+      if (Math.sqrt(dx * dx + dy * dy) > 8) return;
       const op2 = this.otherPlayers.get(pk);
       showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status);
     });
@@ -733,12 +748,13 @@ export class RoomScene extends Phaser.Scene {
   // ── Room Request Toast ──
   private showRoomRequestToast(rp: string, rn: string): void {
     if (this.toastEl) this.toastEl.remove();
+    SoundEngine.get().roomRequest();
     const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     this.toastEl = document.createElement('div');
     this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(135deg,${P.bg},#0e0828);border:1px solid ${P.teal}55;border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
     this.toastEl.innerHTML = `<div style="color:${P.teal};font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:${P.lcream};font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:${P.teal}33;border:1px solid ${P.teal}66;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
     document.body.appendChild(this.toastEl);
-    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true, JSON.stringify({ ...getRoomConfig(), pet: getPet() })); this.toastEl?.remove(); this.toastEl = null; this.chatUI.addMessage('system', `Accepted ${rn}`, P.teal); });
+    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true, JSON.stringify(getRoomConfig())); this.toastEl?.remove(); this.toastEl = null; this.chatUI.addMessage('system', `Accepted ${rn}`, P.teal); });
     this.toastEl.querySelector('#td')!.addEventListener('click', () => { sendRoomResponse(rp, false); this.toastEl?.remove(); this.toastEl = null; });
     setTimeout(() => { if (this.toastEl) { sendRoomResponse(rp, false); this.toastEl.remove(); this.toastEl = null; } }, 30000);
   }
@@ -747,8 +763,8 @@ export class RoomScene extends Phaser.Scene {
   private createPlayer(): void {
     this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(2.5).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY - 120, name, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
-    const myStatus = localStorage.getItem('nd_status') || '';
+    this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY - 120, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    const myStatus = getStatus();
     this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY - 165, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
   }
   private createBackButton(): void {
@@ -849,7 +865,7 @@ export class RoomScene extends Phaser.Scene {
       },
       (newName) => {
         this.registry.set('playerName', newName);
-        this.playerName.setText(newName);
+        this.playerName.setText(newName.slice(0, 14));
         sendNameUpdate(newName);
       },
       (newConfig) => {
@@ -890,7 +906,7 @@ export class RoomScene extends Phaser.Scene {
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': case 'computer': {
         if (!this.isMyRoom()) {
           if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
-          this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
+          this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
           return;
         }
         this.openComputer();

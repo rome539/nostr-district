@@ -377,6 +377,18 @@ export class SoundEngine {
     this.osc(440, 'sine', t + 0.16, 0.13, 0.07, d);
   }
 
+  roomRequest(): void {
+    const t = this.ac().currentTime; const d = this.sfx();
+    // Knock — low thud pair
+    this.noiseShot(0.06, 'lowpass', 280, 1.0, 0.18, d, 0);
+    this.noiseShot(0.06, 'lowpass', 280, 1.0, 0.14, d, 0.14);
+    // Bell shimmer on top
+    this.osc(1047, 'sine', t + 0.01,  0.22, 0.10, d);
+    this.osc(1319, 'sine', t + 0.015, 0.20, 0.07, d);
+    this.osc(1047, 'sine', t + 0.15,  0.18, 0.10, d);
+    this.osc(1319, 'sine', t + 0.155, 0.17, 0.07, d);
+  }
+
   // ── Ambient ───────────────────────────────────────────────────────────────────
 
   setRoom(room: RoomId | ''): void {
