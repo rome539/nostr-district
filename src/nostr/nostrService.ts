@@ -2,6 +2,8 @@ import { authStore } from '../stores/authStore';
 import { setLocalKey, clearLocalKey, getLocalKey } from './dmService';
 import { setChannelKey, clearChannelKey } from './channelService';
 import { DEFAULT_RELAYS } from './relayManager';
+import type { RoomConfig } from '../stores/roomStore';
+import { applyRemoteRoomConfig } from '../stores/roomStore';
 // @ts-ignore — JS module, no types
 import { BunkerClient, renderQR } from '../../nip46-bunker.js';
 
@@ -120,6 +122,13 @@ export async function publishEvent(event: any): Promise<boolean> {
   return accepted > 0;
 }
 
+/** After login: fetch room config from Nostr and apply if found */
+function syncRoomFromRelays(pubkey: string): void {
+  fetchRoomConfig(pubkey).then(remote => {
+    if (remote) applyRemoteRoomConfig(remote);
+  }).catch(() => {});
+}
+
 export async function loginWithExtension(): Promise<void> {
   if (typeof (window as any).nostr === 'undefined') {
     throw new Error('No Nostr extension found. Install Alby, nos2x, or similar.');
@@ -132,10 +141,11 @@ export async function loginWithExtension(): Promise<void> {
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'extension' });
 
-  // Fetch profile in background and update store when ready
+  // Fetch profile and room config in background
   fetchProfile(pubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
+  syncRoomFromRelays(pubkey);
 }
 
 export async function loginWithNsec(nsecString: string): Promise<void> {
@@ -154,10 +164,11 @@ export async function loginWithNsec(nsecString: string): Promise<void> {
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'nsec' });
 
-  // Fetch profile in background and update store when ready
+  // Fetch profile and room config in background
   fetchProfile(pubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
+  syncRoomFromRelays(pubkey);
 }
 
 /**
@@ -182,7 +193,7 @@ export async function startBunkerFlow(
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,nip44_encrypt,nip44_decrypt',
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onStatusChange: (status: string, msg: string) => {
       console.log(`[Bunker] ${status}: ${msg}`);
@@ -202,6 +213,7 @@ export async function startBunkerFlow(
     fetchProfile(pubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
+    syncRoomFromRelays(pubkey);
     return { connectUri: '', waitForConnect: Promise.resolve(pubkey) };
   }
 
@@ -220,6 +232,7 @@ export async function startBunkerFlow(
     fetchProfile(userPubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
+    syncRoomFromRelays(userPubkey);
     return userPubkey;
   });
 
@@ -244,7 +257,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,nip44_encrypt,nip44_decrypt',
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onDisconnect: () => {
       console.warn('[Bunker] Signer disconnected');
@@ -258,6 +271,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
   fetchProfile(userPubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });
+  syncRoomFromRelays(userPubkey);
 }
 
 export async function loginAsGuest(): Promise<void> {
@@ -318,6 +332,49 @@ export async function fetchUserNotes(pubkey: string, limit = 20): Promise<UserNo
   } catch (e) {
     console.warn('[Nostr] fetchUserNotes failed:', e);
     return [];
+  }
+}
+
+const ROOM_D_TAG = 'nostr-district-room';
+
+/**
+ * Publish the user's room config as a NIP-78 (kind 30078) replaceable event.
+ * Only runs when the user is logged in with a signing method.
+ */
+export async function publishRoomConfig(config: RoomConfig): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', ROOM_D_TAG]],
+      content: JSON.stringify(config),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishRoomConfig failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Fetch a user's room config from relays (kind 30078, d=nostr-district-room).
+ * Returns null if not found or on error.
+ */
+export async function fetchRoomConfig(pubkey: string): Promise<RoomConfig | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [ROOM_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content) as RoomConfig;
+  } catch (e) {
+    console.warn('[Nostr] fetchRoomConfig failed:', e);
+    return null;
   }
 }
 

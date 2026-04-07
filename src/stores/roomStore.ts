@@ -124,6 +124,21 @@ function save(): void {
   } catch (_) {}
 }
 
+/**
+ * Apply a RoomConfig fetched from Nostr (e.g. on login from a different browser).
+ * Merges into local state and saves to localStorage without re-publishing.
+ */
+export function applyRemoteRoomConfig(remote: RoomConfig): void {
+  currentRoom = {
+    ...DEFAULT_ROOM,
+    ...remote,
+    furniture: remote.furniture ? [...remote.furniture] : [...DEFAULT_ROOM.furniture],
+    posters: remote.posters ? [remote.posters[0] || 'none', remote.posters[1] || 'none', remote.posters[2] || 'none'] as [PosterId, PosterId, PosterId] : [...DEFAULT_ROOM.posters] as [PosterId, PosterId, PosterId],
+    furnitureColors: remote.furnitureColors ? { ...remote.furnitureColors } : {},
+  };
+  save();
+}
+
 export function getRoomConfig(): RoomConfig {
   return {
     ...currentRoom,

@@ -9,7 +9,7 @@ import { P } from '../config/game.config';
 import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
 import { authStore } from '../stores/authStore';
-import { publishEvent, signEvent } from '../nostr/nostrService';
+import { publishEvent, signEvent, publishRoomConfig } from '../nostr/nostrService';
 import {
   getRoomConfig, setRoomConfig, toggleFurniture, setPoster, markSetupComplete,
   setFurnitureColor, getFurnitureColor, DEFAULT_FURNITURE_COLORS,
@@ -564,19 +564,39 @@ export class ComputerUI {
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">ROOM CUSTOMIZATION</span>
-        <button id="room-preview-btn" style="
-          padding:5px 12px;border-radius:4px;cursor:pointer;
-          font-family:'Courier New',monospace;font-size:11px;
-          background:color-mix(in srgb,var(--nd-accent) 10%,transparent);
-          border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);
-          color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-        " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">Preview</button>
+        <div style="display:flex;gap:6px;">
+          <button id="room-preview-btn" style="
+            padding:5px 12px;border-radius:4px;cursor:pointer;
+            font-family:'Courier New',monospace;font-size:11px;
+            background:color-mix(in srgb,var(--nd-accent) 10%,transparent);
+            border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);
+            color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
+          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">Preview</button>
+          <button id="room-save-btn" style="
+            padding:5px 12px;border-radius:4px;cursor:pointer;
+            font-family:'Courier New',monospace;font-size:11px;
+            background:color-mix(in srgb,var(--nd-accent) 20%,transparent);
+            border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);
+            color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
+          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
+        </div>
       </div>
       <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;"></div>
       <div id="room-section-body"></div>
     `;
 
     body.querySelector('#room-preview-btn')?.addEventListener('click', () => this.previewRoom());
+
+    const saveBtn = body.querySelector('#room-save-btn') as HTMLButtonElement | null;
+    saveBtn?.addEventListener('click', async () => {
+      if (!saveBtn) return;
+      const orig = saveBtn.textContent;
+      saveBtn.textContent = 'Saving...';
+      saveBtn.disabled = true;
+      const ok = await publishRoomConfig(getRoomConfig());
+      saveBtn.textContent = ok ? 'Saved!' : 'Failed';
+      setTimeout(() => { saveBtn.textContent = orig; saveBtn.disabled = false; }, 1800);
+    });
 
     this.renderRoomSectionTabs(body);
     this.renderRoomSectionBody(body);
