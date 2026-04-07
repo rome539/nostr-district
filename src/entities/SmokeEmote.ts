@@ -23,6 +23,7 @@ export class SmokeEmote {
   }
 
   get active(): boolean { return this._active; }
+  readonly stopsOnMove = false;
 
   start(): void {
     this._active = true;

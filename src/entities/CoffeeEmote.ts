@@ -18,7 +18,7 @@ export class CoffeeEmote implements BaseEmote {
   start(): void { this._active = true; this.timer = 0; this.particles = []; }
   stop(): void  { this._active = false; this.timer = 0; this.particles = []; }
 
-  update(g: Phaser.GameObjects.Graphics, delta: number, px: number, py: number, facingRight: boolean, scale: 'hub' | 'room'): boolean {
+  update(g: Phaser.GameObjects.Graphics, delta: number, px: number, py: number, facingRight: boolean, scale: 'hub' | 'cabin' | 'room'): boolean {
     if (!this._active) return false;
     this.timer += delta;
     if (this.timer > this.duration) { this.stop(); return false; }
