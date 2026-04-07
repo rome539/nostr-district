@@ -16,7 +16,7 @@ import { PlayerPicker } from '../ui/PlayerPicker';
 import { RpsGame } from '../ui/RpsGame';
 import { SoundEngine } from '../audio/SoundEngine';
 import { ProfileModal } from '../ui/ProfileModal';
-import { SmokeEmote } from '../entities/SmokeEmote';
+import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
@@ -56,7 +56,7 @@ interface OtherPlayer {
   avatar?: string;
   status?: string;
   clickZone?: Phaser.GameObjects.Zone;
-  smoke?: SmokeEmote;
+  emotes?: EmoteSet;
 }
 
 export class HubScene extends Phaser.Scene {
@@ -90,7 +90,7 @@ export class HubScene extends Phaser.Scene {
   private neonFrame = 0;
   private onlineCount = 0;
 
-  private smokeGraphics!: Phaser.GameObjects.Graphics;
+  private emoteGraphics!: Phaser.GameObjects.Graphics;
   private chimneyGraphics!: Phaser.GameObjects.Graphics;
   private chimneyParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }[] = [];
   private chimneySpawnTimer = 0;
@@ -99,7 +99,7 @@ export class HubScene extends Phaser.Scene {
   private readonly CHIMNEYS: [number, number][] = [
     [22, GROUND_Y - 238], [318, GROUND_Y - 258], [1502, GROUND_Y - 218],
   ];
-  private smokeEmote = new SmokeEmote();
+  private emoteSet = new EmoteSet();
   private settingsPanel = new SettingsPanel();
   private computerUI = new ComputerUI();
   private pollBoard = new PollBoard();
@@ -120,7 +120,7 @@ export class HubScene extends Phaser.Scene {
   private lastWoodsClosedNotice = 0;
 
   constructor() { super({ key: 'HubScene' }); }
-  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.smokeEmote.stop(); this.isLeavingToWoods = false; }
+  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.emoteSet.stopAll(); this.isLeavingToWoods = false; }
 
   create(): void {
     // ── Login gate ──
@@ -242,7 +242,7 @@ export class HubScene extends Phaser.Scene {
     this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
-    this.smokeGraphics = this.add.graphics().setDepth(15);
+    this.emoteGraphics = this.add.graphics().setDepth(15);
     this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard();
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -343,8 +343,9 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       }
     });
 
-    this.smokeGraphics.clear();
-    if (this.smokeEmote.active) { if (isWalking) this.smokeEmote.stop(); else this.smokeEmote.update(this.smokeGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub'); }
+    this.emoteGraphics.clear();
+    this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub', isWalking);
+    this.player.setAlpha(this.emoteSet.isActive('ghost') ? 0.3 : 1);
 
     // ── Woods transition: walk off the left edge ──
     if (this.player.x <= 24 && !this.isLeavingToWoods) {
@@ -359,6 +360,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
     this.playerName.setPosition(this.player.x, this.player.y - 44);
     this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
+    const ghostAlpha = this.emoteSet.isActive('ghost') ? 0.3 : 1;
+    this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
     sendPosition(this.player.x, this.player.y);
     this.otherPlayers.forEach(o => {
       if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
@@ -366,7 +369,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
       o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
-      if (o.smoke?.active) o.smoke.update(this.smokeGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
+      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
+      o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
     });
   }
 
@@ -417,7 +421,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.fadeOut(400, 4, 8, 10);
     this.time.delayedCall(400, () => {
       if (!this.scene.isActive()) return;
-      this.scene.start('WoodsScene');
+      this.scene.start('WoodsScene', { fromCabin: false });
     });
   }
 
@@ -436,9 +440,24 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       onCountUpdate: (c: number) => { this.onlineCount = c; },
       onChat: (pk: string, name: string, text: string, emojis?: { code: string; url: string }[]) => {
         const isMe = pk === this.registry.get('playerPubkey');
-        if (!isMe && text === '/emote smoke_on') { const o = this.otherPlayers.get(pk); if (o) { if (!o.smoke) o.smoke = new SmokeEmote(); o.smoke.start(); ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, '*lights a cigarette*', P.dpurp); } if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, '*lights a cigarette*', P.dpurp, pk); return; }
-        if (!isMe && text === '/emote smoke_off') { const o = this.otherPlayers.get(pk); if (o?.smoke) o.smoke.stop(); return; }
-        if (isMe && text.startsWith('/emote ')) return;
+        if (text.startsWith('/emote ')) {
+          if (!isMe) {
+            const payload = text.slice(7);
+            const sep = payload.lastIndexOf('_');
+            const emoteName = payload.slice(0, sep);
+            const action    = payload.slice(sep + 1);
+            const o = this.otherPlayers.get(pk);
+            if (o && (action === 'on' || action === 'off')) {
+              if (!o.emotes) o.emotes = new EmoteSet();
+              if (action === 'on') {
+                o.emotes.start(emoteName);
+                const flavor = EMOTE_FLAVORS[emoteName];
+                if (flavor) { ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 48, flavor, P.dpurp); if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, flavor, P.dpurp, pk); }
+              } else { o.emotes.stop(emoteName); }
+            }
+          }
+          return;
+        }
         if (text.startsWith('/zap:')) { const sats = parseInt(text.slice(5), 10); if (!isNaN(sats)) { const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite; if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000); } return; }
         if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => { this.chatUI.addMessage('system', msg, P.teal); if (msg.includes('wins') && msg.includes(myName2)) this.snd.rpsWin(); else if (msg.includes('wins')) this.snd.rpsLose(); else this.snd.rpsTie(); })) return; }
         if (!isMe && mutedPlayers.has(pk)) return;
@@ -469,7 +488,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       },
     };
     if (!this.isReturning) connectPresence(cb);
-    else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); if (this.smokeEmote.active) this.time.delayedCall(500, () => sendChat('/emote smoke_on')); }
+    else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on`))); }
     this.snd.setRoom('hub');
   }
 
@@ -684,7 +703,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
       case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const auth2 = authStore.getState(); if (!auth2.pubkey || auth2.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zapTarget: string | null = null; let zapName = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; } }); if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zapTarget, zapName); break; }
-      case 'smoke': { if (this.smokeEmote.active) { this.smokeEmote.stop(); this.chatUI.addMessage('system', 'Put it out', P.dpurp); sendChat('/emote smoke_off'); } else { this.smokeEmote.start(); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, '*lights a cigarette*', P.dpurp); sendChat('/emote smoke_on'); } break; }
+      case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
+      case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
       case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
         if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
         this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
@@ -749,9 +769,22 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'status': { const myStatus = localStorage.getItem('nd_status') || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }
     this.chatUI.flashLog();
+  }
+
+  private handleEmoteCommand(name: string): void {
+    if (this.emoteSet.isActive(name)) {
+      this.emoteSet.stop(name);
+      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
+      sendChat(`/emote ${name}_off`);
+    } else {
+      this.emoteSet.start(name);
+      const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, P.dpurp);
+      sendChat(`/emote ${name}_on`);
+    }
   }
 }

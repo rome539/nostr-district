@@ -37,19 +37,20 @@ export class SmokeEmote {
   }
 
   /** Draw smoke for a player at the given position. Returns false if smoke ended. */
-  update(graphics: Phaser.GameObjects.Graphics, delta: number, px: number, py: number, facingRight: boolean, scale: 'hub' | 'room'): boolean {
+  update(graphics: Phaser.GameObjects.Graphics, delta: number, px: number, py: number, facingRight: boolean, scale: 'hub' | 'cabin' | 'room'): boolean {
     if (!this._active) return false;
 
     this.timer += delta;
     if (this.timer > this.duration) { this.stop(); return false; }
 
     // Scale-dependent offsets
-    const isRoom = scale === 'room';
-    const cigOffX = isRoom ? 18 : 5;
-    const cigOffY = isRoom ? -110 : -27;
-    const cigW = isRoom ? 8 : 4;
-    const cigH = isRoom ? 3 : 1.5;
-    const tipW = isRoom ? 3 : 1.5;
+    const isRoom   = scale === 'room';
+    const isCabin  = scale === 'cabin';
+    const cigOffX  = isRoom ? 18 : isCabin ? 10 : 5;
+    const cigOffY  = isRoom ? -110 : isCabin ? -54 : -27;
+    const cigW     = isRoom ? 8 : isCabin ? 7 : 4;
+    const cigH     = isRoom ? 3 : isCabin ? 2.5 : 1.5;
+    const tipW     = isRoom ? 3 : isCabin ? 2.5 : 1.5;
 
     const cigX = facingRight ? px + cigOffX - cigW : px - cigOffX;
     const cigY = py + cigOffY;
@@ -65,7 +66,7 @@ export class SmokeEmote {
 
     // Tip glow
     graphics.fillStyle(0xf0b040, tipFlicker * 0.15);
-    const glowSize = isRoom ? 7 : 4;
+    const glowSize = isRoom ? 7 : isCabin ? 6 : 4;
     graphics.fillRect(
       facingRight ? cigX + cigW - 2 : cigX - tipW - 1,
       cigY - 2, glowSize, glowSize
@@ -74,14 +75,14 @@ export class SmokeEmote {
     // Spawn particles
     if (Math.random() > 0.6) {
       const tipX = facingRight ? cigX + cigW + 2 : cigX - 2;
-      const pSize = isRoom ? (2 + Math.random() * 2) : (1 + Math.random());
+      const pSize = isRoom ? (2 + Math.random() * 2) : isCabin ? (1.5 + Math.random() * 1.5) : (1 + Math.random());
       this.particles.push({
-        x: tipX + (Math.random() - 0.5) * (isRoom ? 4 : 2),
+        x: tipX + (Math.random() - 0.5) * (isRoom ? 4 : isCabin ? 3 : 2),
         y: cigY - 2,
-        vx: (Math.random() - 0.5) * (isRoom ? 0.5 : 0.3),
-        vy: -(isRoom ? 0.5 : 0.3) - Math.random() * (isRoom ? 0.6 : 0.4),
+        vx: (Math.random() - 0.5) * (isRoom ? 0.5 : isCabin ? 0.4 : 0.3),
+        vy: -(isRoom ? 0.5 : isCabin ? 0.4 : 0.3) - Math.random() * (isRoom ? 0.6 : isCabin ? 0.5 : 0.4),
         life: 0,
-        maxLife: (isRoom ? 1000 : 800) + Math.random() * (isRoom ? 800 : 600),
+        maxLife: (isRoom ? 1000 : isCabin ? 900 : 800) + Math.random() * (isRoom ? 800 : isCabin ? 700 : 600),
         size: pSize,
       });
     }
@@ -97,7 +98,7 @@ export class SmokeEmote {
       const progress = p.life / p.maxLife;
       if (progress >= 1) { this.particles.splice(i, 1); continue; }
       const alpha = progress < 0.2 ? progress / 0.2 : (1 - progress) / 0.8;
-      const size = p.size + progress * (isRoom ? 4 : 2);
+      const size = p.size + progress * (isRoom ? 4 : isCabin ? 3 : 2);
       graphics.fillStyle(0xcccccc, alpha * (isRoom ? 0.3 : 0.25));
       graphics.fillRect(p.x - size / 2, p.y - size / 2, size, size);
     }

@@ -44,14 +44,26 @@ export class HotkeyModal {
       ['/players',      'Who\'s online'],
       ['/follows',      'Open follows list'],
       ['/polls',        'Open polls board'],
-    ];
-
-    const socialCmds: [string, string][] = [
-      ['/smoke',        'Light a cigarette'],
       ['/status',       'Show your status'],
       ['/mute',         'Mute all chat'],
       ['/mutelist',     'View muted players'],
       ['/filter <w>',   'Filter a word from chat'],
+    ];
+
+    const socialCmds: [string, string][] = [
+      ['/smoke',    'Light a cigarette'],
+      ['/coffee',   'Sip some coffee'],
+      ['/music',    'Hum a tune'],
+      ['/zzz',      'Fall asleep (AFK)'],
+      ['/think',    'Show thought bubble'],
+      ['/hearts',   'Float hearts'],
+      ['/angry',    'Steam with rage'],
+      ['/sweat',    'Nervous sweat drops'],
+      ['/sparkle',  'Orbit sparkles'],
+      ['/confetti', 'Celebrate with confetti'],
+      ['/fire',     'Set yourself on fire'],
+      ['/ghost',    'Spooky orbs'],
+      ['/rain',     'Personal rain cloud'],
     ];
 
     const gameCmds: [string, string][] = [
@@ -87,13 +99,13 @@ export class HotkeyModal {
           <button class="hk-close" id="hk-close">✕</button>
         </div>
         <div class="hk-body">
-          <div class="hk-col">
+          <div class="hk-col hk-col-full">
             ${section('HOTKEYS', hotkeys.map(kRow).join(''), true)}
+            ${section('NAVIGATION', navCmds.map(cRow).join(''))}
           </div>
           <div class="hk-divider"></div>
           <div class="hk-col">
-            ${section('NAVIGATION', navCmds.map(cRow).join(''), true)}
-            ${section('SOCIAL', socialCmds.map(cRow).join(''))}
+            ${section('SOCIAL', socialCmds.map(cRow).join(''), true)}
             ${section('GAMES', gameCmds.map(cRow).join(''))}
           </div>
         </div>
