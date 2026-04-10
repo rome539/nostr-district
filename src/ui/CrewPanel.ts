@@ -758,7 +758,7 @@ export class CrewPanel {
           }
 
           // 4. Fallback: Clipboard API — Universal Clipboard from iPhone/iPad
-          if (!fileItem && !htmlItem) {
+          if (!fileItem) {
             try {
               const clipItems = await navigator.clipboard.read();
               for (const clipItem of clipItems) {
