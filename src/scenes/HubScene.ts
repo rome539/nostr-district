@@ -19,6 +19,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { SettingsPanel } from '../ui/SettingsPanel';
+import { HotkeyModal } from '../ui/HotkeyModal';
 import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { sendAvatarUpdate } from '../nostr/presenceService';
@@ -38,6 +39,7 @@ import {
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { PollBoard } from '../ui/PollBoard';
+import { TutorialOverlay, isTutorialDone } from '../ui/TutorialOverlay';
 
 interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
 
@@ -104,6 +106,7 @@ export class HubScene extends Phaser.Scene {
   ];
   private emoteSet = new EmoteSet();
   private settingsPanel = new SettingsPanel();
+  private hotkeyModal = new HotkeyModal();
   private computerUI = new ComputerUI();
   private pollBoard = new PollBoard();
   private muteList = new MuteList();
@@ -321,6 +324,9 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-B', () => { if (document.activeElement === this.chatUI.getInput()) return; this.pollBoard.toggle(); });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
+    document.addEventListener('keydown', hotkeyHandler);
+    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
     this.input.keyboard?.on('keydown-ESC', () => {
       if (document.activeElement === this.chatUI.getInput()) return;
       if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
@@ -519,6 +525,11 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (!this.isReturning) connectPresence(cb);
     else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on`))); }
     this.snd.setRoom('hub');
+
+    // ── First-time tutorial ──
+    if (!this.isReturning && !isTutorialDone()) {
+      this.time.delayedCall(800, () => { new TutorialOverlay(() => {}); });
+    }
   }
 
   // ── Other Players ──
