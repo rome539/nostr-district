@@ -8,7 +8,22 @@
  * - 30s keepalive pings to prevent idle disconnects
  * - Reconnect catch-up: re-subscribes for missed gift wraps after reconnection
  * - Staggered publish delays (150ms between events) to avoid relay rate limiting
+ * - Cloudflare relay proxy: in production, connections route through /api/relay
+ *   so relay operators see Cloudflare IPs instead of user IPs
  */
+
+/**
+ * In production (Cloudflare Pages), route relay connections through the
+ * /api/relay proxy so relay operators can't see user IP addresses.
+ * In dev (localhost / file://) connect directly.
+ */
+function proxyUrl(relayWss: string): string {
+  const host = window.location.hostname;
+  const isDev = host === 'localhost' || host === '127.0.0.1' || host === '';
+  if (isDev) return relayWss;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/api/relay?relay=${encodeURIComponent(relayWss)}`;
+}
 
 // ── The relay lists NYM uses for reliable DM delivery ──
 export const DM_RELAYS = [
@@ -31,6 +46,13 @@ export const DEFAULT_RELAYS = [
   'wss://nostr-pub.wellorder.net',
   'wss://relay.nostr.net',
   'wss://nostr.mom',
+  'wss://relay.coinos.io',
+  'wss://relay.snort.social',
+  'wss://relay1.nostrchat.io',
+  'wss://nostr-01.yakihonne.com',
+  'wss://nostr-02.yakihonne.com',
+  'wss://relay.satlantis.io',
+  'wss://relay.fountain.fm',
 ];
 
 interface ManagedRelay {
@@ -129,7 +151,7 @@ export class RelayManager {
     }
 
     try {
-      relay.ws = new WebSocket(relay.url);
+      relay.ws = new WebSocket(proxyUrl(relay.url));
     } catch (e) {
       console.warn(`[Relay] Failed to create WebSocket for ${relay.url}:`, e);
       this.scheduleReconnect(relay);

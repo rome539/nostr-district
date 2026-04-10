@@ -1,6 +1,7 @@
 import { authStore } from '../stores/authStore';
 import { setLocalKey, clearLocalKey, getLocalKey } from './dmService';
 import { setChannelKey, clearChannelKey } from './channelService';
+import { initNWC, clearNWCCache } from './nwcService';
 import { DEFAULT_RELAYS } from './relayManager';
 import type { RoomConfig } from '../stores/roomStore';
 import { applyRemoteRoomConfig } from '../stores/roomStore';
@@ -239,6 +240,8 @@ export async function loginWithExtension(): Promise<void> {
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'extension' });
 
+  initNWC().catch(() => {});
+
   // Fetch profile and room config in background
   fetchProfile(pubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
@@ -261,6 +264,9 @@ export async function loginWithNsec(nsecString: string): Promise<void> {
 
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'nsec' });
+
+  // Load (and if needed migrate) NWC URI into memory now that key is available
+  initNWC().catch(() => {});
 
   // Fetch profile and room config in background
   fetchProfile(pubkey).then(profile => {
@@ -481,6 +487,7 @@ export function logout(): void {
   _onAvatarSynced = null;
   clearLocalKey();
   clearChannelKey();
+  clearNWCCache();
   if (bunkerClient) {
     bunkerClient.destroy();
     bunkerClient = null;

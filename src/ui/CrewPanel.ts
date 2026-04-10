@@ -26,6 +26,7 @@ import { fetchProfile } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -614,15 +615,26 @@ export class CrewPanel {
     const name = this.getDisplayName(msg.pubkey, myPubkey);
     const t = msg.content.trim();
     const isGif = isGifUrl(t);
-    const bubble = isGif
-      ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;${isOwn ? 'margin-left:auto;' : ''}" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
-      : `<div class="cp-msg-bubble">${renderEmojis(esc(msg.content), msg.emojis)}</div>`;
+    const isLink = !isGif && isPlainUrl(t);
+
     el.className = 'cp-msg ' + (isOwn ? 'cp-msg-own' : 'cp-msg-other');
     el.innerHTML = `
       <div class="cp-msg-name" data-pk="${esc(msg.pubkey)}">${esc(name)}</div>
-      ${bubble}
+      ${isGif
+        ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;${isOwn ? 'margin-left:auto;' : ''}" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
+        : `<div class="cp-msg-bubble"></div>`}
       <div class="cp-msg-time">${timeAgo(msg.createdAt)}</div>
     `;
+
+    if (!isGif) {
+      const bubble = el.querySelector('.cp-msg-bubble')!;
+      if (isLink) {
+        bubble.appendChild(renderLinkWithPreview(t, isOwn));
+      } else {
+        bubble.innerHTML = renderEmojis(esc(msg.content), msg.emojis);
+      }
+    }
+
     this.chatMsgEl.appendChild(el);
   }
 
@@ -1257,9 +1269,14 @@ export class CrewPanel {
     fetchCrewMembers(crew.id).then(members => {
       if (!this.activeCrew || this.activeCrew.id !== crew.id) return;
 
+      // Always treat the logged-in user as online — presence server won't echo you back to yourself
+      const myPubkey = authStore.getState().pubkey;
+      if (myPubkey) onlinePubkeys.add(myPubkey);
+
       // Request online players — handler fires when presence server responds
       setOnlinePlayersHandler((players) => {
         onlinePubkeys = new Set(players.map((p: any) => p.pubkey));
+        if (myPubkey) onlinePubkeys.add(myPubkey); // keep self marked online
         setOnlinePlayersHandler(null); // one-shot
         buildList(members);
       });
@@ -1895,12 +1912,14 @@ export class CrewPanel {
       .cp-modal-cancel {
         background: none; border: 1px solid color-mix(in srgb,var(--nd-text) 20%,transparent);
         border-radius: 4px; color: var(--nd-subtext); cursor: pointer; font-family: inherit; padding: 7px 16px; transition: all 0.15s;
+        white-space: nowrap; flex-shrink: 0;
       }
       .cp-modal-cancel:hover { border-color: #e87aab; color: #e87aab; }
       .cp-modal-submit {
         background: color-mix(in srgb,var(--nd-accent) 20%,transparent);
         border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
         border-radius: 4px; color: var(--nd-accent); cursor: pointer; font-family: inherit; padding: 7px 16px; transition: all 0.15s;
+        white-space: nowrap; flex-shrink: 0; min-width: 100px;
       }
       .cp-modal-submit:hover { background: color-mix(in srgb,var(--nd-accent) 35%,transparent); }
       .cp-modal-submit:disabled { opacity: 0.5; cursor: not-allowed; }

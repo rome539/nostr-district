@@ -15,6 +15,7 @@ import { authStore } from '../stores/authStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 import { ProfileModal } from './ProfileModal';
+import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 import { nip19 } from 'nostr-tools';
 
 interface Conversation {
@@ -643,12 +644,12 @@ export class DMPanel {
       const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const t = msg.content.trim();
       const isGif = isGifUrl(t);
-      const isLink = !isGif && /^https?:\/\/[^\s]+$/i.test(t);
+      const isLink = !isGif && isPlainUrl(t);
       const inviteMatch = !isGif && !isLink && t.match(/^nd-invite:([^:]+):([^:]+):([^:]+)$/);
       const contentHtml = isGif
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
-          ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
+          ? `<span class="dm-link-preview-slot" data-url="${t.replace(/"/g, '%22')}" data-own="${msg.isOwn ? '1' : '0'}"></span>`
           : inviteMatch
             ? `<div class="dm-invite-card">
                 <div class="dm-invite-label">Crew Invite</div>
@@ -676,6 +677,14 @@ export class DMPanel {
     const prevScrollTop = this.messagesEl.scrollTop;
 
     this.messagesEl.innerHTML = loadOlderHtml + msgsHtml;
+
+    // Replace link preview slots with live DOM elements (async OG fetch)
+    this.messagesEl.querySelectorAll('.dm-link-preview-slot').forEach(slot => {
+      const url = (slot as HTMLElement).dataset.url!;
+      const isOwn = (slot as HTMLElement).dataset.own === '1';
+      const preview = renderLinkWithPreview(url, isOwn);
+      slot.replaceWith(preview);
+    });
 
     if (preserveScroll && hasOlder) {
       this.messagesEl.scrollTop = prevScrollTop + (this.messagesEl.scrollHeight - prevScrollHeight);

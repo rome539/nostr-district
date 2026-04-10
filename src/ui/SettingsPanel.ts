@@ -267,8 +267,8 @@ export class SettingsPanel {
               border:1px solid color-mix(in srgb,${P.red} 33%,transparent);
               color:${P.red};">Disconnect</button>
           </div>`;
-        walletRow.querySelector('#sp-wallet-disconnect')?.addEventListener('click', () => {
-          setNWCUri(''); renderWalletRow();
+        walletRow.querySelector('#sp-wallet-disconnect')?.addEventListener('click', async () => {
+          await setNWCUri(''); renderWalletRow();
         });
       } else if (webln) {
         walletRow.innerHTML = `
@@ -309,9 +309,9 @@ export class SettingsPanel {
         inp.addEventListener('keydown', e => e.stopPropagation());
         inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');
         inp.addEventListener('blur',  () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)');
-        walletRow.querySelector('#sp-nwc-connect')?.addEventListener('click', () => {
+        walletRow.querySelector('#sp-nwc-connect')?.addEventListener('click', async () => {
           const err = walletRow.querySelector('#sp-nwc-err') as HTMLElement;
-          const ok = setNWCUri(inp.value.trim());
+          const ok = await setNWCUri(inp.value.trim());
           if (ok) { renderWalletRow(); }
           else { err.style.display = 'block'; }
         });
