@@ -22,6 +22,7 @@ import {
 import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
 import { DMPanel } from '../ui/DMPanel';
+import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
@@ -51,6 +52,7 @@ const FIRE_Y      = FLOOR_Y + 12;
 const CABIN_X     = 900;   // cabin left wall
 const CABIN_W     = 116;   // cabin body width
 const CABIN_DOOR_X = CABIN_X + 78; // door center x (978)
+const TELESCOPE_X  = 1170;         // telescope center x
 
 // ── Particles ──
 interface Firefly { x: number; y: number; vx: number; vy: number; phase: number; size: number; }
@@ -86,6 +88,7 @@ export class WoodsScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private settingsPanel = new SettingsPanel();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
@@ -115,6 +118,11 @@ export class WoodsScene extends Phaser.Scene {
   private cabinPromptBg!: Phaser.GameObjects.Graphics;
   private cabinPromptText!: Phaser.GameObjects.Text;
   private cabinPromptArrow!: Phaser.GameObjects.Text;
+  private nearTelescope = false;
+  private telescopePromptBg!: Phaser.GameObjects.Graphics;
+  private telescopePromptText!: Phaser.GameObjects.Text;
+  private telescopePromptArrow!: Phaser.GameObjects.Text;
+  private telescopeOverlay: HTMLElement | null = null;
 
   constructor() { super({ key: 'WoodsScene' }); }
   init(data?: { fromCabin?: boolean }): void { this.emoteSet.stopAll(); this.isLeavingScene = false; this.spawnX = data?.fromCabin ? CABIN_DOOR_X - 60 : 1400; }
@@ -151,27 +159,42 @@ export class WoodsScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { const wx = this.cameras.main.scrollX + p.x; if (p.y < FLOOR_Y - 10 || p.y > 455) return; if (wx < DOCK_X) return; this.targetX = Phaser.Math.Clamp(wx, DOCK_X, W - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < FLOOR_Y - 10 || p.y > 455) return; if (wx < DOCK_X) return; this.targetX = Phaser.Math.Clamp(wx, DOCK_X, W - 20); this.isMoving = true; });
 
     const myPubkey = this.registry.get('playerPubkey');
     this.snd.setRoom('woods');
     this.chatUI = new ChatUI();
     const chatInput = this.chatUI.create('Chat in the woods...', WOODS_ACCENT, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
-    this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (document.activeElement?.closest('.dm-panel')) return;
+      if (document.activeElement?.closest('.cp-panel')) return;
+      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
+      if (document.activeElement !== chatInput) chatInput.focus();
+    });
 
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
+    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
+    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
 
     let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    this.input.keyboard?.on('keydown-ESC', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; } });
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (document.activeElement === this.chatUI.getInput()) return;
+      if (this.telescopeOverlay) { this.closeTelescopeView(); return; }
+      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
+      if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
+    });
 
     // Cabin door prompt
     this.cabinPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -180,8 +203,28 @@ export class WoodsScene extends Phaser.Scene {
     this.cabinPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Enter CABIN' : '[E] Enter CABIN', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#f0a030', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.cabinPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#f0a030' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.cabinPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 128, 28), Phaser.Geom.Rectangle.Contains);
-    this.cabinPromptBg.on('pointerdown', () => { if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); } });
-    this.input.keyboard?.on('keydown-E', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); } });
+    this.cabinPromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); }
+    });
+    this.input.keyboard?.on('keydown-E', () => {
+      if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
+      if (this.nearTelescope) { this.openTelescopeView(); }
+    });
+
+    // Telescope prompt
+    this.telescopePromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.telescopePromptBg.fillStyle(0x050510, 0.92); this.telescopePromptBg.fillRoundedRect(0, 0, 120, 28, 5);
+    this.telescopePromptBg.lineStyle(1, 0x334488, 0.7); this.telescopePromptBg.strokeRoundedRect(0, 0, 120, 28, 5);
+    this.telescopePromptText = this.add.text(0, 0, '[E] Look Up', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#8ab4ff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.telescopePromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#8ab4ff' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.telescopePromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 120, 28), Phaser.Geom.Rectangle.Contains);
+    this.telescopePromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearTelescope) this.openTelescopeView();
+    });
 
     setPresenceCallbacks({
       onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
@@ -189,6 +232,7 @@ export class WoodsScene extends Phaser.Scene {
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
       onCountUpdate: () => {},
       onChat: (pk, name, text) => {
+
         const isMe = pk === myPubkey;
         if (text.startsWith('/emote ')) {
           if (!isMe) {
@@ -227,9 +271,11 @@ export class WoodsScene extends Phaser.Scene {
 
     this.events.on('shutdown', () => {
       unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.muteList.destroy(); this.playerPicker.close();
-      if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close();
+      if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
       this.cabinPromptBg?.destroy(); this.cabinPromptText?.destroy(); this.cabinPromptArrow?.destroy();
+      this.telescopePromptBg?.destroy(); this.telescopePromptText?.destroy(); this.telescopePromptArrow?.destroy();
+      this.telescopeOverlay?.remove(); this.telescopeOverlay = null;
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
       setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
@@ -543,15 +589,6 @@ export class WoodsScene extends Phaser.Scene {
     r(rbX,FLOOR_Y-28,18,28,'#281808'); r(rbX+2,FLOOR_Y-26,14,22,'#301c0c');
     r(rbX-1,FLOOR_Y-30,20,4,'#1a1008'); r(rbX-1,FLOOR_Y-16,20,3,'#1a1008'); r(rbX-1,FLOOR_Y-4,20,3,'#1a1008');
 
-    // ── Fallen log (x~1320) ──
-    r(1290, FLOOR_Y-14, 80, 14, '#2a1808');
-    r(1290, FLOOR_Y-14, 80, 3, '#362010');
-    r(1290, FLOOR_Y-14, 8, 14, '#1e1006');
-    r(1292, FLOOR_Y-12, 4, 10, '#2a1a0c');
-    r(1366, FLOOR_Y-14, 8, 14, '#1e1006');
-    x.globalAlpha=0.5;
-    for(let mx=1295;mx<1368;mx+=9){r(mx,FLOOR_Y-17,6,4,'#1a3010');}
-    x.globalAlpha=1;
 
 
     // ── Path lantern post (x~1460) ──
@@ -576,9 +613,69 @@ export class WoodsScene extends Phaser.Scene {
       r(sx-2, FLOOR_Y-sh+3, 3, sh-3, '#1a1006');   // left bark
       r(sx+sw-1, FLOOR_Y-sh+3, 3, sh-3, '#1a1006');// right bark
     };
-    stump(1170, 18, 14);   // small, between barrel and fallen log
-    stump(1430, 16, 14);   // small, between log and lantern
+    stump(1320, 18, 14);   // moved from left side to where fallen log was
+    stump(1430, 16, 14);   // small, between stump and lantern
     stump(1538, 22, 18);   // far right
+
+    // ── Telescope ──
+    const tx = TELESCOPE_X;
+    const tmY = FLOOR_Y - 24; // tripod apex / mount base (lower = less tall)
+
+    // Tripod legs
+    x.save();
+    x.lineWidth = 2.5;
+    x.strokeStyle = '#3a2810';
+    x.beginPath(); x.moveTo(tx - 1, tmY); x.lineTo(tx - 12, FLOOR_Y); x.stroke();
+    x.beginPath(); x.moveTo(tx - 1, tmY); x.lineTo(tx + 12, FLOOR_Y); x.stroke();
+    x.lineWidth = 2;
+    x.beginPath(); x.moveTo(tx - 1, tmY); x.lineTo(tx - 1, FLOOR_Y); x.stroke();
+    x.restore();
+
+    // Tripod feet
+    r(tx - 14, FLOOR_Y - 2, 5, 2, '#2a1c0c');
+    r(tx + 10,  FLOOR_Y - 2, 5, 2, '#2a1c0c');
+    r(tx - 3,   FLOOR_Y - 2, 5, 2, '#2a1c0c');
+
+    // Mount collar
+    r(tx - 6, tmY - 3, 12, 6, '#5a4020');
+    r(tx - 5, tmY - 5, 10, 3, '#6a5030');
+
+    // Telescope tube — angled ~50° from vertical pointing upper-left at the sky
+    x.save();
+    x.translate(tx - 3, tmY - 4);
+    x.rotate(-Math.PI * 0.28); // ~-50° → tube tip points upper-left
+    const tL = 22; // tube length (shorter than before)
+    x.fillStyle = '#3c2c14';
+    x.fillRect(-3, -tL, 7, tL);
+    x.fillStyle = '#5a4020';
+    x.fillRect(-3, -tL, 7, 2);
+    x.fillRect(-3, -tL, 1, tL);
+    x.fillStyle = '#2a1c0c';
+    x.fillRect(-3.5, -15, 8, 2);
+    x.fillRect(-3.5, -8,  8, 2);
+    // Objective lens cap
+    x.fillStyle = '#1a1008';
+    x.fillRect(-4, -tL - 2, 9, 4);
+    x.fillStyle = '#0a0a18';
+    x.fillRect(-3, -tL - 1, 7, 2);
+    // Eyepiece
+    x.fillStyle = '#4a3820';
+    x.fillRect(-4, 0, 9, 5);
+    x.restore();
+
+    // Focus knob
+    x.save();
+    x.translate(tx - 3, tmY - 4);
+    x.rotate(-Math.PI * 0.28);
+    x.fillStyle = '#6a5030';
+    x.fillRect(3, -13, 5, 4);
+    x.restore();
+
+    // Subtle ground shadow under tripod
+    x.globalAlpha = 0.15;
+    x.fillStyle = '#000000';
+    x.beginPath(); x.ellipse(tx - 1, FLOOR_Y + 1, 18, 4, 0, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = 1;
 
     // Right edge — district buildings peeking
     x.fillStyle='#0e0828'; x.globalAlpha=0.15;
@@ -608,6 +705,7 @@ export class WoodsScene extends Phaser.Scene {
     this.updateWater(time, delta);
     this.updateShootingStar(delta);
     this.updateCabinProximity();
+    this.updateTelescopeProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
@@ -789,6 +887,459 @@ export class WoodsScene extends Phaser.Scene {
     this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); });
   }
 
+  private updateTelescopeProximity(): void {
+    const near = Math.abs(this.player.x - TELESCOPE_X) < 44;
+    if (near !== this.nearTelescope) {
+      this.nearTelescope = near;
+      this.telescopePromptBg.setVisible(near);
+      this.telescopePromptText.setVisible(near);
+      this.telescopePromptArrow.setVisible(near);
+      if (!near) this.tweens.killTweensOf(this.telescopePromptArrow);
+    }
+    if (near) {
+      const px = TELESCOPE_X, py = FLOOR_Y - 90;
+      this.telescopePromptBg.setPosition(px - 60, py - 2);
+      this.telescopePromptText.setPosition(px, py + 8);
+      this.telescopePromptArrow.setPosition(px, py + 22);
+      if (!this.tweens.isTweening(this.telescopePromptArrow)) {
+        this.tweens.add({ targets: this.telescopePromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
+  }
+
+  private openTelescopeView(): void {
+    if (this.telescopeOverlay) return;
+
+    // ── seeded RNG ──
+    const mkRng = (seed: number) => { let s = seed >>> 0; return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 0x100000000; }; };
+    const viewSeed = (Math.random() * 0x7fffffff) | 0;
+    const R = mkRng(viewSeed);
+    const starRng = mkRng(viewSeed ^ 0xdeadbeef);
+
+    // ── background stars ──
+    const stars = Array.from({ length: 300 }, () => ({
+      x: starRng() * 100, y: starRng() * 100,
+      r: starRng() * 1.5 + 0.3,
+      a: starRng() * 0.5 + 0.45,
+      c: starRng() < 0.08 ? '#ffd8a0' : starRng() < 0.06 ? '#a0c8ff' : '#ffffff',
+    }));
+    const starSvg = stars.map(s =>
+      `<circle cx="${s.x.toFixed(1)}%" cy="${s.y.toFixed(1)}%" r="${s.r.toFixed(2)}" fill="${s.c}" opacity="${s.a.toFixed(2)}">
+        ${s.r > 1.1 ? `<animate attributeName="opacity" values="${s.a.toFixed(2)};${(s.a*0.5).toFixed(2)};${s.a.toFixed(2)}" dur="${(2+starRng()*3).toFixed(1)}s" repeatCount="indefinite"/>` : ''}
+      </circle>`
+    ).join('');
+
+    // ── pick random scene type ──
+    const scenes = [
+      // planets
+      'mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto',
+      // non-zodiac constellations
+      'orion','bigdipper','cassiopeia','pleiades',
+      // zodiac constellations
+      'aries','taurus','gemini','cancer','leo','virgo','libra','scorpius','sagittarius','capricorn','aquarius','pisces',
+      // moon
+      'moon',
+    ];
+    const sceneType = scenes[R() * scenes.length | 0];
+
+    // ── constellation helper ──
+    const makeCon = (stars2: number[][], lines: number[][], col = 'rgba(160,200,255,0.5)') => {
+      const starSize = (i: number) => stars2[i][2] ?? 1.8;
+      return lines.map(([a,b]) =>
+        `<line x1="${stars2[a][0]}%" y1="${stars2[a][1]}%" x2="${stars2[b][0]}%" y2="${stars2[b][1]}%" stroke="${col}" stroke-width="0.6" stroke-dasharray="2 1" opacity="0.7"/>`
+      ).join('') + stars2.map((s,i) =>
+        `<circle cx="${s[0]}%" cy="${s[1]}%" r="${starSize(i)}" fill="rgba(220,235,255,0.95)">
+          <animate attributeName="opacity" values="0.95;0.6;0.95" dur="${(2.5+i*0.3).toFixed(1)}s" repeatCount="indefinite"/>
+        </circle>`
+      ).join('');
+    };
+
+    // ── scenes ──
+    const uid = `tel${viewSeed}`;
+    let subject = '';
+    let label = '';
+    let nebulaCol1 = 'rgba(20,15,50,0.7)'; let nc1x='35%'; let nc1y='40%';
+    let nebulaCol2 = 'rgba(10,30,40,0.5)'; let nc2x='65%'; let nc2y='55%';
+
+    // ── planet helper ──
+    const makePlanet = (px:number,py:number,pr:number,gradId:string,gradStops:string,clipId:string,innerSvg:string,glow?:string) => `
+      ${glow?`<circle cx="${px}%" cy="${py}%" r="${pr+4}%" fill="${glow}"/>`:''}
+      <defs>
+        <radialGradient id="${uid}${gradId}" cx="38%" cy="35%" r="65%">${gradStops}</radialGradient>
+        <clipPath id="${uid}${clipId}"><circle cx="${px}%" cy="${py}%" r="${pr}%"/></clipPath>
+      </defs>
+      <circle cx="${px}%" cy="${py}%" r="${pr}%" fill="url(#${uid}${gradId})"/>
+      <g clip-path="url(#${uid}${clipId})">${innerSvg}</g>
+      <circle cx="${px}%" cy="${py}%" r="${pr}%" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>`;
+
+    if (sceneType === 'mercury') {
+      label = 'Mercury';
+      nebulaCol1 = 'rgba(30,20,10,0.3)';
+      const mx=50, my=46, mr=6;
+      subject = makePlanet(mx,my,mr,'mercg',
+        `<stop offset="0%" stop-color="#c8b898"/><stop offset="100%" stop-color="#706050"/>`,
+        'mercc',
+        `<circle cx="48%" cy="42%" r="1.5%" fill="rgba(80,65,50,0.6)"/>
+         <circle cx="56%" cy="52%" r="1%" fill="rgba(70,55,40,0.5)"/>
+         <circle cx="44%" cy="54%" r="0.8%" fill="rgba(75,60,45,0.5)"/>
+         <circle cx="52%" cy="44%" r="0.6%" fill="rgba(85,70,55,0.4)"/>
+         <circle cx="46%" cy="48%" r="0.5%" fill="rgba(65,50,35,0.45)"/>`,
+        'rgba(180,150,100,0.04)');
+      subject += `<text x="50%" y="63%" font-family="Courier New" font-size="8" fill="rgba(200,180,140,0.6)" text-anchor="middle">MERCURY</text>
+        <text x="50%" y="69%" font-family="Courier New" font-size="6" fill="rgba(160,140,100,0.4)" text-anchor="middle">no atmosphere</text>`;
+    } else if (sceneType === 'venus') {
+      label = 'Venus';
+      nebulaCol1 = 'rgba(50,40,10,0.4)'; nc1x='50%'; nc1y='45%';
+      const vx=50, vy=46, vr=10;
+      subject = `
+        <defs>
+          <radialGradient id="${uid}vg" cx="42%" cy="38%" r="65%">
+            <stop offset="0%" stop-color="#fffae0"/><stop offset="50%" stop-color="#e8d080"/><stop offset="100%" stop-color="#c0a040"/>
+          </radialGradient>
+          <clipPath id="${uid}vc"><circle cx="${vx}%" cy="${vy}%" r="${vr}%"/></clipPath>
+        </defs>
+        <circle cx="${vx}%" cy="${vy}%" r="${vr+5}%" fill="rgba(240,200,80,0.12)"/>
+        <circle cx="${vx}%" cy="${vy}%" r="${vr+3}%" fill="rgba(230,190,70,0.07)"/>
+        <circle cx="${vx}%" cy="${vy}%" r="${vr}%" fill="url(#${uid}vg)"/>
+        <g clip-path="url(#${uid}vc)">
+          <ellipse cx="50%" cy="40%" rx="8%" ry="2%" fill="rgba(230,200,80,0.3)"/>
+          <ellipse cx="50%" cy="46%" rx="9%" ry="2.5%" fill="rgba(220,190,60,0.25)"/>
+          <ellipse cx="50%" cy="52%" rx="7%" ry="2%" fill="rgba(210,175,50,0.3)"/>
+        </g>
+        <circle cx="${vx}%" cy="${vy}%" r="${vr}%" fill="none" stroke="rgba(240,210,100,0.2)" stroke-width="0.5"/>
+        <text x="50%" y="66%" font-family="Courier New" font-size="8" fill="rgba(240,210,120,0.6)" text-anchor="middle">VENUS</text>
+        <text x="50%" y="72%" font-family="Courier New" font-size="6" fill="rgba(200,170,80,0.4)" text-anchor="middle">thick cloud cover</text>`;
+    } else if (sceneType === 'mars') {
+      label = 'Mars';
+      nebulaCol1 = 'rgba(50,15,5,0.4)'; nc1x='50%'; nc1y='46%';
+      const mx=50, my=46, mr=8;
+      subject = `
+        <defs>
+          <radialGradient id="${uid}mgrad" cx="38%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#e07040"/><stop offset="100%" stop-color="#901808"/>
+          </radialGradient>
+          <clipPath id="${uid}mclip"><circle cx="${mx}%" cy="${my}%" r="${mr}%"/></clipPath>
+        </defs>
+        <circle cx="${mx}%" cy="${my}%" r="${mr+3}%" fill="rgba(180,60,20,0.07)"/>
+        <circle cx="${mx}%" cy="${my}%" r="${mr}%" fill="url(#${uid}mgrad)"/>
+        <g clip-path="url(#${uid}mclip)">
+          <ellipse cx="${mx-2}%" cy="${my-6}%" rx="3%" ry="1.5%" fill="rgba(230,230,240,0.7)"/>
+          <ellipse cx="${mx+1}%" cy="${my+6}%" rx="1.5%" ry="1%" fill="rgba(200,210,230,0.4)"/>
+          <circle cx="${mx+2}%" cy="${my+1}%" r="2%" fill="rgba(80,20,10,0.5)"/>
+          <circle cx="${mx-3}%" cy="${my-1}%" r="1.2%" fill="rgba(70,15,5,0.4)"/>
+          <circle cx="${mx+3}%" cy="${my+3}%" r="0.8%" fill="rgba(60,10,5,0.35)"/>
+        </g>
+        <circle cx="${mx}%" cy="${my}%" r="${mr}%" fill="none" stroke="rgba(200,80,30,0.2)" stroke-width="1"/>
+        <text x="50%" y="64%" font-family="Courier New" font-size="8" fill="rgba(220,100,60,0.6)" text-anchor="middle">MARS</text>
+        <text x="50%" y="70%" font-family="Courier New" font-size="6" fill="rgba(180,80,40,0.4)" text-anchor="middle">polar ice caps visible</text>`;
+    } else if (sceneType === 'jupiter') {
+      label = 'Jupiter';
+      nebulaCol1 = 'rgba(30,20,10,0.4)';
+      const jx=50, jy=46, jr=13;
+      subject = `
+        <defs>
+          <clipPath id="${uid}jclip"><circle cx="${jx}%" cy="${jy}%" r="${jr}%"/></clipPath>
+          <radialGradient id="${uid}jgrad" cx="45%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#f0d8a0"/><stop offset="100%" stop-color="#c8a060"/>
+          </radialGradient>
+        </defs>
+        <circle cx="${jx}%" cy="${jy}%" r="${jr+2}%" fill="rgba(200,160,80,0.08)"/>
+        <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="url(#${uid}jgrad)"/>
+        <g clip-path="url(#${uid}jclip)">
+          <rect x="${jx-jr}%" y="${jy-9}%" width="${jr*2}%" height="4%" fill="rgba(160,100,50,0.55)" rx="2"/>
+          <rect x="${jx-jr}%" y="${jy-4}%" width="${jr*2}%" height="6%" fill="rgba(200,130,60,0.4)" rx="2"/>
+          <rect x="${jx-jr}%" y="${jy+3}%" width="${jr*2}%" height="3%" fill="rgba(150,90,40,0.5)" rx="2"/>
+          <rect x="${jx-jr}%" y="${jy+7}%" width="${jr*2}%" height="5%" fill="rgba(180,110,50,0.45)" rx="2"/>
+          <ellipse cx="${jx-4}%" cy="${jy+1}%" rx="3%" ry="2%" fill="rgba(180,80,40,0.6)"/>
+        </g>
+        <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="none" stroke="rgba(200,150,80,0.3)" stroke-width="1"/>
+        <circle cx="${jx-18}%" cy="${jy-1}%" r="1%" fill="rgba(220,210,190,0.9)"/>
+        <circle cx="${jx-22}%" cy="${jy+3}%" r="0.8%" fill="rgba(210,200,180,0.85)"/>
+        <circle cx="${jx+19}%" cy="${jy-2}%" r="0.9%" fill="rgba(220,215,195,0.9)"/>
+        <circle cx="${jx+24}%" cy="${jy+1}%" r="0.7%" fill="rgba(210,205,185,0.8)"/>
+        <text x="50%" y="68%" font-family="Courier New" font-size="8" fill="rgba(200,170,100,0.6)" text-anchor="middle">JUPITER</text>
+        <text x="50%" y="74%" font-family="Courier New" font-size="6" fill="rgba(180,150,80,0.4)" text-anchor="middle">4 Galilean moons visible</text>`;
+    } else if (sceneType === 'saturn') {
+      label = 'Saturn';
+      nebulaCol1 = 'rgba(30,25,15,0.4)';
+      const sx=50, sy=47, sr=10;
+      subject = `
+        <defs>
+          <clipPath id="${uid}sclip"><circle cx="${sx}%" cy="${sy}%" r="${sr}%"/></clipPath>
+          <radialGradient id="${uid}sgrad" cx="40%" cy="38%" r="65%">
+            <stop offset="0%" stop-color="#e8d898"/><stop offset="100%" stop-color="#b89848"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+14}%" ry="3.5%" fill="none" stroke="rgba(200,170,90,0.35)" stroke-width="6"/>
+        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+10}%" ry="2.5%" fill="none" stroke="rgba(190,155,75,0.28)" stroke-width="4"/>
+        <circle cx="${sx}%" cy="${sy}%" r="${sr}%" fill="url(#${uid}sgrad)"/>
+        <g clip-path="url(#${uid}sclip)">
+          <rect x="${sx-sr}%" y="${sy-5}%" width="${sr*2}%" height="3%" fill="rgba(160,120,50,0.4)" rx="1"/>
+          <rect x="${sx-sr}%" y="${sy-1}%" width="${sr*2}%" height="4%" fill="rgba(180,140,60,0.3)" rx="1"/>
+          <rect x="${sx-sr}%" y="${sy+4}%" width="${sr*2}%" height="3%" fill="rgba(155,115,45,0.35)" rx="1"/>
+        </g>
+        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+14}%" ry="3.5%" fill="none" stroke="rgba(200,170,90,0.2)" stroke-width="1"/>
+        <text x="50%" y="70%" font-family="Courier New" font-size="8" fill="rgba(200,180,100,0.6)" text-anchor="middle">SATURN</text>`;
+    } else if (sceneType === 'uranus') {
+      label = 'Uranus';
+      nebulaCol1 = 'rgba(10,40,50,0.4)'; nc1x='50%'; nc1y='45%';
+      const ux=50, uy=46, ur=9;
+      subject = `
+        <defs>
+          <radialGradient id="${uid}ug" cx="40%" cy="36%" r="65%">
+            <stop offset="0%" stop-color="#c0f0f0"/><stop offset="60%" stop-color="#60c0c8"/><stop offset="100%" stop-color="#308090"/>
+          </radialGradient>
+          <clipPath id="${uid}uc"><circle cx="${ux}%" cy="${uy}%" r="${ur}%"/></clipPath>
+        </defs>
+        <circle cx="${ux}%" cy="${uy}%" r="${ur+3}%" fill="rgba(80,200,210,0.07)"/>
+        <circle cx="${ux}%" cy="${uy}%" r="${ur}%" fill="url(#${uid}ug)"/>
+        <g clip-path="url(#${uid}uc)">
+          <ellipse cx="50%" cy="44%" rx="8%" ry="1.5%" fill="rgba(160,230,235,0.2)"/>
+          <ellipse cx="50%" cy="48%" rx="8%" ry="1.5%" fill="rgba(140,215,220,0.15)"/>
+        </g>
+        <ellipse cx="${ux}%" cy="${uy}%" rx="${ur+10}%" ry="2%" fill="none" stroke="rgba(140,220,230,0.3)" stroke-width="2"/>
+        <ellipse cx="${ux}%" cy="${uy}%" rx="${ur+7}%" ry="1.4%" fill="none" stroke="rgba(120,200,210,0.2)" stroke-width="1.5"/>
+        <circle cx="${ux}%" cy="${uy}%" r="${ur}%" fill="none" stroke="rgba(140,210,220,0.15)" stroke-width="0.5"/>
+        <text x="50%" y="66%" font-family="Courier New" font-size="8" fill="rgba(140,220,230,0.6)" text-anchor="middle">URANUS</text>
+        <text x="50%" y="72%" font-family="Courier New" font-size="6" fill="rgba(100,180,190,0.4)" text-anchor="middle">rotates on its side</text>`;
+    } else if (sceneType === 'neptune') {
+      label = 'Neptune';
+      nebulaCol1 = 'rgba(5,10,50,0.6)'; nc1x='50%'; nc1y='45%';
+      const nx=50, ny=46, nr=8;
+      subject = `
+        <defs>
+          <radialGradient id="${uid}ng" cx="38%" cy="33%" r="65%">
+            <stop offset="0%" stop-color="#8090f8"/><stop offset="60%" stop-color="#2030d0"/><stop offset="100%" stop-color="#101080"/>
+          </radialGradient>
+          <clipPath id="${uid}nc"><circle cx="${nx}%" cy="${ny}%" r="${nr}%"/></clipPath>
+        </defs>
+        <circle cx="${nx}%" cy="${ny}%" r="${nr+4}%" fill="rgba(40,60,200,0.1)"/>
+        <circle cx="${nx}%" cy="${ny}%" r="${nr}%" fill="url(#${uid}ng)"/>
+        <g clip-path="url(#${uid}nc)">
+          <ellipse cx="48%" cy="46%" rx="4%" ry="2%" fill="rgba(10,10,80,0.6)"/>
+          <ellipse cx="50%" cy="42%" rx="7%" ry="1.5%" fill="rgba(100,120,240,0.3)"/>
+          <ellipse cx="50%" cy="50%" rx="6%" ry="1.5%" fill="rgba(80,100,220,0.25)"/>
+        </g>
+        <circle cx="${nx}%" cy="${ny}%" r="${nr}%" fill="none" stroke="rgba(80,100,220,0.2)" stroke-width="0.5"/>
+        <text x="50%" y="64%" font-family="Courier New" font-size="8" fill="rgba(100,130,255,0.6)" text-anchor="middle">NEPTUNE</text>
+        <text x="50%" y="70%" font-family="Courier New" font-size="6" fill="rgba(80,110,220,0.4)" text-anchor="middle">Great Dark Spot</text>`;
+    } else if (sceneType === 'pluto') {
+      label = 'Pluto';
+      nebulaCol1 = 'rgba(20,15,10,0.3)';
+      const px=50, py=46, pr=4;
+      subject = makePlanet(px,py,pr,'plutg',
+        `<stop offset="0%" stop-color="#d8c8a8"/><stop offset="60%" stop-color="#a09070"/><stop offset="100%" stop-color="#706050"/>`,
+        'plutc',
+        `<ellipse cx="51%" cy="45%" rx="3%" ry="2.5%" fill="rgba(240,230,210,0.55)"/>
+         <ellipse cx="48%" cy="50%" rx="2%" ry="1.2%" fill="rgba(180,140,100,0.4)"/>`,
+        'rgba(180,160,120,0.04)');
+      subject += `<text x="50%" y="61%" font-family="Courier New" font-size="8" fill="rgba(200,185,150,0.6)" text-anchor="middle">PLUTO</text>
+        <text x="50%" y="67%" font-family="Courier New" font-size="6" fill="rgba(160,145,110,0.4)" text-anchor="middle">Tombaugh Regio</text>`;
+    } else if (sceneType === 'orion') {
+      label = 'Orion';
+      nebulaCol1 = 'rgba(40,20,60,0.7)'; nc1x='50%'; nc1y='45%';
+      const s = [[38,22,2.2],[62,20,2.1],[45,42,1.6],[50,42,1.5],[55,42,1.6],[48,52,1.4],[40,65,2],[60,63,2],[50,48,1.3],[50,55,1.2]];
+      subject = makeCon(s,[[0,2],[1,2],[2,3],[3,4],[4,1],[0,6],[1,7],[2,8],[8,9]], 'rgba(180,200,255,0.55)');
+      subject += `<text x="51%" y="17%" font-family="Courier New" font-size="7" fill="rgba(180,200,255,0.5)" text-anchor="middle">ORION</text>`;
+    } else if (sceneType === 'bigdipper') {
+      label = 'Ursa Major';
+      const s = [[28,30,2],[36,25,1.8],[46,22,1.9],[52,27,1.8],[50,35,1.7],[40,38,1.6],[35,44,1.8]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[3,5]], 'rgba(180,210,255,0.55)');
+      subject += `<text x="40%" y="18%" font-family="Courier New" font-size="7" fill="rgba(180,200,255,0.5)" text-anchor="middle">URSA MAJOR</text>`;
+    } else if (sceneType === 'cassiopeia') {
+      label = 'Cassiopeia';
+      const s = [[25,35,2],[36,25,1.9],[50,32,2.1],[64,24,1.9],[75,33,2]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4]], 'rgba(200,220,255,0.55)');
+      subject += `<text x="50%" y="19%" font-family="Courier New" font-size="7" fill="rgba(180,200,255,0.5)" text-anchor="middle">CASSIOPEIA</text>`;
+    } else if (sceneType === 'pleiades') {
+      label = 'Pleiades Cluster';
+      nebulaCol1 = 'rgba(20,30,70,0.7)'; nc1x='50%'; nc1y='45%';
+      const cluster = Array.from({length:22},(_,i)=> {
+        const cr = mkRng(i*31+7); return [42+cr()*16, 38+cr()*16, 0.8+cr()*1.6];
+      });
+      subject = cluster.map(s => `<circle cx="${s[0].toFixed(1)}%" cy="${s[1].toFixed(1)}%" r="${s[2].toFixed(1)}" fill="rgba(180,210,255,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="${(1.5+s[2]).toFixed(1)}s" repeatCount="indefinite"/></circle>`).join('');
+      subject += `<ellipse cx="50%" cy="46%" rx="12%" ry="10%" fill="none" stroke="rgba(140,180,255,0.15)" stroke-width="8"/>`;
+      subject += `<text x="50%" y="32%" font-family="Courier New" font-size="7" fill="rgba(180,210,255,0.5)" text-anchor="middle">PLEIADES</text>`;
+    } else if (sceneType === 'aries') {
+      label = 'Aries';
+      nebulaCol1 = 'rgba(50,20,10,0.35)'; nc1x='50%'; nc1y='45%';
+      const s = [[35,42,2.3],[50,38,1.8],[58,40,1.7],[65,43,1.6]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3]], 'rgba(255,200,160,0.55)');
+      subject += `<text x="50%" y="32%" font-family="Courier New" font-size="7" fill="rgba(255,200,160,0.5)" text-anchor="middle">ARIES ♈</text>`;
+    } else if (sceneType === 'taurus') {
+      label = 'Taurus';
+      nebulaCol1 = 'rgba(40,20,5,0.35)'; nc1x='48%'; nc1y='48%';
+      // V-shape Hyades + Aldebaran
+      const s = [[40,52,2.8],[50,46,1.9],[56,50,1.8],[50,56,1.7],[44,58,1.6],[35,40,1.5],[44,38,1.5],[58,34,1.4],[64,28,1.4]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,0],[1,5],[1,6],[6,7],[7,8]], 'rgba(255,210,150,0.5)');
+      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(255,210,150,0.5)" text-anchor="middle">TAURUS ♉</text>`;
+    } else if (sceneType === 'gemini') {
+      label = 'Gemini';
+      nebulaCol1 = 'rgba(20,20,50,0.35)'; nc1x='50%'; nc1y='44%';
+      // Twin columns: Castor & Pollux at top
+      const s = [[38,24,2.2],[56,26,2.4],[37,34,1.7],[55,35,1.7],[36,44,1.7],[54,44,1.6],[35,54,1.6],[54,54,1.5],[36,62,1.5],[55,62,1.5]];
+      subject = makeCon(s,[[0,2],[2,4],[4,6],[6,8],[1,3],[3,5],[5,7],[7,9],[4,5]], 'rgba(200,220,255,0.55)');
+      subject += `<text x="47%" y="18%" font-family="Courier New" font-size="7" fill="rgba(200,220,255,0.5)" text-anchor="middle">GEMINI ♊</text>`;
+    } else if (sceneType === 'cancer') {
+      label = 'Cancer';
+      nebulaCol1 = 'rgba(10,30,40,0.35)'; nc1x='50%'; nc1y='46%';
+      const s = [[38,36,1.8],[56,34,1.8],[44,46,1.7],[50,56,2],[38,62,1.6],[56,62,1.6]];
+      subject = makeCon(s,[[0,2],[1,2],[2,3],[3,4],[3,5]], 'rgba(170,220,255,0.5)');
+      // Beehive cluster
+      const bhive = Array.from({length:12},(_,i)=>{const cr=mkRng(i*19+11);return[46+cr()*8,42+cr()*8,0.5+cr()*1.0];});
+      subject += bhive.map(b=>`<circle cx="${b[0].toFixed(1)}%" cy="${b[1].toFixed(1)}%" r="${b[2].toFixed(1)}" fill="rgba(200,230,255,0.7)"/>`).join('');
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(170,220,255,0.5)" text-anchor="middle">CANCER ♋</text>`;
+    } else if (sceneType === 'leo') {
+      label = 'Leo';
+      nebulaCol1 = 'rgba(40,25,10,0.4)'; nc1x='45%'; nc1y='45%';
+      const s = [[35,55,2.4],[28,42,1.8],[35,32,1.7],[48,28,2],[58,32,1.8],[62,42,2.2],[55,55,1.7],[48,50,1.5]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[5,7],[7,0]], 'rgba(255,220,160,0.5)');
+      subject += `<text x="46%" y="24%" font-family="Courier New" font-size="7" fill="rgba(255,220,160,0.45)" text-anchor="middle">LEO ♌</text>`;
+    } else if (sceneType === 'virgo') {
+      label = 'Virgo';
+      nebulaCol1 = 'rgba(30,40,10,0.35)'; nc1x='50%'; nc1y='47%';
+      const s = [[50,22,1.8],[44,30,1.7],[38,38,2.3],[44,46,1.6],[50,52,1.7],[58,46,1.6],[64,38,1.8],[60,28,1.7],[52,38,1.5]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[3,8],[8,5]], 'rgba(200,240,180,0.5)');
+      subject += `<text x="50%" y="16%" font-family="Courier New" font-size="7" fill="rgba(200,240,180,0.5)" text-anchor="middle">VIRGO ♍</text>`;
+    } else if (sceneType === 'libra') {
+      label = 'Libra';
+      nebulaCol1 = 'rgba(20,30,20,0.35)'; nc1x='50%'; nc1y='46%';
+      const s = [[38,54,2],[62,54,2],[34,42,1.8],[66,42,1.7],[50,36,1.9],[50,50,1.6]];
+      subject = makeCon(s,[[0,1],[0,2],[1,3],[2,4],[3,4],[4,5],[5,0],[5,1]], 'rgba(180,240,180,0.5)');
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(180,240,180,0.5)" text-anchor="middle">LIBRA ♎</text>`;
+    } else if (sceneType === 'scorpius') {
+      label = 'Scorpius';
+      nebulaCol1 = 'rgba(60,10,10,0.5)'; nc1x='50%'; nc1y='50%';
+      const s = [[50,20,2.4],[47,28,1.8],[44,35,1.7],[40,42,1.6],[38,50,1.5],[40,58,1.4],[44,65,1.6],[48,70,1.5],[53,68,1.5],[42,34,1.4],[36,30,1.4]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[2,9],[9,10]], 'rgba(255,160,140,0.5)');
+      subject += `<text x="50%" y="15%" font-family="Courier New" font-size="7" fill="rgba(255,160,140,0.5)" text-anchor="middle">SCORPIUS ♏</text>`;
+    } else if (sceneType === 'sagittarius') {
+      label = 'Sagittarius';
+      nebulaCol1 = 'rgba(40,20,5,0.45)'; nc1x='50%'; nc1y='50%';
+      // Teapot asterism
+      const s = [[44,58,1.8],[52,56,1.7],[58,52,2],[54,46,2.1],[46,46,1.8],[38,50,1.7],[36,56,1.7],[50,62,1.6]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,0],[0,7],[1,3],[4,3]], 'rgba(255,190,100,0.5)');
+      subject += `<text x="50%" y="38%" font-family="Courier New" font-size="7" fill="rgba(255,190,100,0.5)" text-anchor="middle">SAGITTARIUS ♐</text>`;
+    } else if (sceneType === 'capricorn') {
+      label = 'Capricorn';
+      nebulaCol1 = 'rgba(15,25,35,0.35)'; nc1x='50%'; nc1y='47%';
+      const s = [[32,38,2],[44,34,1.8],[56,34,1.8],[66,40,2],[60,50,1.7],[50,56,1.8],[40,56,1.7],[34,50,1.7]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[1,6],[2,5]], 'rgba(160,200,220,0.5)');
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,220,0.5)" text-anchor="middle">CAPRICORN ♑</text>`;
+    } else if (sceneType === 'aquarius') {
+      label = 'Aquarius';
+      nebulaCol1 = 'rgba(10,20,50,0.45)'; nc1x='50%'; nc1y='46%';
+      const s = [[42,32,2.2],[50,36,1.8],[44,44,1.7],[52,50,1.8],[42,56,1.7],[56,56,1.7],[60,48,1.6],[38,48,1.6]];
+      subject = makeCon(s,[[0,1],[0,2],[2,3],[3,4],[3,5],[3,6],[2,7]], 'rgba(140,200,255,0.5)');
+      // water droplets
+      subject += `<line x1="44%" y1="60%" x2="40%" y2="70%" stroke="rgba(100,180,255,0.35)" stroke-width="0.7"/>
+        <line x1="50%" y1="62%" x2="46%" y2="72%" stroke="rgba(100,180,255,0.3)" stroke-width="0.7"/>
+        <line x1="56%" y1="60%" x2="52%" y2="70%" stroke="rgba(100,180,255,0.3)" stroke-width="0.7"/>`;
+      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(140,200,255,0.5)" text-anchor="middle">AQUARIUS ♒</text>`;
+    } else if (sceneType === 'pisces') {
+      label = 'Pisces';
+      nebulaCol1 = 'rgba(10,20,40,0.4)'; nc1x='50%'; nc1y='46%';
+      // Two fish + cord
+      const s = [[28,38,2],[22,44,1.8],[28,52,1.8],[36,46,1.7],[72,38,2],[78,44,1.8],[72,52,1.8],[64,46,1.7],[50,46,1.5]];
+      subject = makeCon(s,[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[3,8],[8,7]], 'rgba(160,200,255,0.5)');
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,255,0.5)" text-anchor="middle">PISCES ♓</text>`;
+    } else { // moon
+      nebulaCol1 = 'rgba(20,20,30,0.5)';
+      // ── Real lunar phase ──────────────────────────────────────────
+      // Known new moon: 2000-01-06 18:14 UTC
+      const knownNewMoon = 947182440000;
+      const lunarCycle  = 29.53059 * 86400000;
+      const realPhase   = ((Date.now() - knownNewMoon) % lunarCycle) / lunarCycle;
+      // 0=new moon  0.25=first quarter  0.5=full moon  0.75=last quarter
+      const phaseNames = [
+        [0.03,  'New Moon'],
+        [0.22,  'Waxing Crescent'],
+        [0.28,  'First Quarter'],
+        [0.47,  'Waxing Gibbous'],
+        [0.53,  'Full Moon'],
+        [0.72,  'Waning Gibbous'],
+        [0.78,  'Last Quarter'],
+        [0.97,  'Waning Crescent'],
+        [1.00,  'New Moon'],
+      ];
+      const phaseName = phaseNames.find(([t]) => realPhase <= (t as number))![1] as string;
+      label = `Luna — ${phaseName}`;
+      // Shadow offset: waxing moves shadow left (right side lit), waning moves right (left side lit)
+      // moonR*2.1 pushes shadow fully off the disc at full moon
+      const moonX = 50, moonY = 46, moonR = 18;
+      const maxOff = moonR * 2.1;
+      const shadowOff = realPhase <= 0.5
+        ? -realPhase * 2 * maxOff          // 0 → -maxOff (new → full, waxing)
+        : (1 - realPhase) * 2 * maxOff;   // +maxOff → 0 (full → new, waning)
+      const craters = Array.from({length:12},(_,i)=>{const cr=mkRng(i*17+3);return{x:moonX-moonR+cr()*moonR*1.8,y:moonY-moonR+cr()*moonR*1.8,r:cr()*2+0.6,a:0.15+cr()*0.25};});
+      const craterSvg = craters.map(c=>`<circle cx="${c.x.toFixed(1)}%" cy="${c.y.toFixed(1)}%" r="${c.r.toFixed(1)}" fill="none" stroke="rgba(160,155,130,${c.a.toFixed(2)})" stroke-width="0.5"/>`).join('');
+      subject = `
+        <defs>
+          <radialGradient id="${uid}lunagrad" cx="35%" cy="32%" r="65%">
+            <stop offset="0%" stop-color="#e8e0c0"/><stop offset="60%" stop-color="#c8c0a0"/><stop offset="100%" stop-color="#a09070"/>
+          </radialGradient>
+          <clipPath id="${uid}lunaclip"><circle cx="${moonX}%" cy="${moonY}%" r="${moonR}%"/></clipPath>
+          <mask id="${uid}lunamask">
+            <rect width="100%" height="100%" fill="white"/>
+            <circle cx="${(moonX+shadowOff).toFixed(1)}%" cy="${(moonY-2).toFixed(1)}%" r="${(moonR*1.05).toFixed(1)}%" fill="black"/>
+          </mask>
+        </defs>
+        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR+4}%" fill="rgba(220,210,160,0.06)"/>
+        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR+2}%" fill="rgba(200,190,140,0.04)"/>
+        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR}%" fill="url(#${uid}lunagrad)" mask="url(#${uid}lunamask)"/>
+        <g clip-path="url(#${uid}lunaclip)" mask="url(#${uid}lunamask)">${craterSvg}</g>
+        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR}%" fill="none" stroke="rgba(220,210,160,0.15)" stroke-width="0.5"/>
+        <text x="50%" y="74%" font-family="Courier New" font-size="8" fill="rgba(220,210,160,0.55)" text-anchor="middle">LUNA</text>`;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,5,0.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9000;';
+    overlay.innerHTML = `
+      <div style="font-family:'Courier New',monospace;font-size:11px;color:rgba(140,170,255,0.6);letter-spacing:0.15em;text-transform:uppercase">${label}</div>
+      <div style="position:relative;width:min(460px,78vmin);height:min(460px,78vmin);border-radius:50%;overflow:hidden;
+        box-shadow:0 0 0 3px #1a1a2e,0 0 0 7px #0d0d1a,0 0 50px rgba(50,70,160,0.4),inset 0 0 80px rgba(0,0,20,0.6);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" style="position:absolute;inset:0">
+          <defs>
+            <radialGradient id="${uid}n1" cx="${nc1x}" cy="${nc1y}" r="38%">
+              <stop offset="0%" stop-color="${nebulaCol1}"/><stop offset="100%" stop-color="transparent"/>
+            </radialGradient>
+            <radialGradient id="${uid}n2" cx="${nc2x}" cy="${nc2y}" r="30%">
+              <stop offset="0%" stop-color="${nebulaCol2}"/><stop offset="100%" stop-color="transparent"/>
+            </radialGradient>
+            <radialGradient id="${uid}vig" cx="50%" cy="50%" r="50%">
+              <stop offset="70%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(0,0,10,0.97)"/>
+            </radialGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="#00000c"/>
+          <rect width="100%" height="100%" fill="url(#${uid}n1)"/>
+          <rect width="100%" height="100%" fill="url(#${uid}n2)"/>
+          ${starSvg}
+          ${subject}
+          <line x1="50%" y1="2%" x2="50%" y2="98%" stroke="rgba(80,120,255,0.12)" stroke-width="0.5"/>
+          <line x1="2%" y1="50%" x2="98%" y2="50%" stroke="rgba(80,120,255,0.12)" stroke-width="0.5"/>
+          <circle cx="50%" cy="50%" r="6%" fill="none" stroke="rgba(80,120,255,0.15)" stroke-width="0.5"/>
+          <circle cx="50%" cy="50%" r="50%" fill="url(#${uid}vig)"/>
+        </svg>
+      </div>
+      <div style="font-family:'Courier New',monospace;font-size:10px;color:rgba(100,130,200,0.4);letter-spacing:0.1em">[ESC] close</div>
+    `;
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) this.closeTelescopeView(); });
+    document.body.appendChild(overlay);
+    this.telescopeOverlay = overlay;
+    overlay.style.opacity = '0';
+    requestAnimationFrame(() => { overlay.style.transition = 'opacity 0.4s ease'; overlay.style.opacity = '1'; });
+  }
+
+  private closeTelescopeView(): void {
+    if (!this.telescopeOverlay) return;
+    const el = this.telescopeOverlay;
+    this.telescopeOverlay = null;
+    el.style.transition = 'opacity 0.25s ease';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 260);
+  }
+
   private updateCabinProximity(): void {
     const near = Math.abs(this.player.x - CABIN_DOOR_X) < 46;
     if (near !== this.nearCabin) {
@@ -819,7 +1370,7 @@ export class WoodsScene extends Phaser.Scene {
     const nt=this.add.text(px,py-44,name.slice(0,14),{fontFamily:'"Courier New", monospace',fontSize:'9px',color:WOODS_ACCENT,align:'center',backgroundColor:'#04081088',padding:{x:3,y:1}}).setOrigin(0.5).setDepth(9);
     const ss=(status||'').slice(0,30); const st=this.add.text(px,py-59,ss,{fontFamily:'"Courier New", monospace',fontSize:'8px',color:P.lpurp,align:'center'}).setOrigin(0.5).setDepth(9).setAlpha(ss?1:0);
     const cz=this.add.zone(px,py-20,40,50).setInteractive({useHandCursor:true}).setDepth(12);
-    cz.on('pointerdown',(ptr:Phaser.Input.Pointer)=>{ptr.event.stopPropagation();const op2=this.otherPlayers.get(pk);showPlayerMenu(pk,name.slice(0,14),ptr.x,ptr.y,{onChat:(t,c)=>this.chatUI.addMessage('system',t,c),getDMPanel:()=>this.dmPanel},op2?.avatar,op2?.status);});
+    cz.on('pointerdown',(ptr:Phaser.Input.Pointer)=>{if((ptr.event.target as HTMLElement)?.tagName!=='CANVAS')return;ptr.event.stopPropagation();const op2=this.otherPlayers.get(pk);showPlayerMenu(pk,name.slice(0,14),ptr.x,ptr.y,{onChat:(t,c)=>this.chatUI.addMessage('system',t,c),getDMPanel:()=>this.dmPanel},op2?.avatar,op2?.status);});
     this.otherPlayers.set(pk,{sprite:sp,nameText:nt,statusText:st,targetX:px,targetY:py,name,avatar:avatarStr,status:status||'',clickZone:cz});
   }
   private removeOtherPlayer(pk: string): void {
@@ -843,7 +1394,7 @@ export class WoodsScene extends Phaser.Scene {
       case 'mute':{const s=toggleMute();this.chatUI.addMessage('system',s?'Muted':'Unmuted',s?P.amber:WOODS_ACCENT);break;}
       case 'filter':{if(!arg){const w=getCustomBannedWords();this.chatUI.addMessage('system',w.length?`Filtered: ${w.join(', ')}`:'No filters',WOODS_ACCENT);return;}addBannedWord(arg);this.chatUI.addMessage('system',`Added "${arg}"`,WOODS_ACCENT);break;}
       case 'unfilter':{if(!arg)return;removeBannedWord(arg);this.chatUI.addMessage('system',`Removed "${arg}"`,WOODS_ACCENT);break;}
-      case 'terminal':case 'wardrobe':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName.slice(0,14));sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
+      case 'terminal':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName.slice(0,14));sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
       case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/coffee','/music','/zzz','/think','/hearts','/angry','/sweat','/sparkle','/confetti','/fire','/ghost','/rain','/terminal','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
       default:this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);
     }

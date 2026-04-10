@@ -11,7 +11,7 @@
  *   ["f", "Font Name", "url"]  — custom web font (woff2)
  */
 
-const PANEL_SELECTORS  = '.fp-panel, .dm-panel, #profile-modal';
+const PANEL_SELECTORS  = '.fp-panel, .dm-panel, .cp-panel, #profile-modal';
 const STYLE_ID         = 'nd-nostr-theme';
 const ENABLED_KEY      = 'nd_nostr_theme_enabled';
 const CACHED_THEME_KEY = 'nd_nostr_theme_cache';

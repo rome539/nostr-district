@@ -18,6 +18,7 @@ import {
 import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
 import { DMPanel } from '../ui/DMPanel';
+import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
@@ -70,6 +71,7 @@ export class CabinScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private settingsPanel = new SettingsPanel();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
@@ -119,6 +121,7 @@ export class CabinScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(80, 50);
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
       const wx = this.cameras.main.scrollX + p.x;
       if (p.y < FLOOR_Y - 10 || p.y > 455) return;
       this.targetX = Phaser.Math.Clamp(wx, DOOR_X + 10, W - 20);
@@ -130,16 +133,25 @@ export class CabinScene extends Phaser.Scene {
     this.chatUI = new ChatUI();
     const chatInput = this.chatUI.create('Chat in the cabin...', CABIN_ACCENT, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
-    this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (document.activeElement?.closest('.dm-panel')) return;
+      if (document.activeElement?.closest('.cp-panel')) return;
+      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
+      if (document.activeElement !== chatInput) chatInput.focus();
+    });
 
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
+    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
+    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
 
     let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
@@ -151,13 +163,19 @@ export class CabinScene extends Phaser.Scene {
     this.doorPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Back to Woods' : '[E] Back to Woods', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.doorPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.doorPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 138, 28), Phaser.Geom.Rectangle.Contains);
-    this.doorPromptBg.on('pointerdown', () => { if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } });
+    this.doorPromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
+    });
     this.input.keyboard?.on('keydown-E', () => {
       if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
     });
     this.input.keyboard?.on('keydown-ESC', () => {
       if (document.activeElement === this.chatUI.getInput()) return;
+      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
       if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
       if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
     });
@@ -168,6 +186,7 @@ export class CabinScene extends Phaser.Scene {
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
       onCountUpdate: () => {},
       onChat: (pk, name, text) => {
+
         const isMe = pk === myPubkey;
         if (text.startsWith('/emote ')) {
           if (!isMe) {
@@ -208,7 +227,7 @@ export class CabinScene extends Phaser.Scene {
 
     this.events.on('shutdown', () => {
       unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.muteList.destroy(); this.playerPicker.close();
-      if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close();
+      if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
       this.doorPromptBg?.destroy(); this.doorPromptText?.destroy(); this.doorPromptArrow?.destroy();
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
@@ -549,7 +568,7 @@ export class CabinScene extends Phaser.Scene {
     const nt = this.add.text(px, py - 90, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(9);
     const ss = (status || '').slice(0, 30); const st = this.add.text(px, py - 102, ss, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(ss ? 1 : 0);
     const cz = this.add.zone(px, py - 28, 40, 60).setInteractive({ useHandCursor: true }).setDepth(12);
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { ptr.event.stopPropagation(); const op2 = this.otherPlayers.get(pk); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status); });
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return; ptr.event.stopPropagation(); const op2 = this.otherPlayers.get(pk); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status); });
     this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name, avatar: avatarStr, status: status || '', clickZone: cz });
   }
 
@@ -575,7 +594,7 @@ export class CabinScene extends Phaser.Scene {
       case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Muted' : 'Unmuted', s ? P.amber : CABIN_ACCENT); break; }
       case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', CABIN_ACCENT); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, CABIN_ACCENT); break; }
       case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, CABIN_ACCENT); break; }
-      case 'terminal': case 'wardrobe': case 'avatar': { if (this.computerUI.isOpen()) { this.computerUI.close(); return; } this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); break; }
+      case 'terminal': case 'avatar': { if (this.computerUI.isOpen()) { this.computerUI.close(); return; } this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); break; }
       case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', CABIN_ACCENT); ['/tp <room>', '/leave', '/dm <n>', '/zap <name>', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/players', '/follows', '/mute', '/filter <w>'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }

@@ -29,7 +29,9 @@ export class HotkeyModal {
     const hotkeys: [string, string][] = [
       ['E / Space', 'Enter room / interact'],
       ['M',         'Messages (DMs)'],
-      ['G',         'Follows list'],
+      ['G',         'Crews'],
+      ['F',         'Follows list'],
+      ['T',         'Terminal / avatar editor'],
       ['B',         'Polls board'],
       ['U',         'Mute list'],
       ['S',         'Settings'],
@@ -40,14 +42,18 @@ export class HotkeyModal {
     const navCmds: [string, string][] = [
       ['/tp <room>',    'Teleport to a room'],
       ['/dm <name>',    'Open direct message'],
+      ['/crew',         'Open crews panel'],
       ['/visit <name>', "Visit player's room"],
+      ['/zap <name>',   'Send a lightning zap'],
       ['/players',      'Who\'s online'],
       ['/follows',      'Open follows list'],
       ['/polls',        'Open polls board'],
+
       ['/status',       'Show your status'],
       ['/mute',         'Mute all chat'],
       ['/mutelist',     'View muted players'],
       ['/filter <w>',   'Filter a word from chat'],
+      ['/unfilter <w>', 'Remove a word filter'],
     ];
 
     const socialCmds: [string, string][] = [

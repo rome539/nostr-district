@@ -15,6 +15,7 @@ Nostr District is a browser-based MMO where your Nostr identity is your characte
 - **DMs** — encrypted direct messages (NIP-17 + NIP-44)
 - **Zaps** — lightning tips via NWC or WebLN (NIP-57 / NIP-47)
 - **Polls** — create and vote on polls pinned to rooms (NIP-88)
+- **Crews** — persistent guilds with chat, roles, and membership (NIP-29)
 - **Avatars** — fully customizable pixel art characters
 - **Themes** — publish and browse community pixel art room themes
 
@@ -50,6 +51,7 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/dm [player]` | — | Open a DM with a player. No argument lists online players. |
+| `/crew` | `/crews` | Open the Crews panel. |
 | `/zap <player>` | — | Open the zap modal to send a lightning tip. Requires login. |
 | `/players` | `/who`, `/online` | List players currently in the scene. |
 | `/follows` | `/following`, `/friends` | Open the follows / friends panel. |
@@ -95,20 +97,43 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | 0 | User metadata (profile, lightning address) | NIP-01 |
 | 1 | Short text notes (global feed) | NIP-01 |
 | 3 | Contact list / follows | NIP-01 |
+| 5 | Event deletion (crew cleanup) | NIP-09 |
 | 6 | Reposts | NIP-18 |
+| 9 | Group chat message (crew chat) | NIP-29 |
 | 13 | Seal (encrypted rumor wrapper) | NIP-59 |
 | 14 | Direct message rumor (unsigned inner event) | NIP-17 |
 | 1018 | Poll vote / response | NIP-88 |
 | 1059 | Gift wrap (outer DM envelope) | NIP-59 |
 | 1068 | Poll event | NIP-88 |
+| 9001 | Kick member from group | NIP-29 |
+| 9007 | Create group (founder action) | NIP-29 |
+| 9008 | Delete group (founder action) | NIP-29 |
+| 9021 | Join group request (member action) | NIP-29 |
+| 9022 | Leave group (member action) | NIP-29 |
 | 9734 | Zap request | NIP-57 |
 | 9735 | Zap receipt | NIP-57 |
 | 13194 | NWC info event (legacy) | NIP-47 |
-| 16767 | User's active theme (replaceable) | custom |
+| 16767 | User's active UI theme (replaceable) | custom |
 | 20000 | Ephemeral channel message (room chat) | NIP-28 |
 | 23194 | NWC request | NIP-47 |
 | 23195 | NWC response | NIP-47 |
-| 36767 | Published theme (addressable) | custom |
+| 30078 | App-specific replaceable data (avatar, room config, crew definitions, crew membership, invite tokens) | NIP-78 |
+| 36767 | Published room theme (addressable) | custom |
+| 39001 | Group admin list (relay-maintained) | NIP-29 |
+| 39002 | Group member list (relay-maintained) | NIP-29 |
+
+### Kind 30078 — d-tag index
+
+All kind 30078 events are namespaced by their `d` tag:
+
+| d-tag | Owner | Description |
+|-------|-------|-------------|
+| `nostr-district-avatar` | any user | Avatar configuration (body, hair, clothes, colors) |
+| `nostr-district-outfits` | any user | Saved outfit presets |
+| `nostr-district-room` | any user | Room decoration and layout config |
+| `nd-crew-{id}` | founder | Crew definition (name, emblem, roles, kicked list) |
+| `nd-m-{crewId}` | each member | Per-member crew membership status (`active: true/false, role`) |
+| `nd-invite-{token}` | invitee | Consumed invite token record (one-time use, cross-device) |
 
 ## NIPs Implemented
 
@@ -117,16 +142,41 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | NIP-01 | Basic protocol | Core event types, signing, relay communication |
 | NIP-04 | Encrypted DMs (legacy) | Fallback encryption for NWC and older extensions |
 | NIP-07 | Browser extension signing | Login via Alby / nos2x; signing and encryption |
+| NIP-09 | Event deletion | Kind 5 deletion events used to remove crew definitions |
 | NIP-17 | Encrypted DMs | Private messages using gift wrap + NIP-44 |
 | NIP-18 | Reposts | Kind 6 repost display in the feed room |
 | NIP-19 | Bech32 encoding | npub / nsec / naddr encode and decode |
 | NIP-28 | Public channels | Room chat via ephemeral kind 20000 events |
+| NIP-29 | Simple Groups | Crew system — group creation, membership, chat, kick, leave |
 | NIP-44 | Encrypted payloads v2 | Primary encryption for DMs and NWC requests |
 | NIP-46 | Remote signing | Login via Bunker URL or QR-based client flow |
 | NIP-47 | Nostr Wallet Connect | Pay zap invoices from a connected lightning wallet |
 | NIP-57 | Zaps | Zap requests and receipt verification |
 | NIP-59 | Gift wraps | Seals and gift wraps for NIP-17 DM privacy |
+| NIP-78 | App-specific data | Kind 30078 for avatar, room config, crew definitions, membership, and invite tokens |
 | NIP-88 | Polls | Create polls and record votes in rooms |
+
+## Crews (NIP-29)
+
+Crews are persistent guilds backed by NIP-29 groups on dedicated relay infrastructure. Each crew has:
+
+- **Founder** — creates and fully controls the crew; can promote/kick anyone
+- **Admins** — can accept join requests and kick regular members
+- **Members** — can chat, post, and react in the crew channel
+
+### How membership works
+
+Each member publishes their own `kind:30078` event (d-tag `nd-m-{crewId}`) as a self-owned membership record — analogous to a kind:3 contact list. `active: true` means joined; `active: false` means left. This is the authoritative membership source and syncs across all devices and browsers automatically.
+
+The crew definition (d-tag `nd-crew-{id}`) published by the founder stores roles, the kicked list, and the NIP-44 chat key used to encrypt crew chat history.
+
+### Invite tokens
+
+DM crew invites include a one-time token. When accepted, a `kind:30078` event with d-tag `nd-invite-{token}` is published by the accepting user. Any browser with the same keypair will see the invite as already consumed.
+
+### NIP-29 relay infrastructure
+
+Crew chat, membership actions, and group management use [groups.0xchat.com](wss://groups.0xchat.com) and [relay.groups.nip29.com](wss://relay.groups.nip29.com) as the NIP-29 relay layer. Crew definitions and member records are also mirrored to standard discovery relays (kind:30078) so crews are browsable without needing NIP-29 access.
 
 ## Security
 

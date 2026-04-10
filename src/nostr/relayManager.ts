@@ -60,9 +60,11 @@ export class RelayManager {
   public connectedCount = 0;
   public lastEventTime = 0;
 
-  constructor() {
-    // Deduplicate relay lists and connect to all
-    const allUrls = new Set([...DM_RELAYS, ...DEFAULT_RELAYS]);
+  constructor(customRelays?: string[]) {
+    // If custom relays provided, use only those; otherwise use full default set
+    const allUrls = customRelays
+      ? new Set(customRelays)
+      : new Set([...DM_RELAYS, ...DEFAULT_RELAYS]);
     const dmSet = new Set(DM_RELAYS);
 
     for (const url of allUrls) {

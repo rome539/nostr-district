@@ -40,6 +40,9 @@ let ws: WebSocket | null = null;
 let callbacks: PresenceCallback | null = null;
 let lastSentX = 0;
 let lastSentY = 0;
+let currentRoom = 'hub';
+
+export function getCurrentRoom(): string { return currentRoom; }
 
 export function connectPresence(cb: PresenceCallback): void {
   if (ws) {
@@ -166,6 +169,7 @@ export function sendChat(text: string): void {
 
 export function sendRoomChange(room: string, x?: number, y?: number): void {
   if (ws?.readyState === WebSocket.OPEN) {
+    currentRoom = room;
     ws.send(JSON.stringify({ type: 'room', room, x: x || 400, y: y || 348, avatar: serializeAvatar(getAvatar()) }));
   }
 }

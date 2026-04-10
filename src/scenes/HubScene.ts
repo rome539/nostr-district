@@ -8,6 +8,7 @@ import {
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
 import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
 import { DMPanel } from '../ui/DMPanel';
+import { CrewPanel } from '../ui/CrewPanel';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
@@ -81,6 +82,7 @@ export class HubScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private playerNames = new Map<string, string>();
 
@@ -110,7 +112,9 @@ export class HubScene extends Phaser.Scene {
   private snd = SoundEngine.get();
   private footTimer = 0;
   private nearBulletinBoard = false;
+  private nearCrewBoard = false;
   private readonly BULLETIN_X = 860;
+  private readonly CREW_BOARD_X = 615;
 
   private playerY = GROUND_Y + 8;
   private isReturning = false;
@@ -244,7 +248,7 @@ export class HubScene extends Phaser.Scene {
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteGraphics = this.add.graphics().setDepth(15);
-    this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard();
+    this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard(); this.createCrewBoard();
     onNextAvatarSync(() => {
       this.generateWalkFrames(getAvatar());
       if (this.textures.exists('player')) this.textures.remove('player');
@@ -255,7 +259,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { const wx = this.cameras.main.scrollX + p.x; if (p.y < GROUND_Y - 10 || p.y > 455) return; this.targetX = Phaser.Math.Clamp(wx, 20, WORLD_WIDTH - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < GROUND_Y - 10 || p.y > 455) return; this.targetX = Phaser.Math.Clamp(wx, 20, WORLD_WIDTH - 20); this.isMoving = true; });
     this.input.keyboard?.on('keydown-E', () => this.tryEnter());
     this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
     this.connectToPresence(); this.setupRoomRequestHandlers();
@@ -291,25 +295,40 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
-    this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (document.activeElement?.closest('.dm-panel')) return;
+      if (document.activeElement?.closest('.cp-panel')) return;
+      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
+      if (document.activeElement !== chatInput) chatInput.focus();
+    });
     let ep = this.registry.get('dmPanel') as DMPanel | undefined;
     if (!ep) { ep = new DMPanel(this.registry.get('playerPubkey') || null); this.registry.set('dmPanel', ep); }
     this.dmPanel = ep;
     ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
+    let cp = this.registry.get('crewPanel') as CrewPanel | undefined;
+    if (!cp) { cp = new CrewPanel(); this.registry.set('crewPanel', cp); }
+    this.crewPanel = cp;
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
 
     let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
     this.followsPanel = fp;
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-B', () => { if (document.activeElement === this.chatUI.getInput()) return; this.pollBoard.toggle(); });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (document.activeElement === this.chatUI.getInput()) return;
+      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
+      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
+    });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; this.playerPicker.close();if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; this.playerPicker.close();if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
   }
 
   update(time: number, delta: number): void {
@@ -448,6 +467,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       onPlayerLeave: (pk: string) => this.removeOtherPlayer(pk),
       onCountUpdate: (c: number) => { this.onlineCount = c; },
       onChat: (pk: string, name: string, text: string, emojis?: { code: string; url: string }[]) => {
+
         const isMe = pk === this.registry.get('playerPubkey');
         if (text.startsWith('/emote ')) {
           if (!isMe) {
@@ -527,6 +547,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
     const cz = this.add.zone(px, py - 20, 24, 44).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
       ptr.event.stopPropagation();
       const op2 = this.otherPlayers.get(pk);
       showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status);
@@ -606,7 +627,26 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
   private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } this.isKeyboardMoving = vx !== 0; if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
   private updateProximity(): void {
-    // Check bulletin board first
+    // Check crew board
+    const cdist = Math.abs(this.player.x - this.CREW_BOARD_X);
+    const wasNearCrew = this.nearCrewBoard;
+    this.nearCrewBoard = cdist < 52;
+    if (this.nearCrewBoard !== wasNearCrew) {
+      if (this.nearCrewBoard) {
+        const px = this.CREW_BOARD_X; const py = GROUND_Y - 75;
+        this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true);
+        this.promptBg.setPosition(px - 62, py - 2);
+        this.promptText.setPosition(px, py + 8); this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} Crews`); this.promptText.setColor(P.teal);
+        this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(P.teal);
+        this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
+        this.tweens.killTweensOf(this.promptArrow);
+      }
+    }
+    if (this.nearCrewBoard) return;
+
+    // Check bulletin board
     const bdist = Math.abs(this.player.x - this.BULLETIN_X);
     const wasNearBoard = this.nearBulletinBoard;
     this.nearBulletinBoard = bdist < 52;
@@ -676,7 +716,50 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     });
   }
 
+  private createCrewBoard(): void {
+    const bx = this.CREW_BOARD_X;
+    const g = this.add.graphics().setDepth(4);
+
+    // Legs
+    g.fillStyle(0x1a3a2a, 1);
+    g.fillRect(bx - 14, GROUND_Y - 10, 2, 10);
+    g.fillRect(bx + 12, GROUND_Y - 10, 2, 10);
+
+    // Board face — dark teal tone
+    g.fillStyle(0x0e2e24, 1);
+    g.fillRect(bx - 17, GROUND_Y - 32, 34, 22);
+    g.lineStyle(1, hexToNum(P.teal), 0.6);
+    g.strokeRect(bx - 17, GROUND_Y - 32, 34, 22);
+
+    // Top shadow
+    g.fillStyle(0x000000, 0.3);
+    g.fillRect(bx - 17, GROUND_Y - 32, 34, 2);
+
+    // Glowing grid lines (crew aesthetic)
+    g.lineStyle(1, hexToNum(P.teal), 0.25);
+    g.lineBetween(bx - 14, GROUND_Y - 26, bx + 14, GROUND_Y - 26);
+    g.lineBetween(bx - 14, GROUND_Y - 20, bx + 14, GROUND_Y - 20);
+    g.lineBetween(bx - 3, GROUND_Y - 30, bx - 3, GROUND_Y - 12);
+
+    // Emblem dots
+    g.fillStyle(hexToNum(P.teal), 0.9); g.fillCircle(bx - 8, GROUND_Y - 28, 1.5);
+    g.fillStyle(hexToNum(P.pink), 0.9); g.fillCircle(bx + 5, GROUND_Y - 22, 1.5);
+    g.fillStyle(hexToNum(P.amber), 0.9); g.fillCircle(bx - 2, GROUND_Y - 16, 1.5);
+
+    // "CREWS" label
+    const signText = this.add.text(bx, GROUND_Y - 34, 'CREWS', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '7px', color: P.teal, fontStyle: 'bold',
+    }).setOrigin(0.5, 1).setDepth(5);
+
+    this.events.on('update', (time: number) => {
+      signText.setAlpha(Math.sin(time * 0.0025 + 1.5) > 0.94 ? 0.4 : 1);
+    });
+  }
+
   private tryEnter(): void {
+    if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+    if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;
@@ -714,7 +797,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const auth2 = authStore.getState(); if (!auth2.pubkey || auth2.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zapTarget: string | null = null; let zapName = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; } }); if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zapTarget, zapName); break; }
       case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
-      case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': {
+      case 'terminal': case 'outfit': case 'avatar': {
         if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
         this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
         break;
@@ -776,9 +859,10 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
         sendChat(`💘 ${d1} + ${d2}: ${pct}% compatible — ${label}`);
         break;
       }
+      case 'crew': case 'crews': { this.dmPanel.close(); this.crewPanel.toggle(); break; }
       case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
       case 'status': { const myStatus = getStatus() || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/visit <n>', '/players', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
+      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/crew', '/visit <n>', '/players', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
       default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
     }
     this.chatUI.flashLog();

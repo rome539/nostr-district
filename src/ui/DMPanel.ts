@@ -8,6 +8,7 @@
  */
 
 import { sendDirectMessage, onDMReceived, canUseDMs, isDMHistoryLoading, onDMHistoryLoading, DMMessage } from '../nostr/dmService';
+import { hasUsedInviteToken, markInviteTokenUsed, clearKickedLocally, syncConsumedInviteTokens, areConsumedTokensSynced } from '../nostr/crewService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
@@ -33,7 +34,7 @@ export class DMPanel {
   private conversations = new Map<string, Conversation>();
   private messages = new Map<string, DMMessage[]>(); // keyed by pubkey
   private activePubkey: string | null = null;
-  private isOpen = false;
+  isOpen = false;
   private unsubscribe: (() => void) | null = null;
   private myPubkey: string | null = null;
   private totalUnread = 0;
@@ -55,6 +56,14 @@ export class DMPanel {
 
   private toNpub(pubkey: string): string {
     try { return nip19.npubEncode(pubkey).slice(0, 16) + '...'; } catch { return pubkey.slice(0, 12) + '...'; }
+  }
+
+  private lastPingAt = 0;
+  private dmPing(): void {
+    const now = Date.now();
+    if (now - this.lastPingAt < 1500) return;
+    this.lastPingAt = now;
+    SoundEngine.get().dmPing();
   }
 
   private readKey(convPubkey: string): string {
@@ -102,6 +111,11 @@ export class DMPanel {
     this.loadHidden();
     this.injectStyles();
 
+    // Close when another panel opens
+    window.addEventListener('nd-panel-open', (e: Event) => {
+      if ((e as CustomEvent).detail !== 'dm' && this.isOpen) this.close();
+    });
+
     // Listen for incoming DMs
     this.unsubscribe = onDMReceived((msg) => this.handleMessage(msg));
 
@@ -134,7 +148,7 @@ export class DMPanel {
             const { pubkey, name, content } = latestMsg as { pubkey: string; name: string; content: string };
             const label = totalUnread === 1 ? name : `${name} +${totalUnread - 1} more`;
             this.showToast(pubkey, label, content);
-            SoundEngine.get().dmPing();
+            this.dmPing();
           }
         }
       } else if (loading && this.isOpen) {
@@ -158,6 +172,10 @@ export class DMPanel {
     }
 
     if (!this.container) this.buildDOM();
+    // Sync consumed invite tokens from relay so invite cards render correctly cross-device
+    syncConsumedInviteTokens().then(() => { if (this.isOpen) this.renderMessages(); });
+    // Close any other slide-out panels before opening
+    window.dispatchEvent(new CustomEvent('nd-panel-open', { detail: 'dm' }));
     this.container!.classList.add('dm-open');
     this.isOpen = true;
     this.totalUnread = 0;
@@ -183,6 +201,26 @@ export class DMPanel {
     }
     this.isOpen = false;
     // Keep activePubkey so reopening returns to the same conversation
+  }
+
+  focusInput(): void {
+    this.inputEl?.focus();
+  }
+
+  handleEsc(): void {
+    if (this.gifPicker?.isOpen()) { this.gifPicker.close(); return; }
+    if (this.inputEl && document.activeElement === this.inputEl) { this.inputEl.blur(); return; }
+    if (this.activePubkey) {
+      // Back to conversation list
+      this.activePubkey = null;
+      const chatEl = this.container?.querySelector('.dm-chat') as HTMLElement;
+      const listEl = this.container?.querySelector('.dm-conv-list') as HTMLElement;
+      if (chatEl) chatEl.style.display = 'none';
+      if (listEl) listEl.style.display = '';
+      this.renderConversationList();
+      return;
+    }
+    this.close();
   }
 
   toggle(targetPubkey?: string): void {
@@ -319,7 +357,7 @@ export class DMPanel {
       if (!this.historyLoading) {
         const senderName = this.conversations.get(convPubkey)?.name || msg.senderName || convPubkey.slice(0, 12) + '...';
         this.showToast(convPubkey, senderName, msg.content);
-        SoundEngine.get().dmPing();
+        this.dmPing();
       }
     }
   }
@@ -388,7 +426,7 @@ export class DMPanel {
     const badge = document.createElement('div');
     badge.id = 'dm-badge';
     badge.style.cssText = `
-      position: fixed; bottom: 20px; right: 20px; z-index: 3999;
+      position: fixed; bottom: 20px; right: 20px; z-index: 1500;
       background: linear-gradient(135deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
       border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent); border-radius: 50px;
       padding: 8px 14px; font-family: 'Courier New', monospace;
@@ -467,7 +505,10 @@ export class DMPanel {
     this.inputEl.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') { this.sendMessage(); }
-      if (e.key === 'Escape') { this.gifPicker?.close(); this.close(); }
+      if (e.key === 'Escape') { e.preventDefault(); this.handleEsc(); }
+    });
+    this.container.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.handleEsc(); }
     });
 
     const gifBtn = this.container.querySelector('.dm-gif-btn') as HTMLButtonElement;
@@ -603,15 +644,28 @@ export class DMPanel {
       const t = msg.content.trim();
       const isGif = isGifUrl(t);
       const isLink = !isGif && /^https?:\/\/[^\s]+$/i.test(t);
+      const inviteMatch = !isGif && !isLink && t.match(/^nd-invite:([^:]+):([^:]+):([^:]+)$/);
       const contentHtml = isGif
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
           ? `<a href="${t.replace(/"/g, '%22')}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${this.escapeHtml(t.length > 55 ? t.slice(0,52)+'…' : t)}</a>`
-          : renderEmojis(this.escapeHtml(msg.content), msg.emojis);
+          : inviteMatch
+            ? `<div class="dm-invite-card">
+                <div class="dm-invite-label">Crew Invite</div>
+                <div class="dm-invite-name">${this.escapeHtml(inviteMatch[2])}</div>
+                ${msg.isOwn
+                  ? '<div class="dm-invite-sent">Invite sent</div>'
+                  : !areConsumedTokensSynced()
+                    ? '<div class="dm-invite-sent dm-invite-checking">…</div>'
+                    : hasUsedInviteToken(inviteMatch[3])
+                      ? '<div class="dm-invite-sent">Invite used</div>'
+                      : `<button class="dm-invite-btn" data-crew-id="${this.escapeHtml(inviteMatch[1])}" data-crew-name="${this.escapeHtml(inviteMatch[2])}" data-token="${this.escapeHtml(inviteMatch[3])}">Accept</button>`}
+              </div>`
+            : renderEmojis(this.escapeHtml(msg.content), msg.emojis);
 
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">
-          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}">${contentHtml}</div>
+          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${inviteMatch ? ' dm-msg-invite' : ''}">${contentHtml}</div>
           <div class="dm-msg-time">${timeStr}</div>
         </div>
       `;
@@ -634,6 +688,26 @@ export class DMPanel {
       const current = this.msgViewStart.get(pk) ?? 0;
       this.msgViewStart.set(pk, Math.max(0, current - DMPanel.MSG_PAGE));
       this.renderMessages(true);
+    });
+
+    this.messagesEl.querySelectorAll('.dm-invite-btn').forEach(btn => {
+      const crewId = (btn as HTMLElement).dataset.crewId!;
+      const token = (btn as HTMLElement).dataset.token!;
+
+      btn.addEventListener('click', async () => {
+        (btn as HTMLButtonElement).disabled = true;
+        (btn as HTMLElement).textContent = 'Joining…';
+        try {
+          const { joinCrew } = await import('../nostr/crewService');
+          clearKickedLocally(crewId);
+          await joinCrew(crewId);
+          markInviteTokenUsed(token);
+          this.renderMessages();
+        } catch {
+          (btn as HTMLButtonElement).disabled = false;
+          (btn as HTMLElement).textContent = 'Accept';
+        }
+      });
     });
   }
 
@@ -686,8 +760,6 @@ export class DMPanel {
 
     this.renderMessages();
     this.renderConversationList();
-
-    setTimeout(() => this.inputEl?.focus(), 100);
   }
 
   private async sendMessage(): Promise<void> {
@@ -910,6 +982,23 @@ export class DMPanel {
         text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       }
       .dm-msg-time { font-size: 10px; color: var(--nd-subtext); margin-top: 3px; }
+      .dm-msg-invite { background: none !important; border: none !important; padding: 0 !important; }
+      .dm-invite-card {
+        border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
+        background: color-mix(in srgb,var(--nd-accent) 6%,transparent);
+        border-radius: 8px; padding: 10px 14px; min-width: 160px; text-align: left;
+      }
+      .dm-invite-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--nd-accent); margin-bottom: 4px; }
+      .dm-invite-name { font-size: 14px; font-weight: bold; color: var(--nd-text); margin-bottom: 10px; }
+      .dm-invite-btn {
+        background: var(--nd-accent); color: var(--nd-bg); border: none; border-radius: 5px;
+        font-family: inherit; font-size: 12px; font-weight: bold; padding: 5px 14px;
+        cursor: pointer; transition: opacity 0.15s;
+      }
+      .dm-invite-btn:hover { opacity: 0.85; }
+      .dm-invite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .dm-invite-btn-joined { background: color-mix(in srgb,var(--nd-accent) 30%,transparent) !important; color: var(--nd-accent) !important; cursor: default !important; }
+      .dm-invite-sent { font-size: 11px; color: var(--nd-subtext); }
       .dm-msg-own .dm-msg-time { text-align: right; }
       .dm-msg-error { text-align: center; color: #e85454; font-size: 12px; padding: 4px; opacity: 0.7; }
 

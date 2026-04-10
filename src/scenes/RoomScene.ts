@@ -12,6 +12,7 @@ import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
 import { canUseDMs, getRelayManager } from '../nostr/dmService';
 import { DEFAULT_RELAYS } from '../nostr/relayManager';
 import { DMPanel } from '../ui/DMPanel';
+import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
@@ -53,6 +54,7 @@ export class RoomScene extends Phaser.Scene {
 
   private chatUI!: ChatUI;
   private dmPanel!: DMPanel;
+  private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private emoteGraphics!: Phaser.GameObjects.Graphics;
   private emoteSet = new EmoteSet();
@@ -165,23 +167,29 @@ export class RoomScene extends Phaser.Scene {
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
-    this.input.keyboard?.on('keydown-ENTER', () => { if (document.activeElement !== chatInput) chatInput.focus(); });
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (document.activeElement?.closest('.dm-panel') || document.activeElement?.closest('.cp-panel')) return;
+      if (document.activeElement !== chatInput) chatInput.focus();
+    });
 
     // DM Panel — singleton
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
+    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
+    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
+    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
 
     let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
 
     // Click to move
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
 
     // Computer interaction prompt (only in myroom)
     this.computerPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -222,6 +230,7 @@ export class RoomScene extends Phaser.Scene {
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
       onChat: (pk, name, text, emojis) => {
+
         const isMe = pk === myPubkey;
         if (text.startsWith('/emote ')) {
           if (!isMe) {
@@ -325,6 +334,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
       if (this.dmPanel) this.dmPanel.close();
+      if (this.crewPanel) this.crewPanel.close();
       if (this.followsPanel) this.followsPanel.close();
       destroyPlayerMenu(); ProfileModal.destroy();
       this.feedNotes.forEach(n => { n.npubText?.destroy(); n.msgText?.destroy(); });
@@ -725,8 +735,9 @@ export class RoomScene extends Phaser.Scene {
     const st = this.add.text(px, py - 165, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
     const cz = this.add.zone(px, py - 70, 60, 120).setInteractive({ useHandCursor: true }).setDepth(12);
     let czDownX = 0; let czDownY = 0;
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { czDownX = ptr.x; czDownY = ptr.y; });
+    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return; czDownX = ptr.x; czDownY = ptr.y; });
     cz.on('pointerup', (ptr: Phaser.Input.Pointer) => {
+      if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
       if (this.computerUI.isOpen()) return;
       const dx = ptr.x - czDownX; const dy = ptr.y - czDownY;
       if (Math.sqrt(dx * dx + dy * dy) > 8) return;
@@ -776,6 +787,7 @@ export class RoomScene extends Phaser.Scene {
     btn.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
     btn.on('pointerdown', () => this.leaveRoom());
     this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
       if (this.computerUI.isOpen()) {
         this.computerUI.close();
         this.setComputerPromptVisible(this.nearComputer);
@@ -903,7 +915,7 @@ export class RoomScene extends Phaser.Scene {
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.nameText.text; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
       case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.chatUI.addMessage('system', EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
       case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
-      case 'terminal': case 'wardrobe': case 'outfit': case 'avatar': case 'computer': {
+      case 'terminal': case 'outfit': case 'avatar': case 'computer': {
         if (!this.isMyRoom()) {
           if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
           this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
