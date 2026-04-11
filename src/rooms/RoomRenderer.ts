@@ -384,101 +384,6 @@ export class RoomRenderer {
       r(cx + 142, FY - 8, 8, 8, SHELF_BODY);
     }
 
-    // ── Office Chair (drawn before desk so desk legs appear in front) ──
-    const CHCX = 648;
-    r(CHCX - 10, FY - 90, 20, 5, FUR_FRAME);                                      // headrest cap
-    r(CHCX - 14, FY - 86, 28, 40, FUR_FRAME);                                     // backrest outer
-    r(CHCX - 12, FY - 84, 24, 34, FUR_MID);                                       // backrest cushion
-    x.globalAlpha = 0.12; r(CHCX - 12, FY - 84, 24, 6, '#c0a8e8'); x.globalAlpha = 1; // sheen
-    r(CHCX - 22, FY - 54, 10, 4, FUR_FRAME);                                      // left armrest
-    r(CHCX + 12, FY - 54, 10, 4, FUR_FRAME);                                      // right armrest
-    r(CHCX - 20, FY - 60, 3, 9, FUR_DARK);                                        // left arm support
-    r(CHCX + 17, FY - 60, 3, 9, FUR_DARK);                                        // right arm support
-    r(CHCX - 22, FY - 48, 44, 14, FUR_FRAME);                                     // seat outer
-    r(CHCX - 20, FY - 46, 40, 10, FUR_MID);                                       // seat cushion
-    x.globalAlpha = 0.1; r(CHCX - 20, FY - 46, 40, 4, '#c0a8e8'); x.globalAlpha = 1; // seat sheen
-    r(CHCX - 4, FY - 34, 8, 22, FUR_DARK);                                        // center post
-    r(CHCX - 24, FY - 5, 48, 5, FUR_DARK);                                        // base arms
-    r(CHCX - 5, FY - 12, 10, 12, FUR_DARK);                                       // center hub
-    x.fillStyle = '#1a1030'; x.globalAlpha = 0.9;
-    x.fillRect(CHCX - 24, FY, 6, 3); x.fillRect(CHCX + 18, FY, 6, 3);           // wheels
-    x.globalAlpha = 1;
-
-    // ── Computer Desk ──
-    const DSY = FY - 65;
-    const deskC = fc('desk');
-    const deskLeg = darken(deskC, 16);
-
-    r(558, DSY, 196, 10, deskC);
-    r(558, DSY + 10, 196, 3, deskLeg);
-    x.globalAlpha = 0.12;
-    r(560, DSY + 2, 80, 1, lighten(deskC, 30)); r(640, DSY + 5, 60, 1, lighten(deskC, 30));
-    r(700, DSY + 3, 40, 1, lighten(deskC, 30)); x.globalAlpha = 1;
-
-    r(561, DSY + 13, 8, FY - (DSY + 13), deskLeg);
-    r(744, DSY + 13, 8, FY - (DSY + 13), deskLeg);
-    r(561, FY - 28, 191, 5, deskLeg);
-
-    r(561, DSY + 13, 58, FY - (DSY + 13), deskC);
-    r(564, DSY + 16, 52, 24, deskLeg);
-    r(564, DSY + 40, 52, 20, deskLeg);
-    r(582, DSY + 26, 14, 3, '#8a6040');
-    r(582, DSY + 50, 14, 3, '#8a6040');
-
-    // Monitor stand (on desk surface, neck connects to monitor bottom)
-    r(647, DSY, 46, 5, FUR_FRAME);         // base sits on desk
-    r(663, DSY - 20, 14, 20, FUR_FRAME);   // neck
-
-    // Monitor — code editor look with syntax-colored lines
-    r(596, DSY - 82, 134, 62, '#0a0818');
-    r(599, DSY - 79, 128, 56, '#050310');
-    // Line number gutter
-    r(599, DSY - 79, 10, 56, '#080618');
-    // Code lines — deterministic widths, syntax colors
-    const codeLines = [
-      { c: P.purp,         w: 38, indent: 0 },
-      { c: light.primary,  w: 62, indent: 8 },
-      { c: P.teal,         w: 44, indent: 8 },
-      { c: P.amber,        w: 70, indent: 16 },
-      { c: light.primary,  w: 30, indent: 16 },
-      { c: P.pink,         w: 52, indent: 8 },
-      { c: P.lpurp,        w: 28, indent: 0 },
-    ];
-    codeLines.forEach((line, i) => {
-      x.fillStyle = line.c; x.globalAlpha = 0.7;
-      x.fillRect(612 + line.indent, DSY - 76 + i * 7, line.w, 3);
-      x.globalAlpha = 1;
-    });
-    // Cursor blink line
-    x.fillStyle = light.primary; x.globalAlpha = 0.9;
-    x.fillRect(612 + 30, DSY - 76 + 5 * 7, 2, 5);
-    x.globalAlpha = 1;
-
-    // Keyboard (bottom at desk surface top)
-    r(608, DSY - 10, 88, 10, FUR_FRAME);
-    r(610, DSY - 9, 84, 8, FUR_DARK);
-    for (let kx = 612; kx < 690; kx += 6) {
-      x.globalAlpha = 0.2; r(kx, DSY - 8, 4, 5, FUR_MID); x.globalAlpha = 1;
-    }
-
-    // Mouse
-    r(703, DSY - 10, 16, 9, FUR_FRAME);
-    r(705, DSY - 8, 12, 6, FUR_DARK);
-
-    // Coffee cup (right edge of desk, bottom at desk surface top)
-    r(726, DSY - 14, 14, 14, FUR_FRAME);
-    r(728, DSY - 12, 10, 8, '#1a0a10');
-    x.fillStyle = '#3d1a0a'; x.globalAlpha = 0.8;
-    x.fillRect(728, DSY - 12, 10, 3);
-    x.globalAlpha = 1;
-    r(740, DSY - 10, 3, 6, FUR_FRAME);   // handle
-    r(724, DSY, 16, 2, FUR_MID);          // saucer
-    x.fillStyle = '#fff'; x.globalAlpha = 0.06;
-    x.fillRect(730, DSY - 26, 2, 10);
-    x.fillRect(735, DSY - 29, 2, 12);
-    x.fillRect(732, DSY - 24, 2, 8);
-    x.globalAlpha = 1;
-
     // ── Posters ──
     this.drawPoster(x, cfg.posters[0], 50, 40, 80, 100, light);
     this.drawPoster(x, cfg.posters[1], 160, 30, 70, 90, light);
@@ -522,6 +427,7 @@ export class RoomRenderer {
     // ── Plant ──
     if (cfg.furniture.includes('plant')) {
       const potC = fc('plant');
+      const DSY = FY - 45;
       r(570, DSY - 14, 10, 12, potC);
       x.fillStyle = lighten(potC, 40); x.globalAlpha = 0.45;
       x.fillRect(568, DSY - 26, 6, 12);
@@ -825,6 +731,65 @@ export class RoomRenderer {
     // ── Top neon strip ──
     r(0, 0, W, 3, lightColor);
     x.globalAlpha = 0.12; r(0, 0, W, 3, lightColor); x.globalAlpha = 1;
+
+    // ── Computer Desk — drawn last, DBOT extends past FY so it's always over the floor ──
+    const DSY  = FY - 58;
+    const DBOT = FY + 11;
+    const deskC   = fc('desk');
+    const deskLeg = darken(deskC, 16);
+
+    // Desk surface
+    r(558, DSY,      196, 10, deskC);
+    r(558, DSY + 10, 196,  3, deskLeg);
+    x.globalAlpha = 0.12;
+    r(560, DSY + 2, 80, 1, lighten(deskC, 30)); r(640, DSY + 5, 60, 1, lighten(deskC, 30));
+    r(700, DSY + 3, 40, 1, lighten(deskC, 30)); x.globalAlpha = 1;
+
+    // Left leg and right leg — extend to DBOT (past floor line)
+    r(561, DSY + 13,  8, DBOT - (DSY + 13), deskLeg);
+    r(744, DSY + 13,  8, DBOT - (DSY + 13), deskLeg);
+    // Crossbar
+    r(561, FY - 8, 191, 5, deskLeg);
+
+    // Cabinet (left side) — tall enough to cover both drawers
+    r(561, DSY + 13, 58, DSY + 61 - (DSY + 13), deskC);
+    r(564, DSY + 16, 52, 24, deskLeg);
+    r(564, DSY + 40, 52, 20, deskLeg);
+    r(582, DSY + 26, 14,  3, '#8a6040');
+    r(582, DSY + 50, 14,  3, '#8a6040');
+
+    // Monitor stand
+    r(647, DSY,      46,  5, FUR_FRAME);
+    r(663, DSY - 20, 14, 20, FUR_FRAME);
+
+    // Monitor
+    r(596, DSY - 82, 134, 62, '#0a0818');
+    r(599, DSY - 79, 128, 56, '#050310');
+    r(599, DSY - 79,  10, 56, '#080618');
+
+    // Keyboard
+    r(608, DSY - 10, 88, 10, FUR_FRAME);
+    r(610, DSY - 9,  84,  8, FUR_DARK);
+    for (let kx = 612; kx < 690; kx += 6) {
+      x.globalAlpha = 0.2; r(kx, DSY - 8, 4, 5, FUR_MID); x.globalAlpha = 1;
+    }
+
+    // Mouse
+    r(703, DSY - 10, 16, 9, FUR_FRAME);
+    r(705, DSY - 8,  12, 6, FUR_DARK);
+
+    // Coffee cup
+    r(726, DSY - 14, 14, 14, FUR_FRAME);
+    r(728, DSY - 12, 10,  8, '#1a0a10');
+    x.fillStyle = '#3d1a0a'; x.globalAlpha = 0.8;
+    x.fillRect(728, DSY - 12, 10, 3); x.globalAlpha = 1;
+    r(740, DSY - 10,  3, 6, FUR_FRAME);
+    r(724, DSY,      16, 2, FUR_MID);
+    x.fillStyle = '#fff'; x.globalAlpha = 0.06;
+    x.fillRect(730, DSY - 26, 2, 10);
+    x.fillRect(735, DSY - 29, 2, 12);
+    x.fillRect(732, DSY - 24, 2,  8);
+    x.globalAlpha = 1;
 
     // ── Door ──
     this.drawDoor(x, W, H - 64, nc, H);

@@ -962,8 +962,7 @@ export class WoodsScene extends Phaser.Scene {
     let nebulaCol2 = 'rgba(10,30,40,0.5)'; let nc2x='65%'; let nc2y='55%';
 
     // ── planet helper ──
-    const makePlanet = (px:number,py:number,pr:number,gradId:string,gradStops:string,clipId:string,innerSvg:string,glow?:string) => `
-      ${glow?`<circle cx="${px}%" cy="${py}%" r="${pr+4}%" fill="${glow}"/>`:''}
+    const makePlanet = (px:number,py:number,pr:number,gradId:string,gradStops:string,clipId:string,innerSvg:string) => `
       <defs>
         <radialGradient id="${uid}${gradId}" cx="38%" cy="35%" r="65%">${gradStops}</radialGradient>
         <clipPath id="${uid}${clipId}"><circle cx="${px}%" cy="${py}%" r="${pr}%"/></clipPath>
@@ -983,8 +982,7 @@ export class WoodsScene extends Phaser.Scene {
          <circle cx="56%" cy="52%" r="1%" fill="rgba(70,55,40,0.5)"/>
          <circle cx="44%" cy="54%" r="0.8%" fill="rgba(75,60,45,0.5)"/>
          <circle cx="52%" cy="44%" r="0.6%" fill="rgba(85,70,55,0.4)"/>
-         <circle cx="46%" cy="48%" r="0.5%" fill="rgba(65,50,35,0.45)"/>`,
-        'rgba(180,150,100,0.04)');
+         <circle cx="46%" cy="48%" r="0.5%" fill="rgba(65,50,35,0.45)"/>`);
       subject += `<text x="50%" y="63%" font-family="Courier New" font-size="8" fill="rgba(200,180,140,0.6)" text-anchor="middle">MERCURY</text>
         <text x="50%" y="69%" font-family="Courier New" font-size="6" fill="rgba(160,140,100,0.4)" text-anchor="middle">no atmosphere</text>`;
     } else if (sceneType === 'venus') {
@@ -998,8 +996,6 @@ export class WoodsScene extends Phaser.Scene {
           </radialGradient>
           <clipPath id="${uid}vc"><circle cx="${vx}%" cy="${vy}%" r="${vr}%"/></clipPath>
         </defs>
-        <circle cx="${vx}%" cy="${vy}%" r="${vr+5}%" fill="rgba(240,200,80,0.12)"/>
-        <circle cx="${vx}%" cy="${vy}%" r="${vr+3}%" fill="rgba(230,190,70,0.07)"/>
         <circle cx="${vx}%" cy="${vy}%" r="${vr}%" fill="url(#${uid}vg)"/>
         <g clip-path="url(#${uid}vc)">
           <ellipse cx="50%" cy="40%" rx="8%" ry="2%" fill="rgba(230,200,80,0.3)"/>
@@ -1020,7 +1016,6 @@ export class WoodsScene extends Phaser.Scene {
           </radialGradient>
           <clipPath id="${uid}mclip"><circle cx="${mx}%" cy="${my}%" r="${mr}%"/></clipPath>
         </defs>
-        <circle cx="${mx}%" cy="${my}%" r="${mr+3}%" fill="rgba(180,60,20,0.07)"/>
         <circle cx="${mx}%" cy="${my}%" r="${mr}%" fill="url(#${uid}mgrad)"/>
         <g clip-path="url(#${uid}mclip)">
           <ellipse cx="${mx-2}%" cy="${my-6}%" rx="3%" ry="1.5%" fill="rgba(230,230,240,0.7)"/>
@@ -1043,7 +1038,6 @@ export class WoodsScene extends Phaser.Scene {
             <stop offset="0%" stop-color="#f0d8a0"/><stop offset="100%" stop-color="#c8a060"/>
           </radialGradient>
         </defs>
-        <circle cx="${jx}%" cy="${jy}%" r="${jr+2}%" fill="rgba(200,160,80,0.08)"/>
         <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="url(#${uid}jgrad)"/>
         <g clip-path="url(#${uid}jclip)">
           <rect x="${jx-jr}%" y="${jy-9}%" width="${jr*2}%" height="4%" fill="rgba(160,100,50,0.55)" rx="2"/>
@@ -1053,10 +1047,10 @@ export class WoodsScene extends Phaser.Scene {
           <ellipse cx="${jx-4}%" cy="${jy+1}%" rx="3%" ry="2%" fill="rgba(180,80,40,0.6)"/>
         </g>
         <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="none" stroke="rgba(200,150,80,0.3)" stroke-width="1"/>
-        <circle cx="${jx-18}%" cy="${jy-1}%" r="1%" fill="rgba(220,210,190,0.9)"/>
-        <circle cx="${jx-22}%" cy="${jy+3}%" r="0.8%" fill="rgba(210,200,180,0.85)"/>
-        <circle cx="${jx+19}%" cy="${jy-2}%" r="0.9%" fill="rgba(220,215,195,0.9)"/>
-        <circle cx="${jx+24}%" cy="${jy+1}%" r="0.7%" fill="rgba(210,205,185,0.8)"/>
+        <circle cx="${jx-18}%" cy="${jy-1}%" r="1%" fill="rgba(220,210,190,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.1s" repeatCount="indefinite"/></circle>
+        <circle cx="${jx-22}%" cy="${jy+3}%" r="0.8%" fill="rgba(210,200,180,0.85)"><animate attributeName="opacity" values="0.85;0.45;0.85" dur="2.4s" repeatCount="indefinite"/></circle>
+        <circle cx="${jx+19}%" cy="${jy-2}%" r="0.9%" fill="rgba(220,215,195,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.8s" repeatCount="indefinite"/></circle>
+        <circle cx="${jx+24}%" cy="${jy+1}%" r="0.7%" fill="rgba(210,205,185,0.8)"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2.9s" repeatCount="indefinite"/></circle>
         <text x="50%" y="68%" font-family="Courier New" font-size="8" fill="rgba(200,170,100,0.6)" text-anchor="middle">JUPITER</text>
         <text x="50%" y="74%" font-family="Courier New" font-size="6" fill="rgba(180,150,80,0.4)" text-anchor="middle">4 Galilean moons visible</text>`;
     } else if (sceneType === 'saturn') {
@@ -1079,7 +1073,26 @@ export class WoodsScene extends Phaser.Scene {
           <rect x="${sx-sr}%" y="${sy+4}%" width="${sr*2}%" height="3%" fill="rgba(155,115,45,0.35)" rx="1"/>
         </g>
         <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+14}%" ry="3.5%" fill="none" stroke="rgba(200,170,90,0.2)" stroke-width="1"/>
-        <text x="50%" y="70%" font-family="Courier New" font-size="8" fill="rgba(200,180,100,0.6)" text-anchor="middle">SATURN</text>`;
+        <text x="50%" y="70%" font-family="Courier New" font-size="8" fill="rgba(200,180,100,0.6)" text-anchor="middle">SATURN</text>
+        ${(() => {
+          const mr = mkRng(viewSeed ^ 0xca551a);
+          // [orbitRadius%, size%, color]
+          const moons: [number,number,string][] = [
+            [28, 1.4, 'rgba(220,190,120,0.95)'], // Titan — largest, golden
+            [22, 0.9, 'rgba(210,205,195,0.9)'],  // Rhea
+            [18, 0.8, 'rgba(205,200,190,0.85)'], // Dione
+            [15, 0.7, 'rgba(200,198,190,0.85)'], // Tethys
+            [12, 0.6, 'rgba(240,245,255,0.95)'], // Enceladus — bright white
+          ];
+          return moons.map(([orb, ms, col]) => {
+            const ang = mr() * Math.PI * 2;
+            const mx = sx + orb * Math.cos(ang);
+            const my = sy + orb * 0.28 * Math.sin(ang);
+            return `<circle cx="${mx.toFixed(1)}%" cy="${my.toFixed(1)}%" r="${ms}%" fill="${col}">
+              <animate attributeName="opacity" values="0.95;0.55;0.95" dur="${(2.5+mr()*2).toFixed(1)}s" repeatCount="indefinite"/>
+            </circle>`;
+          }).join('');
+        })()}`;
     } else if (sceneType === 'uranus') {
       label = 'Uranus';
       nebulaCol1 = 'rgba(10,40,50,0.4)'; nc1x='50%'; nc1y='45%';
@@ -1091,7 +1104,6 @@ export class WoodsScene extends Phaser.Scene {
           </radialGradient>
           <clipPath id="${uid}uc"><circle cx="${ux}%" cy="${uy}%" r="${ur}%"/></clipPath>
         </defs>
-        <circle cx="${ux}%" cy="${uy}%" r="${ur+3}%" fill="rgba(80,200,210,0.07)"/>
         <circle cx="${ux}%" cy="${uy}%" r="${ur}%" fill="url(#${uid}ug)"/>
         <g clip-path="url(#${uid}uc)">
           <ellipse cx="50%" cy="44%" rx="8%" ry="1.5%" fill="rgba(160,230,235,0.2)"/>
@@ -1113,7 +1125,6 @@ export class WoodsScene extends Phaser.Scene {
           </radialGradient>
           <clipPath id="${uid}nc"><circle cx="${nx}%" cy="${ny}%" r="${nr}%"/></clipPath>
         </defs>
-        <circle cx="${nx}%" cy="${ny}%" r="${nr+4}%" fill="rgba(40,60,200,0.1)"/>
         <circle cx="${nx}%" cy="${ny}%" r="${nr}%" fill="url(#${uid}ng)"/>
         <g clip-path="url(#${uid}nc)">
           <ellipse cx="48%" cy="46%" rx="4%" ry="2%" fill="rgba(10,10,80,0.6)"/>
@@ -1131,8 +1142,7 @@ export class WoodsScene extends Phaser.Scene {
         `<stop offset="0%" stop-color="#d8c8a8"/><stop offset="60%" stop-color="#a09070"/><stop offset="100%" stop-color="#706050"/>`,
         'plutc',
         `<ellipse cx="51%" cy="45%" rx="3%" ry="2.5%" fill="rgba(240,230,210,0.55)"/>
-         <ellipse cx="48%" cy="50%" rx="2%" ry="1.2%" fill="rgba(180,140,100,0.4)"/>`,
-        'rgba(180,160,120,0.04)');
+         <ellipse cx="48%" cy="50%" rx="2%" ry="1.2%" fill="rgba(180,140,100,0.4)"/>`);
       subject += `<text x="50%" y="61%" font-family="Courier New" font-size="8" fill="rgba(200,185,150,0.6)" text-anchor="middle">PLUTO</text>
         <text x="50%" y="67%" font-family="Courier New" font-size="6" fill="rgba(160,145,110,0.4)" text-anchor="middle">Tombaugh Regio</text>`;
     } else if (sceneType === 'orion') {
@@ -1158,91 +1168,85 @@ export class WoodsScene extends Phaser.Scene {
         const cr = mkRng(i*31+7); return [42+cr()*16, 38+cr()*16, 0.8+cr()*1.6];
       });
       subject = cluster.map(s => `<circle cx="${s[0].toFixed(1)}%" cy="${s[1].toFixed(1)}%" r="${s[2].toFixed(1)}" fill="rgba(180,210,255,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="${(1.5+s[2]).toFixed(1)}s" repeatCount="indefinite"/></circle>`).join('');
-      subject += `<ellipse cx="50%" cy="46%" rx="12%" ry="10%" fill="none" stroke="rgba(140,180,255,0.15)" stroke-width="8"/>`;
+      subject += `<ellipse cx="50%" cy="46%" rx="13%" ry="11%" fill="rgba(100,140,255,0.03)" stroke="rgba(140,180,255,0.08)" stroke-width="1"/>`;
       subject += `<text x="50%" y="32%" font-family="Courier New" font-size="7" fill="rgba(180,210,255,0.5)" text-anchor="middle">PLEIADES</text>`;
     } else if (sceneType === 'aries') {
       label = 'Aries';
       nebulaCol1 = 'rgba(50,20,10,0.35)'; nc1x='50%'; nc1y='45%';
       const s = [[35,42,2.3],[50,38,1.8],[58,40,1.7],[65,43,1.6]];
       subject = makeCon(s,[[0,1],[1,2],[2,3]], 'rgba(255,200,160,0.55)');
-      subject += `<text x="50%" y="32%" font-family="Courier New" font-size="7" fill="rgba(255,200,160,0.5)" text-anchor="middle">ARIES ♈</text>`;
+      subject += `<text x="50%" y="32%" font-family="Courier New" font-size="7" fill="rgba(255,200,160,0.5)" text-anchor="middle">ARIES</text>`;
     } else if (sceneType === 'taurus') {
       label = 'Taurus';
       nebulaCol1 = 'rgba(40,20,5,0.35)'; nc1x='48%'; nc1y='48%';
       // V-shape Hyades + Aldebaran
       const s = [[40,52,2.8],[50,46,1.9],[56,50,1.8],[50,56,1.7],[44,58,1.6],[35,40,1.5],[44,38,1.5],[58,34,1.4],[64,28,1.4]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,0],[1,5],[1,6],[6,7],[7,8]], 'rgba(255,210,150,0.5)');
-      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(255,210,150,0.5)" text-anchor="middle">TAURUS ♉</text>`;
+      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(255,210,150,0.5)" text-anchor="middle">TAURUS</text>`;
     } else if (sceneType === 'gemini') {
       label = 'Gemini';
       nebulaCol1 = 'rgba(20,20,50,0.35)'; nc1x='50%'; nc1y='44%';
       // Twin columns: Castor & Pollux at top
       const s = [[38,24,2.2],[56,26,2.4],[37,34,1.7],[55,35,1.7],[36,44,1.7],[54,44,1.6],[35,54,1.6],[54,54,1.5],[36,62,1.5],[55,62,1.5]];
       subject = makeCon(s,[[0,2],[2,4],[4,6],[6,8],[1,3],[3,5],[5,7],[7,9],[4,5]], 'rgba(200,220,255,0.55)');
-      subject += `<text x="47%" y="18%" font-family="Courier New" font-size="7" fill="rgba(200,220,255,0.5)" text-anchor="middle">GEMINI ♊</text>`;
+      subject += `<text x="47%" y="18%" font-family="Courier New" font-size="7" fill="rgba(200,220,255,0.5)" text-anchor="middle">GEMINI</text>`;
     } else if (sceneType === 'cancer') {
       label = 'Cancer';
       nebulaCol1 = 'rgba(10,30,40,0.35)'; nc1x='50%'; nc1y='46%';
       const s = [[38,36,1.8],[56,34,1.8],[44,46,1.7],[50,56,2],[38,62,1.6],[56,62,1.6]];
       subject = makeCon(s,[[0,2],[1,2],[2,3],[3,4],[3,5]], 'rgba(170,220,255,0.5)');
-      // Beehive cluster
-      const bhive = Array.from({length:12},(_,i)=>{const cr=mkRng(i*19+11);return[46+cr()*8,42+cr()*8,0.5+cr()*1.0];});
-      subject += bhive.map(b=>`<circle cx="${b[0].toFixed(1)}%" cy="${b[1].toFixed(1)}%" r="${b[2].toFixed(1)}" fill="rgba(200,230,255,0.7)"/>`).join('');
-      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(170,220,255,0.5)" text-anchor="middle">CANCER ♋</text>`;
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(170,220,255,0.5)" text-anchor="middle">CANCER</text>`;
     } else if (sceneType === 'leo') {
       label = 'Leo';
       nebulaCol1 = 'rgba(40,25,10,0.4)'; nc1x='45%'; nc1y='45%';
       const s = [[35,55,2.4],[28,42,1.8],[35,32,1.7],[48,28,2],[58,32,1.8],[62,42,2.2],[55,55,1.7],[48,50,1.5]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[5,7],[7,0]], 'rgba(255,220,160,0.5)');
-      subject += `<text x="46%" y="24%" font-family="Courier New" font-size="7" fill="rgba(255,220,160,0.45)" text-anchor="middle">LEO ♌</text>`;
+      subject += `<text x="46%" y="24%" font-family="Courier New" font-size="7" fill="rgba(255,220,160,0.45)" text-anchor="middle">LEO</text>`;
     } else if (sceneType === 'virgo') {
       label = 'Virgo';
       nebulaCol1 = 'rgba(30,40,10,0.35)'; nc1x='50%'; nc1y='47%';
       const s = [[50,22,1.8],[44,30,1.7],[38,38,2.3],[44,46,1.6],[50,52,1.7],[58,46,1.6],[64,38,1.8],[60,28,1.7],[52,38,1.5]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[3,8],[8,5]], 'rgba(200,240,180,0.5)');
-      subject += `<text x="50%" y="16%" font-family="Courier New" font-size="7" fill="rgba(200,240,180,0.5)" text-anchor="middle">VIRGO ♍</text>`;
+      subject += `<text x="50%" y="16%" font-family="Courier New" font-size="7" fill="rgba(200,240,180,0.5)" text-anchor="middle">VIRGO</text>`;
     } else if (sceneType === 'libra') {
       label = 'Libra';
       nebulaCol1 = 'rgba(20,30,20,0.35)'; nc1x='50%'; nc1y='46%';
       const s = [[38,54,2],[62,54,2],[34,42,1.8],[66,42,1.7],[50,36,1.9],[50,50,1.6]];
       subject = makeCon(s,[[0,1],[0,2],[1,3],[2,4],[3,4],[4,5],[5,0],[5,1]], 'rgba(180,240,180,0.5)');
-      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(180,240,180,0.5)" text-anchor="middle">LIBRA ♎</text>`;
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(180,240,180,0.5)" text-anchor="middle">LIBRA</text>`;
     } else if (sceneType === 'scorpius') {
       label = 'Scorpius';
       nebulaCol1 = 'rgba(60,10,10,0.5)'; nc1x='50%'; nc1y='50%';
       const s = [[50,20,2.4],[47,28,1.8],[44,35,1.7],[40,42,1.6],[38,50,1.5],[40,58,1.4],[44,65,1.6],[48,70,1.5],[53,68,1.5],[42,34,1.4],[36,30,1.4]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[2,9],[9,10]], 'rgba(255,160,140,0.5)');
-      subject += `<text x="50%" y="15%" font-family="Courier New" font-size="7" fill="rgba(255,160,140,0.5)" text-anchor="middle">SCORPIUS ♏</text>`;
+      subject += `<text x="50%" y="15%" font-family="Courier New" font-size="7" fill="rgba(255,160,140,0.5)" text-anchor="middle">SCORPIUS</text>`;
     } else if (sceneType === 'sagittarius') {
       label = 'Sagittarius';
       nebulaCol1 = 'rgba(40,20,5,0.45)'; nc1x='50%'; nc1y='50%';
       // Teapot asterism
       const s = [[44,58,1.8],[52,56,1.7],[58,52,2],[54,46,2.1],[46,46,1.8],[38,50,1.7],[36,56,1.7],[50,62,1.6]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,0],[0,7],[1,3],[4,3]], 'rgba(255,190,100,0.5)');
-      subject += `<text x="50%" y="38%" font-family="Courier New" font-size="7" fill="rgba(255,190,100,0.5)" text-anchor="middle">SAGITTARIUS ♐</text>`;
+      subject += `<text x="50%" y="38%" font-family="Courier New" font-size="7" fill="rgba(255,190,100,0.5)" text-anchor="middle">SAGITTARIUS</text>`;
     } else if (sceneType === 'capricorn') {
       label = 'Capricorn';
       nebulaCol1 = 'rgba(15,25,35,0.35)'; nc1x='50%'; nc1y='47%';
       const s = [[32,38,2],[44,34,1.8],[56,34,1.8],[66,40,2],[60,50,1.7],[50,56,1.8],[40,56,1.7],[34,50,1.7]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[1,6],[2,5]], 'rgba(160,200,220,0.5)');
-      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,220,0.5)" text-anchor="middle">CAPRICORN ♑</text>`;
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,220,0.5)" text-anchor="middle">CAPRICORN</text>`;
     } else if (sceneType === 'aquarius') {
       label = 'Aquarius';
       nebulaCol1 = 'rgba(10,20,50,0.45)'; nc1x='50%'; nc1y='46%';
       const s = [[42,32,2.2],[50,36,1.8],[44,44,1.7],[52,50,1.8],[42,56,1.7],[56,56,1.7],[60,48,1.6],[38,48,1.6]];
       subject = makeCon(s,[[0,1],[0,2],[2,3],[3,4],[3,5],[3,6],[2,7]], 'rgba(140,200,255,0.5)');
       // water droplets
-      subject += `<line x1="44%" y1="60%" x2="40%" y2="70%" stroke="rgba(100,180,255,0.35)" stroke-width="0.7"/>
-        <line x1="50%" y1="62%" x2="46%" y2="72%" stroke="rgba(100,180,255,0.3)" stroke-width="0.7"/>
-        <line x1="56%" y1="60%" x2="52%" y2="70%" stroke="rgba(100,180,255,0.3)" stroke-width="0.7"/>`;
-      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(140,200,255,0.5)" text-anchor="middle">AQUARIUS ♒</text>`;
+      subject += `<text x="50%" y="26%" font-family="Courier New" font-size="7" fill="rgba(140,200,255,0.5)" text-anchor="middle">AQUARIUS</text>`;
     } else if (sceneType === 'pisces') {
       label = 'Pisces';
       nebulaCol1 = 'rgba(10,20,40,0.4)'; nc1x='50%'; nc1y='46%';
       // Two fish + cord
       const s = [[28,38,2],[22,44,1.8],[28,52,1.8],[36,46,1.7],[72,38,2],[78,44,1.8],[72,52,1.8],[64,46,1.7],[50,46,1.5]];
       subject = makeCon(s,[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[3,8],[8,7]], 'rgba(160,200,255,0.5)');
-      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,255,0.5)" text-anchor="middle">PISCES ♓</text>`;
+      subject += `<text x="50%" y="28%" font-family="Courier New" font-size="7" fill="rgba(160,200,255,0.5)" text-anchor="middle">PISCES</text>`;
     } else { // moon
       nebulaCol1 = 'rgba(20,20,30,0.5)';
       // ── Real lunar phase ──────────────────────────────────────────
@@ -1284,8 +1288,6 @@ export class WoodsScene extends Phaser.Scene {
             <circle cx="${(moonX+shadowOff).toFixed(1)}%" cy="${(moonY-2).toFixed(1)}%" r="${(moonR*1.05).toFixed(1)}%" fill="black"/>
           </mask>
         </defs>
-        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR+4}%" fill="rgba(220,210,160,0.06)"/>
-        <circle cx="${moonX}%" cy="${moonY}%" r="${moonR+2}%" fill="rgba(200,190,140,0.04)"/>
         <circle cx="${moonX}%" cy="${moonY}%" r="${moonR}%" fill="url(#${uid}lunagrad)" mask="url(#${uid}lunamask)"/>
         <g clip-path="url(#${uid}lunaclip)" mask="url(#${uid}lunamask)">${craterSvg}</g>
         <circle cx="${moonX}%" cy="${moonY}%" r="${moonR}%" fill="none" stroke="rgba(220,210,160,0.15)" stroke-width="0.5"/>

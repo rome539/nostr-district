@@ -125,10 +125,17 @@ export class HubScene extends Phaser.Scene {
   private waitingForAccess = false;
   private returnFromRoom: string | null = null;
   private isLeavingToWoods = false;
+  private isLeavingToAlley = false;
+  private nearAlley = false;
   private lastWoodsClosedNotice = 0;
 
+  // Alley entrance — gap between RELAY building (ends ~260) and unnamed building (starts 300)
+  // Secret: no prompt shown, press E while in the gap to enter
+  private readonly ALLEY_ENTER_X = 280;
+  private readonly ALLEY_ENTER_RANGE = 30;
+
   constructor() { super({ key: 'HubScene' }); }
-  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.emoteSet.stopAll(); this.isLeavingToWoods = false; }
+  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.emoteSet.stopAll(); this.isLeavingToWoods = false; this.isLeavingToAlley = false; }
 
   create(): void {
     // ── Login gate ──
@@ -380,6 +387,11 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub', isWalking);
     this.player.setAlpha(this.emoteSet.isActive('ghost') ? 0.3 : 1);
 
+    // ── Alley: secret entrance — track proximity silently, no UI shown ──
+    if (!this.isLeavingToAlley && !this.isLeavingToWoods) {
+      this.nearAlley = Math.abs(this.player.x - this.ALLEY_ENTER_X) <= this.ALLEY_ENTER_RANGE;
+    }
+
     // ── Woods transition: walk off the left edge ──
     if (this.player.x <= 24 && !this.isLeavingToWoods) {
       if (!HubScene.WOODS_OPEN) {
@@ -621,7 +633,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   // ── Player ──
   private createPlayer(): void {
     this.playerGlow = this.add.graphics().setDepth(9);
-    let sx = 400; if (this.returnFromRoom === 'woods') { sx = 60; } else if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
+    let sx = 400; if (this.returnFromRoom === 'woods') { sx = 60; } else if (this.returnFromRoom === 'alley') { sx = 310; } else if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY - 44, n.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
@@ -772,10 +784,24 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
+    if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;
     if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; }
     this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor);
+  }
+
+  private enterAlley(): void {
+    this.isLeavingToAlley = true;
+    this.isMoving = false; this.targetX = null;
+    this.snd.roomEnter();
+    this.snd.setRoom('');
+    this.chatUI.destroy();
+    this.cameras.main.fadeOut(350, 0, 0, 0);
+    this.time.delayedCall(350, () => {
+      if (!this.scene.isActive()) return;
+      this.scene.start('AlleyScene');
+    });
   }
 
   // ── Helpers ──

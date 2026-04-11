@@ -3,7 +3,7 @@
  * Singleton — call SoundEngine.get() anywhere.
  */
 
-export type RoomId = 'hub' | 'lounge' | 'relay' | 'feed' | 'myroom' | 'market' | 'woods' | 'cabin';
+export type RoomId = 'hub' | 'lounge' | 'relay' | 'feed' | 'myroom' | 'market' | 'woods' | 'cabin' | 'alley';
 
 const STORAGE_KEY = 'nd_sound';
 const MYROOM_TRACK_KEY = 'nd_myroom_track';
@@ -31,6 +31,9 @@ export class SoundEngine {
   private ambGain: GainNode | null = null;
   private ambNodes: AudioScheduledSourceNode[] = [];
   private streamEl: HTMLAudioElement | null = null;
+  private bufferSrc: AudioBufferSourceNode | null = null;
+  private _xfadeNodes: Array<{ src: AudioBufferSourceNode; gain: GainNode }> = [];
+  private _loopTimer: ReturnType<typeof setTimeout> | null = null;
   private currentRoom: RoomId | '' = '';
   private footL = true;
   private _sfxVol = 0.65;
@@ -83,7 +86,85 @@ export class SoundEngine {
     this.streamEl = el;
   }
 
+  /** Gapless loop via Web Audio buffer — avoids MP3 encoder padding gap.
+   *  loopAt: seconds into the track to start the crossfade (default: auto). */
+  private _startStreamGapless(url: string, forRoom: RoomId, loopAt?: number): void {
+    this._stopStream();
+    const ctx = this.ac();
+    fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(ab => ctx.decodeAudioData(ab))
+      .then(buf => {
+        if (this.currentRoom !== forRoom) return;
+        this._startCrossfadeLoop(buf, loopAt);
+      })
+      .catch(() => {});
+  }
+
+  /** Crossfade loop — each node loops internally (loop=true) and a new instance
+   *  fades in while the previous fades out, making the repeat point inaudible.
+   *  loopAt: seconds at which to start the crossfade (defaults to near end of buffer). */
+  private _startCrossfadeLoop(buf: AudioBuffer, loopAt?: number): void {
+    const ctx = this.ac();
+    const xfade = Math.min(2, buf.duration * 0.4); // crossfade ≤ 40% of track, max 2s
+    const interval = loopAt ?? (buf.duration - xfade); // when to start the next layer
+
+    const play = () => {
+      const now = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      src.buffer = buf;
+      src.loop = true; // sustains indefinitely — we stop it manually after fade-out
+      src.connect(gain);
+      gain.connect(this.amb());
+
+      // Fade in over xfade seconds
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(1, now + xfade);
+      src.start(now);
+
+      // Fade out and release the previous node
+      if (this._xfadeNodes.length > 0) {
+        const prev = this._xfadeNodes[this._xfadeNodes.length - 1];
+        prev.gain.gain.cancelScheduledValues(now);
+        prev.gain.gain.setValueAtTime(1, now);
+        prev.gain.gain.linearRampToValueAtTime(0, now + xfade);
+        const ref = prev;
+        setTimeout(() => {
+          try { ref.src.stop(); } catch {}
+          try { ref.src.disconnect(); } catch {}
+          try { ref.gain.disconnect(); } catch {}
+          this._xfadeNodes = this._xfadeNodes.filter(n => n !== ref);
+        }, (xfade + 0.3) * 1000);
+      }
+
+      this._xfadeNodes.push({ src, gain });
+      this.bufferSrc = src;
+
+      // Schedule the next crossfade
+      this._loopTimer = setTimeout(play, interval * 1000);
+    };
+
+    play();
+  }
+
+  private _stopBufferSrc(): void {
+    if (this._loopTimer !== null) { clearTimeout(this._loopTimer); this._loopTimer = null; }
+    this._xfadeNodes.forEach(({ src, gain }) => {
+      try { src.stop(); } catch {}
+      try { src.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    });
+    this._xfadeNodes = [];
+    if (this.bufferSrc) {
+      try { this.bufferSrc.stop(); } catch {}
+      try { this.bufferSrc.disconnect(); } catch {}
+      this.bufferSrc = null;
+    }
+  }
+
   private _stopStream(): void {
+    this._stopBufferSrc();
     if (this.streamEl) {
       this.streamEl.pause();
       this.streamEl.src = '';
@@ -397,12 +478,14 @@ export class SoundEngine {
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
-      this._startStream('/assets/audio/hub-ambient.ogg');
+      this._startStreamGapless('/assets/audio/hub-ambient.ogg', 'hub');
       return;
     } else if (room === 'woods') {
-      this._startStream('/assets/audio/woods-night.mp3');
+      this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
     } else if (room === 'cabin') {
-      this._startStream('/assets/audio/cabin-fire.m4a');
+      this._startStreamGapless('/assets/audio/cabin-fire.m4a', 'cabin');
+    } else if (room === 'alley') {
+      this._startStreamGapless('/assets/audio/rain-alley.mp3', 'alley', 7);
     } else if (room === 'lounge') {
       this._startStream(`${BASE}Backbay%20Lounge.mp3`);
     } else if (room === 'myroom') {

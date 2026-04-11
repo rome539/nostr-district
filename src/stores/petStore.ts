@@ -43,6 +43,7 @@ export const CAT_ANIM_SPECS: AnimSpec[] = [
   { key: 'lick2',   frames: 5,  frameRate: 8  },
   { key: 'itch',    frames: 2,  frameRate: 6  },
   { key: 'meow',    frames: 4,  frameRate: 8  },
+  { key: 'sleep2',  frames: 1,  frameRate: 1  },
 ];
 
 export function getAnimSpecs(species: Exclude<PetSpecies, 'none'>): AnimSpec[] {

@@ -583,6 +583,14 @@ export class ComputerUI {
     });
   }
 
+  /** Apply draftRoom to the store temporarily so the room re-renders without saving. */
+  private _applyLivePreview(): void {
+    if (!this.draftRoom) return;
+    if (!this.previewBaseline) this.previewBaseline = getRoomConfig();
+    setRoomConfig(this.draftRoom);
+    this.onRoomChange?.(this.draftRoom);
+  }
+
   // ══════════════════════════════════════
   // ROOM PREVIEW — temporarily hide panel so user can see live result
   private previewRoom(): void {
@@ -590,7 +598,8 @@ export class ComputerUI {
     this.panel.style.display = 'none';
     this.backdrop.style.display = 'none';
     if (this.draftRoom) {
-      this.previewBaseline = getRoomConfig();
+      // Only save baseline if not already saved by a live color preview
+      if (!this.previewBaseline) this.previewBaseline = getRoomConfig();
       this.previewSaved = false;
       setRoomConfig(this.draftRoom);
       this.onRoomChange?.(getRoomConfig());
@@ -618,12 +627,8 @@ export class ComputerUI {
     if (this.backdrop) this.backdrop.style.display = '';
     this.previewPill?.remove();
     this.previewPill = null;
-    if (this.previewBaseline && !this.previewSaved) {
-      setRoomConfig(this.previewBaseline);
-      this.onRoomChange?.(getRoomConfig());
-      this.onPetChange?.(this.previewBaseline.pet);
-      this.previewBaseline = null;
-    }
+    // Don't revert here — live preview already wrote the draft to the store.
+    // Revert only happens on close() without saving.
   }
 
   // ROOM TAB — Full Customization
@@ -754,6 +759,7 @@ export class ComputerUI {
     container.querySelectorAll('.wt').forEach(el => {
       el.addEventListener('click', () => {
         this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), wallTheme: (el as HTMLElement).dataset.wall as WallTheme };
+        this._applyLivePreview();
         this.renderWallPicker(container, body);
       });
     });
@@ -801,6 +807,7 @@ export class ComputerUI {
     container.querySelectorAll('.ft').forEach(el => {
       el.addEventListener('click', () => {
         this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), floorStyle: (el as HTMLElement).dataset.floor as FloorStyle };
+        this._applyLivePreview();
         this.renderFloorPicker(container, body);
       });
     });
@@ -834,6 +841,7 @@ export class ComputerUI {
     container.querySelectorAll('.lt').forEach(el => {
       el.addEventListener('click', () => {
         this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), lighting: (el as HTMLElement).dataset.light as LightingMood };
+        this._applyLivePreview();
         this.renderLightingPicker(container, body);
       });
     });
@@ -923,26 +931,35 @@ export class ComputerUI {
       </div>
     `;
 
-    // Toggle place/remove
+    // Toggle place/remove — if palette is open for this item, close it instead of removing
     container.querySelectorAll('.fur-row').forEach(el => {
       el.addEventListener('click', (e) => {
         const fid = (el as HTMLElement).dataset.fid as FurnitureId;
         if (fid === 'desk') return;
-        // Don't toggle if clicking the color swatch
         if ((e.target as HTMLElement).classList.contains('fur-palette-btn')) return;
+        if ((e.target as HTMLElement).classList.contains('pal-swatch')) return;
+        if ((e.target as HTMLElement).classList.contains('pal-reset')) return;
+        // If palette is open for this item, just close it
+        if (this.activeFurnitureColor === fid) {
+          this.activeFurnitureColor = null;
+          this.renderFurniturePicker(container, body);
+          return;
+        }
+        // If palette is open for a different item, close it
+        if (this.activeFurnitureColor !== null) {
+          this.activeFurnitureColor = null;
+        }
         const base = this.draftRoom ?? getRoomConfig();
         const furniture = [...base.furniture];
         const idx = furniture.indexOf(fid);
         if (idx >= 0) furniture.splice(idx, 1); else furniture.push(fid);
         this.draftRoom = { ...base, furniture };
-        if (this.activeFurnitureColor === fid && !this.draftRoom.furniture.includes(fid)) {
-          this.activeFurnitureColor = null;
-        }
+        this._applyLivePreview();
         this.renderFurniturePicker(container, body);
       });
     });
 
-    // Open/close palette
+    // Open/close palette via the color swatch button
     container.querySelectorAll('.fur-palette-btn').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -952,7 +969,7 @@ export class ComputerUI {
       });
     });
 
-    // Pick a swatch color
+    // Pick a swatch color — live preview in room without saving
     container.querySelectorAll('.pal-swatch').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -960,17 +977,19 @@ export class ComputerUI {
         const color = (el as HTMLElement).dataset.color!;
         const base = this.draftRoom ?? getRoomConfig();
         this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: color } };
+        this._applyLivePreview();
         this.renderFurniturePicker(container, body);
       });
     });
 
-    // Reset to default
+    // Reset to default — also live previews
     container.querySelectorAll('.pal-reset').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         const fid = (el as HTMLElement).dataset.fid as FurnitureId;
         const base = this.draftRoom ?? getRoomConfig();
         this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: DEFAULT_FURNITURE_COLORS[fid] } };
+        this._applyLivePreview();
         this.renderFurniturePicker(container, body);
       });
     });
@@ -1028,6 +1047,7 @@ export class ComputerUI {
         const posters = [...base.posters] as [PosterId, PosterId, PosterId];
         posters[this.activePosterSlot] = pid;
         this.draftRoom = { ...base, posters };
+        this._applyLivePreview();
         this.renderPosterPicker(container, body);
       });
     });

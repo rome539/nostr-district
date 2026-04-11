@@ -85,6 +85,17 @@ const PERSP_NEAR = 1.05; // scale multiplier at FLOOR_MAX (camera-near)
 const PERSP_FAR  = 0.72; // scale multiplier at FLOOR_MIN (camera-far)
 const LAY_COOLDOWN_MS = 20000;
 
+// Per-breed bark VFX x offset (as fraction of displayWidth) — facing right.
+// Derived from pixel analysis of each dog's bark sprite to align VFX with muzzle.
+const DOG_BREED_BARK_XOFFSET: Record<number, number> = {
+  1: 0.25, // Golden Retriever
+  2: 0.17, // Akita
+  3: 0.32, // Great Dane
+  4: 0.22, // Schnauzer
+  5: 0.30, // Saint Bernard
+  6: 0.25, // Siberian Husky
+};
+
 // Per-breed base scales: 1=Golden, 2=Akita, 3=Great Dane, 4=Schnauzer, 5=Saint Bernard, 6=Husky
 const DOG_BREED_SCALE: Record<number, number> = {
   1: 1.9,  // Golden Retriever — medium
@@ -117,6 +128,7 @@ export class PetSprite {
   private stateDuration = 0;
   private layCooldown   = 0;
   private species: 'dog' | 'cat' = 'dog';
+  private breed     = 1;
   private prefix    = '';
   private baseScale = 1;
   private animFrameCounts: Record<string, number> = {};
@@ -129,6 +141,7 @@ export class PetSprite {
     if (sel.species === 'none') return;
     this.scene     = scene;
     this.species   = sel.species;
+    this.breed     = sel.breed;
     this.prefix    = `pet-${sel.species}-${sel.breed}`;
     this.baseScale = sel.species === 'dog'
       ? (DOG_BREED_SCALE[sel.breed] ?? 1.9)
@@ -186,6 +199,11 @@ export class PetSprite {
       // Frame 2 (x 32–47): scattered dots fading out
       dot(41,3); dot(38,6); dot(44,6); dot(41,10);
       this.scene.textures.addCanvas('bark-vfx', c);
+      // Manually register the three 16×16 frames so generateFrameNumbers can resolve them
+      const bvTex = this.scene.textures.get('bark-vfx');
+      bvTex.add(0, 0,  0, 0, 16, 16);
+      bvTex.add(1, 0, 16, 0, 16, 16);
+      bvTex.add(2, 0, 32, 0, 16, 16);
     }
     if (!this.scene.anims.exists('bark-vfx-anim')) {
       this.scene.anims.create({
@@ -206,9 +224,12 @@ export class PetSprite {
     //   Head top ≈ 22px from bottom (44%), mouth ≈ 17px from bottom (34%).
     //   Use 0.34 so the VFX bottom lands at the mouth, extending upward.
     // Dogs: 100px frame, content is more spread — 0.55 lands near the muzzle.
-    const yFactor  = this.species === 'cat' ? 0.34 : 0.55;
+    const yFactor  = this.species === 'cat' ? 0.34 : 0.46;
     const vfxScale = this.sprite.scaleX * 1.1;
-    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * 0.32;
+    const xFraction = this.species === 'dog'
+      ? (DOG_BREED_BARK_XOFFSET[this.breed] ?? 0.25)
+      : 0.32;
+    const offsetX  = (this.sprite.flipX ? -1 : 1) * this.sprite.displayWidth * xFraction;
     const vfxY     = this.sprite.y - this.sprite.displayHeight * yFactor;
 
     const vfx = this.scene.add.sprite(
@@ -306,11 +327,15 @@ export class PetSprite {
         this.stateDuration = 6000 + Math.random() * 8000;  // 6–14 s
         break;
 
-      case 'sleep':
+      case 'sleep': {
+        const sleepTex = (this.species === 'cat' && Math.random() < 0.5)
+          ? `${this.prefix}-sleep2`
+          : `${this.prefix}-sleep`;
         this.sprite.stop();
-        this.sprite.setTexture(`${this.prefix}-sleep`).setFrame(0);
+        this.sprite.setTexture(sleepTex).setFrame(0);
         this.stateDuration = 10000 + Math.random() * 12000; // 10–22 s
         break;
+      }
 
       case 'lay':
         this.sprite.play({ key: `${this.prefix}-lay-anim`, repeat: 0 });
@@ -408,6 +433,12 @@ export class PetSprite {
         else          this.enterState('sit');
         break;
     }
+  }
+
+  /** Call from console: scene.pet.triggerEmote() or window.__testBark() */
+  triggerEmote(): void {
+    if (!this.sprite?.active) return;
+    this.enterState('emote');
   }
 
   destroy(): void {

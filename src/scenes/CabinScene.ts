@@ -124,7 +124,7 @@ export class CabinScene extends Phaser.Scene {
       if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
       const wx = this.cameras.main.scrollX + p.x;
       if (p.y < FLOOR_Y - 10 || p.y > 455) return;
-      this.targetX = Phaser.Math.Clamp(wx, DOOR_X + 10, W - 20);
+      this.targetX = Phaser.Math.Clamp(wx, 20, W - 20);
       this.isMoving = true;
     });
 
@@ -181,7 +181,7 @@ export class CabinScene extends Phaser.Scene {
     });
 
     setPresenceCallbacks({
-      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
+      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey) || this.isLeavingScene) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
       onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
       onCountUpdate: () => {},
@@ -485,7 +485,7 @@ export class CabinScene extends Phaser.Scene {
     this.isKeyboardMoving = vx !== 0;
     if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
     else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * CABIN_SPEED / 60; this.facingRight = dx > 0; } }
-    this.player.x = Phaser.Math.Clamp(this.player.x, DOOR_X + 8, W - 52);
+    this.player.x = Phaser.Math.Clamp(this.player.x, 20, W - 52);
     this.player.setFlipX(!this.facingRight);
   }
 

@@ -95,7 +95,14 @@ export class RoomScene extends Phaser.Scene {
   private isLeavingRoom = false;
 
   constructor() { super({ key: 'RoomScene' }); }
-  init(data: RoomSceneConfig): void { this.roomConfig = data; this.feedNotes = []; this.emoteSet.stopAll(); this.introActive = false; this.isLeavingRoom = false; }
+  init(data: RoomSceneConfig): void {
+    this.roomConfig = data;
+    this.feedNotes = [];
+    this.emoteSet.stopAll();
+    this.introActive = false;
+    this.isLeavingRoom = false;
+    this.playerY = 420;
+  }
 
   preload(): void {
     if (!this.roomConfig.id.startsWith('myroom:')) return;
@@ -189,7 +196,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
 
     // Click to move
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 300 || p.y > 450) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 330 || p.y > 470) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
 
     // Computer interaction prompt (only in myroom)
     this.computerPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -218,7 +225,7 @@ export class RoomScene extends Phaser.Scene {
       onPlayerJoin: (p) => {
         if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return;
         if (mutedPlayers.has(p.pubkey)) return;
-        const ry = Phaser.Math.Clamp(p.y, 350, 445);
+        const ry = Phaser.Math.Clamp(p.y, 340, 470);
         this.addRoomPlayer(p.pubkey, p.name, p.x, ry, (p as any).avatar, (p as any).status);
         sendAvatarUpdate();
         // Re-broadcast music track to the new joiner if we're the owner
@@ -226,7 +233,7 @@ export class RoomScene extends Phaser.Scene {
           this.time.delayedCall(300, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
         }
       },
-      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 350, 445); } },
+      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 340, 470); } },
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
       onChat: (pk, name, text, emojis) => {
@@ -902,7 +909,7 @@ export class RoomScene extends Phaser.Scene {
     if (vx !== 0 || vy !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.player.y += vy / 60; if (vx !== 0) this.facingRight = vx > 0; }
     else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * sp / 60; this.facingRight = dx > 0; } }
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, GAME_WIDTH - 40);
-    this.player.y = Phaser.Math.Clamp(this.player.y, 350, 445);
+    this.player.y = Phaser.Math.Clamp(this.player.y, 340, 470);
     this.playerY = this.player.y; this.player.setFlipX(!this.facingRight);
     this.isWalking = vx !== 0 || vy !== 0 || (this.isMoving && this.targetX !== null);
   }
