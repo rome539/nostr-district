@@ -735,7 +735,6 @@ export class CabinScene extends Phaser.Scene {
       { text: "If you judge people, you have no time to love them.", author: "Mother Teresa" },
       { text: "If you want to live a happy life, tie it to a goal, not to people or things.", author: "Albert Einstein" },
       { text: "Never let the fear of striking out keep you from playing the game.", author: "Babe Ruth" },
-      { text: "Money and success don't change people; they merely amplify what is already there.", author: "Will Smith" },
       { text: "It is never too late to be what you might have been.", author: "George Eliot" },
       { text: "You must be the change you wish to see in the world.", author: "Mahatma Gandhi" },
       { text: "Spread love everywhere you go. Let no one ever come to you without leaving happier.", author: "Mother Teresa" },
