@@ -3,6 +3,7 @@
  * Full-screen mystic overlay shown when interacting with the alley fortune teller.
  * Coin drop animation → crystal ball glow → typewriter fortune reveal.
  */
+import { SoundEngine } from '../audio/SoundEngine';
 
 const FORTUNES = [
   "A change is coming. You will not see it until it has already arrived.",
@@ -74,6 +75,7 @@ export const FortuneTellerModal = {
   show(onClose?: () => void): void {
     if (overlay) return;
     onCloseCallback = onClose ?? null;
+    SoundEngine.get().fortuneTellerReveal();
 
     overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -187,11 +189,14 @@ export const FortuneTellerModal = {
       status.style.fontSize = '11px';
       status.style.letterSpacing = '0.5px';
       typewrite(status, `"${fortune}"`, 28);
+      // Stop sound 2s after typewriter finishes
+      setTimeout(() => SoundEngine.get().stopFileSounds(), (fortune.length + 2) * 28 + 2000);
     }, 1300);
   },
 
   destroy(): void {
     if (!overlay) return;
+    SoundEngine.get().stopFileSounds();
     overlay.style.transition = 'opacity 0.3s';
     overlay.style.opacity = '0';
     setTimeout(() => {

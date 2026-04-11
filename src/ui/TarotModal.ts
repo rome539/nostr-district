@@ -2,6 +2,7 @@
  * TarotModal.ts — Full 78-card tarot deck, 3-card spread (Past | Present | Future).
  * Uses pixel art asset pack from public/assets/Tarot/
  */
+import { SoundEngine } from '../audio/SoundEngine';
 
 type Suit = 'major' | 'wands' | 'cups' | 'swords' | 'pentacles';
 
@@ -162,6 +163,9 @@ export const TarotModal = {
   show(): void {
     if (overlay) return;
     const draw = drawThree();
+    SoundEngine.get().tarotCardFlip();
+    // Stop 2s after last card flips (last flip at 600 + 2*180 = 960ms)
+    setTimeout(() => SoundEngine.get().stopFileSounds(), 960 + 2000);
 
     overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -244,7 +248,9 @@ export const TarotModal = {
       imgWrap.appendChild(face);
 
       // Flip reveal after deal animation finishes
-      setTimeout(() => { face.style.opacity = '1'; back.style.opacity = '0'; }, 600 + i * 180);
+      setTimeout(() => {
+        face.style.opacity = '1'; back.style.opacity = '0';
+      }, 600 + i * 180);
 
       slot.appendChild(imgWrap);
 
@@ -297,6 +303,7 @@ export const TarotModal = {
 
   destroy(): void {
     if (!overlay) return;
+    SoundEngine.get().stopFileSounds();
     overlay.style.transition = 'opacity 0.25s';
     overlay.style.opacity = '0';
     setTimeout(() => { overlay?.remove(); overlay = null; }, 250);

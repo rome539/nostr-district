@@ -458,6 +458,30 @@ export class SoundEngine {
     this.osc(440, 'sine', t + 0.16, 0.13, 0.07, d);
   }
 
+  private _fileEls: HTMLAudioElement[] = [];
+
+  private _playFile(path: string, volume = 1.0, startAt = 0): void {
+    const el = new Audio(path);
+    el.volume = this._muted ? 0 : Math.min(1, this._sfxVol * volume);
+    el.currentTime = startAt;
+    el.play().catch(() => {});
+    this._fileEls.push(el);
+    el.onended = () => { this._fileEls = this._fileEls.filter(e => e !== el); };
+  }
+
+  stopFileSounds(): void {
+    this._fileEls.forEach(el => { el.pause(); el.currentTime = 0; });
+    this._fileEls = [];
+  }
+
+  tarotCardFlip(): void {
+    this._playFile('/assets/audio/214034__hubsons__flipping-cards.wav', 1.0, 1.0);
+  }
+
+  fortuneTellerReveal(): void {
+    this._playFile('/assets/audio/584244__smokinghotdog__magic-stars-retro-sparkle.wav', 0.15);
+  }
+
   roomRequest(): void {
     const t = this.ac().currentTime; const d = this.sfx();
     // Knock — low thud pair
