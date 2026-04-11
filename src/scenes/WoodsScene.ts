@@ -68,6 +68,8 @@ interface OtherPlayer {
   name: string; avatar?: string; status?: string;
   clickZone?: Phaser.GameObjects.Zone;
   emotes?: EmoteSet;
+  joinTime: number;
+  shown: boolean;
 }
 
 export class WoodsScene extends Phaser.Scene {
@@ -125,7 +127,7 @@ export class WoodsScene extends Phaser.Scene {
   private telescopeOverlay: HTMLElement | null = null;
 
   constructor() { super({ key: 'WoodsScene' }); }
-  init(data?: { fromCabin?: boolean }): void { this.emoteSet.stopAll(); this.isLeavingScene = false; this.spawnX = data?.fromCabin ? CABIN_DOOR_X - 60 : 1400; }
+  init(data?: { fromCabin?: boolean }): void { this.emoteSet.stopAll(); this.isLeavingScene = false; this.spawnX = data?.fromCabin ? CABIN_DOOR_X - 10 : 1400; }
 
   create(): void {
     this.renderParallaxLayer();
@@ -140,6 +142,7 @@ export class WoodsScene extends Phaser.Scene {
     this.fireflyGraphics = this.add.graphics().setDepth(12);
     this.emoteGraphics = this.add.graphics().setDepth(15);
 
+    this.fireflies = [];
     for (let i = 0; i < 50; i++) {
       this.fireflies.push({ x: 40 + Math.random() * (W - 80), y: 40 + Math.random() * (FLOOR_Y - 60), vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.3, phase: Math.random() * Math.PI * 2, size: 1.5 + Math.random() * 1.5 });
     }
@@ -263,7 +266,7 @@ export class WoodsScene extends Phaser.Scene {
       onNameUpdate: (pk, name) => { const o = this.otherPlayers.get(pk); if (o) { o.nameText.setText(name.slice(0, 14)); o.name = name; } },
       onStatusUpdate: (pk, status) => { const o = this.otherPlayers.get(pk); if (o) { o.status = status; o.statusText.setText(status.slice(0, 30)); o.statusText.setAlpha(status ? 1 : 0); } },
     });
-    sendRoomChange('woods', 1400, this.playerY);
+    sendRoomChange('woods', this.spawnX, this.playerY);
 
     const unsubProfile = authStore.subscribe(() => { const n = authStore.getState().displayName; if (n && n !== this.registry.get('playerName')) { this.registry.set('playerName', n); this.playerName?.setText(n.slice(0, 14)); sendNameUpdate(n); } });
     this.cameras.main.fadeIn(400, 4, 8, 10);
@@ -702,6 +705,9 @@ export class WoodsScene extends Phaser.Scene {
     this.updateCampfire(time, delta);
     this.updateChimneySmoke(delta);
     this.updateFireflies(time, delta);
+    const fireDist = Math.abs(this.player.x - FIRE_X);
+    const fireT = Math.max(0, 1 - fireDist / 320);
+    this.snd.setLoopElVolume(fireT * fireT);
     this.updateWater(time, delta);
     this.updateShootingStar(delta);
     this.updateCabinProximity();
@@ -727,13 +733,20 @@ export class WoodsScene extends Phaser.Scene {
     sendPosition(this.player.x, this.player.y);
 
     this.otherPlayers.forEach(o => {
-      if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
-      if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
+      if (!o.shown) {
+        if (Date.now() - o.joinTime >= 500) {
+          o.sprite.x = o.targetX; o.sprite.y = this.playerY;
+          o.sprite.setAlpha(1); o.nameText.setAlpha(1); o.statusText.setAlpha(o.statusText.text ? 1 : 0);
+          o.shown = true;
+        } else { return; }
+      }
+      const dx = o.targetX - o.sprite.x;
+      if (Math.abs(dx) > 1) o.sprite.x += dx * 0.12;
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44); o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
       o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
-      o.sprite.y = Math.abs(o.targetX - o.sprite.x) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
+      o.sprite.y = Math.abs(dx) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
     });
   }
 
@@ -1373,7 +1386,8 @@ export class WoodsScene extends Phaser.Scene {
     const ss=(status||'').slice(0,30); const st=this.add.text(px,py-59,ss,{fontFamily:'"Courier New", monospace',fontSize:'8px',color:P.lpurp,align:'center'}).setOrigin(0.5).setDepth(9).setAlpha(ss?1:0);
     const cz=this.add.zone(px,py-20,40,50).setInteractive({useHandCursor:true}).setDepth(12);
     cz.on('pointerdown',(ptr:Phaser.Input.Pointer)=>{if((ptr.event.target as HTMLElement)?.tagName!=='CANVAS')return;ptr.event.stopPropagation();const op2=this.otherPlayers.get(pk);showPlayerMenu(pk,name.slice(0,14),ptr.x,ptr.y,{onChat:(t,c)=>this.chatUI.addMessage('system',t,c),getDMPanel:()=>this.dmPanel},op2?.avatar,op2?.status);});
-    this.otherPlayers.set(pk,{sprite:sp,nameText:nt,statusText:st,targetX:px,targetY:py,name,avatar:avatarStr,status:status||'',clickZone:cz});
+    sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
+    this.otherPlayers.set(pk,{sprite:sp,nameText:nt,statusText:st,targetX:px,targetY:py,name,avatar:avatarStr,status:status||'',clickZone:cz,joinTime:Date.now(),shown:false});
   }
   private removeOtherPlayer(pk: string): void {
     const o=this.otherPlayers.get(pk);if(!o)return;this.otherPlayers.delete(pk);this.dyingSprites.set(pk,o);

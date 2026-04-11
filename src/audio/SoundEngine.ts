@@ -31,6 +31,8 @@ export class SoundEngine {
   private ambGain: GainNode | null = null;
   private ambNodes: AudioScheduledSourceNode[] = [];
   private streamEl: HTMLAudioElement | null = null;
+  private _loopEl: HTMLAudioElement | null = null;
+  private _loopVol = 1.0;
   private bufferSrc: AudioBufferSourceNode | null = null;
   private _xfadeNodes: Array<{ src: AudioBufferSourceNode; gain: GainNode }> = [];
   private _loopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,6 +81,7 @@ export class SoundEngine {
   private _startStream(url: string): void {
     this._stopStream();
     const el = new Audio();
+    el.disableRemotePlayback = true;
     el.src = url;
     el.loop = true;
     el.volume = this._muted ? 0 : this._ambVol;
@@ -88,7 +91,7 @@ export class SoundEngine {
 
   /** Gapless loop via Web Audio buffer — avoids MP3 encoder padding gap.
    *  loopAt: seconds into the track to start the crossfade (default: auto). */
-  private _startStreamGapless(url: string, forRoom: RoomId, loopAt?: number): void {
+  private _startStreamGapless(url: string, forRoom: RoomId, loopAt?: number, gainMult = 1.0): void {
     this._stopStream();
     const ctx = this.ac();
     fetch(url)
@@ -96,7 +99,7 @@ export class SoundEngine {
       .then(ab => ctx.decodeAudioData(ab))
       .then(buf => {
         if (this.currentRoom !== forRoom) return;
-        this._startCrossfadeLoop(buf, loopAt);
+        this._startCrossfadeLoop(buf, loopAt, gainMult);
       })
       .catch(() => {});
   }
@@ -104,7 +107,7 @@ export class SoundEngine {
   /** Crossfade loop — each node loops internally (loop=true) and a new instance
    *  fades in while the previous fades out, making the repeat point inaudible.
    *  loopAt: seconds at which to start the crossfade (defaults to near end of buffer). */
-  private _startCrossfadeLoop(buf: AudioBuffer, loopAt?: number): void {
+  private _startCrossfadeLoop(buf: AudioBuffer, loopAt?: number, gainMult = 1.0): void {
     const ctx = this.ac();
     const xfade = Math.min(2, buf.duration * 0.4); // crossfade ≤ 40% of track, max 2s
     const interval = loopAt ?? (buf.duration - xfade); // when to start the next layer
@@ -120,14 +123,14 @@ export class SoundEngine {
 
       // Fade in over xfade seconds
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(1, now + xfade);
+      gain.gain.linearRampToValueAtTime(gainMult, now + xfade);
       src.start(now);
 
       // Fade out and release the previous node
       if (this._xfadeNodes.length > 0) {
         const prev = this._xfadeNodes[this._xfadeNodes.length - 1];
         prev.gain.gain.cancelScheduledValues(now);
-        prev.gain.gain.setValueAtTime(1, now);
+        prev.gain.gain.setValueAtTime(gainMult, now);
         prev.gain.gain.linearRampToValueAtTime(0, now + xfade);
         const ref = prev;
         setTimeout(() => {
@@ -181,6 +184,7 @@ export class SoundEngine {
     this._muted = v;
     if (this.masterGain) this.masterGain.gain.setTargetAtTime(v ? 0 : 1, this.ac().currentTime, 0.05);
     if (this.streamEl) this.streamEl.volume = v ? 0 : this._ambVol;
+    if (this._loopEl) this._loopEl.volume = v ? 0 : Math.min(1, this._ambVol * this._loopVol);
     this.save();
   }
 
@@ -194,6 +198,7 @@ export class SoundEngine {
     this._ambVol = Math.max(0, Math.min(1, v));
     if (this.ambGain) this.ambGain.gain.setTargetAtTime(this._ambVol, this.ac().currentTime, 0.1);
     if (this.streamEl) this.streamEl.volume = this._muted ? 0 : this._ambVol;
+    if (this._loopEl) this._loopEl.volume = this._muted ? 0 : Math.min(1, this._ambVol * this._loopVol);
     this.save();
   }
 
@@ -460,13 +465,17 @@ export class SoundEngine {
 
   private _fileEls: HTMLAudioElement[] = [];
 
-  private _playFile(path: string, volume = 1.0, startAt = 0): void {
+  private _playFile(path: string, volume = 1.0, startAt = 0, stopAfterMs = 0): void {
     const el = new Audio(path);
+    el.disableRemotePlayback = true;
     el.volume = this._muted ? 0 : Math.min(1, this._sfxVol * volume);
     el.currentTime = startAt;
     el.play().catch(() => {});
     this._fileEls.push(el);
     el.onended = () => { this._fileEls = this._fileEls.filter(e => e !== el); };
+    if (stopAfterMs > 0) {
+      setTimeout(() => { el.pause(); this._fileEls = this._fileEls.filter(e => e !== el); }, stopAfterMs);
+    }
   }
 
   stopFileSounds(): void {
@@ -475,11 +484,23 @@ export class SoundEngine {
   }
 
   tarotCardFlip(): void {
-    this._playFile('/assets/audio/214034__hubsons__flipping-cards.wav', 1.0, 1.0);
+    this._playFile('/assets/audio/214034__hubsons__flipping-cards.wav', 1.0, 30, 10000);
   }
 
   fortuneTellerReveal(): void {
     this._playFile('/assets/audio/584244__smokinghotdog__magic-stars-retro-sparkle.wav', 0.15);
+  }
+
+  stokeFireplace(): void {
+    const d = this.sfx();
+    // Crackling pops
+    this.noiseShot(0.16, 'bandpass', 600, 2.0, 0.09, d, 0);
+    this.noiseShot(0.20, 'bandpass', 500, 2.5, 0.11, d, 0.05);
+    this.noiseShot(0.14, 'bandpass', 720, 3.0, 0.07, d, 0.10);
+    this.noiseShot(0.12, 'bandpass', 460, 2.0, 0.08, d, 0.16);
+    this.noiseShot(0.10, 'bandpass', 840, 3.0, 0.06, d, 0.22);
+    // Low warm whoosh
+    this.noiseShot(0.10, 'lowpass', 280, 1.0, 0.40, d, 0);
   }
 
   roomRequest(): void {
@@ -506,8 +527,10 @@ export class SoundEngine {
       return;
     } else if (room === 'woods') {
       this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
+      this._startLoopEl('/assets/audio/cabin-fire.m4a', 2.5);
+      if (this._loopEl) this._loopEl.volume = 0;
     } else if (room === 'cabin') {
-      this._startStreamGapless('/assets/audio/cabin-fire.m4a', 'cabin');
+      this._startStreamGapless('/assets/audio/cabin-fire.m4a', 'cabin', undefined, 3.0);
     } else if (room === 'alley') {
       this._startStreamGapless('/assets/audio/rain-alley.mp3', 'alley', 7);
     } else if (room === 'lounge') {
@@ -522,8 +545,28 @@ export class SoundEngine {
     }
   }
 
+  private _startLoopEl(url: string, volume: number): void {
+    if (this._loopEl) { this._loopEl.pause(); this._loopEl.src = ''; this._loopEl = null; }
+    this._loopVol = volume;
+    const el = new Audio(url);
+    el.disableRemotePlayback = true;
+    el.loop = true;
+    el.volume = this._muted ? 0 : Math.min(1, this._ambVol * volume);
+    el.play().catch(() => {});
+    this._loopEl = el;
+  }
+
+  private _stopLoopEl(): void {
+    if (this._loopEl) { this._loopEl.pause(); this._loopEl.src = ''; this._loopEl = null; }
+  }
+
+  setLoopElVolume(t: number): void {
+    if (this._loopEl) this._loopEl.volume = this._muted ? 0 : Math.min(1, this._ambVol * this._loopVol * t);
+  }
+
   private _stopAmbient(): void {
     this._stopStream();
+    this._stopLoopEl();
     this.ambNodes.forEach(n => { try { n.stop(); } catch {} });
     this.ambNodes = [];
   }

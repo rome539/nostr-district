@@ -61,6 +61,8 @@ interface OtherPlayer {
   status?: string;
   clickZone?: Phaser.GameObjects.Zone;
   emotes?: EmoteSet;
+  joinTime: number;
+  shown: boolean;
 }
 
 export class HubScene extends Phaser.Scene {
@@ -409,8 +411,17 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
     sendPosition(this.player.x, this.player.y);
     this.otherPlayers.forEach(o => {
-      if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
-      if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
+      if (!o.shown) {
+        if (Date.now() - o.joinTime >= 500) {
+          o.sprite.x = o.targetX; o.sprite.y = o.targetY;
+          o.sprite.setAlpha(1); o.nameText.setAlpha(1); o.statusText.setAlpha(o.statusText.text ? 1 : 0);
+          o.shown = true;
+        } else { return; }
+      }
+      const dx = o.targetX - o.sprite.x;
+      const dy = o.targetY - o.sprite.y;
+      if (Math.abs(dx) > 1) o.sprite.x += dx * 0.12;
+      if (Math.abs(dy) > 1) o.sprite.y += dy * 0.12;
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
       o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
@@ -566,7 +577,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     const nt = this.add.text(px, py - 44, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.lcream, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(9);
     const statusStr = (status || '').slice(0, 30);
     const st = this.add.text(px, py - 59, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr, status: status || '' });
+    sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr, status: status || '', joinTime: Date.now(), shown: false });
     this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
     const cz = this.add.zone(px, py - 20, 24, 44).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {

@@ -898,9 +898,9 @@ export class AlleyScene extends Phaser.Scene {
     this.otherPlayers.forEach(o => {
       if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
       if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
-      o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
-      o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
-      if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 28);
+      o.nameText.setPosition(o.sprite.x, o.sprite.y - 90);
+      o.statusText.setPosition(o.sprite.x, o.sprite.y - 102);
+      if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 50);
       o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'cabin');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
       o.sprite.y = Math.abs(o.targetX - o.sprite.x) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
