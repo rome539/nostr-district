@@ -33,6 +33,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { ComputerUI } from '../ui/ComputerUI';
 import { MuteList } from '../ui/MuteList';
 import { PlayerPicker } from '../ui/PlayerPicker';
+import { HotkeyModal } from '../ui/HotkeyModal';
 
 const CABIN_ACCENT = '#f0a030';
 const W = 1000;             // cabin world width
@@ -76,6 +77,7 @@ export class CabinScene extends Phaser.Scene {
   private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private settingsPanel = new SettingsPanel();
+  private hotkeyModal = new HotkeyModal();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
   private emoteSet = new EmoteSet();
   private snd = SoundEngine.get();
@@ -169,6 +171,9 @@ export class CabinScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
     this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
+    document.addEventListener('keydown', hotkeyHandler);
+    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
 
     // Door exit prompt
     this.doorPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -206,10 +211,16 @@ export class CabinScene extends Phaser.Scene {
     });
     this.input.keyboard?.on('keydown-ESC', () => {
       if (document.activeElement === this.chatUI.getInput()) return;
+      if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
-      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
       if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
+      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
+      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
+      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
       if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
+      if (this.muteList.isOpen()) { this.muteList.close(); return; }
+      if (document.getElementById('profile-modal')) return;
+      if (document.getElementById('zap-modal')) return;
       if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
     });
 

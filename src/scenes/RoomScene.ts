@@ -32,6 +32,8 @@ import { authStore } from '../stores/authStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
 import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../stores/petStore';
+import { BookcaseModal } from '../ui/BookcaseModal';
+import { HotkeyModal } from '../ui/HotkeyModal';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
@@ -60,6 +62,7 @@ export class RoomScene extends Phaser.Scene {
   private emoteSet = new EmoteSet();
   private settingsPanel = new SettingsPanel();
   private muteList = new MuteList();
+  private hotkeyModal = new HotkeyModal();
   private playerPicker = new PlayerPicker();
   private computerUI = new ComputerUI();
   private roomRenderer = new RoomRenderer();
@@ -67,6 +70,11 @@ export class RoomScene extends Phaser.Scene {
   private computerPrompt!: Phaser.GameObjects.Text;
   private computerPromptBg!: Phaser.GameObjects.Graphics;
   private nearComputer = false;
+  private bookcasePrompt!: Phaser.GameObjects.Text;
+  private bookcasePromptBg!: Phaser.GameObjects.Graphics;
+  private nearBookcase = false;
+  private hasBookcase = false;
+  private parsedRoomConfig: any = null;
   private roomBgImage!: Phaser.GameObjects.Image;
   // Walk animation
   private walkFrame = 0;
@@ -136,6 +144,9 @@ export class RoomScene extends Phaser.Scene {
     if (this.roomConfig.ownerRoomConfig) {
       try { parsedOwnerConfig = JSON.parse(this.roomConfig.ownerRoomConfig); } catch (_) {}
     }
+    // For own room use live config; for visitor rooms use owner's parsed config only (no local fallback)
+    this.parsedRoomConfig = parsedOwnerConfig ?? (this.isOwner ? getRoomConfig() : null);
+    this.hasBookcase = Array.isArray(this.parsedRoomConfig?.furniture) && this.parsedRoomConfig.furniture.includes('bookshelf');
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT, parsedOwnerConfig);
     this.roomBgImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(-1);
 
@@ -175,6 +186,7 @@ export class RoomScene extends Phaser.Scene {
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
     this.input.keyboard?.on('keydown-ENTER', () => {
+      if (BookcaseModal.isOpen()) return;
       if (document.activeElement?.closest('.dm-panel') || document.activeElement?.closest('.cp-panel')) return;
       if (document.activeElement !== chatInput) chatInput.focus();
     });
@@ -182,18 +194,21 @@ export class RoomScene extends Phaser.Scene {
     // DM Panel — singleton
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
+    this.input.keyboard?.on('keydown-M', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
     this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
     if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
+    this.input.keyboard?.on('keydown-G', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
 
     let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
+    this.input.keyboard?.on('keydown-F', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-S', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
+    this.input.keyboard?.on('keydown-U', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
+    this.input.keyboard?.on('keydown-T', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
+    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
+    document.addEventListener('keydown', hotkeyHandler);
+    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 330 || p.y > 470) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -212,11 +227,28 @@ export class RoomScene extends Phaser.Scene {
       if (!this.introActive && this.nearComputer && this.isMyRoom()) this.openComputer();
     });
 
+    // Bookcase interaction prompt (any myroom with a bookshelf)
+    this.bookcasePromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.bookcasePromptBg.fillStyle(hexToNum(P.bg), 0.9);
+    this.bookcasePromptBg.fillRoundedRect(0, 0, 148, 28, 5);
+    this.bookcasePromptBg.lineStyle(1, hexToNum(P.purp), 0.3);
+    this.bookcasePromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
+    this.bookcasePrompt = this.add.text(0, 0, '[E] Sign the bookcase', {
+      fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.purp, fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.bookcasePrompt.setInteractive();
+    this.bookcasePrompt.on('pointerdown', () => {
+      if (!this.introActive && this.nearBookcase) this.openBookcase();
+    });
+
     this.input.keyboard?.on('keydown-E', () => {
       if (this.introActive) return;
+      if (BookcaseModal.isOpen()) return;
       if (document.activeElement === this.chatUI.getInput()) return;
       if (this.nearComputer && this.isMyRoom()) {
         this.openComputer();
+      } else if (this.nearBookcase) {
+        this.openBookcase();
       }
     });
 
@@ -343,7 +375,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.dmPanel) this.dmPanel.close();
       if (this.crewPanel) this.crewPanel.close();
       if (this.followsPanel) this.followsPanel.close();
-      destroyPlayerMenu(); ProfileModal.destroy();
+      destroyPlayerMenu(); ProfileModal.destroy(); BookcaseModal.destroy();
       this.feedNotes.forEach(n => { n.npubText?.destroy(); n.msgText?.destroy(); });
       this.feedNotes = [];
       this.relayStatusLines.forEach(l => { l.dot.destroy(); l.lat.destroy(); });
@@ -447,6 +479,11 @@ export class RoomScene extends Phaser.Scene {
   // LIVE ROOM REFRESH
   // ══════════════════════════════════════
   private refreshRoomBackground(): void {
+    // Re-read live room config so hasBookcase stays in sync after ComputerUI saves
+    const liveConfig = getRoomConfig();
+    this.parsedRoomConfig = liveConfig;
+    this.hasBookcase = Array.isArray(liveConfig?.furniture) && liveConfig.furniture.includes('bookshelf');
+    if (!this.hasBookcase) this.setBookcasePromptVisible(false);
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT);
     this.roomBgImage.setTexture(texKey);
   }
@@ -457,6 +494,15 @@ export class RoomScene extends Phaser.Scene {
     if (visible) {
       this.computerPromptBg.setPosition(595, 260);
       this.computerPrompt.setPosition(660, 274);
+    }
+  }
+
+  private setBookcasePromptVisible(visible: boolean): void {
+    this.bookcasePrompt.setVisible(visible);
+    this.bookcasePromptBg.setVisible(visible);
+    if (visible) {
+      this.bookcasePromptBg.setPosition(634, 318);
+      this.bookcasePrompt.setPosition(708, 332);
     }
   }
 
@@ -482,6 +528,13 @@ export class RoomScene extends Phaser.Scene {
       const near = this.player.x > 560 && this.player.x < 740;
       if (near !== this.nearComputer) this.nearComputer = near;
       this.setComputerPromptVisible(near && !this.computerUI.isOpen());
+    }
+
+    // Bookcase proximity check (bookshelf is at x=755-790)
+    if (this.hasBookcase && !this.introActive) {
+      const nearShelf = this.player.x > 715 && this.player.x < 830;
+      if (nearShelf !== this.nearBookcase) this.nearBookcase = nearShelf;
+      this.setBookcasePromptVisible(nearShelf && !BookcaseModal.isOpen());
     }
 
     // Room-specific updates
@@ -794,27 +847,29 @@ export class RoomScene extends Phaser.Scene {
     btn.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
     btn.on('pointerdown', () => this.leaveRoom());
     this.input.keyboard?.on('keydown-ESC', () => {
+      // Close panels/modals from most-overlay to least before allowing room exit
+      if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
       if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
-      if (this.computerUI.isOpen()) {
-        this.computerUI.close();
-        this.setComputerPromptVisible(this.nearComputer);
-        return;
-      }
-      if (this.settingsPanel.isOpen()) {
-        this.settingsPanel.toggle();
-        return;
-      }
-      if (this.playerPicker.isOpen()) {
-        this.playerPicker.close();
-        return;
-      }
+      if (BookcaseModal.isOpen()) { BookcaseModal.destroy(); return; }
+      if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
+      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
+      if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
+      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
+      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
+      if (this.muteList.isOpen()) { this.muteList.close(); return; }
+      // ProfileModal and ZapModal handle their own ESC via document listeners;
+      // just guard leaveRoom so the room doesn't exit while they're showing.
+      if (document.getElementById('profile-modal')) return;
+      if (document.getElementById('zap-modal')) return;
       this.leaveRoom();
     });
   }
   private createRoomLabel(): void {
-    const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
-    bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(GAME_WIDTH / 2 - 80, 4, 160, 32, 6);
-    bg.lineStyle(1, hexToNum(nc), 0.35); bg.strokeRoundedRect(GAME_WIDTH / 2 - 80, 4, 160, 32, 6); bg.setDepth(99);
+    const nc = this.roomConfig.neonColor;
+    const labelW = Math.max(160, this.roomConfig.name.length * 9 + 32);
+    const bg = this.add.graphics();
+    bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(GAME_WIDTH / 2 - labelW / 2, 4, labelW, 32, 6);
+    bg.lineStyle(1, hexToNum(nc), 0.35); bg.strokeRoundedRect(GAME_WIDTH / 2 - labelW / 2, 4, labelW, 32, 6); bg.setDepth(99);
     this.add.text(GAME_WIDTH / 2, 20, this.roomConfig.name, { fontFamily: '"Courier New", monospace', fontSize: '14px', color: nc, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(100);
   }
   private leaveRoom(): void {
@@ -870,6 +925,13 @@ export class RoomScene extends Phaser.Scene {
     this.load.once('complete', () => { if (!this.pet) this.spawnPet(sel); });
     this.load.start();
   }
+  private openBookcase(): void {
+    if (BookcaseModal.isOpen()) { BookcaseModal.destroy(); return; }
+    this.setBookcasePromptVisible(false);
+    const ownerPubkey = this.roomConfig.ownerPubkey || this.registry.get('playerPubkey');
+    BookcaseModal.show(ownerPubkey);
+  }
+
   private openComputer(): void {
     if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
     this.setComputerPromptVisible(false);

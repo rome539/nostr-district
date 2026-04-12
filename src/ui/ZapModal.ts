@@ -120,7 +120,7 @@ export class ZapModal {
     document.body.appendChild(modal);
     ZapModal.el = modal;
 
-    ZapModal.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') ZapModal.destroy(); };
+    ZapModal.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); ZapModal.destroy(); } };
     document.addEventListener('keydown', ZapModal.escHandler);
 
     modal.querySelector('#zap-close')?.addEventListener('click', () => ZapModal.destroy());

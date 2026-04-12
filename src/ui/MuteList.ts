@@ -37,6 +37,8 @@ export class MuteList {
     this.open = false;
   }
 
+  isOpen(): boolean { return this.open; }
+
   destroy(): void { this.panel?.remove(); this.panel = null; }
 
   private build(): void {
@@ -44,7 +46,7 @@ export class MuteList {
     this.panel = document.createElement('div');
     this.panel.id = 'mutelist-overlay';
     document.body.appendChild(this.panel);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.open) this.close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.open) { e.stopPropagation(); this.close(); } });
   }
 
   private render(): void {

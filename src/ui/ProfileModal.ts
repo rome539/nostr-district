@@ -143,7 +143,7 @@ export class ProfileModal {
     const modal = document.createElement('div');
     modal.id = MODAL_ID;
     modal.style.cssText = `
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3000;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000;
       background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
       border: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent); border-radius: 10px;
       padding: 24px 28px 20px; font-family: 'Courier New', monospace;
@@ -165,7 +165,7 @@ export class ProfileModal {
     const closeModal = (e: PointerEvent) => {
       if (!modal.contains(e.target as Node)) destroyModal();
     };
-    escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') destroyModal(); };
+    escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); destroyModal(); } };
     document.addEventListener('keydown', escHandler);
     setTimeout(() => document.addEventListener('pointerdown', closeModal), 300);
 

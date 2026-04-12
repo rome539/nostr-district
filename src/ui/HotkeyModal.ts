@@ -19,6 +19,8 @@ export class HotkeyModal {
     this.open = false;
   }
 
+  isOpen(): boolean { return this.open; }
+
   destroy(): void { this.el?.remove(); this.el = null; }
 
   private build(): void {

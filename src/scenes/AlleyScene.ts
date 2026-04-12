@@ -34,6 +34,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { ComputerUI } from '../ui/ComputerUI';
 import { MuteList } from '../ui/MuteList';
 import { PlayerPicker } from '../ui/PlayerPicker';
+import { HotkeyModal } from '../ui/HotkeyModal';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
@@ -81,6 +82,7 @@ export class AlleyScene extends Phaser.Scene {
   private crewPanel!: CrewPanel;
   private followsPanel!: FollowsPanel;
   private settingsPanel = new SettingsPanel();
+  private hotkeyModal = new HotkeyModal();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private neonGraphics!: Phaser.GameObjects.Graphics;
@@ -206,6 +208,9 @@ export class AlleyScene extends Phaser.Scene {
       else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); }
     });
     this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === chatInput) return; this.muteList.toggle(); });
+    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === chatInput) return; this.hotkeyModal.toggle(); };
+    document.addEventListener('keydown', hotkeyHandler);
+    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
 
     // Tarot machine prompt
     this.tarotPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
@@ -276,11 +281,17 @@ export class AlleyScene extends Phaser.Scene {
     });
     this.input.keyboard?.on('keydown-ESC', () => {
       if (document.activeElement === chatInput) return;
+      if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
       if (FortuneTellerModal.isOpen()) { FortuneTellerModal.destroy(); return; }
       if (TarotModal.isOpen()) { TarotModal.destroy(); return; }
-      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
       if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
+      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
+      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
+      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
       if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
+      if (this.muteList.isOpen()) { this.muteList.close(); return; }
+      if (document.getElementById('profile-modal')) return;
+      if (document.getElementById('zap-modal')) return;
       if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToHub(); }
     });
 
