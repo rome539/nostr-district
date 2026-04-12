@@ -7,33 +7,24 @@
  */
 
 import Phaser from 'phaser';
+import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
 import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
-  setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
   sendAvatarUpdate, sendNameUpdate,
 } from '../nostr/presenceService';
-import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
+import { shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
-import { DMPanel } from '../ui/DMPanel';
-import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
-import { FollowsPanel } from '../ui/FollowsPanel';
-import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
+import { showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { ZapModal } from '../ui/ZapModal';
-import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
-import { SettingsPanel } from '../ui/SettingsPanel';
+import { EmoteSet, EMOTE_FLAVORS } from '../entities/EmoteSet';
 import { renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
-import { SoundEngine } from '../audio/SoundEngine';
-import { ComputerUI } from '../ui/ComputerUI';
-import { MuteList } from '../ui/MuteList';
-import { PlayerPicker } from '../ui/PlayerPicker';
-import { HotkeyModal } from '../ui/HotkeyModal';
 
 const CABIN_ACCENT = '#f0a030';
 const W = 1000;             // cabin world width
@@ -49,6 +40,7 @@ interface OtherPlayer {
   nameText: Phaser.GameObjects.Text;
   statusText: Phaser.GameObjects.Text;
   targetX: number; targetY: number;
+  facingRight: boolean;
   name: string; avatar?: string; status?: string;
   clickZone?: Phaser.GameObjects.Zone;
   emotes?: EmoteSet;
@@ -56,10 +48,8 @@ interface OtherPlayer {
   shown: boolean;
 }
 
-export class CabinScene extends Phaser.Scene {
+export class CabinScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
-  private playerName!: Phaser.GameObjects.Text;
-  private playerStatusText!: Phaser.GameObjects.Text;
   private targetX: number | null = null;
   private isMoving = false;
   private isKeyboardMoving = false;
@@ -72,19 +62,7 @@ export class CabinScene extends Phaser.Scene {
   private otherPlayers = new Map<string, OtherPlayer>();
   private dyingSprites  = new Map<string, OtherPlayer>();
 
-  private chatUI!: ChatUI;
-  private dmPanel!: DMPanel;
-  private crewPanel!: CrewPanel;
-  private followsPanel!: FollowsPanel;
-  private settingsPanel = new SettingsPanel();
-  private hotkeyModal = new HotkeyModal();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
-  private emoteSet = new EmoteSet();
-  private snd = SoundEngine.get();
-  private computerUI = new ComputerUI();
-  private muteList = new MuteList();
-  private playerPicker = new PlayerPicker();
-  private isLeavingScene = false;
 
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
   private smokeLayerGraphics!: Phaser.GameObjects.Graphics;
@@ -147,33 +125,11 @@ export class CabinScene extends Phaser.Scene {
     const myPubkey = this.registry.get('playerPubkey');
     this.snd.setRoom('cabin');
     this.chatUI = new ChatUI();
-    const chatInput = this.chatUI.create('Chat in the cabin...', CABIN_ACCENT, (cmd) => this.handleCommand(cmd));
+    this.chatInput = this.chatUI.create('Chat in the cabin...', CABIN_ACCENT, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
-    this.input.keyboard?.on('keydown-ENTER', () => {
-      if (document.activeElement?.closest('.dm-panel')) return;
-      if (document.activeElement?.closest('.cp-panel')) return;
-      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
-      if (document.activeElement !== chatInput) chatInput.focus();
-    });
 
-    this.dmPanel = this.registry.get('dmPanel') as DMPanel;
-    if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
-    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
-    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
-
-    let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
-    if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
-    this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
-    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
-    document.addEventListener('keydown', hotkeyHandler);
-    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
+    this.setupRegistryPanels(myPubkey);
+    this.setupCommonKeyboardHandlers();
 
     // Door exit prompt
     this.doorPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -202,7 +158,7 @@ export class CabinScene extends Phaser.Scene {
     this.bookshelfPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
 
     this.input.keyboard?.on('keydown-E', () => {
-      if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); return; }
@@ -210,23 +166,16 @@ export class CabinScene extends Phaser.Scene {
       if (this.nearBookshelf) { this.showBookQuote(); return; }
     });
     this.input.keyboard?.on('keydown-ESC', () => {
-      if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.activeElement === this.chatInput) return;
       if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
-      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
-      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
-      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
-      if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
-      if (this.muteList.isOpen()) { this.muteList.close(); return; }
-      if (document.getElementById('profile-modal')) return;
-      if (document.getElementById('zap-modal')) return;
+      if (this.handleCommonEsc()) return;
       if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
     });
 
     setPresenceCallbacks({
       onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey) || this.isLeavingScene) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
-      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
+      onPlayerMove: (pk, x, y, f) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; if (f !== undefined) o.facingRight = f === 1; } },
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
       onCountUpdate: () => {},
       onChat: (pk, name, text) => {
@@ -254,6 +203,7 @@ export class CabinScene extends Phaser.Scene {
           }
           return;
         }
+        if (this.handleRpsIncoming(pk, name, text)) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? CABIN_ACCENT : P.lpurp, pk);
@@ -266,6 +216,7 @@ export class CabinScene extends Phaser.Scene {
       onStatusUpdate: (pk, status) => { const o = this.otherPlayers.get(pk); if (o) { o.status = status; o.statusText.setText(status.slice(0, 30)); o.statusText.setAlpha(status ? 1 : 0); } },
     });
     sendRoomChange('cabin', 140, this.playerY);
+    this.setupRoomRequestHandlers();
     // Room-scoped player list arrives via the server's 'players' response to sendRoomChange.
     // Do NOT call requestOnlinePlayers() here — it returns all rooms and would ghost-populate the cabin.
 
@@ -274,16 +225,13 @@ export class CabinScene extends Phaser.Scene {
     this.settingsPanel.create();
 
     this.events.on('shutdown', () => {
-      unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.muteList.destroy(); this.playerPicker.close();
-      if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close();
-      destroyPlayerMenu(); ProfileModal.destroy();
+      this.shutdownCommonPanels(unsubProfile);
       this.doorPromptBg?.destroy(); this.doorPromptText?.destroy(); this.doorPromptArrow?.destroy();
       this.fireplacePromptBg?.destroy(); this.fireplacePromptText?.destroy(); this.fireplacePromptArrow?.destroy();
       this.bookshelfPromptBg?.destroy(); this.bookshelfPromptText?.destroy(); this.bookshelfPromptArrow?.destroy();
       if (this.bookOverlay) { this.bookOverlay.remove(); this.bookOverlay = null; }
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
-      setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
     });
   }
 
@@ -519,7 +467,7 @@ export class CabinScene extends Phaser.Scene {
 
     this.playerName.setPosition(this.player.x, this.player.y - 90);
     this.playerStatusText.setPosition(this.player.x, this.player.y - 102);
-    sendPosition(this.player.x, this.player.y);
+    sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.otherPlayers.forEach(o => {
       if (!o.shown) {
@@ -530,10 +478,11 @@ export class CabinScene extends Phaser.Scene {
         } else { return; }
       }
       const dx = o.targetX - o.sprite.x;
-      if (Math.abs(dx) > 1) o.sprite.x += dx * 0.12;
+      if (Math.abs(dx) > 1) { o.sprite.x += dx * 0.12; o.facingRight = dx > 0; }
+      o.sprite.setFlipX(!o.facingRight);
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 90); o.statusText.setPosition(o.sprite.x, o.sprite.y - 102);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 50);
-      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'cabin');
+      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, 'cabin');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
       o.sprite.y = Math.abs(dx) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
     });
@@ -1039,7 +988,7 @@ export class CabinScene extends Phaser.Scene {
     const cz = this.add.zone(px, py - 28, 40, 60).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return; ptr.event.stopPropagation(); const op2 = this.otherPlayers.get(pk); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status); });
     sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name, avatar: avatarStr, status: status || '', clickZone: cz, joinTime: Date.now(), shown: false });
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, facingRight: true, name, avatar: avatarStr, status: status || '', clickZone: cz, joinTime: Date.now(), shown: false });
   }
 
   private removeOtherPlayer(pk: string): void {
@@ -1050,6 +999,8 @@ export class CabinScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════
   // COMMANDS
   // ══════════════════════════════════════════════════════════════════
+  protected override getSceneAccent(): string { return CABIN_ACCENT; }
+
   private handleCommand(text: string): void {
     const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
     switch (cmd) {
@@ -1057,30 +1008,10 @@ export class CabinScene extends Phaser.Scene {
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: hub, woods, relay, feed, myroom, lounge, market, cabin', CABIN_ACCENT); return; } const al: Record<string, string> = { hub: 'hub', woods: 'woods', cabin: 'cabin', relay: 'relay', feed: 'feed', thefeed: 'feed', myroom: 'myroom', room: 'picker', lounge: 'lounge', rooftop: 'lounge', market: 'market', shop: 'market', store: 'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'woods') { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } return; } if (rid === 'cabin') { this.chatUI.addMessage('system', 'Already in the cabin!', CABIN_ACCENT); return; } if (rid === 'hub') { if (!this.isLeavingScene) { this.isLeavingScene = true; sendRoomChange('hub'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('HubScene', { _returning: true }); }); } return; } if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { sendRoomChange(opk); this.chatUI.addMessage('system', 'Requesting access...', CABIN_ACCENT); }); return; } if (rid) { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); break; }
       case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players here', CABIN_ACCENT); return; } let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', CABIN_ACCENT); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', CABIN_ACCENT); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.name; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
-      case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.snd.lighterFlick(); this.chatUI.addMessage('system', EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
-      case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', CABIN_ACCENT); break; }
-      case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
-      case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Muted' : 'Unmuted', s ? P.amber : CABIN_ACCENT); break; }
-      case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', CABIN_ACCENT); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, CABIN_ACCENT); break; }
-      case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, CABIN_ACCENT); break; }
-      case 'terminal': case 'avatar': { if (this.computerUI.isOpen()) { this.computerUI.close(); return; } this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', CABIN_ACCENT); ['/tp <room>', '/leave', '/dm <n>', '/zap <name>', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/players', '/follows', '/mute', '/filter <w>'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
-      default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }
     this.chatUI.flashLog();
   }
 
-  private handleEmoteCommand(name: string): void {
-    if (this.emoteSet.isActive(name)) {
-      this.emoteSet.stop(name);
-      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
-      sendChat(`/emote ${name}_off`);
-    } else {
-      this.emoteSet.start(name);
-      const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      this.chatUI.addMessage('system', flavor, P.dpurp);
-      sendChat(`/emote ${name}_on`);
-    }
-  }
 }

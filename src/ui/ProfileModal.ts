@@ -159,15 +159,21 @@ export class ProfileModal {
     let escHandler: ((e: KeyboardEvent) => void) | null = null;
     const destroyModal = () => {
       modal.remove();
-      document.removeEventListener('pointerdown', closeModal);
+      document.removeEventListener('pointerdown', closeModal, { capture: true });
       if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
     };
     const closeModal = (e: PointerEvent) => {
-      if (!modal.contains(e.target as Node)) destroyModal();
+      if (!modal.contains(e.target as Node)) {
+        // preventDefault suppresses the mousedown that follows pointerdown,
+        // preventing any parent modal (e.g. BookcaseModal) from also closing
+        e.preventDefault();
+        e.stopPropagation();
+        destroyModal();
+      }
     };
     escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); destroyModal(); } };
     document.addEventListener('keydown', escHandler);
-    setTimeout(() => document.addEventListener('pointerdown', closeModal), 300);
+    setTimeout(() => document.addEventListener('pointerdown', closeModal, { capture: true }), 300);
 
     const addCloseBtn = (npubToCopy?: string, npubDisplayShort?: string) => {
       modal.querySelector('#profile-close')?.addEventListener('click', () => destroyModal());

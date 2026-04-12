@@ -10,34 +10,25 @@
  */
 
 import Phaser from 'phaser';
+import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse,
-  setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
   requestOnlinePlayers, setOnlinePlayersHandler, sendAvatarUpdate, sendNameUpdate,
 } from '../nostr/presenceService';
-import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
+import { shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
-import { DMPanel } from '../ui/DMPanel';
-import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
-import { FollowsPanel } from '../ui/FollowsPanel';
-import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
+import { showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { ZapModal } from '../ui/ZapModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
-import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
-import { SoundEngine } from '../audio/SoundEngine';
-import { ComputerUI } from '../ui/ComputerUI';
-import { MuteList } from '../ui/MuteList';
-import { PlayerPicker } from '../ui/PlayerPicker';
-import { HotkeyModal } from '../ui/HotkeyModal';
 
 const WOODS_ACCENT = '#aaff44';
 const W = WORLD_WIDTH; // 1600
@@ -66,6 +57,7 @@ interface OtherPlayer {
   nameText: Phaser.GameObjects.Text;
   statusText: Phaser.GameObjects.Text;
   targetX: number; targetY: number;
+  facingRight: boolean;
   name: string; avatar?: string; status?: string;
   clickZone?: Phaser.GameObjects.Zone;
   emotes?: EmoteSet;
@@ -73,10 +65,8 @@ interface OtherPlayer {
   shown: boolean;
 }
 
-export class WoodsScene extends Phaser.Scene {
+export class WoodsScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
-  private playerName!: Phaser.GameObjects.Text;
-  private playerStatusText!: Phaser.GameObjects.Text;
   private targetX: number | null = null;
   private isMoving = false;
   private isKeyboardMoving = false;
@@ -89,19 +79,7 @@ export class WoodsScene extends Phaser.Scene {
   private otherPlayers = new Map<string, OtherPlayer>();
   private dyingSprites = new Map<string, OtherPlayer>();
 
-  private chatUI!: ChatUI;
-  private dmPanel!: DMPanel;
-  private crewPanel!: CrewPanel;
-  private followsPanel!: FollowsPanel;
-  private settingsPanel = new SettingsPanel();
-  private hotkeyModal = new HotkeyModal();
   private emoteGraphics!: Phaser.GameObjects.Graphics;
-  private emoteSet = new EmoteSet();
-  private snd = SoundEngine.get();
-  private computerUI = new ComputerUI();
-  private muteList = new MuteList();
-  private playerPicker = new PlayerPicker();
-  private isLeavingScene = false;
 
   private parallaxBg!: Phaser.GameObjects.Image;
   private fireflyGraphics!: Phaser.GameObjects.Graphics;
@@ -169,45 +147,17 @@ export class WoodsScene extends Phaser.Scene {
     const myPubkey = this.registry.get('playerPubkey');
     this.snd.setRoom('woods');
     this.chatUI = new ChatUI();
-    const chatInput = this.chatUI.create('Chat in the woods...', WOODS_ACCENT, (cmd) => this.handleCommand(cmd));
+    this.chatInput = this.chatUI.create('Chat in the woods...', WOODS_ACCENT, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
-    this.input.keyboard?.on('keydown-ENTER', () => {
-      if (document.activeElement?.closest('.dm-panel')) return;
-      if (document.activeElement?.closest('.cp-panel')) return;
-      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
-      if (document.activeElement !== chatInput) chatInput.focus();
-    });
 
-    this.dmPanel = this.registry.get('dmPanel') as DMPanel;
-    if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
-    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
-    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
+    this.setupRegistryPanels(myPubkey);
+    this.setupCommonKeyboardHandlers();
 
-    let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
-    if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
-    this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
-    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
-    document.addEventListener('keydown', hotkeyHandler);
-    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
     this.input.keyboard?.on('keydown-ESC', () => {
-      if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.activeElement === this.chatInput) return;
       if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
       if (this.telescopeOverlay) { this.closeTelescopeView(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
-      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
-      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
-      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
-      if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
-      if (this.muteList.isOpen()) { this.muteList.close(); return; }
-      if (document.getElementById('profile-modal')) return;
-      if (document.getElementById('zap-modal')) return;
+      if (this.handleCommonEsc()) return;
     });
 
     // Cabin door prompt
@@ -222,7 +172,7 @@ export class WoodsScene extends Phaser.Scene {
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); }
     });
     this.input.keyboard?.on('keydown-E', () => {
-      if (document.activeElement === this.chatUI.getInput()) return;
+      if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
       if (this.nearTelescope) { this.openTelescopeView(); }
@@ -242,7 +192,7 @@ export class WoodsScene extends Phaser.Scene {
 
     setPresenceCallbacks({
       onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
-      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
+      onPlayerMove: (pk, x, y, f) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; if (f !== undefined) o.facingRight = f === 1; } },
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
       onCountUpdate: () => {},
       onChat: (pk, name, text) => {
@@ -266,6 +216,7 @@ export class WoodsScene extends Phaser.Scene {
           }
           return;
         }
+        if (this.handleRpsIncoming(pk, name, text)) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? WOODS_ACCENT : P.lpurp, pk);
@@ -278,21 +229,19 @@ export class WoodsScene extends Phaser.Scene {
       onStatusUpdate: (pk, status) => { const o = this.otherPlayers.get(pk); if (o) { o.status = status; o.statusText.setText(status.slice(0, 30)); o.statusText.setAlpha(status ? 1 : 0); } },
     });
     sendRoomChange('woods', this.spawnX, this.playerY);
+    this.setupRoomRequestHandlers();
 
     const unsubProfile = authStore.subscribe(() => { const n = authStore.getState().displayName; if (n && n !== this.registry.get('playerName')) { this.registry.set('playerName', n); this.playerName?.setText(n.slice(0, 14)); sendNameUpdate(n); } });
     this.cameras.main.fadeIn(400, 4, 8, 10);
     this.settingsPanel.create();
 
     this.events.on('shutdown', () => {
-      unsubProfile(); this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.muteList.destroy(); this.playerPicker.close();
-      if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close();
-      destroyPlayerMenu(); ProfileModal.destroy();
+      this.shutdownCommonPanels(unsubProfile);
       this.cabinPromptBg?.destroy(); this.cabinPromptText?.destroy(); this.cabinPromptArrow?.destroy();
       this.telescopePromptBg?.destroy(); this.telescopePromptText?.destroy(); this.telescopePromptArrow?.destroy();
       this.telescopeOverlay?.remove(); this.telescopeOverlay = null;
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
-      setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
     });
   }
 
@@ -741,7 +690,7 @@ export class WoodsScene extends Phaser.Scene {
 
     this.playerName.setPosition(this.player.x, this.player.y - 44);
     this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
-    sendPosition(this.player.x, this.player.y);
+    sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.otherPlayers.forEach(o => {
       if (!o.shown) {
@@ -752,10 +701,11 @@ export class WoodsScene extends Phaser.Scene {
         } else { return; }
       }
       const dx = o.targetX - o.sprite.x;
-      if (Math.abs(dx) > 1) o.sprite.x += dx * 0.12;
+      if (Math.abs(dx) > 1) { o.sprite.x += dx * 0.12; o.facingRight = dx > 0; }
+      o.sprite.setFlipX(!o.facingRight);
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44); o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
-      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
+      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, 'hub');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
       o.sprite.y = Math.abs(dx) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
     });
@@ -1398,7 +1348,7 @@ export class WoodsScene extends Phaser.Scene {
     const cz=this.add.zone(px,py-20,40,50).setInteractive({useHandCursor:true}).setDepth(12);
     cz.on('pointerdown',(ptr:Phaser.Input.Pointer)=>{if((ptr.event.target as HTMLElement)?.tagName!=='CANVAS')return;ptr.event.stopPropagation();const op2=this.otherPlayers.get(pk);showPlayerMenu(pk,name.slice(0,14),ptr.x,ptr.y,{onChat:(t,c)=>this.chatUI.addMessage('system',t,c),getDMPanel:()=>this.dmPanel},op2?.avatar,op2?.status);});
     sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
-    this.otherPlayers.set(pk,{sprite:sp,nameText:nt,statusText:st,targetX:px,targetY:py,name,avatar:avatarStr,status:status||'',clickZone:cz,joinTime:Date.now(),shown:false});
+    this.otherPlayers.set(pk,{sprite:sp,nameText:nt,statusText:st,targetX:px,targetY:py,facingRight:true,name,avatar:avatarStr,status:status||'',clickZone:cz,joinTime:Date.now(),shown:false});
   }
   private removeOtherPlayer(pk: string): void {
     const o=this.otherPlayers.get(pk);if(!o)return;this.otherPlayers.delete(pk);this.dyingSprites.set(pk,o);
@@ -1408,33 +1358,30 @@ export class WoodsScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════
   // COMMANDS
   // ══════════════════════════════════════════════════════════════════
+  protected override getSceneAccent(): string { return WOODS_ACCENT; }
+
   private handleCommand(text: string): void {
     const parts=text.slice(1).split(' ');const cmd=parts[0].toLowerCase();const arg=parts.slice(1).join(' ').trim();
     switch(cmd){
       case 'dm':{if(!canUseDMs()){this.chatUI.addMessage('system','DMs need a key',P.amber);return;}if(!arg){const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`Online: ${ps.join(', ')}`:'No players here',WOODS_ACCENT);return;}let tp:string|null=null;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase()))tp=pk;});if(tp){this.dmPanel.open(tp);this.chatUI.addMessage('system','Opening DM...',WOODS_ACCENT);}else this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);break;}
       case 'zap':{if(!arg){this.chatUI.addMessage('system','Usage: /zap <name>',WOODS_ACCENT);return;}const za=authStore.getState();if(!za.pubkey||za.isGuest){this.chatUI.addMessage('system','Login to zap',P.amber);return;}let zt:string|null=null;let zn=arg;this.otherPlayers.forEach((o,pk)=>{if(o.name?.toLowerCase().includes(arg.toLowerCase())){zt=pk;zn=o.name;}});if(!zt){this.chatUI.addMessage('system',`"${arg}" not found`,P.amber);return;}ZapModal.show(zt,zn);break;}
-      case 'smoke':{if(this.emoteSet.isActive('smoke')){this.emoteSet.stop('smoke');this.chatUI.addMessage('system',EMOTE_OFF_MSGS['smoke'],P.dpurp);sendChat('/emote smoke_off');}else{this.emoteSet.start('smoke');this.snd.lighterFlick();ChatUI.showBubble(this,this.player.x,this.player.y-48,EMOTE_FLAVORS['smoke'],P.dpurp);sendChat('/emote smoke_on');}break;}
-      case 'coffee':case 'music':case 'zzz':case 'think':case 'hearts':case 'angry':case 'sweat':case 'sparkle':case 'confetti':case 'fire':case 'ghost':case 'rain':{this.handleEmoteCommand(cmd);break;}
       case 'tp':case 'teleport':case 'go':{if(!arg){this.chatUI.addMessage('system','Rooms: hub, cabin, relay, feed, myroom, lounge, market',WOODS_ACCENT);return;}const al:Record<string,string>={hub:'hub',cabin:'cabin',relay:'relay',feed:'feed',thefeed:'feed',myroom:'myroom',room:'picker',lounge:'lounge',rooftop:'lounge',market:'market',shop:'market',store:'market'};const rid=al[arg.toLowerCase().replace(/\s+/g,'')];if(rid==='hub'){this.leaveToDistrict();return;}if(rid==='cabin'){if(!this.isLeavingScene){this.isLeavingScene=true;this.enterCabin();}return;}if(rid==='myroom'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});return;}if(rid==='picker'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';this.playerPicker.open(pk,n,()=>{sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});},(opk)=>{sendRoomChange(opk);this.chatUI.addMessage('system','Requesting access...',WOODS_ACCENT);});return;}if(rid){sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:rid,name:rid.charAt(0).toUpperCase()+rid.slice(1),neonColor:P.teal});return;}this.chatUI.addMessage('system',`Unknown room "${arg}"`,P.amber);break;}
       case 'players':case 'who':case 'online':{const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`${ps.length} here: ${ps.join(', ')}`:'No other players',WOODS_ACCENT);break;}
-      case 'follows':case 'following':case 'friends':{this.followsPanel.toggle();break;}
-      case 'mute':{const s=toggleMute();this.chatUI.addMessage('system',s?'Muted':'Unmuted',s?P.amber:WOODS_ACCENT);break;}
-      case 'filter':{if(!arg){const w=getCustomBannedWords();this.chatUI.addMessage('system',w.length?`Filtered: ${w.join(', ')}`:'No filters',WOODS_ACCENT);return;}addBannedWord(arg);this.chatUI.addMessage('system',`Added "${arg}"`,WOODS_ACCENT);break;}
-      case 'unfilter':{if(!arg)return;removeBannedWord(arg);this.chatUI.addMessage('system',`Removed "${arg}"`,WOODS_ACCENT);break;}
-      case 'terminal':case 'avatar':{if(this.computerUI.isOpen()){this.computerUI.close();return;}this.computerUI.open(undefined,(newName)=>{this.registry.set('playerName',newName);this.playerName?.setText(newName.slice(0,14));sendNameUpdate(newName);},undefined,undefined,undefined,undefined,['profile']);break;}
-      case 'help':case '?':{this.chatUI.addMessage('system','Commands:',WOODS_ACCENT);['/tp <room>','/dm <n>','/zap <name>','/smoke','/coffee','/music','/zzz','/think','/hearts','/angry','/sweat','/sparkle','/confetti','/fire','/ghost','/rain','/terminal','/players','/follows','/mute','/filter <w>'].forEach(h=>this.chatUI.addMessage('system',h,P.lpurp));break;}
-      default:this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);
+      default:{if(!this.handleCommonCommand(cmd,arg))this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);break;}
     }
     this.chatUI.flashLog();
   }
 
-  private handleEmoteCommand(name: string): void {
+  // WoodsScene shows an in-world speech bubble for emotes in addition to the
+  // chat log message, so we override the base implementation.
+  protected override handleEmoteCommand(name: string): void {
     if (this.emoteSet.isActive(name)) {
       this.emoteSet.stop(name);
       this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
+      if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
       ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, P.dpurp);
       sendChat(`/emote ${name}_on`);

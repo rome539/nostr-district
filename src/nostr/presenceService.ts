@@ -14,7 +14,7 @@ type PlayerData = {
 
 export type PresenceCallback = {
   onPlayerJoin: (player: PlayerData) => void;
-  onPlayerMove: (pubkey: string, x: number, y: number) => void;
+  onPlayerMove: (pubkey: string, x: number, y: number, f?: number) => void;
   onPlayerLeave: (pubkey: string) => void;
   onCountUpdate: (count: number) => void;
   onChat: (pubkey: string, name: string, text: string, emojis?: { code: string; url: string }[]) => void;
@@ -89,7 +89,7 @@ export function connectPresence(cb: PresenceCallback): void {
         msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
       }
       if (msg.type === 'join') callbacks?.onPlayerJoin(msg);
-      if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y);
+      if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y, msg.f);
       if (msg.type === 'leave') callbacks?.onPlayerLeave(msg.pubkey);
       if (msg.type === 'count') callbacks?.onCountUpdate(msg.count);
       if (msg.type === 'chat') callbacks?.onChat(msg.pubkey, msg.name, msg.text, msg.emojis);
@@ -151,12 +151,14 @@ export function requestOnlinePlayers(): void {
 
 // ── Existing sends ──
 
-export function sendPosition(x: number, y: number): void {
+export function sendPosition(x: number, y: number, facingRight?: boolean): void {
   if (Math.abs(x - lastSentX) < 2 && Math.abs(y - lastSentY) < 2) return;
   lastSentX = x;
   lastSentY = y;
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'move', x, y }));
+    const msg: Record<string, unknown> = { type: 'move', x, y };
+    if (facingRight !== undefined) msg.f = facingRight ? 1 : 0;
+    ws.send(JSON.stringify(msg));
   }
 }
 

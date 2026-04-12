@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BaseScene } from './BaseScene';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
@@ -6,20 +7,11 @@ import {
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, setOnlinePlayersHandler,
 } from '../nostr/presenceService';
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
-import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
-import { DMPanel } from '../ui/DMPanel';
-import { CrewPanel } from '../ui/CrewPanel';
-import { FollowsPanel } from '../ui/FollowsPanel';
+import { shouldFilter } from '../nostr/moderationService';
 import { ChatUI } from '../ui/ChatUI';
-import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
-import { MuteList } from '../ui/MuteList';
-import { PlayerPicker } from '../ui/PlayerPicker';
-import { RpsGame } from '../ui/RpsGame';
-import { SoundEngine } from '../audio/SoundEngine';
+import { showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
-import { SettingsPanel } from '../ui/SettingsPanel';
-import { HotkeyModal } from '../ui/HotkeyModal';
 import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { sendAvatarUpdate } from '../nostr/presenceService';
@@ -38,7 +30,6 @@ import {
 } from '../nostr/nostrService';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
-import { PollBoard } from '../ui/PollBoard';
 import { TutorialOverlay, isTutorialDone } from '../ui/TutorialOverlay';
 
 interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
@@ -56,6 +47,7 @@ interface OtherPlayer {
   nameText: Phaser.GameObjects.Text;
   statusText: Phaser.GameObjects.Text;
   targetX: number; targetY: number;
+  facingRight: boolean;
   name: string;
   avatar?: string;
   status?: string;
@@ -65,11 +57,9 @@ interface OtherPlayer {
   shown: boolean;
 }
 
-export class HubScene extends Phaser.Scene {
+export class HubScene extends BaseScene {
   private static readonly WOODS_OPEN = true;
   private player!: Phaser.GameObjects.Image;
-  private playerName!: Phaser.GameObjects.Text;
-  private playerStatusText!: Phaser.GameObjects.Text;
   private playerGlow!: Phaser.GameObjects.Graphics;
   private targetX: number | null = null;
   private isMoving = false;
@@ -84,10 +74,6 @@ export class HubScene extends Phaser.Scene {
   private otherPlayers = new Map<string, OtherPlayer>();
   private dyingSprites = new Map<string, OtherPlayer>();
 
-  private chatUI!: ChatUI;
-  private dmPanel!: DMPanel;
-  private crewPanel!: CrewPanel;
-  private followsPanel!: FollowsPanel;
   private playerNames = new Map<string, string>();
 
   private parallaxBg!: Phaser.GameObjects.Image;
@@ -106,15 +92,6 @@ export class HubScene extends Phaser.Scene {
   private readonly CHIMNEYS: [number, number][] = [
     [22, GROUND_Y - 238], [318, GROUND_Y - 258], [1502, GROUND_Y - 218],
   ];
-  private emoteSet = new EmoteSet();
-  private settingsPanel = new SettingsPanel();
-  private hotkeyModal = new HotkeyModal();
-  private computerUI = new ComputerUI();
-  private pollBoard = new PollBoard();
-  private muteList = new MuteList();
-  private playerPicker = new PlayerPicker();
-  private rpsGame = new RpsGame();
-  private snd = SoundEngine.get();
   private footTimer = 0;
   private nearBulletinBoard = false;
   private nearCrewBoard = false;
@@ -123,7 +100,6 @@ export class HubScene extends Phaser.Scene {
 
   private playerY = GROUND_Y + 8;
   private isReturning = false;
-  private toastEl: HTMLDivElement | null = null;
   private waitingForAccess = false;
   private returnFromRoom: string | null = null;
   private isLeavingToWoods = false;
@@ -301,49 +277,32 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     }
 
     this.chatUI = new ChatUI();
-    this.rpsGame.setChatUI(this.chatUI);
-    const chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
+    this.chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => {
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
-    this.input.keyboard?.on('keydown-ENTER', () => {
-      if (document.activeElement?.closest('.dm-panel')) return;
-      if (document.activeElement?.closest('.cp-panel')) return;
-      if (this.dmPanel?.isOpen) { this.dmPanel.focusInput(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.focusInput(); return; }
-      if (document.activeElement !== chatInput) chatInput.focus();
-    });
-    let ep = this.registry.get('dmPanel') as DMPanel | undefined;
-    if (!ep) { ep = new DMPanel(this.registry.get('playerPubkey') || null); this.registry.set('dmPanel', ep); }
-    this.dmPanel = ep;
+
+    this.setupRegistryPanels(this.registry.get('playerPubkey') || null);
     ProfileModal.setDMPanel(this.dmPanel);
     if (canUseDMs()) startDMSubscription();
-    this.input.keyboard?.on('keydown-M', () => { if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
-    let cp = this.registry.get('crewPanel') as CrewPanel | undefined;
-    if (!cp) { cp = new CrewPanel(); this.registry.set('crewPanel', cp); }
-    this.crewPanel = cp;
-    this.input.keyboard?.on('keydown-G', () => { if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName?.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, (s) => { this.playerStatusText.setText(s.slice(0, 30)); this.playerStatusText.setAlpha(s ? 1 : 0); }, undefined, ['profile']); } });
+    this.setupCommonKeyboardHandlers();
 
-    let fp = this.registry.get('followsPanel') as FollowsPanel | undefined;
-    if (!fp) { fp = new FollowsPanel(); this.registry.set('followsPanel', fp); }
-    this.followsPanel = fp;
-    this.input.keyboard?.on('keydown-F', () => { if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-S', () => { if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-B', () => { if (document.activeElement === this.chatUI.getInput()) return; this.pollBoard.toggle(); });
-    this.input.keyboard?.on('keydown-U', () => { if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
-    document.addEventListener('keydown', hotkeyHandler);
-    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
     this.input.keyboard?.on('keydown-ESC', () => {
-      if (document.activeElement === this.chatUI.getInput()) return;
-      if (this.dmPanel?.isOpen) { this.dmPanel.handleEsc(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
+      if (document.activeElement === this.chatInput) return;
+      if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
+      if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
+      if (this.handleCommonEsc()) return;
     });
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
-    this.events.on('shutdown', () => { this.chatUI.destroy(); this.settingsPanel.destroy(); this.computerUI.close(); this.pollBoard.destroy(); this.muteList.destroy(); this.rpsGame.destroy(); this.chimneyGraphics?.destroy(); this.chimneyParticles = []; this.playerPicker.close();if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; } if (this.dmPanel) this.dmPanel.close(); if (this.crewPanel) this.crewPanel.close(); if (this.followsPanel) this.followsPanel.close(); destroyPlayerMenu(); ProfileModal.destroy(); this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); }); this.otherPlayers.clear(); });
+    this.events.on('shutdown', () => {
+      // unsubProfile is handled by a separate shutdown listener registered above
+      this.shutdownCommonPanels(() => {});
+      this.chimneyGraphics?.destroy(); this.chimneyParticles = [];
+      this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
+      this.otherPlayers.clear();
+    });
   }
 
   update(time: number, delta: number): void {
@@ -409,7 +368,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
     const ghostAlpha = this.emoteSet.isActive('ghost') ? 0.3 : 1;
     this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
-    sendPosition(this.player.x, this.player.y);
+    sendPosition(this.player.x, this.player.y, this.facingRight);
     this.otherPlayers.forEach(o => {
       if (!o.shown) {
         if (Date.now() - o.joinTime >= 500) {
@@ -420,36 +379,24 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       }
       const dx = o.targetX - o.sprite.x;
       const dy = o.targetY - o.sprite.y;
-      if (Math.abs(dx) > 1) o.sprite.x += dx * 0.12;
+      if (Math.abs(dx) > 1) { o.sprite.x += dx * 0.12; o.facingRight = dx > 0; }
       if (Math.abs(dy) > 1) o.sprite.y += dy * 0.12;
+      o.sprite.setFlipX(!o.facingRight);
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 44);
       o.statusText.setPosition(o.sprite.x, o.sprite.y - 59);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 20);
-      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'hub');
+      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, 'hub');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
     });
   }
 
   // ── Room Requests ──
-  private setupRoomRequestHandlers(): void {
+  protected override setupRoomRequestHandlers(): void {
     setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
     setRoomGrantedHandler((op, on, room, roomConfig) => { this.waitingForAccess = false; this.chatUI.addMessage('system', `${on} accepted!`, P.teal); this.enterRoom(room, `${on}'s Room`, P.teal, op, roomConfig); });
     setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); });
     setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Removed from room', P.amber); });
   }
-  private showRoomRequestToast(rp: string, rn: string): void {
-    if (this.toastEl) this.toastEl.remove();
-    this.snd.roomRequest();
-    const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-    this.toastEl = document.createElement('div');
-    this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(135deg,${P.bg},#0e0828);border:1px solid ${P.teal}55;border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
-    this.toastEl.innerHTML = `<div style="color:${P.teal};font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:${P.lcream};font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:${P.teal}33;border:1px solid ${P.teal}66;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
-    document.body.appendChild(this.toastEl);
-    this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true, JSON.stringify(getRoomConfig())); this.toastEl?.remove(); this.toastEl = null; });
-    this.toastEl.querySelector('#td')!.addEventListener('click', () => { sendRoomResponse(rp, false); this.toastEl?.remove(); this.toastEl = null; });
-    setTimeout(() => { if (this.toastEl) { sendRoomResponse(rp, false); this.toastEl.remove(); this.toastEl = null; } }, 30000);
-  }
-
   // ── Player Picker ──
   private showPlayerPicker(): void {
     const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room';
@@ -492,7 +439,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   private connectToPresence(): void {
     const cb = {
       onPlayerJoin: (p: any) => { const mk = this.registry.get('playerPubkey'); if (p.pubkey === mk || this.otherPlayers.has(p.pubkey)) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, p.avatar, p.status); sendAvatarUpdate(); },
-      onPlayerMove: (pk: string, x: number, y: number) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; } },
+      onPlayerMove: (pk: string, x: number, y: number, f?: number) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; if (f !== undefined) o.facingRight = f === 1; } },
       onPlayerLeave: (pk: string) => this.removeOtherPlayer(pk),
       onCountUpdate: (c: number) => { this.onlineCount = c; },
       onChat: (pk: string, name: string, text: string, emojis?: { code: string; url: string }[]) => {
@@ -517,7 +464,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
           return;
         }
         if (text.startsWith('/zap:')) { const sats = parseInt(text.slice(5), 10); if (!isNaN(sats)) { const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite; if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000); } return; }
-        if (text.startsWith('/game:rps:')) { const myPk2 = this.registry.get('playerPubkey'); const myName2 = this.registry.get('playerName') || 'Player'; if (this.rpsGame.handleChat(pk, name, text, myPk2, myName2, (msg) => { this.chatUI.addMessage('system', msg, P.teal); if (msg.includes('wins') && msg.includes(myName2)) this.snd.rpsWin(); else if (msg.includes('wins')) this.snd.rpsLose(); else this.snd.rpsTie(); })) return; }
+        if (this.handleRpsIncoming(pk, name, text)) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk, emojis);
@@ -578,7 +525,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     const statusStr = (status || '').slice(0, 30);
     const st = this.add.text(px, py - 59, statusStr, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(statusStr ? 1 : 0);
     sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, name: name.slice(0, 14), avatar: avatarStr, status: status || '', joinTime: Date.now(), shown: false });
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, facingRight: true, name: name.slice(0, 14), avatar: avatarStr, status: status || '', joinTime: Date.now(), shown: false });
     this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
     const cz = this.add.zone(px, py - 20, 24, 44).setInteractive({ useHandCursor: true }).setDepth(12);
     cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
@@ -839,91 +786,21 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       case 'visit': { if (!arg) return; this.resolvePlayerPubkey(arg).then(tp => { if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} online: ${ps.join(', ')}` : 'No players online', P.teal); break; }
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } if (rid === 'picker') { this.showPlayerPicker(); return; } if (rid === 'myroom') { const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room'; this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; this.enterRoom(b.id, b.name, b.neonColor); break; }
-      case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Chat muted' : 'Unmuted', s ? P.amber : P.teal); break; }
-      case 'mutelist': case 'mutes': case 'blocked': { this.muteList.toggle(); break; }
-      case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
-      case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const auth2 = authStore.getState(); if (!auth2.pubkey || auth2.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zapTarget: string | null = null; let zapName = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; } }); if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zapTarget, zapName); break; }
-      case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.snd.lighterFlick(); ChatUI.showBubble(this, this.player.x, this.player.y - 48, EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
-      case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
-      case 'terminal': case 'outfit': case 'avatar': {
-        if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
-        this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
-        break;
-      }
-      case 'polls': { this.pollBoard.toggle(); break; }
-      case 'flip': case 'coin': {
-        this.snd.coinFlip();
-        const result = Math.random() < 0.5 ? '👑 HEADS' : '🦅 TAILS';
-        sendChat(`🪙 flipped a coin: ${result}`);
-        break;
-      }
-      case '8ball': {
-        if (!arg) { this.chatUI.addMessage('system', 'Usage: /8ball <question>', P.teal); return; }
-        const responses = [
-          'It is certain.', 'Without a doubt.', 'Yes, definitely.', 'You may rely on it.',
-          'As I see it, yes.', 'Most likely.', 'Outlook good.', 'Signs point to yes.',
-          'Reply hazy, try again.', 'Ask again later.', 'Better not tell you now.',
-          'Cannot predict now.', 'Concentrate and ask again.',
-          "Don't count on it.", 'My reply is no.', 'My sources say no.',
-          'Outlook not so good.', 'Very doubtful.', 'Absolutely not.', 'The stars say no.',
-        ];
-        const answer = responses[Math.floor(Math.random() * responses.length)];
-        sendChat(`🎱 ${arg} — ${answer}`);
-        break;
-      }
-      case 'rps': {
-        const choices = ['rock', 'paper', 'scissors'] as const;
-        const choice = arg.toLowerCase() as typeof choices[number];
-        if (!choices.includes(choice)) { this.chatUI.addMessage('system', 'Usage: /rps <rock|paper|scissors>', P.teal); return; }
-        const myName3 = this.registry.get('playerName') || 'Player';
-        this.rpsGame.challenge(choice, myName3);
-        this.chatUI.addMessage('system', '🎮 RPS challenge sent! Waiting for someone to accept...', P.teal);
-        break;
-      }
-      case 'slots': {
-        const reels = ['🍒','🍋','🍊','🍇','💎','🍀','⭐','🎰'];
-        const r = () => reels[Math.floor(Math.random() * reels.length)];
-        const [a, b, c] = [r(), r(), r()];
-        const jackpot = a === b && b === c;
-        const two = !jackpot && (a === b || b === c || a === c);
-        const result = jackpot ? '🎉 JACKPOT!' : two ? '✨ Two of a kind!' : '💸 No match.';
-        this.snd.slotSpin();
-        if (jackpot) setTimeout(() => this.snd.slotJackpot(), 680);
-        else if (two) setTimeout(() => this.snd.slotTwoMatch(), 680);
-        sendChat(`🎰 [ ${a} | ${b} | ${c} ] — ${result}`);
-        break;
-      }
-      case 'ship': {
-        const spaceIdx = arg.indexOf(' ');
-        const n1 = spaceIdx > -1 ? arg.slice(0, spaceIdx).trim() : arg.trim();
-        const n2 = spaceIdx > -1 ? arg.slice(spaceIdx + 1).trim() : '';
-        if (!n1 || !n2) { this.chatUI.addMessage('system', 'Usage: /ship <name1> <name2>', P.teal); return; }
-        const seed = [n1.toLowerCase(), n2.toLowerCase()].sort().join('|');
-        let hash = 0; for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) & 0xfffffff;
-        const pct = hash % 101;
-        const label = pct >= 90 ? '💕 Soulmates!' : pct >= 70 ? '💖 Great match!' : pct >= 50 ? '💛 Good vibes.' : pct >= 30 ? '🤝 Could work.' : '😬 Rough road ahead.';
-        const d1 = n1.startsWith('npub1') ? n1.slice(0, 13) + '…' : n1;
-        const d2 = n2.startsWith('npub1') ? n2.slice(0, 13) + '…' : n2;
-        sendChat(`💘 ${d1} + ${d2}: ${pct}% compatible — ${label}`);
-        break;
-      }
-      case 'crew': case 'crews': { this.dmPanel.close(); this.crewPanel.toggle(); break; }
-      case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
-      case 'status': { const myStatus = getStatus() || '(none)'; this.chatUI.addMessage('system', `Your status: ${myStatus}`, P.teal); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/tp <room>', '/dm <n>', '/crew', '/visit <n>', '/players', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/follows', '/polls', '/flip', '/8ball <q>', '/rps <choice>', '/slots', '/ship <n1> <n2>', '/mute', '/mutelist', '/filter <w>', '/status'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
-      default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }
     this.chatUI.flashLog();
   }
 
-  private handleEmoteCommand(name: string): void {
+  // HubScene shows an in-world speech bubble above the player for emotes
+  protected override handleEmoteCommand(name: string): void {
     if (this.emoteSet.isActive(name)) {
       this.emoteSet.stop(name);
       this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
+      if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
       ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, P.dpurp);
       sendChat(`/emote ${name}_on`);

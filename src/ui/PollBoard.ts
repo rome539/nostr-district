@@ -22,7 +22,6 @@ const DURATIONS = [
 export class PollBoard {
   private container: HTMLDivElement | null = null;
   private isOpen = false;
-  private escHandler: ((e: KeyboardEvent) => void) | null = null;
   private view: View = 'list';
   private polls: Poll[] = [];
   private selectedPoll: Poll | null = null;
@@ -65,10 +64,6 @@ export class PollBoard {
     if (!this.container) this.buildDOM();
     this.container!.style.display = 'flex';
     this.isOpen = true;
-    if (!this.escHandler) {
-      this.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); };
-      document.addEventListener('keydown', this.escHandler);
-    }
     if (this.view === 'list') this.loadAndRender();
     else this.renderView();
   }
@@ -76,20 +71,12 @@ export class PollBoard {
   close(): void {
     if (this.container) this.container.style.display = 'none';
     this.isOpen = false;
-    if (this.escHandler) {
-      document.removeEventListener('keydown', this.escHandler);
-      this.escHandler = null;
-    }
   }
 
   toggle(): void { this.isOpen ? this.close() : this.open(); }
   isVisible(): boolean { return this.isOpen; }
 
   destroy(): void {
-    if (this.escHandler) {
-      document.removeEventListener('keydown', this.escHandler);
-      this.escHandler = null;
-    }
     this.container?.remove();
     this.container = null;
   }

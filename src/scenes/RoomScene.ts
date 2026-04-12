@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
@@ -7,42 +8,32 @@ import {
   sendRoomResponse, setRoomRequestHandler, setRoomKickHandler, sendRoomRequest,
   setRoomGrantedHandler, setRoomDeniedHandler, requestOnlinePlayers, setOnlinePlayersHandler,
 } from '../nostr/presenceService';
-import { shouldFilter, toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
+import { shouldFilter } from '../nostr/moderationService';
 import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
 import { canUseDMs, getRelayManager } from '../nostr/dmService';
 import { DEFAULT_RELAYS } from '../nostr/relayManager';
-import { DMPanel } from '../ui/DMPanel';
-import { CrewPanel } from '../ui/CrewPanel';
 import { ChatUI } from '../ui/ChatUI';
-import { showPlayerMenu, destroyPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
+import { showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { ZapModal } from '../ui/ZapModal';
-import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
+import { EmoteSet, EMOTE_FLAVORS } from '../entities/EmoteSet';
 import { PetSprite } from '../entities/PetSprite';
-import { FollowsPanel } from '../ui/FollowsPanel';
 import { RoomRenderer } from '../rooms/RoomRenderer';
-import { SettingsPanel } from '../ui/SettingsPanel';
 import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
 import { sendAvatarUpdate, sendNameUpdate } from '../nostr/presenceService';
-import { ComputerUI } from '../ui/ComputerUI';
-import { MuteList } from '../ui/MuteList';
-import { PlayerPicker } from '../ui/PlayerPicker';
 import { authStore } from '../stores/authStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
 import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../stores/petStore';
 import { BookcaseModal } from '../ui/BookcaseModal';
-import { HotkeyModal } from '../ui/HotkeyModal';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
-interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; statusText: Phaser.GameObjects.Text; targetX: number; targetY: number; avatar?: string; status?: string; clickZone?: Phaser.GameObjects.Zone; emotes?: EmoteSet; walkFrame: number; walkTimer: number; }
+interface OtherPlayer { sprite: Phaser.GameObjects.Image; nameText: Phaser.GameObjects.Text; statusText: Phaser.GameObjects.Text; targetX: number; targetY: number; facingRight: boolean; avatar?: string; status?: string; clickZone?: Phaser.GameObjects.Zone; emotes?: EmoteSet; walkFrame: number; walkTimer: number; }
 
-export class RoomScene extends Phaser.Scene {
+export class RoomScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
-  private playerName!: Phaser.GameObjects.Text;
-  private playerStatusText!: Phaser.GameObjects.Text;
   private targetX: number | null = null;
   private isMoving = false;
   private facingRight = true;
@@ -54,17 +45,7 @@ export class RoomScene extends Phaser.Scene {
   private waitingForAccess = false;
   private toastEl: HTMLDivElement | null = null;
 
-  private chatUI!: ChatUI;
-  private dmPanel!: DMPanel;
-  private crewPanel!: CrewPanel;
-  private followsPanel!: FollowsPanel;
   private emoteGraphics!: Phaser.GameObjects.Graphics;
-  private emoteSet = new EmoteSet();
-  private settingsPanel = new SettingsPanel();
-  private muteList = new MuteList();
-  private hotkeyModal = new HotkeyModal();
-  private playerPicker = new PlayerPicker();
-  private computerUI = new ComputerUI();
   private roomRenderer = new RoomRenderer();
   private pet: PetSprite | null = null;
   private computerPrompt!: Phaser.GameObjects.Text;
@@ -103,6 +84,17 @@ export class RoomScene extends Phaser.Scene {
   private isLeavingRoom = false;
 
   constructor() { super({ key: 'RoomScene' }); }
+
+  // Block all panel hotkeys while the bookcase modal is open (textarea focus)
+  protected override shouldBlockPanelKeys(): boolean { return BookcaseModal.isOpen(); }
+
+  // RoomScene T key: open the full computer in myroom, profile-only elsewhere
+  protected override onTKey(): void {
+    if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
+    if (this.isMyRoom()) { this.openComputer(); }
+    else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); }
+  }
+
   init(data: RoomSceneConfig): void {
     this.roomConfig = data;
     this.feedNotes = [];
@@ -180,35 +172,14 @@ export class RoomScene extends Phaser.Scene {
 
     // Chat UI
     this.chatUI = new ChatUI();
-    const chatInput = this.chatUI.create(`Chat in ${this.roomConfig.name}...`, this.roomConfig.neonColor, (cmd) => this.handleCommand(cmd));
+    this.chatInput = this.chatUI.create(`Chat in ${this.roomConfig.name}...`, this.roomConfig.neonColor, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => {
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
-    this.input.keyboard?.on('keydown-ENTER', () => {
-      if (BookcaseModal.isOpen()) return;
-      if (document.activeElement?.closest('.dm-panel') || document.activeElement?.closest('.cp-panel')) return;
-      if (document.activeElement !== chatInput) chatInput.focus();
-    });
 
-    // DM Panel — singleton
-    this.dmPanel = this.registry.get('dmPanel') as DMPanel;
-    if (!this.dmPanel) { this.dmPanel = new DMPanel(myPubkey); this.registry.set('dmPanel', this.dmPanel); }
-    this.input.keyboard?.on('keydown-M', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.crewPanel.close(); this.dmPanel.toggle(); });
-    this.crewPanel = this.registry.get('crewPanel') as CrewPanel;
-    if (!this.crewPanel) { this.crewPanel = new CrewPanel(); this.registry.set('crewPanel', this.crewPanel); }
-    this.input.keyboard?.on('keydown-G', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.dmPanel.close(); this.crewPanel.toggle(); });
-
-    let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
-    if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
-    this.followsPanel = rfp;
-    this.input.keyboard?.on('keydown-F', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.followsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-S', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.settingsPanel.toggle(); });
-    this.input.keyboard?.on('keydown-U', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; this.muteList.toggle(); });
-    this.input.keyboard?.on('keydown-T', () => { if (BookcaseModal.isOpen()) return; if (document.activeElement === this.chatUI.getInput()) return; if (this.computerUI.isOpen()) { this.computerUI.close(); return; } if (this.isMyRoom()) { this.openComputer(); } else { this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']); } });
-    const hotkeyHandler = (e: KeyboardEvent) => { if (e.key !== '?') return; if (document.activeElement === this.chatUI.getInput()) return; this.hotkeyModal.toggle(); };
-    document.addEventListener('keydown', hotkeyHandler);
-    this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
+    this.setupRegistryPanels(myPubkey);
+    this.setupCommonKeyboardHandlers();  // shouldBlockPanelKeys() guards with BookcaseModal.isOpen()
 
     // Click to move
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 330 || p.y > 470) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
@@ -265,7 +236,7 @@ export class RoomScene extends Phaser.Scene {
           this.time.delayedCall(300, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
         }
       },
-      onPlayerMove: (pk, x, y) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 340, 470); } },
+      onPlayerMove: (pk, x, y, f) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = Phaser.Math.Clamp(y, 340, 470); if (f !== undefined) o.facingRight = f === 1; } },
       onPlayerLeave: (pk) => this.removeRoomPlayer(pk),
       onCountUpdate: (c) => { this.globalPlayerCount = c; },
       onChat: (pk, name, text, emojis) => {
@@ -294,6 +265,7 @@ export class RoomScene extends Phaser.Scene {
           }
           return;
         }
+        if (this.handleRpsIncoming(pk, name, text)) return;
         if (!isMe && mutedPlayers.has(pk)) return;
         if (!isMe && shouldFilter(text)) return;
         this.chatUI.addMessage(name, text, isMe ? P.teal : P.lpurp, pk, emojis);
@@ -340,7 +312,7 @@ export class RoomScene extends Phaser.Scene {
       }
     });
 
-    if (this.isOwner) setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
+    if (this.isOwner) setRoomRequestHandler((rp, rn) => this.showIncomingRoomRequest(rp, rn));
     setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Owner left', P.amber); setTimeout(() => this.leaveRoom(), 1500); });
     setRoomGrantedHandler((op, on, room, roomConfig) => {
       this.waitingForAccess = false;
@@ -362,20 +334,12 @@ export class RoomScene extends Phaser.Scene {
     }
 
     this.events.on('shutdown', () => {
-      unsubProfile();
-      this.chatUI.destroy();
-      this.settingsPanel.destroy();
-      this.computerUI.close();
-      this.muteList.destroy();
-      this.playerPicker.close();
+      this.shutdownCommonPanels(unsubProfile);
+      BookcaseModal.destroy();
       this.pet?.destroy(); this.pet = null;
       if (this.introOverlay) { this.introOverlay.destroy(); this.introOverlay = null; }
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
-      if (this.dmPanel) this.dmPanel.close();
-      if (this.crewPanel) this.crewPanel.close();
-      if (this.followsPanel) this.followsPanel.close();
-      destroyPlayerMenu(); ProfileModal.destroy(); BookcaseModal.destroy();
       this.feedNotes.forEach(n => { n.npubText?.destroy(); n.msgText?.destroy(); });
       this.feedNotes = [];
       this.relayStatusLines.forEach(l => { l.dot.destroy(); l.lat.destroy(); });
@@ -521,7 +485,7 @@ export class RoomScene extends Phaser.Scene {
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'room', this.isWalking);
     this.player.setAlpha(this.emoteSet.isActive('ghost') ? 0.3 : 1);
 
-    sendPosition(this.player.x, this.player.y);
+    sendPosition(this.player.x, this.player.y, this.facingRight);
 
     // Computer proximity check (myroom only — desk is around x=600-720)
     if (this.isMyRoom() && !this.introActive) {
@@ -563,19 +527,19 @@ export class RoomScene extends Phaser.Scene {
 
     // Other players
     this.otherPlayers.forEach((o, pk) => {
-      const prevX = o.sprite.x;
-      if (Math.abs(o.targetX - o.sprite.x) > 1) o.sprite.x += (o.targetX - o.sprite.x) * 0.12;
+      const dx = o.targetX - o.sprite.x;
+      if (Math.abs(dx) > 1) { o.sprite.x += dx * 0.12; o.facingRight = dx > 0; }
       if (Math.abs(o.targetY - o.sprite.y) > 1) o.sprite.y += (o.targetY - o.sprite.y) * 0.12;
+      o.sprite.setFlipX(!o.facingRight);
       o.nameText.setPosition(o.sprite.x, o.sprite.y - 150);
       o.statusText.setPosition(o.sprite.x, o.sprite.y - 165);
       if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 80);
-      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, true, 'room');
+      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, 'room');
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
 
       // Walk animation for other players
-      const oMoving = Math.abs(o.targetX - o.sprite.x) > 1;
+      const oMoving = Math.abs(dx) > 1;
       if (oMoving) {
-        o.sprite.setFlipX(o.targetX < o.sprite.x);
         o.walkTimer += delta;
         if (o.walkTimer >= 180) {
           o.walkTimer = 0;
@@ -804,7 +768,7 @@ export class RoomScene extends Phaser.Scene {
       const op2 = this.otherPlayers.get(pk);
       showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status);
     });
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, avatar: avatarStr, status: status || '', clickZone: cz, walkFrame: 0, walkTimer: 0 });
+    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, facingRight: true, avatar: avatarStr, status: status || '', clickZone: cz, walkFrame: 0, walkTimer: 0 });
   }
   private removeRoomPlayer(pk: string): void {
     const o = this.otherPlayers.get(pk); if (!o) return;
@@ -817,7 +781,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // ── Room Request Toast ──
-  private showRoomRequestToast(rp: string, rn: string): void {
+  private showIncomingRoomRequest(rp: string, rn: string): void {
     if (this.toastEl) this.toastEl.remove();
     SoundEngine.get().roomRequest();
     const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
@@ -848,19 +812,15 @@ export class RoomScene extends Phaser.Scene {
     btn.on('pointerdown', () => this.leaveRoom());
     this.input.keyboard?.on('keydown-ESC', () => {
       // Close panels/modals from most-overlay to least before allowing room exit
+      if (document.activeElement === this.chatInput) return;
       if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
-      if (this.crewPanel?.isVisible()) { this.crewPanel.pressEsc(); return; }
-      if (BookcaseModal.isOpen()) { BookcaseModal.destroy(); return; }
+      if (BookcaseModal.isOpen()) {
+        // If a profile is open inside the bookcase, let ESC close just the profile first
+        if (document.getElementById('profile-modal')) return;
+        BookcaseModal.destroy(); return;
+      }
       if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return; }
-      if (this.settingsPanel.isOpen()) { this.settingsPanel.toggle(); return; }
-      if (this.playerPicker.isOpen()) { this.playerPicker.close(); return; }
-      if (this.dmPanel?.isVisible()) { this.dmPanel.close(); return; }
-      if (this.followsPanel?.isVisible()) { this.followsPanel.close(); return; }
-      if (this.muteList.isOpen()) { this.muteList.close(); return; }
-      // ProfileModal and ZapModal handle their own ESC via document listeners;
-      // just guard leaveRoom so the room doesn't exit while they're showing.
-      if (document.getElementById('profile-modal')) return;
-      if (document.getElementById('zap-modal')) return;
+      if (this.handleCommonEsc()) return;
       this.leaveRoom();
     });
   }
@@ -977,44 +937,18 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // ── Commands ──
+  protected override getSceneAccent(): string { return this.roomConfig?.neonColor ?? P.teal; }
+
   private handleCommand(text: string): void {
     const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
     switch (cmd) {
       case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.nameText?.text) ps.push(o.nameText.text); }); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players here', P.teal); return; } let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.nameText.text; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
-      case 'smoke': { if (this.emoteSet.isActive('smoke')) { this.emoteSet.stop('smoke'); this.chatUI.addMessage('system', EMOTE_OFF_MSGS['smoke'], P.dpurp); sendChat('/emote smoke_off'); } else { this.emoteSet.start('smoke'); this.chatUI.addMessage('system', EMOTE_FLAVORS['smoke'], P.dpurp); sendChat('/emote smoke_on'); } break; }
-      case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts': case 'angry': case 'sweat': case 'sparkle': case 'confetti': case 'fire': case 'ghost': case 'rain': { this.handleEmoteCommand(cmd); break; }
-      case 'terminal': case 'outfit': case 'avatar': case 'computer': {
-        if (!this.isMyRoom()) {
-          if (this.computerUI.isOpen()) { this.computerUI.close(); return; }
-          this.computerUI.open(undefined, (newName) => { this.registry.set('playerName', newName); this.playerName.setText(newName.slice(0, 14)); sendNameUpdate(newName); }, undefined, undefined, undefined, undefined, ['profile']);
-          return;
-        }
-        this.openComputer();
-        break;
-      }
       case 'visit': case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /tp <room> or /tp <player>', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', hub:'hub', woods:'woods', cabin:'cabin', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(opk); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); }); return; } if (rid === 'hub') { this.leaveRoom(); return; } if (rid === 'woods') { sendRoomChange('woods'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('WoodsScene'); }); return; } if (rid === 'cabin') { sendRoomChange('cabin'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 4, 2, 0); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); }); return; } if (rid) { sendRoomChange('hub'); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } let target: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) target = pk; }); if (target) { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(target); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); } else this.chatUI.addMessage('system', `Unknown room or player "${arg}"`, P.amber); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.nameText?.text) ps.push(o.nameText.text); }); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', P.teal); break; }
-      case 'follows': case 'following': case 'friends': { this.followsPanel.toggle(); break; }
-      case 'help': case '?': { this.chatUI.addMessage('system', 'Commands:', P.teal); ['/dm', '/zap <name>', '/smoke', '/coffee', '/music', '/zzz', '/think', '/hearts', '/angry', '/sweat', '/sparkle', '/confetti', '/fire', '/ghost', '/rain', '/terminal', '/tp <room|player>', '/players', '/follows', '/mute', '/filter <w>'].forEach(h => this.chatUI.addMessage('system', h, P.lpurp)); break; }
-      case 'mute': { const s = toggleMute(); this.chatUI.addMessage('system', s ? 'Muted' : 'Unmuted', s ? P.amber : P.teal); break; }
-      case 'filter': { if (!arg) { const w = getCustomBannedWords(); this.chatUI.addMessage('system', w.length ? `Filtered: ${w.join(', ')}` : 'No filters', P.teal); return; } addBannedWord(arg); this.chatUI.addMessage('system', `Added "${arg}"`, P.teal); break; }
-      case 'unfilter': { if (!arg) return; removeBannedWord(arg); this.chatUI.addMessage('system', `Removed "${arg}"`, P.teal); break; }
-      default: this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }
     this.chatUI.flashLog();
   }
 
-  private handleEmoteCommand(name: string): void {
-    if (this.emoteSet.isActive(name)) {
-      this.emoteSet.stop(name);
-      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
-      sendChat(`/emote ${name}_off`);
-    } else {
-      this.emoteSet.start(name);
-      const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      this.chatUI.addMessage('system', flavor, P.dpurp);
-      sendChat(`/emote ${name}_on`);
-    }
-  }
 }

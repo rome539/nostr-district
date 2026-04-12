@@ -1345,7 +1345,7 @@ export class CrewPanel {
     `;
 
     document.body.appendChild(modal);
-    modal.addEventListener('keydown', e => e.stopPropagation());
+    modal.addEventListener('keydown', e => { if (e.key === 'Escape') modal.remove(); e.stopPropagation(); });
     modal.addEventListener('keyup', e => e.stopPropagation());
     setTimeout(() => (modal.querySelector('#cpm-name') as HTMLInputElement)?.focus(), 50);
 

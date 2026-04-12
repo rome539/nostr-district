@@ -121,7 +121,7 @@ export class HotkeyModal {
 
     this.el.addEventListener('mousedown', e => { if (e.target === this.el) this.close(); });
     this.el.querySelector('#hk-close')?.addEventListener('click', () => this.close());
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && this.open) this.close(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && this.open) { e.stopPropagation(); this.close(); } });
     document.body.appendChild(this.el);
   }
 
