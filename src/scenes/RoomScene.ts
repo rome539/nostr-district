@@ -7,6 +7,7 @@ import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomResponse, setRoomRequestHandler, setRoomKickHandler, sendRoomRequest,
   setRoomGrantedHandler, setRoomDeniedHandler, requestOnlinePlayers, setOnlinePlayersHandler,
+  clearRoomRequestHandler, clearRoomKickHandler, clearRoomGrantedHandler, clearRoomDeniedHandler,
 } from '../nostr/presenceService';
 import { shouldFilter } from '../nostr/moderationService';
 import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
@@ -57,6 +58,15 @@ export class RoomScene extends BaseScene {
   private hasBookcase = false;
   private parsedRoomConfig: any = null;
   private roomBgImage!: Phaser.GameObjects.Image;
+  private readonly incomingRoomRequestHandler = (rp: string, rn: string) => this.showIncomingRoomRequest(rp, rn);
+  private readonly roomKickHandler = (r: string) => { this.chatUI.addMessage('system', r || 'Owner left', P.amber); setTimeout(() => this.leaveRoom(), 1500); };
+  private readonly roomGrantedHandler = (op: string, on: string, room: string, roomConfig?: string) => {
+    this.waitingForAccess = false;
+    this.chatUI.addMessage('system', `${on} accepted!`, P.teal);
+    sendRoomChange('hub');
+    this.scene.start('RoomScene', { id: room, name: `${on}'s Room`, neonColor: P.teal, ownerPubkey: op, ownerRoomConfig: roomConfig });
+  };
+  private readonly roomDeniedHandler = (r: string) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); };
   // Walk animation
   private walkFrame = 0;
   private walkTimer = 0;
@@ -312,16 +322,10 @@ export class RoomScene extends BaseScene {
       }
     });
 
-    if (this.isOwner) setRoomRequestHandler((rp, rn) => this.showIncomingRoomRequest(rp, rn));
-    setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Owner left', P.amber); setTimeout(() => this.leaveRoom(), 1500); });
-    setRoomGrantedHandler((op, on, room, roomConfig) => {
-      this.waitingForAccess = false;
-      this.chatUI.addMessage('system', `${on} accepted!`, P.teal);
-      // Leave current room and go to the granted room
-      sendRoomChange('hub');
-      this.scene.start('RoomScene', { id: room, name: `${on}'s Room`, neonColor: P.teal, ownerPubkey: op, ownerRoomConfig: roomConfig });
-    });
-    setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); });
+    if (this.isOwner) setRoomRequestHandler(this.incomingRoomRequestHandler);
+    setRoomKickHandler(this.roomKickHandler);
+    setRoomGrantedHandler(this.roomGrantedHandler);
+    setRoomDeniedHandler(this.roomDeniedHandler);
 
     this.cameras.main.fadeIn(300, 10, 0, 20);
     this.settingsPanel.create();
@@ -349,7 +353,10 @@ export class RoomScene extends BaseScene {
       this.relayEventsText?.destroy(); this.relayEventsText = null;
       this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
       this.otherPlayers.clear();
-      setRoomRequestHandler(null); setRoomKickHandler(null); setRoomGrantedHandler(null); setRoomDeniedHandler(null);
+      clearRoomRequestHandler(this.incomingRoomRequestHandler);
+      clearRoomKickHandler(this.roomKickHandler);
+      clearRoomGrantedHandler(this.roomGrantedHandler);
+      clearRoomDeniedHandler(this.roomDeniedHandler);
     });
   }
 
@@ -786,8 +793,8 @@ export class RoomScene extends BaseScene {
     SoundEngine.get().roomRequest();
     const esc = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     this.toastEl = document.createElement('div');
-    this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(135deg,${P.bg},#0e0828);border:1px solid ${P.teal}55;border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
-    this.toastEl.innerHTML = `<div style="color:${P.teal};font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:${P.lcream};font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:${P.teal}33;border:1px solid ${P.teal}66;border-radius:6px;color:${P.teal};font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
+    this.toastEl.style.cssText = `position:fixed;top:20px;right:20px;z-index:3000;background:linear-gradient(180deg,var(--nd-bg) 0%, var(--nd-navy) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%, transparent);border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;box-shadow:0 4px 20px rgba(0,0,0,0.6);max-width:300px;`;
+    this.toastEl.innerHTML = `<div style="color:var(--nd-accent);font-size:14px;font-weight:bold;margin-bottom:10px;">Room Request</div><div style="color:var(--nd-text);font-size:13px;margin-bottom:14px;"><strong>${esc(rn)}</strong> wants to enter</div><div style="display:flex;gap:8px;"><button id="ta" style="flex:1;padding:8px;background:color-mix(in srgb,var(--nd-accent) 18%, transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 44%, transparent);border-radius:6px;color:var(--nd-accent);font-size:13px;cursor:pointer;font-weight:bold;">Accept</button><button id="td" style="flex:1;padding:8px;background:${P.red}22;border:1px solid ${P.red}44;border-radius:6px;color:${P.red};font-size:13px;cursor:pointer;">Deny</button></div>`;
     document.body.appendChild(this.toastEl);
     this.toastEl.querySelector('#ta')!.addEventListener('click', () => { sendRoomResponse(rp, true, JSON.stringify(getRoomConfig())); this.toastEl?.remove(); this.toastEl = null; this.chatUI.addMessage('system', `Accepted ${rn}`, P.teal); });
     this.toastEl.querySelector('#td')!.addEventListener('click', () => { sendRoomResponse(rp, false); this.toastEl?.remove(); this.toastEl = null; });

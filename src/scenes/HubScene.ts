@@ -113,7 +113,7 @@ export class HubScene extends BaseScene {
   private readonly ALLEY_ENTER_RANGE = 30;
 
   constructor() { super({ key: 'HubScene' }); }
-  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.emoteSet.stopAll(); this.isLeavingToWoods = false; this.isLeavingToAlley = false; }
+  init(data?: any): void { this.isReturning = !!data?._returning; this.returnFromRoom = data?.fromRoom || null; this.emoteSet.stopAll(); this.isLeavingScene = false; this.isLeavingToWoods = false; this.isLeavingToAlley = false; }
 
   create(): void {
     // ── Login gate ──
@@ -407,6 +407,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
   private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
   private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
+    if (this.isLeavingScene) return;
+    this.isLeavingScene = true;
     this.snd.roomEnter();
     this.snd.setRoom('');
     this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -415,10 +417,12 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
 
   private enterWoods(): void {
+    if (this.isLeavingScene) return;
     if (!HubScene.WOODS_OPEN) {
       this.notifyWoodsClosed();
       return;
     }
+    this.isLeavingScene = true;
     this.snd.roomEnter();
     this.snd.setRoom('');
     this.chatUI.destroy();
@@ -740,6 +744,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
 
   private tryEnter(): void {
+    if (this.isLeavingScene) return;
     if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }

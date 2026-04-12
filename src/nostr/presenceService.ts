@@ -127,6 +127,18 @@ export function setRoomGrantedHandler(handler: RoomGrantedHandler | null): void 
 export function setRoomDeniedHandler(handler: RoomDeniedHandler | null): void { onRoomDenied = handler; }
 export function setRoomKickHandler(handler: RoomKickHandler | null): void { onRoomKick = handler; }
 export function setOnlinePlayersHandler(handler: OnlinePlayersHandler | null): void { onOnlinePlayers = handler; }
+export function clearRoomRequestHandler(handler: RoomRequestHandler | null): void {
+  if (onRoomRequest === handler) onRoomRequest = null;
+}
+export function clearRoomGrantedHandler(handler: RoomGrantedHandler | null): void {
+  if (onRoomGranted === handler) onRoomGranted = null;
+}
+export function clearRoomDeniedHandler(handler: RoomDeniedHandler | null): void {
+  if (onRoomDenied === handler) onRoomDenied = null;
+}
+export function clearRoomKickHandler(handler: RoomKickHandler | null): void {
+  if (onRoomKick === handler) onRoomKick = null;
+}
 
 /** Request to enter someone's myroom */
 export function sendRoomRequest(ownerPubkey: string): void {

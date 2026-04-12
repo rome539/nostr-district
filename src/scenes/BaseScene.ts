@@ -66,7 +66,7 @@ import { PollBoard } from '../ui/PollBoard';
 import { destroyPlayerMenu } from '../ui/PlayerMenu';
 import {
   sendChat, sendNameUpdate, sendRoomResponse,
-  setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
+  setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, clearRoomRequestHandler,
 } from '../nostr/presenceService';
 import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords } from '../nostr/moderationService';
 import { getRoomConfig } from '../stores/roomStore';
@@ -103,6 +103,7 @@ export abstract class BaseScene extends Phaser.Scene {
   // ── Scene state ────────────────────────────────────────────────────────────
   protected isLeavingScene = false;
   private roomRequestToast: HTMLElement | null = null;
+  private readonly roomRequestHandler = (rp: string, rn: string) => this.showRoomRequestToast(rp, rn);
 
   // ══════════════════════════════════════════════════════════════════════════
   // REGISTRY PANEL SETUP
@@ -211,7 +212,7 @@ export abstract class BaseScene extends Phaser.Scene {
   // calling its own setupRoomRequestHandlers).
   // ══════════════════════════════════════════════════════════════════════════
   protected setupRoomRequestHandlers(): void {
-    setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
+    setRoomRequestHandler(this.roomRequestHandler);
     setRoomGrantedHandler(null);
     setRoomDeniedHandler(null);
     setRoomKickHandler(null);
@@ -476,6 +477,6 @@ export abstract class BaseScene extends Phaser.Scene {
     this.pollBoard?.destroy();
     this.roomRequestToast?.remove();
     this.roomRequestToast = null;
-    setRoomRequestHandler(null);
+    clearRoomRequestHandler(this.roomRequestHandler);
   }
 }
