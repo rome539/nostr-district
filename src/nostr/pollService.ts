@@ -143,6 +143,7 @@ export async function createPoll(
     endsAt = Math.floor(Date.now() / 1000) + durationHours * 3600;
     tags.push(['endsAt', String(endsAt)]);
   }
+  tags.push(['client', 'Nostr District']);
   const unsigned = { kind: 1068, content: question.trim(), tags, created_at: Math.floor(Date.now() / 1000) };
   try {
     const signed = await signEvent(unsigned);
@@ -170,6 +171,7 @@ export async function castVote(poll: Poll, optionIds: string[]): Promise<boolean
     ...optionIds.map(id => ['response', id]),
     ...poll.relays.slice(0, 2).map(r => ['relay', r]),
   ];
+  tags.push(['client', 'Nostr District']);
   const unsigned = { kind: 1018, content: '', tags, created_at: Math.floor(Date.now() / 1000) };
   try {
     const signed = await signEvent(unsigned);

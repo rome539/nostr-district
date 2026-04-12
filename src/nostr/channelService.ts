@@ -135,7 +135,7 @@ export async function sendChannelMessage(content: string): Promise<void> {
     tags: [
       ['g', currentChannel],
       ['n', name],
-      ['client', 'nostr-district'],
+      ['client', 'Nostr District'],
     ],
     content,
     pubkey: state.pubkey,

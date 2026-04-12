@@ -87,6 +87,7 @@ async function buildZapRequest(
       ['amount', String(amountMsats)],
       ['lnurl', lnurlCallbackUrl],
       ['relays', ...RELAYS],
+      ['client', 'Nostr District'],
     ],
   };
 

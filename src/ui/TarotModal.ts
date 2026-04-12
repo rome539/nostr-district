@@ -3,6 +3,8 @@
  * Uses pixel art asset pack from public/assets/Tarot/
  */
 import { SoundEngine } from '../audio/SoundEngine';
+import { signEvent, publishEvent } from '../nostr/nostrService';
+import { authStore } from '../stores/authStore';
 
 type Suit = 'major' | 'wands' | 'cups' | 'swords' | 'pentacles';
 
@@ -147,11 +149,132 @@ const SUIT_STYLE: Record<Suit,{border:string;label:string}> = {
 const SPREAD_LABELS = ['PAST', 'PRESENT', 'FUTURE'];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DRAW 3 UNIQUE CARDS
+// DRAW 3 UNIQUE CARDS — persisted for 24 hours
 // ─────────────────────────────────────────────────────────────────────────────
-function drawThree(): { card: TarotCard; reversed: boolean }[] {
-  const shuffled = [...DECK].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 3).map(card => ({ card, reversed: Math.random() < 0.35 }));
+const TAROT_KEY = 'nd_daily_tarot';
+const MS_24H    = 24 * 60 * 60 * 1000;
+
+interface StoredDraw { indices: number[]; reversed: boolean[]; ts: number; }
+
+function getDailyDraw(): { card: TarotCard; reversed: boolean; fresh: boolean }[] {
+  try {
+    const stored: StoredDraw = JSON.parse(localStorage.getItem(TAROT_KEY) || 'null');
+    if (stored && Date.now() - stored.ts < MS_24H) {
+      return stored.indices.map((idx, i) => ({ card: DECK[idx], reversed: stored.reversed[i], fresh: false }));
+    }
+  } catch {}
+  const shuffled = [...DECK].sort(() => Math.random() - 0.5).slice(0, 3);
+  const draw = shuffled.map(card => ({ card, reversed: Math.random() < 0.35, fresh: true }));
+  const toStore: StoredDraw = {
+    indices: draw.map(d => DECK.indexOf(d.card)),
+    reversed: draw.map(d => d.reversed),
+    ts: Date.now(),
+  };
+  localStorage.setItem(TAROT_KEY, JSON.stringify(toStore));
+  return draw;
+}
+
+function timeUntilReset(key: string): string {
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || 'null');
+    if (!stored?.ts) return '';
+    const ms = MS_24H - (Date.now() - stored.ts);
+    if (ms <= 0) return '';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return `next reading in ${h}h ${m}m`;
+  } catch { return ''; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOSTR SHARE  (NIP-96 upload cascade + NIP-98 auth)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Free NIP-96 hosts tried in order; first success wins
+const NIP96_HOSTS = [
+  'https://nostr.build/api/v2/upload/files',
+  'https://nostrcheck.me/api/v2/media',
+];
+
+/** Render card to canvas at 4× nearest-neighbor, optionally rotated 180° for reversed. */
+function upscaleCard(cardFile: string, reversed: boolean): Promise<Blob | null> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const scale = 4;
+      const w = img.naturalWidth * scale;
+      const h = img.naturalHeight * scale;
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      if (reversed) { ctx.translate(w, h); ctx.rotate(Math.PI); }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(resolve, 'image/png');
+    };
+    img.onerror = () => resolve(null);
+    img.src = cardFile;
+  });
+}
+
+/** POST blob to one NIP-96 host with NIP-98 auth. Returns CDN URL or null. */
+async function tryNip96(uploadUrl: string, blob: Blob): Promise<string | null> {
+  try {
+    const authEvent = await signEvent({
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['u', uploadUrl], ['method', 'POST']],
+      content: '',
+    });
+    const form = new FormData();
+    form.append('file', blob, 'tarot.png');
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { Authorization: `Nostr ${btoa(JSON.stringify(authEvent))}` },
+      body: form,
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    // Handle nostr.build format, NIP-96 standard format, and direct url field
+    return (
+      json?.data?.[0]?.url ??
+      json?.data?.url ??
+      json?.nip94_event?.tags?.find((t: string[]) => t[0] === 'url')?.[1] ??
+      null
+    );
+  } catch { return null; }
+}
+
+/** Upload one card image: upscale → try each NIP-96 host → fallback to origin URL. */
+async function uploadCard(cardFile: string, reversed: boolean): Promise<string> {
+  const fallback = encodeURI(`${window.location.origin}${cardFile}`);
+  const blob = await upscaleCard(cardFile, reversed);
+  if (!blob) return fallback;
+  for (const host of NIP96_HOSTS) {
+    const url = await tryNip96(host, blob);
+    if (url) return url;
+  }
+  return fallback;
+}
+
+function buildTarotNote(draw: { card: TarotCard; reversed: boolean }[], imageUrls: string[]): string {
+  const labels = ['PAST', 'PRESENT', 'FUTURE'];
+  const lines: string[] = ['🔮 My tarot spread — Past · Present · Future', ''];
+
+  draw.forEach(({ card, reversed }, i) => {
+    const cardName = card.suit === 'major' ? `${card.number} · ${card.name}` : card.name;
+    lines.push(`✦ ${labels[i]} — ${cardName} (${reversed ? 'Reversed' : 'Upright'})`);
+    lines.push(reversed ? card.reversed : card.upright);
+    lines.push('');
+  });
+
+  // Bare image URLs on their own lines → inline previews in Damus, Nostur, Snort, etc.
+  imageUrls.forEach(url => lines.push(url));
+
+  lines.push('');
+  lines.push('#tarot #nostrdistrict');
+  return lines.join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,7 +285,8 @@ let overlay: HTMLElement | null = null;
 export const TarotModal = {
   show(): void {
     if (overlay) return;
-    const draw = drawThree();
+    const draw = getDailyDraw();
+    const isFresh = draw[0].fresh;
     SoundEngine.get().tarotCardFlip();
     // Stop 2s after last card flips (last flip at 600 + 2*180 = 960ms)
     setTimeout(() => SoundEngine.get().stopFileSounds(), 960 + 2000);
@@ -203,8 +327,20 @@ export const TarotModal = {
     // Title
     const title = document.createElement('div');
     title.textContent = '✦ THE CARDS SPEAK ✦';
-    title.style.cssText = 'color:#c0a0ff;font-size:10px;letter-spacing:3px;margin-bottom:16px;opacity:0.8;';
+    title.style.cssText = 'color:#c0a0ff;font-size:10px;letter-spacing:3px;margin-bottom:6px;opacity:0.8;';
     box.appendChild(title);
+
+    // 24h reset hint (shown only for cached readings)
+    if (!isFresh) {
+      const resetHint = document.createElement('div');
+      resetHint.textContent = timeUntilReset(TAROT_KEY);
+      resetHint.style.cssText = 'color:#6644aa;font-size:8px;letter-spacing:1px;margin-bottom:14px;opacity:0.7;';
+      box.appendChild(resetHint);
+    } else {
+      const spacer = document.createElement('div');
+      spacer.style.cssText = 'margin-bottom:14px;';
+      box.appendChild(spacer);
+    }
 
     // Cards row
     const cardsRow = document.createElement('div');
@@ -289,9 +425,63 @@ export const TarotModal = {
     hr.style.cssText = 'width:100%;max-width:460px;border-top:1px solid #3322664a;margin:20px auto 10px;';
     box.appendChild(hr);
 
+    // Share to Nostr button (logged-in non-guest only)
+    const { isLoggedIn, isGuest } = authStore.getState();
+    if (isLoggedIn && !isGuest) {
+      const shareBtn = document.createElement('button');
+      shareBtn.textContent = '✦ Share reading to Nostr';
+      shareBtn.disabled = true;
+      shareBtn.style.cssText = `
+        background:transparent; border:1px solid #5533aa44; border-radius:6px;
+        color:#7755aa88; font-family:"Courier New",monospace; font-size:9px;
+        letter-spacing:1px; cursor:default; padding:6px 14px; margin-bottom:10px;
+        transition:border-color 0.2s, color 0.2s;
+      `;
+      // Enable once all card flips + typewriters finish (last flip at 960ms, last typewriter starts at 1100ms)
+      setTimeout(() => {
+        shareBtn.disabled = false;
+        shareBtn.style.borderColor = '#5533aa88';
+        shareBtn.style.color = '#a080ee';
+        shareBtn.style.cursor = 'pointer';
+        shareBtn.onmouseenter = () => { shareBtn.style.borderColor = '#9966ff'; shareBtn.style.color = '#c0a0ff'; };
+        shareBtn.onmouseleave = () => { shareBtn.style.borderColor = '#5533aa88'; shareBtn.style.color = '#a080ee'; };
+      }, 2000);
+      shareBtn.onclick = async () => {
+        if (shareBtn.disabled) return;
+        shareBtn.disabled = true;
+        shareBtn.textContent = '↑ uploading cards...';
+        try {
+          // Upload all 3 cards in parallel (upscaled 4×, reversed cards rotated 180°)
+          const imageUrls = await Promise.all(
+            draw.map(d => uploadCard(d.card.file, d.reversed))
+          );
+          shareBtn.textContent = '✦ publishing...';
+          const event = await signEvent({
+            kind: 1,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['t', 'tarot'],
+              ['t', 'nostrdistrict'],
+              ['client', 'Nostr District'],
+              // NIP-92 imeta — Primal uses these for inline image rendering
+              ...imageUrls.map(url => ['imeta', `url ${url}`, 'm image/png']),
+            ],
+            content: buildTarotNote(draw, imageUrls),
+          });
+          const ok = await publishEvent(event);
+          shareBtn.textContent = ok ? '✓ shared!' : '✗ relay error';
+          shareBtn.style.color = ok ? '#80ee80' : '#ee8080';
+        } catch {
+          shareBtn.textContent = '✗ failed';
+          shareBtn.style.color = '#ee8080';
+        }
+      };
+      box.appendChild(shareBtn);
+    }
+
     const hint = document.createElement('div');
     hint.textContent = '[ESC] or click to close';
-    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;';
+    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
     hint.onclick = () => TarotModal.destroy();
     box.appendChild(hint);
 

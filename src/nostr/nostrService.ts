@@ -135,7 +135,7 @@ export async function publishAvatar(avatar: AvatarConfig): Promise<boolean> {
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', AVATAR_D_TAG]],
+      tags: [['d', AVATAR_D_TAG], ['client', 'Nostr District']],
       content: JSON.stringify(avatar),
     });
     return publishEvent(event);
@@ -170,7 +170,7 @@ export async function publishOutfits(outfits: OutfitPreset[]): Promise<boolean> 
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', OUTFITS_D_TAG]],
+      tags: [['d', OUTFITS_D_TAG], ['client', 'Nostr District']],
       content: JSON.stringify(outfits),
     });
     return publishEvent(event);
@@ -452,7 +452,7 @@ export async function publishRoomConfig(config: RoomConfig): Promise<boolean> {
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', ROOM_D_TAG]],
+      tags: [['d', ROOM_D_TAG], ['client', 'Nostr District']],
       content: JSON.stringify(config),
     });
     return publishEvent(event);

@@ -95,7 +95,7 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | Kind | Description | NIP |
 |------|-------------|-----|
 | 0 | User metadata (profile, lightning address) | NIP-01 |
-| 1 | Short text notes (global feed) | NIP-01 |
+| 1 | Short text notes (global feed, tarot spread shares) | NIP-01 |
 | 3 | Contact list / follows | NIP-01 |
 | 5 | Event deletion (crew cleanup) | NIP-09 |
 | 6 | Reposts | NIP-18 |
@@ -110,6 +110,7 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | 9008 | Delete group (founder action) | NIP-29 |
 | 9021 | Join group request (member action) | NIP-29 |
 | 9022 | Leave group (member action) | NIP-29 |
+| 27235 | HTTP auth (NIP-96 upload signing) | NIP-98 |
 | 9734 | Zap request | NIP-57 |
 | 9735 | Zap receipt | NIP-57 |
 | 13194 | NWC info event (legacy) | NIP-47 |
@@ -155,6 +156,10 @@ All kind 30078 events are namespaced by their `d` tag:
 | NIP-59 | Gift wraps | Seals and gift wraps for NIP-17 DM privacy |
 | NIP-78 | App-specific data | Kind 30078 for avatar, room config, crew definitions, membership, and invite tokens |
 | NIP-88 | Polls | Create polls and record votes in rooms |
+| NIP-89 | App handler info | `client` tag on published notes so clients display "posted via Nostr District" |
+| NIP-92 | Media attachments | `imeta` tags on kind 1 tarot share notes for inline image previews in Primal, Nostur, and other clients |
+| NIP-96 | HTTP file storage | Card images upscaled and uploaded to a free NIP-96 host (nostr.build → nostrcheck.me fallback) before publishing tarot spread notes |
+| NIP-98 | HTTP auth | Signs NIP-96 upload requests with the user's Nostr key — no account or subscription required |
 
 ## Crews (NIP-29)
 

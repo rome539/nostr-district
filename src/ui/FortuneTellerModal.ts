@@ -4,6 +4,8 @@
  * Coin drop animation → crystal ball glow → typewriter fortune reveal.
  */
 import { SoundEngine } from '../audio/SoundEngine';
+import { signEvent, publishEvent } from '../nostr/nostrService';
+import { authStore } from '../stores/authStore';
 
 const FORTUNES = [
   "A change is coming. You will not see it until it has already arrived.",
@@ -68,6 +70,38 @@ const FORTUNES = [
   "You have survived every hard day so far. That is not nothing.",
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 24-HOUR FORTUNE PERSISTENCE
+// ─────────────────────────────────────────────────────────────────────────────
+const FORTUNE_KEY = 'nd_daily_fortune';
+const MS_24H = 24 * 60 * 60 * 1000;
+
+interface StoredFortune { index: number; ts: number; }
+
+function getDailyFortune(): { fortune: string; fresh: boolean } {
+  try {
+    const stored: StoredFortune = JSON.parse(localStorage.getItem(FORTUNE_KEY) || 'null');
+    if (stored && Date.now() - stored.ts < MS_24H) {
+      return { fortune: FORTUNES[stored.index], fresh: false };
+    }
+  } catch {}
+  const index = Math.floor(Math.random() * FORTUNES.length);
+  localStorage.setItem(FORTUNE_KEY, JSON.stringify({ index, ts: Date.now() } as StoredFortune));
+  return { fortune: FORTUNES[index], fresh: true };
+}
+
+function timeUntilReset(): string {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FORTUNE_KEY) || 'null');
+    if (!stored?.ts) return '';
+    const ms = MS_24H - (Date.now() - stored.ts);
+    if (ms <= 0) return '';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return `next reading in ${h}h ${m}m`;
+  } catch { return ''; }
+}
+
 let overlay: HTMLElement | null = null;
 let onCloseCallback: (() => void) | null = null;
 
@@ -75,6 +109,7 @@ export const FortuneTellerModal = {
   show(onClose?: () => void): void {
     if (overlay) return;
     onCloseCallback = onClose ?? null;
+    const { fortune, fresh } = getDailyFortune();
     SoundEngine.get().fortuneTellerReveal();
 
     overlay = document.createElement('div');
@@ -120,8 +155,14 @@ export const FortuneTellerModal = {
     // Title
     const title = document.createElement('div');
     title.textContent = '✦ MADAME ZARA ✦';
-    title.style.cssText = 'color:#c0a0ff;font-size:11px;letter-spacing:3px;margin-bottom:18px;opacity:0.8;';
+    title.style.cssText = 'color:#c0a0ff;font-size:11px;letter-spacing:3px;margin-bottom:6px;opacity:0.8;';
     box.appendChild(title);
+
+    // 24h reset hint (shown only for cached readings)
+    const resetHint = document.createElement('div');
+    resetHint.textContent = fresh ? '' : timeUntilReset();
+    resetHint.style.cssText = 'color:#6644aa;font-size:8px;letter-spacing:1px;margin-bottom:14px;opacity:0.7;min-height:12px;';
+    box.appendChild(resetHint);
 
     // Crystal ball
     const ballWrap = document.createElement('div');
@@ -169,10 +210,53 @@ export const FortuneTellerModal = {
     div.style.cssText = 'border-top:1px solid #3322664a;margin:16px 0 12px;';
     box.appendChild(div);
 
+    // Share to Nostr button (logged-in non-guest only)
+    const { isLoggedIn, isGuest } = authStore.getState();
+    if (isLoggedIn && !isGuest) {
+      const shareBtn = document.createElement('button');
+      shareBtn.textContent = '✦ Share to Nostr';
+      shareBtn.disabled = true; // enabled after fortune is revealed
+      shareBtn.style.cssText = `
+        background:transparent; border:1px solid #5533aa44; border-radius:6px;
+        color:#7755aa88; font-family:"Courier New",monospace; font-size:9px;
+        letter-spacing:1px; cursor:default; padding:5px 12px; margin-bottom:10px;
+        transition:border-color 0.2s, color 0.2s;
+      `;
+      const enableShare = () => {
+        shareBtn.disabled = false;
+        shareBtn.style.borderColor = '#5533aa88';
+        shareBtn.style.color = '#a080ee';
+        shareBtn.style.cursor = 'pointer';
+        shareBtn.onmouseenter = () => { shareBtn.style.borderColor = '#9966ff'; shareBtn.style.color = '#c0a0ff'; };
+        shareBtn.onmouseleave = () => { shareBtn.style.borderColor = '#5533aa88'; shareBtn.style.color = '#a080ee'; };
+        shareBtn.onclick = async () => {
+          shareBtn.disabled = true;
+          shareBtn.textContent = '...';
+          try {
+            const event = await signEvent({
+              kind: 1,
+              created_at: Math.floor(Date.now() / 1000),
+              tags: [['t', 'nostrdistrict'], ['client', 'Nostr District']],
+              content: `🔮 The oracle has spoken\n\n"${fortune}"\n\n— Madame Zara, Nostr District\n\n#nostrdistrict`,
+            });
+            const ok = await publishEvent(event);
+            shareBtn.textContent = ok ? '✓ shared!' : '✗ relay error';
+            shareBtn.style.color = ok ? '#80ee80' : '#ee8080';
+          } catch {
+            shareBtn.textContent = '✗ sign failed';
+            shareBtn.style.color = '#ee8080';
+          }
+        };
+      };
+      // Enable share button after the fortune has been revealed
+      setTimeout(enableShare, 1300 + 500);
+      box.appendChild(shareBtn);
+    }
+
     // Dismiss hint
     const hint = document.createElement('div');
     hint.textContent = '[ESC] or click to close';
-    hint.style.cssText = 'color:#5544884a;font-size:9px;letter-spacing:1px;cursor:pointer;';
+    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
     hint.onclick = () => FortuneTellerModal.destroy();
     box.appendChild(hint);
 
@@ -183,7 +267,6 @@ export const FortuneTellerModal = {
 
     // After coin lands, reveal fortune
     setTimeout(() => {
-      const fortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
       status.style.animation = '';
       status.style.color = '#d0b8ff';
       status.style.fontSize = '11px';
