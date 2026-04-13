@@ -18,6 +18,73 @@ import {
   cancelBunkerFlow,
 } from './nostr/nostrService';
 
+// Auto-fullscreen on landscape rotation (touch devices only)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+const isStandalone = (navigator as any).standalone === true;
+
+if ('ontouchstart' in window && !isIOS && document.documentElement.requestFullscreen) {
+  // Android / non-iOS: use real Fullscreen API on rotation
+  const tryFullscreen = () => {
+    const landscape = screen.orientation
+      ? screen.orientation.type.startsWith('landscape')
+      : Math.abs((window.orientation as number) ?? 0) === 90;
+    if (landscape && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', tryFullscreen);
+  } else {
+    window.addEventListener('orientationchange', tryFullscreen);
+  }
+}
+
+if (isIOS && !isStandalone && !localStorage.getItem('nd_pwa_hint_dismissed')) {
+  // iOS: show "Add to Home Screen" hint once, only in landscape
+  const showHint = () => {
+    const landscape = screen.orientation
+      ? screen.orientation.type.startsWith('landscape')
+      : Math.abs((window.orientation as number) ?? 0) === 90;
+    if (!landscape) return;
+    if (document.getElementById('nd-pwa-hint')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'nd-pwa-hint';
+    banner.style.cssText = `
+      position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+      z-index:9999;background:linear-gradient(135deg,#0D0221ee,#1a0a3aee);
+      border:1px solid #9b7fe888;border-radius:10px;padding:10px 14px;
+      font-family:'Courier New',monospace;font-size:12px;color:#c9b8f0;
+      max-width:min(320px,88vw);text-align:center;line-height:1.6;
+      box-shadow:0 4px 20px rgba(0,0,0,0.7);
+    `;
+    banner.innerHTML = `
+      <div style="margin-bottom:6px;color:#9b7fe8;font-size:10px;letter-spacing:1px;">FOR FULLSCREEN ON IOS</div>
+      Tap <strong style="color:#fff;">Share</strong> <span style="font-size:14px;">⎙</span>
+      then <strong style="color:#fff;">Add to Home Screen</strong>
+      <button id="nd-pwa-dismiss" style="
+        display:block;margin:8px auto 0;background:none;
+        border:1px solid #9b7fe855;border-radius:4px;
+        color:#9b7fe8;font-family:'Courier New',monospace;font-size:10px;
+        padding:3px 12px;cursor:pointer;
+      ">Got it</button>
+    `;
+    document.body.appendChild(banner);
+    document.getElementById('nd-pwa-dismiss')?.addEventListener('click', () => {
+      banner.remove();
+      localStorage.setItem('nd_pwa_hint_dismissed', '1');
+    });
+  };
+
+  // Show after a short delay so it doesn't flash immediately on load
+  setTimeout(showHint, 3000);
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', () => setTimeout(showHint, 500));
+  } else {
+    window.addEventListener('orientationchange', () => setTimeout(showHint, 500));
+  }
+}
+
 // Vite HMR guard — this flag persists on window across module re-evaluations
 const w = window as any;
 if (w.__nostr_district_started) {
