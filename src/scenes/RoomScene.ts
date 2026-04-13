@@ -11,7 +11,7 @@ import {
   sendAvatarUpdate, sendNameUpdate,
 } from '../nostr/presenceService';
 import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
-import { canUseDMs, getRelayManager } from '../nostr/dmService';
+import { getRelayManager } from '../nostr/dmService';
 import { DEFAULT_RELAYS } from '../nostr/relayManager';
 import { ChatUI } from '../ui/ChatUI';
 import { showPlayerMenu } from '../ui/PlayerMenu';
@@ -177,9 +177,8 @@ export class RoomScene extends BaseScene {
     });
     // Mobile: zoom in and follow player so the room fills the screen properly
     if (this.sys.game.device.input.touch) {
-      this.setupMobileCamera(1.5);
+      // No zoom in rooms — room is exactly game-sized, zoom scrolls title/leave off screen
       this.cameras.main.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     }
     this.createMobileControls();
 
@@ -742,8 +741,8 @@ export class RoomScene extends BaseScene {
   private createBackButton(): void {
     const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
     bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(16, 6, 150, 28, 6);
-    bg.lineStyle(1, hexToNum(nc), 0.3); bg.strokeRoundedRect(16, 6, 150, 28, 6); bg.setDepth(99);
-    const btn = this.add.text(91, 20, '\u2190 Back to District', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: nc, align: 'center' }).setOrigin(0.5).setDepth(100).setInteractive({ useHandCursor: true });
+    bg.lineStyle(1, hexToNum(nc), 0.3); bg.strokeRoundedRect(16, 6, 150, 28, 6); bg.setDepth(99).setScrollFactor(0);
+    const btn = this.add.text(91, 20, '\u2190 Back to District', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: nc, align: 'center' }).setOrigin(0.5).setDepth(100).setScrollFactor(0).setInteractive({ useHandCursor: true });
     btn.on('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
     btn.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
     btn.on('pointerdown', () => this.leaveRoom());
@@ -754,8 +753,8 @@ export class RoomScene extends BaseScene {
     const labelW = Math.max(160, this.roomConfig.name.length * 9 + 32);
     const bg = this.add.graphics();
     bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(GAME_WIDTH / 2 - labelW / 2, 4, labelW, 32, 6);
-    bg.lineStyle(1, hexToNum(nc), 0.35); bg.strokeRoundedRect(GAME_WIDTH / 2 - labelW / 2, 4, labelW, 32, 6); bg.setDepth(99);
-    this.add.text(GAME_WIDTH / 2, 20, this.roomConfig.name, { fontFamily: '"Courier New", monospace', fontSize: '14px', color: nc, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(100);
+    bg.lineStyle(1, hexToNum(nc), 0.35); bg.strokeRoundedRect(GAME_WIDTH / 2 - labelW / 2, 4, labelW, 32, 6); bg.setDepth(99).setScrollFactor(0);
+    this.add.text(GAME_WIDTH / 2, 20, this.roomConfig.name, { fontFamily: '"Courier New", monospace', fontSize: '14px', color: nc, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
   }
   private leaveRoom(): void {
     if (this.isLeavingRoom) return;
@@ -869,7 +868,6 @@ export class RoomScene extends BaseScene {
   private handleCommand(text: string): void {
     const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
     switch (cmd) {
-      case 'dm': { if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs need a key', P.amber); return; } if (!arg) { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.nameText?.text) ps.push(o.nameText.text); }); this.chatUI.addMessage('system', ps.length ? `Online: ${ps.join(', ')}` : 'No players here', P.teal); return; } let tp: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) tp = pk; }); if (tp) { this.dmPanel.open(tp); this.chatUI.addMessage('system', 'Opening DM...', P.teal); } else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); break; }
       case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.nameText.text; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
       case 'visit': case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /tp <room> or /tp <player>', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', hub:'hub', woods:'woods', cabin:'cabin', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(opk); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); }); return; } if (rid === 'hub') { this.leaveRoom(); return; } if (rid === 'woods') { sendRoomChange('woods'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('WoodsScene'); }); return; } if (rid === 'cabin') { sendRoomChange('cabin'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 4, 2, 0); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); }); return; } if (rid) { sendRoomChange('hub'); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } let target: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) target = pk; }); if (target) { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(target); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); } else this.chatUI.addMessage('system', `Unknown room or player "${arg}"`, P.amber); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.name) ps.push(o.name); }); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', P.teal); break; }

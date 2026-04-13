@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Nostr District — Pixel Art Social World on Nostr</title>
   <meta name="description" content="Nostr District is a free multiplayer pixel art social world built on the Nostr protocol. Walk around, chat live, customize your avatar, visit player rooms, and connect with the Nostr community — no account required to explore.">
   <meta name="keywords" content="nostr, nostr social, nostr game, nostr client, nostr app, pixel art social world, multiplayer nostr, decentralized social game, nostr chat, nostr community, bitcoin social, web3 game">
@@ -56,14 +56,17 @@
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100dvh; overflow: hidden; background: #0D0221; }
+    html { width: 100%; height: 100dvh; overflow: hidden; background: #0D0221; }
+    /* position:fixed on body prevents iOS from scrolling the page when the keyboard appears */
+    body { position: fixed; width: 100%; height: 100%; overflow: hidden; background: #0D0221; }
     #game-container {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      /* Pin to bottom above the chat bar; position:fixed prevents the keyboard from pushing the canvas up */
-      bottom: 64px;
+      /* Extend to full height — chat bar floats over the bottom of the canvas.
+         This maximises canvas size, reducing letterbox bars on wide mobile screens. */
+      bottom: 0;
       display: flex;
       align-items: center;
       justify-content: center;

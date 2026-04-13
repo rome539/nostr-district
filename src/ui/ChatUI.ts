@@ -30,6 +30,7 @@ export class ChatUI {
   private container!: HTMLDivElement;
   private log!: HTMLDivElement;
   private input!: HTMLInputElement;
+  private inputRow!: HTMLDivElement;
   private onCommand: ((text: string) => void) | null = null;
   private onNameClick: ((pubkey: string, name: string) => void) | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -47,8 +48,9 @@ export class ChatUI {
     this.log.style.cssText = `max-height:min(160px,30dvh);overflow-y:auto;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;`;
     this.container.appendChild(this.log);
 
-    const inputRow = document.createElement('div');
-    inputRow.style.cssText = `display:flex;gap:6px;pointer-events:auto;`;
+    this.inputRow = document.createElement('div');
+    this.inputRow.style.cssText = `display:flex;gap:6px;pointer-events:auto;`;
+    const inputRow = this.inputRow;
 
     this.input = document.createElement('input');
     this.input.type = 'text';
@@ -61,6 +63,10 @@ export class ChatUI {
     this.input.addEventListener('focus', () => {
       this.input.style.borderColor = `color-mix(in srgb,var(--nd-accent) 75%,transparent)`;
       this.input.style.boxShadow = `0 0 10px color-mix(in srgb,var(--nd-accent) 18%,transparent)`;
+      // iOS Safari scrolls the page when a text input is focused — scroll it back immediately
+      if ('ontouchstart' in window) {
+        setTimeout(() => { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; }, 50);
+      }
       this.showLog();
     });
     this.input.addEventListener('blur', () => {
@@ -183,6 +189,21 @@ export class ChatUI {
       }
       this.hideTimer = null;
     }, delay);
+  }
+
+  setDMButton(callback: () => void): void {
+    if (this.inputRow?.querySelector('.nd-dm-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'nd-dm-btn';
+    btn.textContent = '✉';
+    btn.title = 'Messages';
+    btn.style.cssText = `background:color-mix(in srgb,black 45%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 25%,transparent);border-radius:6px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:14px;padding:0 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:color 0.15s,border-color 0.15s;`;
+    btn.addEventListener('mouseenter', () => { btn.style.color = 'var(--nd-accent)'; btn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 55%,transparent)`; });
+    btn.addEventListener('mouseleave', () => { btn.style.color = 'var(--nd-subtext)'; btn.style.borderColor = `color-mix(in srgb,var(--nd-text) 25%,transparent)`; });
+    btn.addEventListener('click', callback);
+    const gifBtn = this.inputRow.querySelector('button');
+    if (gifBtn) this.inputRow.insertBefore(btn, gifBtn);
+    else this.inputRow.appendChild(btn);
   }
 
   setNameClickHandler(fn: (pubkey: string, name: string) => void): void { this.onNameClick = fn; }

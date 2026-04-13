@@ -72,6 +72,7 @@ import {
   PresenceCallback,
 } from '../nostr/presenceService';
 import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords, shouldFilter } from '../nostr/moderationService';
+import { canUseDMs } from '../nostr/dmService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
 import { getRoomConfig } from '../stores/roomStore';
@@ -423,6 +424,11 @@ export abstract class BaseScene extends Phaser.Scene {
     let rfp = this.registry.get('followsPanel') as FollowsPanel | undefined;
     if (!rfp) { rfp = new FollowsPanel(); this.registry.set('followsPanel', rfp); }
     this.followsPanel = rfp;
+
+    // On touch devices, add a DM shortcut button to the chat bar
+    if ('ontouchstart' in window) {
+      this.chatUI.setDMButton(() => { this.crewPanel.close(); this.dmPanel.toggle(); });
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -871,6 +877,19 @@ export abstract class BaseScene extends Phaser.Scene {
         this.followsPanel.toggle(); return true;
       case 'crew': case 'crews':
         this.dmPanel.close(); this.crewPanel.toggle(); return true;
+      case 'dm': case 'dms': case 'messages': case 'msg': {
+        if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs require a Nostr key', P.amber); return true; }
+        if (!arg) { this.crewPanel.close(); this.dmPanel.toggle(); return true; }
+        // /dm <name> — find matching player in scene and open conversation
+        let target: string | null = null;
+        this.otherPlayers.forEach((o, pk) => {
+          const name = (o.name ?? o.nameText?.text ?? '').toLowerCase();
+          if (name.includes(arg.toLowerCase())) target = pk;
+        });
+        if (target) { this.dmPanel.open(target); this.chatUI.addMessage('system', 'Opening DM…', ac); }
+        else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber);
+        return true;
+      }
 
       // ── Moderation ────────────────────────────────────────────────────────
       case 'mute': {
