@@ -8,12 +8,31 @@
  * - 30s keepalive pings to prevent idle disconnects
  * - Reconnect catch-up: re-subscribes for missed gift wraps after reconnection
  * - Staggered publish delays (150ms between events) to avoid relay rate limiting
- * - Cloudflare relay proxy: in production, connections route through /api/relay
- *   so relay operators see Cloudflare IPs instead of user IPs
+ * - Cloudflare relay proxy: when VITE_RELAY_PROXY="" is set, connections route
+ *   through /api/relay on the current host (Cloudflare Pages Worker) so relay
+ *   operators see Cloudflare IPs instead of user IPs. Falls back to direct
+ *   connection automatically if the proxy fails.
  */
 
+/**
+ * Base URL for the relay proxy, or null for direct connections.
+ *
+ * Set VITE_RELAY_PROXY="" (empty string) in Cloudflare Pages environment
+ * variables to enable the /api/relay Worker proxy.
+ * Leave unset (or any non-empty value) for direct relay connections.
+ */
+const RELAY_PROXY_BASE: string | null = (() => {
+  if (!import.meta.env.PROD) return null;
+  const env = import.meta.env.VITE_RELAY_PROXY as string | undefined;
+  if (env !== '') return null; // unset or non-empty → direct
+  // Empty string → Cloudflare Pages mode: use /api/relay on this host
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+})();
+
 function proxyUrl(relayWss: string): string {
-  return relayWss;
+  if (!RELAY_PROXY_BASE) return relayWss;
+  return `${RELAY_PROXY_BASE}/api/relay?relay=${encodeURIComponent(relayWss)}`;
 }
 
 // ── The relay lists NYM uses for reliable DM delivery ──
@@ -53,6 +72,7 @@ interface ManagedRelay {
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   keepaliveTimer: ReturnType<typeof setInterval> | null;
   isDMRelay: boolean;
+  useDirect: boolean; // true after proxy fails — use direct connection
   pingSubId?: string;
   pingStart?: number;
   latencyMs?: number;
@@ -88,6 +108,7 @@ export class RelayManager {
         reconnectTimer: null,
         keepaliveTimer: null,
         isDMRelay: dmSet.has(url),
+        useDirect: false,
       });
     }
   }
@@ -141,8 +162,12 @@ export class RelayManager {
       try { relay.ws.close(); } catch (_) {}
     }
 
+    const connectUrl = (relay.useDirect || !RELAY_PROXY_BASE)
+      ? relay.url
+      : proxyUrl(relay.url);
+
     try {
-      relay.ws = new WebSocket(proxyUrl(relay.url));
+      relay.ws = new WebSocket(connectUrl);
     } catch (e) {
       console.warn(`[Relay] Failed to create WebSocket for ${relay.url}:`, e);
       this.scheduleReconnect(relay);
@@ -236,6 +261,11 @@ export class RelayManager {
     };
 
     relay.ws.onerror = () => {
+      // If we were trying the proxy and it failed, fall back to direct
+      if (!relay.useDirect && RELAY_PROXY_BASE) {
+        console.log(`[Relay] Proxy failed for ${relay.url}, falling back to direct`);
+        relay.useDirect = true;
+      }
       // onclose will fire after this, so we handle reconnect there
     };
 
