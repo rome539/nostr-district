@@ -596,13 +596,7 @@ export class SoundEngine {
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
-      // OGG is not supported on iOS Safari — fall back to synthesized ambient
-      const canOgg = document.createElement('audio').canPlayType('audio/ogg; codecs=vorbis') !== '';
-      if (canOgg) {
-        this._startStreamGapless('/assets/audio/hub-ambient.ogg', 'hub');
-      } else {
-        this._startAmbient('hub'); // oscillator-based fallback
-      }
+      this._startStream('/assets/audio/hub-ambient.m4a');
     } else if (room === 'woods') {
       this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
       this._startLoopEl('/assets/audio/cabin-fire.m4a', 2.5);
@@ -612,7 +606,7 @@ export class SoundEngine {
       this._startStream('/assets/audio/cabin-fire.m4a');
     } else if (room === 'alley') {
       // Use HTML Audio — more reliable than Web Audio on iOS Safari
-      this._startStream('/assets/audio/rain-alley.mp3');
+      this._startStream('/assets/audio/rain-alley.m4a');
     } else if (room === 'lounge') {
       this._startStream(`${BASE}Backbay%20Lounge.mp3`);
     } else if (room === 'myroom') {
@@ -628,7 +622,7 @@ export class SoundEngine {
     // mark this room so unlock() can restart the ambient once the context resumes.
     // HTML-audio rooms (lounge, myroom, cabin, alley) are already retried via
     // streamEl/loopEl in onUnlocked — only Web Audio rooms need the pending restart.
-    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'alley';
+    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'alley' && room !== 'hub';
     if (usesWebAudio && this.ctx && this.ctx.state !== 'running') {
       this._pendingRoomRestart = room;
     }
