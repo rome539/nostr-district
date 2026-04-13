@@ -286,6 +286,7 @@ export class ChatUI {
     const bubbleText = scene.add.text(bx, by - 10, displayText, {
       fontFamily: '"Courier New", monospace', fontSize: '12px', color: tint, align: 'center',
       backgroundColor: '#0a0014cc', padding: { x: 6, y: 4 },
+      wordWrap: { width: 220, useAdvancedWrap: true },
     });
     bubbleText.setOrigin(0.5); bubbleText.setDepth(91);
     bubbleText.setAlpha(0);

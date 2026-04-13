@@ -25,6 +25,13 @@ if (w.__nostr_district_started) {
   console.log('[Main] HMR reload detected, skipping login screen');
 } else {
 
+// Hide the SEO splash now that JS is running and the login screen will take over
+const seoSplash = document.getElementById('seo-splash');
+if (seoSplash) {
+  seoSplash.classList.add('hidden');
+  setTimeout(() => seoSplash.remove(), 700);
+}
+
 let game: Phaser.Game | null = null;
 let gameStarting = false;
 let loginInProgress = false;

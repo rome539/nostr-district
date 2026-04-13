@@ -21,6 +21,7 @@ export type PresenceCallback = {
   onAvatarUpdate?: (pubkey: string, avatar: string) => void;
   onNameUpdate?: (pubkey: string, name: string) => void;
   onStatusUpdate?: (pubkey: string, status: string) => void;
+  onOnlinePlayers?: (players: { pubkey: string; name: string; room: string }[]) => void;
 };
 
 // Global callbacks for room request system — persist across scene changes
@@ -102,7 +103,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'room_granted') onRoomGranted?.(msg.ownerPubkey, msg.ownerName, msg.room, msg.roomConfig);
       if (msg.type === 'room_denied') onRoomDenied?.(msg.reason);
       if (msg.type === 'room_kick') onRoomKick?.(msg.reason);
-      if (msg.type === 'online_players') onOnlinePlayers?.(msg.players);
+      if (msg.type === 'online_players') { onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
     } catch (e) {}
   };
 

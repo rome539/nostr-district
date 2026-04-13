@@ -12,18 +12,14 @@ import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
 import {
-  setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
-  sendAvatarUpdate, sendNameUpdate,
+  sendPosition, sendChat, sendRoomChange,
 } from '../nostr/presenceService';
-import { shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
 import { ChatUI } from '../ui/ChatUI';
-import { showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { ZapModal } from '../ui/ZapModal';
-import { EmoteSet, EMOTE_FLAVORS } from '../entities/EmoteSet';
 import { renderHubSprite } from '../entities/AvatarRenderer';
-import { deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
+import { getAvatar } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
 
 const CABIN_ACCENT = '#f0a030';
@@ -35,34 +31,8 @@ const FP_Y    = FLOOR_Y - 14;
 
 interface Ember { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; }
 
-interface OtherPlayer {
-  sprite: Phaser.GameObjects.Image;
-  nameText: Phaser.GameObjects.Text;
-  statusText: Phaser.GameObjects.Text;
-  targetX: number; targetY: number;
-  facingRight: boolean;
-  name: string; avatar?: string; status?: string;
-  clickZone?: Phaser.GameObjects.Zone;
-  emotes?: EmoteSet;
-  joinTime: number;
-  shown: boolean;
-}
-
 export class CabinScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
-  private targetX: number | null = null;
-  private isMoving = false;
-  private isKeyboardMoving = false;
-  private facingRight = true;
-  private playerY = FLOOR_Y + 8;
-  private walkTime = 0;
-  private walkFrame = 0;
-  private footTimer = 0;
-
-  private otherPlayers = new Map<string, OtherPlayer>();
-  private dyingSprites  = new Map<string, OtherPlayer>();
-
-  private emoteGraphics!: Phaser.GameObjects.Graphics;
 
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
   private smokeLayerGraphics!: Phaser.GameObjects.Graphics;
@@ -86,7 +56,7 @@ export class CabinScene extends BaseScene {
   private bookOverlay: HTMLElement | null = null;
 
   constructor() { super({ key: 'CabinScene' }); }
-  init(): void { this.emoteSet.stopAll(); this.isLeavingScene = false; }
+  init(): void { super.init(); }
 
   // ══════════════════════════════════════════════════════════════════
   // CREATE
@@ -165,73 +135,23 @@ export class CabinScene extends BaseScene {
       if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); return; }
       if (this.nearBookshelf) { this.showBookQuote(); return; }
     });
-    this.input.keyboard?.on('keydown-ESC', () => {
-      if (document.activeElement === this.chatInput) return;
-      if (this.hotkeyModal.isOpen()) { this.hotkeyModal.close(); return; }
-      if (this.bookOverlay) { this.closeBookOverlay(); return; }
-      if (this.handleCommonEsc()) return;
-      if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
-    });
-
-    setPresenceCallbacks({
-      onPlayerJoin: (p) => { if (p.pubkey === myPubkey || this.otherPlayers.has(p.pubkey) || this.isLeavingScene) return; this.addOtherPlayer(p.pubkey, p.name, p.x, p.y, (p as any).avatar, (p as any).status); sendAvatarUpdate(); },
-      onPlayerMove: (pk, x, y, f) => { const o = this.otherPlayers.get(pk); if (o) { o.targetX = x; o.targetY = y; if (f !== undefined) o.facingRight = f === 1; } },
-      onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
-      onCountUpdate: () => {},
-      onChat: (pk, name, text) => {
-
-        const isMe = pk === myPubkey;
-        if (text === '/stoke') {
-          if (!isMe && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); }
-          return;
-        }
-        if (text.startsWith('/emote ')) {
-          if (!isMe) {
-            const payload = text.slice(7);
-            const sep = payload.lastIndexOf('_');
-            const emoteName = payload.slice(0, sep);
-            const action    = payload.slice(sep + 1);
-            const o = this.otherPlayers.get(pk);
-            if (o && (action === 'on' || action === 'off')) {
-              if (!o.emotes) o.emotes = new EmoteSet();
-              if (action === 'on') {
-                o.emotes.start(emoteName);
-                const flavor = EMOTE_FLAVORS[emoteName];
-                if (flavor) { if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, flavor, P.dpurp, pk); }
-              } else { o.emotes.stop(emoteName); }
-            }
-          }
-          return;
-        }
-        if (this.handleRpsIncoming(pk, name, text)) return;
-        if (!isMe && mutedPlayers.has(pk)) return;
-        if (!isMe && shouldFilter(text)) return;
-        this.chatUI.addMessage(name, text, isMe ? CABIN_ACCENT : P.lpurp, pk);
-        if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
-        if (isMe) ChatUI.showBubble(this, this.player.x, this.player.y - 94, text, CABIN_ACCENT);
-        else { const o = this.otherPlayers.get(pk); if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y - 94, text, P.lpurp); }
-      },
-      onAvatarUpdate: (pk, avatarStr) => { const o = this.otherPlayers.get(pk); if (!o) return; o.avatar = avatarStr; const cfg = deserializeAvatar(avatarStr) || getDefaultAvatar(); const texKey = `avatar_hub_${pk}`; if (this.textures.exists(texKey)) this.textures.remove(texKey); this.textures.addCanvas(texKey, renderHubSprite(cfg)); o.sprite.setTexture(texKey).setTint(0xffffff); },
-      onNameUpdate: (pk, name) => { const o = this.otherPlayers.get(pk); if (o) { o.nameText.setText(name.slice(0, 14)); o.name = name; } },
-      onStatusUpdate: (pk, status) => { const o = this.otherPlayers.get(pk); if (o) { o.status = status; o.statusText.setText(status.slice(0, 30)); o.statusText.setAlpha(status ? 1 : 0); } },
-    });
+    this.setupEscHandler();
+    this.setupPresenceCallbacks(myPubkey);
     sendRoomChange('cabin', 140, this.playerY);
     this.setupRoomRequestHandlers();
     // Room-scoped player list arrives via the server's 'players' response to sendRoomChange.
     // Do NOT call requestOnlinePlayers() here — it returns all rooms and would ghost-populate the cabin.
 
-    const unsubProfile = authStore.subscribe(() => { const n = authStore.getState().displayName; if (n && n !== this.registry.get('playerName')) { this.registry.set('playerName', n); this.playerName?.setText(n.slice(0, 14)); sendNameUpdate(n); } });
+    this.setupProfileSubscription();
     this.cameras.main.fadeIn(350, 4, 2, 0);
     this.settingsPanel.create();
 
     this.events.on('shutdown', () => {
-      this.shutdownCommonPanels(unsubProfile);
+      this.shutdownCommonPanels();
       this.doorPromptBg?.destroy(); this.doorPromptText?.destroy(); this.doorPromptArrow?.destroy();
       this.fireplacePromptBg?.destroy(); this.fireplacePromptText?.destroy(); this.fireplacePromptArrow?.destroy();
       this.bookshelfPromptBg?.destroy(); this.bookshelfPromptText?.destroy(); this.bookshelfPromptArrow?.destroy();
       if (this.bookOverlay) { this.bookOverlay.remove(); this.bookOverlay = null; }
-      this.otherPlayers.forEach(o => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); });
-      this.otherPlayers.clear();
     });
   }
 
@@ -469,23 +389,7 @@ export class CabinScene extends BaseScene {
     this.playerStatusText.setPosition(this.player.x, this.player.y - 102);
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
-    this.otherPlayers.forEach(o => {
-      if (!o.shown) {
-        if (Date.now() - o.joinTime >= 500) {
-          o.sprite.x = o.targetX; o.sprite.y = this.playerY;
-          o.sprite.setAlpha(1); o.nameText.setAlpha(1); o.statusText.setAlpha(o.statusText.text ? 1 : 0);
-          o.shown = true;
-        } else { return; }
-      }
-      const dx = o.targetX - o.sprite.x;
-      if (Math.abs(dx) > 1) { o.sprite.x += dx * 0.12; o.facingRight = dx > 0; }
-      o.sprite.setFlipX(!o.facingRight);
-      o.nameText.setPosition(o.sprite.x, o.sprite.y - 90); o.statusText.setPosition(o.sprite.x, o.sprite.y - 102);
-      if (o.clickZone) o.clickZone.setPosition(o.sprite.x, o.sprite.y - 50);
-      o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, 'cabin');
-      o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
-      o.sprite.y = Math.abs(dx) > 3 ? this.playerY + Math.abs(Math.sin(time * Math.PI / 150)) * -2 : this.playerY;
-    });
+    this.updateOtherPlayers(time, delta);
   }
 
   private updateMovement(): void {
@@ -977,23 +881,37 @@ export class CabinScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   // OTHER PLAYERS
   // ══════════════════════════════════════════════════════════════════
-  private addOtherPlayer(pk: string, name: string, px: number, py: number, avatarStr?: string, status?: string): void {
-    const dying = this.dyingSprites.get(pk); if (dying) { this.tweens.killTweensOf([dying.sprite, dying.nameText, dying.statusText]); dying.sprite.destroy(); dying.nameText.destroy(); dying.statusText.destroy(); if (dying.clickZone) dying.clickZone.destroy(); this.dyingSprites.delete(pk); }
-    const texKey = `avatar_hub_${pk}`; const cfg = avatarStr ? (deserializeAvatar(avatarStr) || getDefaultAvatar()) : getDefaultAvatar();
-    if (this.textures.exists(texKey)) this.textures.remove(texKey); this.textures.addCanvas(texKey, renderHubSprite(cfg));
-    const sp = this.add.image(px, py, texKey).setOrigin(0.5, 1).setScale(2).setDepth(8);
-    if (!avatarStr) { const h = name.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0); sp.setTint([0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8][h % 5]); }
-    const nt = this.add.text(px, py - 90, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(9);
-    const ss = (status || '').slice(0, 30); const st = this.add.text(px, py - 102, ss, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(9).setAlpha(ss ? 1 : 0);
-    const cz = this.add.zone(px, py - 28, 40, 60).setInteractive({ useHandCursor: true }).setDepth(12);
-    cz.on('pointerdown', (ptr: Phaser.Input.Pointer) => { if ((ptr.event.target as HTMLElement)?.tagName !== 'CANVAS') return; ptr.event.stopPropagation(); const op2 = this.otherPlayers.get(pk); showPlayerMenu(pk, name.slice(0, 14), ptr.x, ptr.y, { onChat: (t, c) => this.chatUI.addMessage('system', t, c), getDMPanel: () => this.dmPanel }, op2?.avatar, op2?.status); });
-    sp.setAlpha(0); nt.setAlpha(0); st.setAlpha(0);
-    this.otherPlayers.set(pk, { sprite: sp, nameText: nt, statusText: st, targetX: px, targetY: py, facingRight: true, name, avatar: avatarStr, status: status || '', clickZone: cz, joinTime: Date.now(), shown: false });
+  protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
+  protected override getBubbleYOffset(): number { return -94; }
+  protected override onPlayerJoinGuard(_p: { pubkey: string }): boolean { return !this.isLeavingScene; }
+  protected override handleSceneChatCommand(_pk: string, _name: string, text: string, isMe: boolean): boolean {
+    if (text === '/stoke') {
+      if (!isMe && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); }
+      return true;
+    }
+    return false;
+  }
+  protected override handleSceneEsc(): boolean {
+    if (this.bookOverlay) { this.closeBookOverlay(); return true; }
+    return false;
+  }
+  protected override onEscFallthrough(): void {
+    if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
   }
 
-  private removeOtherPlayer(pk: string): void {
-    const o = this.otherPlayers.get(pk); if (!o) return; this.otherPlayers.delete(pk); this.dyingSprites.set(pk, o);
-    this.tweens.add({ targets: [o.sprite, o.nameText, o.statusText], alpha: 0, duration: 300, onComplete: () => { o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy(); this.dyingSprites.delete(pk); } });
+  protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
+    return {
+      texKeyPrefix: 'avatar_hub_', scale: 2,
+      nameYOffset: -90, statusYOffset: -102,
+      nameColor: CABIN_ACCENT, nameFontSize: '9px', statusFontSize: '8px',
+      nameBg: '#04081088', namePadding: { x: 3, y: 1 },
+      czW: 40, czH: 60, czYOffset: -50,
+      tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8],
+      useFadeIn: true, interpolateY: false, emoteContext: 'cabin',
+    };
+  }
+  protected override renderOtherAvatar(cfg: import('../stores/avatarStore').AvatarConfig): HTMLCanvasElement {
+    return renderHubSprite(cfg);
   }
 
   // ══════════════════════════════════════════════════════════════════

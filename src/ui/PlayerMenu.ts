@@ -53,6 +53,7 @@ export function unmutePlayer(pubkey: string): void {
 interface MenuCallbacks {
   onChat: (text: string, color: string) => void;
   getDMPanel?: () => DMPanel | null;
+  onMuteChange?: (pubkey: string, muted: boolean) => void;
 }
 
 export function showPlayerMenu(
@@ -140,9 +141,11 @@ export function showPlayerMenu(
     if (mutedPlayers.has(pubkey)) {
       unmutePlayer(pubkey);
       callbacks.onChat(`Unmuted ${name}`, P.teal);
+      callbacks.onMuteChange?.(pubkey, false);
     } else {
       mutePlayer(pubkey, name);
       callbacks.onChat(`Muted ${name}`, P.amber);
+      callbacks.onMuteChange?.(pubkey, true);
     }
   });
 
