@@ -11,17 +11,20 @@ import { AlleyScene } from './scenes/AlleyScene';
 import { SoundEngine } from './audio/SoundEngine';
 import './stores/themeStore'; // init theme CSS vars early
 
-// Unlock the AudioContext on the first user gesture anywhere on the page.
-// Mobile browsers (iOS Safari, Android Chrome) start AudioContext suspended
-// and silently drop all .play() / bufferSource.start() calls until a real
-// touch or click event calls ctx.resume(). By wiring this to the login button
-// tap we ensure audio is live the moment the game scene starts.
+// Unlock the AudioContext on user gestures. Mobile browsers start AudioContext
+// suspended; ctx.resume() only works inside a real gesture handler. We keep
+// retrying on every touchend/click until audioUnlocked is confirmed — touchstart
+// is unreliable on iOS Safari for this purpose.
 {
   const unlockAudio = () => {
     SoundEngine.get().unlock();
+    if (SoundEngine.get().audioUnlocked) {
+      document.removeEventListener('touchend', unlockAudio);
+      document.removeEventListener('click',    unlockAudio);
+    }
   };
-  document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
-  document.addEventListener('click',      unlockAudio, { once: true });
+  document.addEventListener('touchend', unlockAudio, { passive: true });
+  document.addEventListener('click',    unlockAudio);
 }
 import {
   loginWithExtension,

@@ -55,26 +55,31 @@ export class SoundEngine {
     if (saved === 'off' || MYROOM_TRACKS.some(t => t.id === saved)) this._myRoomTrack = saved!;
   }
 
+  get audioUnlocked(): boolean { return this._audioUnlocked; }
+
   /**
-   * Must be called once from a user-gesture handler (touchstart / click).
-   * Resumes the AudioContext and retries any HTML audio that failed to autoplay.
-   * On mobile browsers the AudioContext starts suspended and cannot play until
-   * this is called inside a real gesture event.
+   * Call from every user-gesture handler until audioUnlocked is true.
+   * Does NOT guard on _audioUnlocked — touchstart can fail silently on iOS
+   * so we keep retrying on every gesture (touchend, click, pointerdown) until
+   * ctx.state confirms 'running'.
    */
   unlock(): void {
-    if (this._audioUnlocked) return;
-    this._audioUnlocked = true;
-    // Eagerly create AND resume the AudioContext while we're inside a gesture
-    // handler. On mobile, ctx.resume() only works from within a real touch/click
-    // event. Calling ac() here ensures the context is born running — not
-    // suspended — so all subsequent audio (including non-gesture scene loads) works.
-    this.ac();
-    // Retry any HTML <audio> elements whose autoplay was blocked
-    if (this.streamEl && this.streamEl.paused) {
-      this.streamEl.play().catch(() => {});
-    }
-    if (this._loopEl && this._loopEl.paused) {
-      this._loopEl.play().catch(() => {});
+    const ctx = this.ac(); // create context now while inside a gesture handler
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+        .then(() => {
+          if (ctx.state === 'running') {
+            this._audioUnlocked = true;
+            // Retry HTML audio that had its .play() blocked
+            if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
+            if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
+          }
+        })
+        .catch(() => {});
+    } else if (ctx.state === 'running') {
+      this._audioUnlocked = true;
+      if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
+      if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
     }
   }
 

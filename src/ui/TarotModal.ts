@@ -291,11 +291,17 @@ export const TarotModal = {
     // Stop 2s after last card flips (last flip at 600 + 2*180 = 960ms)
     setTimeout(() => SoundEngine.get().stopFileSounds(), 960 + 2000);
 
+    const isTouch = 'ontouchstart' in window;
+    // Responsive card size — 3 cards must fit in viewport width with gaps + padding
+    const cardW = isTouch ? Math.max(72, Math.floor((Math.min(window.innerWidth, window.innerHeight) - 80) / 3)) : 130;
+    const cardH = Math.round(cardW * (210 / 130));
+
     overlay = document.createElement('div');
     overlay.style.cssText = `
       position:fixed; inset:0; z-index:9000;
       background:rgba(2,1,14,0.95);
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      display:flex; flex-direction:column; align-items:center;
+      justify-content:flex-start; overflow-y:auto; padding:12px 8px 24px;
       font-family:"Courier New",monospace;
       animation:trFade 0.35s ease;
     `;
@@ -315,14 +321,20 @@ export const TarotModal = {
 
     const box = document.createElement('div');
     box.style.cssText = `
-      width:max-content; max-width:94vw;
-      min-width:780px;
+      width:min(780px,100%); max-width:100%;
       background:linear-gradient(160deg,#0e0828 0%,#130c34 60%,#0a0620 100%);
       border:1px solid #5533aa66;
-      border-radius:12px; padding:28px 24px 22px;
-      text-align:center; position:relative; overflow:hidden;
+      border-radius:12px; padding:${isTouch ? '16px 12px 18px' : '28px 24px 22px'};
+      text-align:center; position:relative;
       box-shadow:0 18px 48px rgba(0,0,0,0.45);
     `;
+
+    // Always-visible close button at the top-right — bottom close is unreachable on mobile
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = `position:absolute;top:10px;right:12px;background:none;border:1px solid #5533aa44;border-radius:4px;color:#8866cc;font-family:"Courier New",monospace;font-size:13px;padding:4px 9px;cursor:pointer;z-index:1;-webkit-tap-highlight-color:transparent;`;
+    closeBtn.addEventListener('click', () => TarotModal.destroy());
+    box.appendChild(closeBtn);
 
     // Title
     const title = document.createElement('div');
@@ -351,7 +363,7 @@ export const TarotModal = {
 
       const slot = document.createElement('div');
       slot.style.cssText = `
-        display:flex; flex-direction:column; align-items:center; width:130px;
+        display:flex; flex-direction:column; align-items:center; width:${cardW}px;
         animation: trDeal 0.45s ${0.08 + i * 0.18}s ease both;
       `;
 
@@ -364,7 +376,7 @@ export const TarotModal = {
       // Card image wrapper (handles reversed flip)
       const imgWrap = document.createElement('div');
       imgWrap.style.cssText = `
-        width:130px; height:210px; position:relative; border-radius:8px; overflow:hidden;
+        width:${cardW}px; height:${cardH}px; position:relative; border-radius:8px; overflow:hidden;
         background:${st.border}22;
         border:2px solid ${st.border}99;
         box-shadow:inset 0 0 0 1px ${st.border}55, 0 0 16px 4px ${st.border}1a, 0 4px 24px rgba(0,0,0,0.6);
@@ -480,9 +492,8 @@ export const TarotModal = {
     }
 
     const hint = document.createElement('div');
-    hint.textContent = '[ESC] or click to close';
-    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
-    hint.onclick = () => TarotModal.destroy();
+    hint.textContent = isTouch ? 'tap ✕ to close' : '[ESC] or click outside to close';
+    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;margin-top:10px;';
     box.appendChild(hint);
 
     overlay.appendChild(box);

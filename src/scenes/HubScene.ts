@@ -330,6 +330,45 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       (pk) => this.requestRoomAccess(pk),
     );
   }
+  private showMobileRoomSheet(): void {
+    const myPk = this.registry.get('playerPubkey');
+    const myName = this.registry.get('playerName') || 'My Room';
+
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:4000;display:flex;gap:10px;pointer-events:auto;';
+
+    const makeBtn = (label: string, color: string, border: string) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `background:${color};border:1px solid ${border};border-radius:8px;color:#fff;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;padding:12px 20px;cursor:pointer;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.6);`;
+      return b;
+    };
+
+    const myRoomBtn  = makeBtn('→ My Room',     'rgba(30,80,60,0.92)',  '#5dca9988');
+    const visitBtn   = makeBtn('Visit a Room',  'rgba(30,20,60,0.92)',  '#9b7fe888');
+    const cancelBtn  = makeBtn('✕',             'rgba(20,10,40,0.85)',  '#ffffff22');
+    cancelBtn.style.padding = '12px 14px';
+
+    sheet.appendChild(myRoomBtn);
+    sheet.appendChild(visitBtn);
+    sheet.appendChild(cancelBtn);
+    document.body.appendChild(sheet);
+
+    const dismiss = () => sheet.remove();
+
+    myRoomBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dismiss();
+      this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk);
+    });
+    visitBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dismiss();
+      this.showPlayerPicker();
+    });
+    cancelBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); dismiss(); });
+  }
+
   private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
   private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
     if (this.isLeavingScene) return;
@@ -631,7 +670,16 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;
-    if (this.nearBuilding.id === 'myroom') { this.showPlayerPicker(); return; }
+    if (this.nearBuilding.id === 'myroom') {
+      if (this.sys.game.device.input.touch) {
+        // Mobile: show a compact 2-button sheet so own room = 1 more tap
+        // while still allowing visits. Full picker is 3 taps; this is 2.
+        this.showMobileRoomSheet();
+      } else {
+        this.showPlayerPicker();
+      }
+      return;
+    }
     this.enterRoom(this.nearBuilding.id, this.nearBuilding.name, this.nearBuilding.neonColor);
   }
 
