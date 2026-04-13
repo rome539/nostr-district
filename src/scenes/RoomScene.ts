@@ -52,7 +52,9 @@ export class RoomScene extends BaseScene {
   private readonly roomGrantedHandler = (op: string, on: string, room: string, roomConfig?: string) => {
     this.waitingForAccess = false;
     this.chatUI.addMessage('system', `${on} accepted!`, P.teal);
-    sendRoomChange('hub');
+    // Do NOT sendRoomChange('hub') here — that subscribes to hub's presence channel
+    // and causes hub players to appear as ghosts in the destination room.
+    // The new RoomScene will call sendRoomChange(room) in its own create().
     this.scene.start('RoomScene', { id: room, name: `${on}'s Room`, neonColor: P.teal, ownerPubkey: op, ownerRoomConfig: roomConfig });
   };
   private readonly roomDeniedHandler = (r: string) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); };
@@ -80,6 +82,7 @@ export class RoomScene extends BaseScene {
   private relayUpdateTimer = 0;
   private globalPlayerCount = 1;
   private isLeavingRoom = false;
+  private backBtnEl: HTMLButtonElement | null = null;
 
   constructor() { super({ key: 'RoomScene' }); }
 
@@ -262,6 +265,7 @@ export class RoomScene extends BaseScene {
       if (this.introOverlay) { this.introOverlay.destroy(); this.introOverlay = null; }
       if (this.introText) { this.introText.destroy(); this.introText = null; }
       if (this.toastEl) { this.toastEl.remove(); this.toastEl = null; }
+      if (this.backBtnEl) { this.backBtnEl.remove(); this.backBtnEl = null; }
       this.feedNotes.forEach(n => { n.npubText?.destroy(); n.msgText?.destroy(); });
       this.feedNotes = [];
       this.relayStatusLines.forEach(l => { l.dot.destroy(); l.lat.destroy(); });
@@ -739,15 +743,21 @@ export class RoomScene extends BaseScene {
     this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY - 165, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
   }
   private createBackButton(): void {
-    const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
+    const nc = this.roomConfig.neonColor;
+    // Phaser visual only — not interactive (HTML button handles all taps/clicks)
+    const bg = this.add.graphics();
     bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(16, 6, 150, 28, 6);
     bg.lineStyle(1, hexToNum(nc), 0.3); bg.strokeRoundedRect(16, 6, 150, 28, 6); bg.setDepth(99).setScrollFactor(0);
     const btn = this.add.text(91, 20, '\u2190 Back to District', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: nc, align: 'center' }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
-    // Use a zone for the hit area — text bounds alone are too small for mobile touch
-    const hitZone = this.add.zone(91, 20, 160, 36).setDepth(101).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    hitZone.on('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
-    hitZone.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
-    hitZone.on('pointerdown', () => this.leaveRoom());
+    // Transparent HTML overlay — Phaser Zone + setInteractive is unreliable on mobile touch.
+    // A real DOM element at fixed position is guaranteed to receive pointer events.
+    const el = document.createElement('button');
+    this.backBtnEl = el;
+    el.style.cssText = 'position:fixed;top:0;left:0;width:190px;height:44px;background:transparent;border:none;outline:none;cursor:pointer;z-index:500;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;';
+    el.addEventListener('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
+    el.addEventListener('pointerout',  () => { btn.setColor(nc); btn.setScale(1); });
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); this.leaveRoom(); });
+    document.body.appendChild(el);
     this.setupEscHandler();
   }
   private createRoomLabel(): void {
@@ -761,6 +771,7 @@ export class RoomScene extends BaseScene {
   private leaveRoom(): void {
     if (this.isLeavingRoom) return;
     this.isLeavingRoom = true;
+    this.backBtnEl?.remove(); this.backBtnEl = null;
     this.waitingForAccess = false;
     // Stop accepting new player joins before broadcasting hub presence
     // so hub players don't flash as ghosts during the fade-out

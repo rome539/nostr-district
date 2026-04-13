@@ -64,9 +64,11 @@ export class SoundEngine {
   unlock(): void {
     if (this._audioUnlocked) return;
     this._audioUnlocked = true;
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
+    // Eagerly create AND resume the AudioContext while we're inside a gesture
+    // handler. On mobile, ctx.resume() only works from within a real touch/click
+    // event. Calling ac() here ensures the context is born running — not
+    // suspended — so all subsequent audio (including non-gesture scene loads) works.
+    this.ac();
     // Retry any HTML <audio> elements whose autoplay was blocked
     if (this.streamEl && this.streamEl.paused) {
       this.streamEl.play().catch(() => {});
@@ -551,7 +553,13 @@ export class SoundEngine {
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
-      this._startStreamGapless('/assets/audio/hub-ambient.ogg', 'hub');
+      // OGG is not supported on iOS Safari — fall back to synthesized ambient
+      const canOgg = document.createElement('audio').canPlayType('audio/ogg; codecs=vorbis') !== '';
+      if (canOgg) {
+        this._startStreamGapless('/assets/audio/hub-ambient.ogg', 'hub');
+      } else {
+        this._startAmbient('hub'); // oscillator-based fallback
+      }
       return;
     } else if (room === 'woods') {
       this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
