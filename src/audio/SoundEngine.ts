@@ -45,6 +45,8 @@ export class SoundEngine {
   private _audioUnlocked = false;
   // Room to restart after the AudioContext unlocks (set when setRoom is called while context is suspended)
   private _pendingRoomRestart: RoomId | null = null;
+  // Silent looping source that keeps the AudioContext from being auto-suspended by iOS
+  private _keepAliveNode: AudioBufferSourceNode | null = null;
 
   private constructor() {
     try {
@@ -81,6 +83,20 @@ export class SoundEngine {
 
     const onUnlocked = () => {
       this._audioUnlocked = true;
+      // Keep-alive: loop a 1-second silent buffer so iOS never auto-suspends the
+      // AudioContext after a period of silence. This prevents hub oscillators and
+      // SFX from going dead between interactions.
+      if (!this._keepAliveNode) {
+        try {
+          const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.loop = true;
+          src.connect(ctx.destination); // bypass masterGain — it's truly silent
+          src.start();
+          this._keepAliveNode = src;
+        } catch {}
+      }
       // Retry HTML audio elements that had their .play() blocked
       if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
       if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
@@ -592,9 +608,11 @@ export class SoundEngine {
       this._startLoopEl('/assets/audio/cabin-fire.m4a', 2.5);
       if (this._loopEl) this._loopEl.volume = 0;
     } else if (room === 'cabin') {
-      this._startStreamGapless('/assets/audio/cabin-fire.m4a', 'cabin', undefined, 3.0);
+      // Use HTML Audio — more reliable than Web Audio on iOS Safari
+      this._startStream('/assets/audio/cabin-fire.m4a');
     } else if (room === 'alley') {
-      this._startStreamGapless('/assets/audio/rain-alley.mp3', 'alley', 7);
+      // Use HTML Audio — more reliable than Web Audio on iOS Safari
+      this._startStream('/assets/audio/rain-alley.mp3');
     } else if (room === 'lounge') {
       this._startStream(`${BASE}Backbay%20Lounge.mp3`);
     } else if (room === 'myroom') {
@@ -608,8 +626,10 @@ export class SoundEngine {
 
     // If the AudioContext isn't running yet (mobile browsers start it suspended),
     // mark this room so unlock() can restart the ambient once the context resumes.
-    // HTML-audio rooms (lounge, myroom) are already retried via streamEl/loopEl in onUnlocked.
-    if (room !== 'lounge' && room !== 'myroom' && this.ctx && this.ctx.state !== 'running') {
+    // HTML-audio rooms (lounge, myroom, cabin, alley) are already retried via
+    // streamEl/loopEl in onUnlocked — only Web Audio rooms need the pending restart.
+    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'alley';
+    if (usesWebAudio && this.ctx && this.ctx.state !== 'running') {
       this._pendingRoomRestart = room;
     }
   }
