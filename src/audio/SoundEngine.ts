@@ -605,8 +605,7 @@ export class SoundEngine {
       // Use HTML Audio — more reliable than Web Audio on iOS Safari
       this._startStream('/assets/audio/cabin-fire.m4a');
     } else if (room === 'alley') {
-      // Use HTML Audio — more reliable than Web Audio on iOS Safari
-      this._startStream('/assets/audio/rain-alley.m4a');
+      this._startStreamGapless('/assets/audio/rain-alley.m4a', 'alley');
     } else if (room === 'lounge') {
       this._startStream(`${BASE}Backbay%20Lounge.mp3`);
     } else if (room === 'myroom') {
@@ -622,7 +621,7 @@ export class SoundEngine {
     // mark this room so unlock() can restart the ambient once the context resumes.
     // HTML-audio rooms (lounge, myroom, cabin, alley) are already retried via
     // streamEl/loopEl in onUnlocked — only Web Audio rooms need the pending restart.
-    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'alley' && room !== 'hub';
+    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'hub';
     if (usesWebAudio && this.ctx && this.ctx.state !== 'running') {
       this._pendingRoomRestart = room;
     }
