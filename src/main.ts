@@ -9,22 +9,40 @@ import { WoodsScene } from './scenes/WoodsScene';
 import { CabinScene } from './scenes/CabinScene';
 import { AlleyScene } from './scenes/AlleyScene';
 import { SoundEngine } from './audio/SoundEngine';
+import { disconnectPresence } from './nostr/presenceService';
 import './stores/themeStore'; // init theme CSS vars early
+
+// Graceful disconnect when the page is actually unloaded (tab close, navigate away).
+// e.persisted = true means the page entered the back-forward cache (iOS bfcache) —
+// we skip disconnect in that case so returning users reconnect cleanly.
+// Mobile app-kills that bypass this are caught by the server heartbeat instead.
+window.addEventListener('pagehide', (e) => {
+  if (!e.persisted) disconnectPresence();
+});
 
 // Unlock the AudioContext on user gestures. Mobile browsers start AudioContext
 // suspended; ctx.resume() only works inside a real gesture handler. We keep
-// retrying on every touchend/click until audioUnlocked is confirmed — touchstart
-// is unreliable on iOS Safari for this purpose.
+// retrying on every touchend/click/pointerdown until audioUnlocked is confirmed —
+// touchstart is unreliable on iOS Safari for this purpose.
 {
   const unlockAudio = () => {
     SoundEngine.get().unlock();
     if (SoundEngine.get().audioUnlocked) {
-      document.removeEventListener('touchend', unlockAudio);
-      document.removeEventListener('click',    unlockAudio);
+      document.removeEventListener('touchend',   unlockAudio, false);
+      document.removeEventListener('click',      unlockAudio, false);
+      document.removeEventListener('pointerdown',unlockAudio, false);
     }
   };
-  document.addEventListener('touchend', unlockAudio, { passive: true });
-  document.addEventListener('click',    unlockAudio);
+  document.addEventListener('touchend',    unlockAudio, { passive: true });
+  document.addEventListener('click',       unlockAudio);
+  document.addEventListener('pointerdown', unlockAudio, { passive: true });
+
+  // When the tab returns to foreground the AudioContext may have been suspended
+  // by the browser. Attempt a resume — works without a gesture on Android Chrome;
+  // on iOS the next user touch will handle it via the listeners above.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) SoundEngine.get().unlock();
+  });
 }
 import {
   loginWithExtension,

@@ -16,7 +16,30 @@ const players = new Map<string, Player>();
 const wss = new WebSocketServer({ port: 3100 });
 console.log('[Presence] Server running on ws://localhost:3100');
 
+// Track which connections have responded to the last ping.
+// When a mobile client kills the app without sending a close frame the OS drops
+// the TCP connection silently; the heartbeat detects that within 30 s and calls
+// ws.terminate(), which triggers the existing ws.on('close') cleanup logic.
+const aliveConns = new WeakSet<WebSocket>();
+
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (!aliveConns.has(ws)) {
+      // No pong since last ping — connection is dead
+      ws.terminate(); // emits 'close', triggering the cleanup handler below
+      return;
+    }
+    aliveConns.delete(ws); // mark as pending until next pong
+    ws.ping();
+  });
+}, 30_000);
+
+wss.on('close', () => clearInterval(heartbeatInterval));
+
 wss.on('connection', (ws) => {
+  aliveConns.add(ws);          // treat as alive on first connect
+  ws.on('pong', () => aliveConns.add(ws)); // re-mark alive on each pong
+
   let myPubkey: string | null = null;
 
   ws.on('message', (raw) => {

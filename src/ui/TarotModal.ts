@@ -331,13 +331,6 @@ export const TarotModal = {
       box-shadow:0 18px 48px rgba(0,0,0,0.45);
     `;
 
-    // ✕ button at top-right — always reachable even before scrolling
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `position:sticky;top:0;float:right;margin:-8px -8px 0 0;background:none;border:1px solid #5533aa44;border-radius:4px;color:#8866cc;font-family:"Courier New",monospace;font-size:13px;padding:4px 9px;cursor:pointer;z-index:1;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
-    closeBtn.addEventListener('click', () => TarotModal.destroy());
-    box.appendChild(closeBtn);
-
     // Title
     const title = document.createElement('div');
     title.textContent = '✦ THE CARDS SPEAK ✦';

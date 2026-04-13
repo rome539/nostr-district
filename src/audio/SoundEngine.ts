@@ -43,6 +43,8 @@ export class SoundEngine {
   private _muted = false;
   private _myRoomTrack: MyRoomTrackId = 'off';
   private _audioUnlocked = false;
+  // Room to restart after the AudioContext unlocks (set when setRoom is called while context is suspended)
+  private _pendingRoomRestart: RoomId | null = null;
 
   private constructor() {
     try {
@@ -65,21 +67,40 @@ export class SoundEngine {
    */
   unlock(): void {
     const ctx = this.ac(); // create context now while inside a gesture handler
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-        .then(() => {
-          if (ctx.state === 'running') {
-            this._audioUnlocked = true;
-            // Retry HTML audio that had its .play() blocked
-            if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
-            if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
-          }
-        })
-        .catch(() => {});
-    } else if (ctx.state === 'running') {
+
+    // Play a 1-sample silent buffer — required to properly unlock iOS AudioContext.
+    // ctx.resume() alone is sometimes rejected silently on iOS Safari; starting
+    // an actual AudioBufferSourceNode inside the gesture handler is more reliable.
+    try {
+      const silentBuf = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const silentSrc = ctx.createBufferSource();
+      silentSrc.buffer = silentBuf;
+      silentSrc.connect(ctx.destination);
+      silentSrc.start(0);
+    } catch {}
+
+    const onUnlocked = () => {
       this._audioUnlocked = true;
+      // Retry HTML audio elements that had their .play() blocked
       if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
       if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
+      // Restart Web Audio ambient that was set up while the context was suspended.
+      // Buffer sources and oscillators started while suspended don't reliably resume
+      // on iOS Safari, so we tear down and rebuild the ambient now that context is running.
+      if (this._pendingRoomRestart) {
+        const room = this._pendingRoomRestart;
+        this._pendingRoomRestart = null;
+        this.currentRoom = ''; // reset so setRoom() won't bail on the equality check
+        this.setRoom(room);
+      }
+    };
+
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+        .then(() => { if (ctx.state === 'running') onUnlocked(); })
+        .catch(() => {});
+    } else if (ctx.state === 'running') {
+      onUnlocked();
     }
   }
 
@@ -555,6 +576,7 @@ export class SoundEngine {
   setRoom(room: RoomId | ''): void {
     if (room === this.currentRoom) return;
     this._stopAmbient();
+    this._pendingRoomRestart = null; // clear stale pending from previous room
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
@@ -565,7 +587,6 @@ export class SoundEngine {
       } else {
         this._startAmbient('hub'); // oscillator-based fallback
       }
-      return;
     } else if (room === 'woods') {
       this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
       this._startLoopEl('/assets/audio/cabin-fire.m4a', 2.5);
@@ -583,6 +604,13 @@ export class SoundEngine {
       }
     } else {
       this._startAmbient(room);
+    }
+
+    // If the AudioContext isn't running yet (mobile browsers start it suspended),
+    // mark this room so unlock() can restart the ambient once the context resumes.
+    // HTML-audio rooms (lounge, myroom) are already retried via streamEl/loopEl in onUnlocked.
+    if (room !== 'lounge' && room !== 'myroom' && this.ctx && this.ctx.state !== 'running') {
+      this._pendingRoomRestart = room;
     }
   }
 

@@ -29,7 +29,7 @@ export class PlayerPicker {
     `;
     document.body.appendChild(this.el);
 
-    this.el.querySelector('.pp-mine')!.addEventListener('click', () => { this.close(); onMyRoom(); });
+    this.el.querySelector('.pp-mine')!.addEventListener('pointerdown', (e) => { e.preventDefault(); this.close(); onMyRoom(); });
     this.el.querySelector('.pp-cancel')!.addEventListener('click', () => this.close());
 
     this.kbHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); this.close(); } };
