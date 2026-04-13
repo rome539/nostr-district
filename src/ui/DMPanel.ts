@@ -1041,6 +1041,10 @@ export class DMPanel {
         color: var(--nd-subtext); font-size: 13px; text-align: center;
         padding: 30px 20px; line-height: 1.5; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
       }
+      /* Prevent iOS Safari auto-zoom: inputs must be ≥16px on touch devices */
+      @media (hover: none) and (pointer: coarse) {
+        .dm-input { font-size: 16px; }
+      }
     `;
     document.head.appendChild(style);
   }

@@ -13,16 +13,19 @@
  */
 
 /**
- * In production (Cloudflare Pages), route relay connections through the
- * /api/relay proxy so relay operators can't see user IP addresses.
- * In dev (localhost / file://) connect directly.
+ * Route relay connections through the presence server's /api/relay proxy so
+ * relay operators see the server's IP instead of the user's.
+ * Dev: connect directly. Prod: proxy through the Railway presence server.
  */
+const RELAY_PROXY_BASE = import.meta.env.PROD
+  ? 'wss://nostr-district-production.up.railway.app'
+  : null;
+
 function proxyUrl(relayWss: string): string {
   const host = window.location.hostname;
   const isDev = host === 'localhost' || host === '127.0.0.1' || host === '';
-  if (isDev) return relayWss;
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/api/relay?relay=${encodeURIComponent(relayWss)}`;
+  if (isDev || !RELAY_PROXY_BASE) return relayWss;
+  return `${RELAY_PROXY_BASE}/api/relay?relay=${encodeURIComponent(relayWss)}`;
 }
 
 // ── The relay lists NYM uses for reliable DM delivery ──

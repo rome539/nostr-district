@@ -1,3 +1,4 @@
+import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 
 interface Player {
@@ -12,7 +13,71 @@ interface Player {
 }
 
 const players = new Map<string, Player>();
-const wss = new WebSocketServer({ port: 3100 });
+
+// HTTP server — handles both presence WebSocket upgrades and the /api/relay proxy
+const httpServer = http.createServer((_req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Nostr District presence server');
+});
+
+// Presence WebSocket (attached to the HTTP server, not its own port)
+const wss = new WebSocketServer({ noServer: true });
+
+const PORT = process.env.PORT || 3100;
+httpServer.listen(PORT, () => {
+  console.log(`[Presence] Server running on port ${PORT}`);
+});
+
+// Route incoming WebSocket upgrades by path
+httpServer.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
+
+  if (url.pathname === '/api/relay') {
+    // ── NIP-17 relay proxy ────────────────────────────────────────────────
+    // Proxies client connections to an upstream Nostr relay so relay
+    // operators see this server's IP instead of the end-user's IP.
+    const targetRelay = url.searchParams.get('relay');
+    if (!targetRelay) { socket.destroy(); return; }
+
+    let upstream: WebSocket;
+    try {
+      upstream = new WebSocket(targetRelay);
+    } catch {
+      socket.destroy();
+      return;
+    }
+
+    // Complete the WS upgrade for the client AFTER upstream opens (or bail)
+    upstream.once('open', () => {
+      wss.handleUpgrade(req, socket, head, (client) => {
+        // Client → upstream
+        client.on('message', (data) => {
+          if (upstream.readyState === WebSocket.OPEN) upstream.send(data);
+        });
+        // Upstream → client
+        upstream.on('message', (data) => {
+          if (client.readyState === WebSocket.OPEN) client.send(data);
+        });
+        // Tear-down both sides on close/error
+        const closeAll = () => {
+          try { client.close(); } catch { /* noop */ }
+          try { upstream.close(); } catch { /* noop */ }
+        };
+        client.on('close', closeAll);
+        client.on('error', closeAll);
+        upstream.on('close', closeAll);
+        upstream.on('error', closeAll);
+      });
+    });
+
+    upstream.once('error', () => socket.destroy());
+  } else {
+    // ── Presence connections ──────────────────────────────────────────────
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  }
+});
 
 console.log('[Presence] Server running on ws://localhost:3100');
 

@@ -83,6 +83,7 @@ export class CabinScene extends BaseScene {
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
+    this.setupMobileCamera();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
@@ -96,6 +97,7 @@ export class CabinScene extends BaseScene {
     this.snd.setRoom('cabin');
     this.chatUI = new ChatUI();
     this.chatInput = this.chatUI.create('Chat in the cabin...', CABIN_ACCENT, (cmd) => this.handleCommand(cmd));
+    this.createMobileControls();
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
 
     this.setupRegistryPanels(myPubkey);
@@ -396,6 +398,7 @@ export class CabinScene extends BaseScene {
     const CABIN_SPEED = PLAYER_SPEED * 1.5;
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
     if (c) { if (c.left.isDown) vx = -CABIN_SPEED; else if (c.right.isDown) vx = CABIN_SPEED; }
+    if (vx === 0) { if (this.mobileLeft) vx = -CABIN_SPEED; else if (this.mobileRight) vx = CABIN_SPEED; }
     this.isKeyboardMoving = vx !== 0;
     if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
     else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * CABIN_SPEED / 60; this.facingRight = dx > 0; } }

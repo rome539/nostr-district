@@ -113,6 +113,7 @@ export class WoodsScene extends BaseScene {
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
+    this.setupMobileCamera();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < FLOOR_Y - 10 || p.y > 455) return; if (wx < DOCK_X) return; this.targetX = Phaser.Math.Clamp(wx, DOCK_X, W - 20); this.isMoving = true; });
 
@@ -120,6 +121,7 @@ export class WoodsScene extends BaseScene {
     this.snd.setRoom('woods');
     this.chatUI = new ChatUI();
     this.chatInput = this.chatUI.create('Chat in the woods...', WOODS_ACCENT, (cmd) => this.handleCommand(cmd));
+    this.createMobileControls();
     this.chatUI.setNameClickHandler((pubkey, name) => { const op = this.otherPlayers.get(pubkey); ProfileModal.show(pubkey, name, op?.avatar, op?.status); });
 
     this.setupRegistryPanels(myPubkey);
@@ -626,6 +628,7 @@ export class WoodsScene extends BaseScene {
   private updateMovement(): void {
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
     if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
+    if (vx === 0) { if (this.mobileLeft) vx = -PLAYER_SPEED; else if (this.mobileRight) vx = PLAYER_SPEED; }
     this.isKeyboardMoving = vx !== 0;
     if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
     else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } }

@@ -265,7 +265,7 @@ export class GifPicker {
     s.id = 'gp-styles';
     s.textContent = `
       .gp {
-        position:fixed;z-index:5000;width:300px;
+        position:fixed;z-index:5000;width:min(300px,calc(100vw - 16px));
         background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
         border:1px solid color-mix(in srgb,var(--nd-text) 12%,transparent);border-radius:10px;
         box-shadow:0 -4px 24px rgba(0,0,0,0.8);
@@ -299,7 +299,7 @@ export class GifPicker {
       .gp-search-input:focus,.gp-memes-input:focus { border-color:color-mix(in srgb,var(--nd-accent) 65%,transparent); }
       .gp-search-input::placeholder,.gp-memes-input::placeholder { color:var(--nd-subtext);opacity:0.55; }
       .gp-grid {
-        height:280px;overflow-y:auto;padding:5px;
+        height:min(280px,50vh);overflow-y:auto;padding:5px;
         display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:88px;gap:4px;align-content:start;
         scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-text) 18%,transparent) transparent;
       }

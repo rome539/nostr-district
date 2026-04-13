@@ -54,7 +54,9 @@ export class ChatUI {
     this.input.type = 'text';
     this.input.placeholder = placeholder;
     this.input.maxLength = 200;
-    this.input.style.cssText = `flex:1;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;padding:10px 14px;outline:none;transition:border-color 0.2s ease,box-shadow 0.2s ease;`;
+    // font-size ≥ 16px on touch devices prevents iOS Safari from auto-zooming the page on focus
+    const inputFontSize = ('ontouchstart' in window) ? '16px' : '13px';
+    this.input.style.cssText = `flex:1;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:${inputFontSize};padding:10px 14px;outline:none;transition:border-color 0.2s ease,box-shadow 0.2s ease;`;
 
     this.input.addEventListener('focus', () => {
       this.input.style.borderColor = `color-mix(in srgb,var(--nd-accent) 75%,transparent)`;

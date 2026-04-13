@@ -1924,6 +1924,11 @@ export class CrewPanel {
       .cp-modal-submit:hover { background: color-mix(in srgb,var(--nd-accent) 35%,transparent); }
       .cp-modal-submit:disabled { opacity: 0.5; cursor: not-allowed; }
       .cp-modal-status { font-size: 11px; color: #e85454; min-height: 16px; }
+      /* Prevent iOS Safari auto-zoom: inputs must be ≥16px on touch devices */
+      @media (hover: none) and (pointer: coarse) {
+        .cp-input { font-size: 16px; }
+        .cp-composer-input { font-size: 16px; }
+      }
     `;
     document.head.appendChild(s);
   }

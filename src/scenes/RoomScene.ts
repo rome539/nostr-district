@@ -175,12 +175,19 @@ export class RoomScene extends BaseScene {
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
+    // Mobile: zoom in and follow player so the room fills the screen properly
+    if (this.sys.game.device.input.touch) {
+      this.setupMobileCamera(1.5);
+      this.cameras.main.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    }
+    this.createMobileControls();
 
     this.setupRegistryPanels(myPubkey);
     this.setupCommonKeyboardHandlers();  // shouldBlockPanelKeys() guards with BookcaseModal.isOpen()
 
     // Click to move
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.y < 330 || p.y > 470) return; this.targetX = Phaser.Math.Clamp(p.x, 40, GAME_WIDTH - 40); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.worldY < 330 || p.worldY > 470) return; this.targetX = Phaser.Math.Clamp(p.worldX, 40, GAME_WIDTH - 40); this.isMoving = true; });
 
     // Computer interaction prompt (only in myroom)
     this.computerPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -846,6 +853,8 @@ export class RoomScene extends BaseScene {
   private updateMovement(): void {
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0; let vy = 0; const sp = 250;
     if (c) { if (c.left.isDown) vx = -sp; else if (c.right.isDown) vx = sp; if (c.up.isDown) vy = -sp; else if (c.down.isDown) vy = sp; }
+    // Mobile arrow buttons (up = interact, not vertical movement)
+    if (vx === 0) { if (this.mobileLeft) vx = -sp; else if (this.mobileRight) vx = sp; }
     if (vx !== 0 || vy !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.player.y += vy / 60; if (vx !== 0) this.facingRight = vx > 0; }
     else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * sp / 60; this.facingRight = dx > 0; } }
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, GAME_WIDTH - 40);

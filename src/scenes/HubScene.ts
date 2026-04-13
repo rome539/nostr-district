@@ -215,6 +215,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
+    this.setupMobileCamera();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < GROUND_Y - 10 || p.y > 455) return; this.targetX = Phaser.Math.Clamp(wx, 20, WORLD_WIDTH - 20); this.isMoving = true; });
     this.input.keyboard?.on('keydown-E', () => this.tryEnter());
     this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
@@ -241,6 +242,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
     });
+    this.createMobileControls();
 
     this.setupRegistryPanels(this.registry.get('playerPubkey') || null);
     ProfileModal.setDMPanel(this.dmPanel);
@@ -472,7 +474,24 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
-  private updateMovement(): void { const c = this.input.keyboard?.createCursorKeys(); let vx = 0; if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; } this.isKeyboardMoving = vx !== 0; if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; } else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } } this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20); this.player.setFlipX(!this.facingRight); }
+  private updateMovement(): void {
+    const c = this.input.keyboard?.createCursorKeys();
+    let vx = 0;
+    if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
+    // Mobile arrow buttons
+    if (vx === 0) { if (this.mobileLeft) vx = -PLAYER_SPEED; else if (this.mobileRight) vx = PLAYER_SPEED; }
+    this.isKeyboardMoving = vx !== 0;
+    // Clear proximity prompts the moment the player starts moving so they don't linger
+    if (vx !== 0 && (this.nearBuilding || this.nearCrewBoard || this.nearBulletinBoard)) {
+      this.nearBuilding = null; this.nearCrewBoard = false; this.nearBulletinBoard = false;
+      this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
+      this.tweens.killTweensOf(this.promptArrow);
+    }
+    if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
+    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } }
+    this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20);
+    this.player.setFlipX(!this.facingRight);
+  }
   private updateProximity(): void {
     // Check crew board
     const cdist = Math.abs(this.player.x - this.CREW_BOARD_X);

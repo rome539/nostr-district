@@ -176,6 +176,11 @@ export abstract class BaseScene extends Phaser.Scene {
   protected walkFrame      = 0;
   protected footTimer      = 0;
 
+  // ── Mobile controls ────────────────────────────────────────────────────────
+  protected mobileLeft  = false;
+  protected mobileRight = false;
+  private   mobileControlsEl: HTMLElement | null = null;
+
   // ── Scene state ────────────────────────────────────────────────────────────
   protected isLeavingScene = false;
   private unsubProfile?: () => void;
@@ -199,6 +204,8 @@ export abstract class BaseScene extends Phaser.Scene {
     this.isMoving  = false;
     this.isKeyboardMoving = false;
     this.targetX   = null;
+    this.mobileLeft  = false;
+    this.mobileRight = false;
   }
 
   /**
@@ -967,6 +974,80 @@ export abstract class BaseScene extends Phaser.Scene {
   // Destroys / closes all panels that BaseScene manages.
   // Add any scene-specific cleanup AFTER this call.
   // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  // MOBILE HELPERS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Apply a proportional camera zoom on touch devices.
+   * Call once in create() after camera bounds + startFollow are set.
+   * Zoom is inversely proportional to device width so smaller phones get
+   * a larger zoom — e.g. 1.80 on 667 px (iPhone SE), 1.42 on 844 px (iPhone 12).
+   */
+  protected setupMobileCamera(maxZoom = 2.5): void {
+    if (!this.sys.game.device.input.touch) return;
+    const zoom = Math.min(maxZoom, Math.max(1.2, 1400 / window.innerWidth));
+    this.cameras.main.setZoom(zoom);
+  }
+
+  /**
+   * Create a fixed HTML overlay with ◀ ▲ ▶ buttons for mobile.
+   * ◀ / ▶ set this.mobileLeft / this.mobileRight continuously while held.
+   * ▲ fires a synthetic 'E' keydown so every scene's interact handler fires.
+   * Destroyed automatically by shutdownCommonPanels().
+   */
+  protected createMobileControls(): void {
+    if (!this.sys.game.device.input.touch) return;
+    // Remove any stale controls left by a previous scene visit
+    document.getElementById('nd-mobile-controls')?.remove();
+    this.mobileLeft  = false;
+    this.mobileRight = false;
+
+    const btnSize = Math.round(Math.min(64, window.innerWidth * 0.13));
+    const gap     = Math.max(6, Math.round(btnSize * 0.18));
+
+    const wrap = document.createElement('div');
+    wrap.id = 'nd-mobile-controls';
+    wrap.style.cssText = `position:fixed;bottom:${68 + gap}px;left:50%;transform:translateX(-50%);display:flex;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+
+    const makeBtn = (label: string): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `width:${btnSize}px;height:${btnSize}px;background:rgba(10,0,20,0.65);border:1.5px solid rgba(155,127,232,0.35);border-radius:${Math.round(btnSize * 0.22)}px;color:rgba(200,168,255,0.85);font-size:${Math.round(btnSize * 0.44)}px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;line-height:1;padding:0;font-family:monospace;`;
+      return b;
+    };
+
+    const leftBtn  = makeBtn('◀');
+    const upBtn    = makeBtn('▲');
+    const rightBtn = makeBtn('▶');
+
+    const active = (b: HTMLButtonElement) => { b.style.background = 'rgba(93,202,165,0.25)'; b.style.borderColor = 'rgba(93,202,165,0.7)'; b.style.color = 'rgba(93,202,165,1)'; };
+    const idle   = (b: HTMLButtonElement) => { b.style.background = 'rgba(10,0,20,0.65)'; b.style.borderColor = 'rgba(155,127,232,0.35)'; b.style.color = 'rgba(200,168,255,0.85)'; };
+
+    // ◀ Left
+    leftBtn.addEventListener('pointerdown',   (e) => { e.preventDefault(); this.mobileLeft = true;  active(leftBtn);  });
+    leftBtn.addEventListener('pointerup',     ()  => { this.mobileLeft = false;  idle(leftBtn);  });
+    leftBtn.addEventListener('pointercancel', ()  => { this.mobileLeft = false;  idle(leftBtn);  });
+    leftBtn.addEventListener('pointerleave',  ()  => { this.mobileLeft = false;  idle(leftBtn);  });
+
+    // ▶ Right
+    rightBtn.addEventListener('pointerdown',   (e) => { e.preventDefault(); this.mobileRight = true;  active(rightBtn); });
+    rightBtn.addEventListener('pointerup',     ()  => { this.mobileRight = false; idle(rightBtn); });
+    rightBtn.addEventListener('pointercancel', ()  => { this.mobileRight = false; idle(rightBtn); });
+    rightBtn.addEventListener('pointerleave',  ()  => { this.mobileRight = false; idle(rightBtn); });
+
+    // ▲ Interact — fires 'E' key so every scene's keydown-E handler responds
+    upBtn.addEventListener('pointerdown',   (e) => { e.preventDefault(); active(upBtn); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', keyCode: 69, bubbles: true, cancelable: true })); });
+    upBtn.addEventListener('pointerup',     () => idle(upBtn));
+    upBtn.addEventListener('pointercancel', () => idle(upBtn));
+
+    wrap.appendChild(leftBtn);
+    wrap.appendChild(upBtn);
+    wrap.appendChild(rightBtn);
+    document.body.appendChild(wrap);
+    this.mobileControlsEl = wrap;
+  }
+
   protected shutdownCommonPanels(): void {
     this.unsubProfile?.();
     this.unsubProfile = undefined;
@@ -997,5 +1078,7 @@ export abstract class BaseScene extends Phaser.Scene {
     this.roomRequestToast?.remove();
     this.roomRequestToast = null;
     clearRoomRequestHandler(this.roomRequestHandler);
+    this.mobileControlsEl?.remove();
+    this.mobileControlsEl = null;
   }
 }

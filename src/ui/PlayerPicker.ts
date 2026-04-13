@@ -17,13 +17,14 @@ export class PlayerPicker {
     this.close();
 
     this.el = document.createElement('div');
-    this.el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,var(--nd-bg),var(--nd-navy));border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);min-width:300px;max-width:360px;`;
+    const isTouch = 'ontouchstart' in window;
+    this.el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3000;background:linear-gradient(180deg,var(--nd-bg),var(--nd-navy));border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:10px;padding:20px 24px;font-family:'Courier New',monospace;box-shadow:0 8px 30px rgba(0,0,0,0.7);width:min(360px,calc(100vw - 32px));box-sizing:border-box;`;
     this.el.innerHTML = `
       <div style="color:var(--nd-accent);font-size:15px;font-weight:bold;margin-bottom:14px;text-align:center;">MY ROOM</div>
       <button class="pp-mine" style="width:100%;padding:10px;margin-bottom:12px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;color:var(--nd-accent);font-size:13px;cursor:pointer;font-weight:bold;">Enter ${esc(myName)}'s Room</button>
       <div style="color:var(--nd-subtext);font-size:12px;margin-bottom:10px;text-align:center;">— or visit someone —</div>
-      <input class="pp-search" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:color-mix(in srgb,var(--nd-bg) 80%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-text);font-size:13px;outline:none;box-sizing:border-box;"/>
-      <div class="pp-list" style="max-height:200px;overflow-y:auto;border:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);border-radius:6px;"></div>
+      <input class="pp-search" type="text" placeholder="Search..." style="width:100%;padding:8px 12px;margin-bottom:10px;background:color-mix(in srgb,var(--nd-bg) 80%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-text);font-size:${isTouch ? '16px' : '13px'};outline:none;box-sizing:border-box;"/>
+      <div class="pp-list" style="max-height:min(200px,40vh);overflow-y:auto;border:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);border-radius:6px;"></div>
       <button class="pp-cancel" style="width:100%;padding:8px;margin-top:12px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 27%,transparent);border-radius:6px;color:var(--nd-subtext);font-size:12px;cursor:pointer;">Cancel</button>
     `;
     document.body.appendChild(this.el);
