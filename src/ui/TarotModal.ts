@@ -292,16 +292,17 @@ export const TarotModal = {
     setTimeout(() => SoundEngine.get().stopFileSounds(), 960 + 2000);
 
     const isTouch = 'ontouchstart' in window;
-    // Responsive card size — 3 cards must fit in viewport width with gaps + padding
-    const cardW = isTouch ? Math.max(72, Math.floor((Math.min(window.innerWidth, window.innerHeight) - 80) / 3)) : 130;
+    // Cards must fit 3-across in available width. Landscape phones use height as
+    // the limiting dimension; portrait phones use width.
+    const avail = isTouch ? Math.min(window.innerWidth, window.innerHeight) : 780;
+    const cardW = Math.min(130, Math.max(72, Math.floor((avail - 80) / 3)));
     const cardH = Math.round(cardW * (210 / 130));
 
     overlay = document.createElement('div');
     overlay.style.cssText = `
       position:fixed; inset:0; z-index:9000;
       background:rgba(2,1,14,0.95);
-      display:flex; flex-direction:column; align-items:center;
-      justify-content:flex-start; overflow-y:auto; padding:12px 8px 24px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
       font-family:"Courier New",monospace;
       animation:trFade 0.35s ease;
     `;
@@ -321,18 +322,19 @@ export const TarotModal = {
 
     const box = document.createElement('div');
     box.style.cssText = `
-      width:min(780px,100%); max-width:100%;
+      width:max-content; max-width:calc(100vw - 16px);
+      max-height:calc(100vh - 24px); overflow-y:auto;
       background:linear-gradient(160deg,#0e0828 0%,#130c34 60%,#0a0620 100%);
       border:1px solid #5533aa66;
-      border-radius:12px; padding:${isTouch ? '16px 12px 18px' : '28px 24px 22px'};
-      text-align:center; position:relative;
+      border-radius:12px; padding:28px 24px 22px;
+      text-align:center; position:relative; overflow-x:hidden;
       box-shadow:0 18px 48px rgba(0,0,0,0.45);
     `;
 
-    // Always-visible close button at the top-right — bottom close is unreachable on mobile
+    // ✕ button at top-right — always reachable even before scrolling
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `position:absolute;top:10px;right:12px;background:none;border:1px solid #5533aa44;border-radius:4px;color:#8866cc;font-family:"Courier New",monospace;font-size:13px;padding:4px 9px;cursor:pointer;z-index:1;-webkit-tap-highlight-color:transparent;`;
+    closeBtn.style.cssText = `position:sticky;top:0;float:right;margin:-8px -8px 0 0;background:none;border:1px solid #5533aa44;border-radius:4px;color:#8866cc;font-family:"Courier New",monospace;font-size:13px;padding:4px 9px;cursor:pointer;z-index:1;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
     closeBtn.addEventListener('click', () => TarotModal.destroy());
     box.appendChild(closeBtn);
 
@@ -492,8 +494,9 @@ export const TarotModal = {
     }
 
     const hint = document.createElement('div');
-    hint.textContent = isTouch ? 'tap ✕ to close' : '[ESC] or click outside to close';
-    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;margin-top:10px;';
+    hint.textContent = '[ESC] or click to close';
+    hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
+    hint.onclick = () => TarotModal.destroy();
     box.appendChild(hint);
 
     overlay.appendChild(box);
