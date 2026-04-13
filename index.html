@@ -109,28 +109,14 @@
       #rotate-prompt { display: flex; }
     }
 
-    /* SEO splash — shown while game loads, fades out once canvas is ready */
+    /* SEO content — invisible to users, crawlable by search engines */
     #seo-splash {
-      position: fixed; inset: 0; z-index: 50;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 16px; padding: 40px 32px; text-align: center;
-      background: #0D0221;
-      font-family: 'Courier New', monospace;
-      color: #9b7fe8;
-      transition: opacity 0.6s ease;
-      pointer-events: none;
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
     }
-    #seo-splash h1 {
-      font-size: clamp(22px, 4vw, 36px); letter-spacing: 0.1em;
-      color: #c8a8ff; margin-bottom: 4px;
-    }
-    #seo-splash p { font-size: clamp(12px, 1.6vw, 15px); opacity: 0.8; max-width: 560px; line-height: 1.7; }
-    #seo-splash ul {
-      list-style: none; padding: 0; max-width: 560px;
-      font-size: clamp(11px, 1.4vw, 13px); opacity: 0.65; line-height: 2;
-    }
-    #seo-splash ul li::before { content: '› '; color: #c8a8ff; }
-    #seo-splash.hidden { opacity: 0; }
   </style>
 </head>
 <body>
