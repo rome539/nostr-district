@@ -8,7 +8,21 @@ import { RoomScene } from './scenes/RoomScene';
 import { WoodsScene } from './scenes/WoodsScene';
 import { CabinScene } from './scenes/CabinScene';
 import { AlleyScene } from './scenes/AlleyScene';
+import { SoundEngine } from './audio/SoundEngine';
 import './stores/themeStore'; // init theme CSS vars early
+
+// Unlock the AudioContext on the first user gesture anywhere on the page.
+// Mobile browsers (iOS Safari, Android Chrome) start AudioContext suspended
+// and silently drop all .play() / bufferSource.start() calls until a real
+// touch or click event calls ctx.resume(). By wiring this to the login button
+// tap we ensure audio is live the moment the game scene starts.
+{
+  const unlockAudio = () => {
+    SoundEngine.get().unlock();
+  };
+  document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+  document.addEventListener('click',      unlockAudio, { once: true });
+}
 import {
   loginWithExtension,
   loginWithNsec,

@@ -857,7 +857,7 @@ export class DMPanel {
         position: fixed; top: 0; right: -100vw; width: min(390px, 100vw); height: 100dvh;
         background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
         border-left: 1px solid color-mix(in srgb,var(--nd-text) 10%,transparent);
-        z-index: 2000; font-family: 'Courier New', monospace;
+        z-index: 3000; font-family: 'Courier New', monospace;
         display: flex; flex-direction: column;
         transition: right 0.25s ease; box-shadow: -4px 0 20px rgba(0,0,0,0.5);
       }

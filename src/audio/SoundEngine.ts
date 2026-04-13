@@ -42,6 +42,7 @@ export class SoundEngine {
   private _ambVol = 0.04;
   private _muted = false;
   private _myRoomTrack: MyRoomTrackId = 'off';
+  private _audioUnlocked = false;
 
   private constructor() {
     try {
@@ -52,6 +53,27 @@ export class SoundEngine {
     } catch {}
     const saved = localStorage.getItem(MYROOM_TRACK_KEY) as MyRoomTrackId | null;
     if (saved === 'off' || MYROOM_TRACKS.some(t => t.id === saved)) this._myRoomTrack = saved!;
+  }
+
+  /**
+   * Must be called once from a user-gesture handler (touchstart / click).
+   * Resumes the AudioContext and retries any HTML audio that failed to autoplay.
+   * On mobile browsers the AudioContext starts suspended and cannot play until
+   * this is called inside a real gesture event.
+   */
+  unlock(): void {
+    if (this._audioUnlocked) return;
+    this._audioUnlocked = true;
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    // Retry any HTML <audio> elements whose autoplay was blocked
+    if (this.streamEl && this.streamEl.paused) {
+      this.streamEl.play().catch(() => {});
+    }
+    if (this._loopEl && this._loopEl.paused) {
+      this._loopEl.play().catch(() => {});
+    }
   }
 
   get myRoomTrack(): MyRoomTrackId { return this._myRoomTrack; }
@@ -222,7 +244,13 @@ export class SoundEngine {
       this.ambGain.gain.value = this._ambVol;
       this.ambGain.connect(this.masterGain);
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    if (this.ctx.state === 'suspended') {
+      // Only resume inside a gesture handler — outside one this is a no-op on mobile.
+      // The unlock() method is the proper place for gesture-triggered resume.
+      this.ctx.resume().catch(() => {});
+    } else if (this.ctx.state === 'running') {
+      this._audioUnlocked = true;
+    }
     return this.ctx;
   }
 

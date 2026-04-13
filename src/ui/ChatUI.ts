@@ -117,6 +117,18 @@ export class ChatUI {
     this.container.appendChild(inputRow);
     document.body.appendChild(this.container);
 
+    // On mobile, float the chat container above the software keyboard
+    if ('ontouchstart' in window && window.visualViewport) {
+      const vv = window.visualViewport;
+      const reposition = () => {
+        // offsetTop accounts for any top-scroll offset; combined with height gives keyboard clearance
+        const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        this.container.style.bottom = `${8 + keyboardHeight}px`;
+      };
+      vv.addEventListener('resize', reposition);
+      vv.addEventListener('scroll', reposition);
+    }
+
     return this.input;
   }
 
@@ -177,7 +189,8 @@ export class ChatUI {
 
   private showLog(): void {
     this.log.style.opacity = '1';
-    this.log.style.pointerEvents = 'auto';
+    // Keep pointer-events none so the log never blocks the mobile control buttons behind it.
+    // The log is read-only and auto-scrolls, so no interaction is needed.
   }
 
   private scheduleHide(delay: number): void {
@@ -185,7 +198,6 @@ export class ChatUI {
     this.hideTimer = setTimeout(() => {
       if (document.activeElement !== this.input) {
         this.log.style.opacity = '0';
-        this.log.style.pointerEvents = 'none';
       }
       this.hideTimer = null;
     }, delay);

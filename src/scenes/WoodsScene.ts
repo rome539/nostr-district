@@ -115,7 +115,7 @@ export class WoodsScene extends BaseScene {
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < FLOOR_Y - 10 || p.y > 455) return; if (wx < DOCK_X) return; this.targetX = Phaser.Math.Clamp(wx, DOCK_X, W - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (p.worldY < FLOOR_Y - 10 || p.worldY > 460) return; if (p.worldX < DOCK_X) return; this.targetX = Phaser.Math.Clamp(p.worldX, DOCK_X, W - 20); this.isMoving = true; });
 
     const myPubkey = this.registry.get('playerPubkey');
     this.snd.setRoom('woods');

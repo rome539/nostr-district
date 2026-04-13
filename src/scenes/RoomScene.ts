@@ -742,10 +742,12 @@ export class RoomScene extends BaseScene {
     const nc = this.roomConfig.neonColor; const bg = this.add.graphics();
     bg.fillStyle(hexToNum(P.bg), 0.92); bg.fillRoundedRect(16, 6, 150, 28, 6);
     bg.lineStyle(1, hexToNum(nc), 0.3); bg.strokeRoundedRect(16, 6, 150, 28, 6); bg.setDepth(99).setScrollFactor(0);
-    const btn = this.add.text(91, 20, '\u2190 Back to District', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: nc, align: 'center' }).setOrigin(0.5).setDepth(100).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
-    btn.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
-    btn.on('pointerdown', () => this.leaveRoom());
+    const btn = this.add.text(91, 20, '\u2190 Back to District', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: nc, align: 'center' }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+    // Use a zone for the hit area — text bounds alone are too small for mobile touch
+    const hitZone = this.add.zone(91, 20, 160, 36).setDepth(101).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    hitZone.on('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
+    hitZone.on('pointerout', () => { btn.setColor(nc); btn.setScale(1); });
+    hitZone.on('pointerdown', () => this.leaveRoom());
     this.setupEscHandler();
   }
   private createRoomLabel(): void {

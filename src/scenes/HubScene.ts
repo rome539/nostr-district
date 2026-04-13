@@ -216,7 +216,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; const wx = this.cameras.main.scrollX + p.x; if (p.y < GROUND_Y - 10 || p.y > 455) return; this.targetX = Phaser.Math.Clamp(wx, 20, WORLD_WIDTH - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (p.worldY < GROUND_Y - 10 || p.worldY > 460) return; this.targetX = Phaser.Math.Clamp(p.worldX, 20, WORLD_WIDTH - 20); this.isMoving = true; });
     this.input.keyboard?.on('keydown-E', () => this.tryEnter());
     this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
     this.setupPresenceCallbacks(this.registry.get('playerPubkey')); this.setupRoomRequestHandlers();

@@ -112,9 +112,8 @@ export class AlleyScene extends BaseScene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
-      const wx = this.cameras.main.scrollX + p.x;
-      if (p.y < FLOOR_Y - 10 || p.y > 455) return;
-      this.targetX = Phaser.Math.Clamp(wx, 20, W - 28);
+      if (p.worldY < FLOOR_Y - 10 || p.worldY > 460) return;
+      this.targetX = Phaser.Math.Clamp(p.worldX, 20, W - 28);
       this.isMoving = true;
     });
 
@@ -858,8 +857,9 @@ export class AlleyScene extends BaseScene {
       if (!near) this.tweens.killTweensOf(this.tarotPromptArrow);
     }
     if (near) {
+      const zoom = this.cameras.main.zoom;
       const sx = TAROT_X - this.cameras.main.scrollX;
-      const sy = this.player.y - 130;
+      const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
       this.tarotPromptBg.setPosition(sx - 74, sy - 2);
       this.tarotPromptText.setPosition(sx, sy + 12);
       this.tarotPromptArrow.setPosition(sx, sy + 24);
@@ -880,9 +880,9 @@ export class AlleyScene extends BaseScene {
       if (!near) this.tweens.killTweensOf(this.fortunePromptArrow);
     }
     if (near) {
-      // Convert world x to screen x
+      const zoom = this.cameras.main.zoom;
       const sx = FORTUNE_X - this.cameras.main.scrollX;
-      const sy = this.player.y - 130;
+      const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
       this.fortunePromptBg.setPosition(sx - 74, sy - 2);
       this.fortunePromptText.setPosition(sx, sy + 12);
       this.fortunePromptArrow.setPosition(sx, sy + 24);
