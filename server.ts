@@ -13,9 +13,8 @@ interface Player {
 
 const players = new Map<string, Player>();
 
-const PORT = process.env.PORT || 3100;
-const wss = new WebSocketServer({ port: Number(PORT) });
-console.log(`[Presence] Server running on ws://localhost:${PORT}`);
+const wss = new WebSocketServer({ port: 3100 });
+console.log('[Presence] Server running on ws://localhost:3100');
 
 wss.on('connection', (ws) => {
   let myPubkey: string | null = null;
