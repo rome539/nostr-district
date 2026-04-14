@@ -214,7 +214,9 @@ export class SoundEngine {
         }
         this._startCrossfadeLoop(buf, loopAt, gainMult);
       })
-      .catch(() => {}); // covers fetch abort and decodeAudioData failures
+      .catch((e) => {
+        if (e?.name !== 'AbortError') console.warn('[SoundEngine] decode failed for', url, e);
+      });
   }
 
   /** Crossfade loop — each node loops internally (loop=true) and a new instance
