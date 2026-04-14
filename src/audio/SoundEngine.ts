@@ -55,6 +55,12 @@ export class SoundEngine {
   private _fetchAbort: AbortController | null = null;
   // Silent looping source that keeps the AudioContext from being auto-suspended by iOS
   private _keepAliveNode: AudioBufferSourceNode | null = null;
+  // Persistent looping HTML Audio element that keeps the iOS audio session alive.
+  // Without this, iOS Safari throttles/silences Web Audio output (both ambient buffers
+  // and oscillator SFX) in scenes that don't already have an HTML Audio element playing.
+  // Woods works by accident because it starts cabin-fire.m4a at volume 0 for the
+  // approach-the-cabin crossfade; hub and alley have nothing, so Web Audio goes silent.
+  private _sessionKeeper: HTMLAudioElement | null = null;
 
   private constructor() {
     try {
@@ -78,6 +84,7 @@ export class SoundEngine {
   unlock(): void {
     const ctx = this.ac(); // create context now while inside a gesture handler
     this._dbg(`unlock() state=${ctx.state}`);
+    this._startSessionKeeper();
 
     // Play a 1-sample silent buffer — required to properly unlock iOS AudioContext.
     // ctx.resume() alone is sometimes rejected silently on iOS Safari; starting
@@ -98,6 +105,28 @@ export class SoundEngine {
       ctx.resume().then(() => this._dbg(`resume() resolved state=${ctx.state}`)).catch((e) => this._dbg(`resume() rejected: ${e?.message || e}`));
     } else if (ctx.state === 'running') {
       this._onContextRunning();
+    }
+  }
+
+  /**
+   * Start a permanent looping silent HTML Audio element so iOS keeps the audio
+   * session active. Must be called from a user-gesture stack so .play() resolves.
+   * Idempotent — subsequent calls retry play() on the existing element if it was
+   * paused (iOS may pause it after backgrounding).
+   */
+  private _startSessionKeeper(): void {
+    if (!this._sessionKeeper) {
+      const el = new Audio('/assets/audio/silent.wav');
+      el.disableRemotePlayback = true;
+      el.loop = true;
+      el.volume = 0;
+      this._sessionKeeper = el;
+    }
+    if (this._sessionKeeper.paused) {
+      this._sessionKeeper.play().then(
+        () => this._dbg('sessionKeeper playing'),
+        (e) => this._dbg(`sessionKeeper play rejected: ${e?.message || e}`),
+      );
     }
   }
 
@@ -156,6 +185,8 @@ export class SoundEngine {
         this._keepAliveNode = src;
       } catch {}
     }
+    // Retry the session keeper in case its initial play() was blocked.
+    this._startSessionKeeper();
     // Retry HTML audio elements that had their .play() blocked (cabin, lounge, myroom).
     if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
     if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
