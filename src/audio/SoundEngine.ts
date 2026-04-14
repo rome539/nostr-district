@@ -77,6 +77,7 @@ export class SoundEngine {
    */
   unlock(): void {
     const ctx = this.ac(); // create context now while inside a gesture handler
+    this._dbg(`unlock() state=${ctx.state}`);
 
     // Play a 1-sample silent buffer — required to properly unlock iOS AudioContext.
     // ctx.resume() alone is sometimes rejected silently on iOS Safari; starting
@@ -94,10 +95,38 @@ export class SoundEngine {
       // reliably. ctx.resume().then() is also called as a nudge, but we do NOT check
       // ctx.state inside the .then() — on iOS Safari the promise can resolve before
       // the state actually flips, causing onContextRunning to be skipped entirely.
-      ctx.resume().catch(() => {});
+      ctx.resume().then(() => this._dbg(`resume() resolved state=${ctx.state}`)).catch((e) => this._dbg(`resume() rejected: ${e?.message || e}`));
     } else if (ctx.state === 'running') {
       this._onContextRunning();
     }
+  }
+
+  // ── On-screen debug HUD (toggle with /audio debug in chat, or ?audioDebug=1) ──
+  private _dbgEl: HTMLDivElement | null = null;
+  private _dbgLines: string[] = [];
+  private _dbgEnabled = false;
+  enableDebugHud(): void {
+    if (this._dbgEnabled) return;
+    this._dbgEnabled = true;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:4px;left:4px;z-index:99999;background:rgba(0,0,0,0.75);color:#0f0;font:10px/1.2 monospace;padding:4px 6px;max-width:60vw;pointer-events:none;white-space:pre;border:1px solid #0a0;border-radius:3px;';
+    document.body.appendChild(el);
+    this._dbgEl = el;
+    this._dbg('HUD enabled');
+    setInterval(() => this._dbgRefresh(), 500);
+  }
+  private _dbg(msg: string): void {
+    if (!this._dbgEnabled) return;
+    const ts = new Date().toTimeString().slice(0, 8);
+    this._dbgLines.push(`${ts} ${msg}`);
+    if (this._dbgLines.length > 8) this._dbgLines.shift();
+    this._dbgRefresh();
+  }
+  private _dbgRefresh(): void {
+    if (!this._dbgEl) return;
+    const state = this.ctx?.state ?? 'no-ctx';
+    const head = `ctx=${state} unlocked=${this._audioUnlocked} room=${this.currentRoom || '-'}\npending=${this._pendingRoomRestart || '-'} keepAlive=${!!this._keepAliveNode}\n`;
+    this._dbgEl.textContent = head + this._dbgLines.join('\n');
   }
 
   /**
@@ -106,6 +135,7 @@ export class SoundEngine {
    * unlock() when the context is already running. Idempotent: safe to call many times.
    */
   private _onContextRunning(): void {
+    this._dbg(`_onContextRunning pending=${this._pendingRoomRestart || '-'} hasBuf=${!!this._pendingBuffer}`);
     this._audioUnlocked = true;
     // Keep-alive: loop a 1-second non-silent buffer so iOS never auto-suspends the
     // AudioContext. A zero-sample buffer is detected as silence and doesn't help;
@@ -646,6 +676,7 @@ export class SoundEngine {
   // ── Ambient ───────────────────────────────────────────────────────────────────
 
   setRoom(room: RoomId | ''): void {
+    this._dbg(`setRoom(${room}) ctx=${this.ctx?.state ?? 'none'}`);
     if (room === this.currentRoom) return;
     this._stopAmbient();
     // Clear all pending state from the previous room so a stale restart or

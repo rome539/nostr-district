@@ -33,6 +33,11 @@ window.addEventListener('pagehide', (e) => {
   document.addEventListener('click',       unlockAudio);
   document.addEventListener('pointerdown', unlockAudio, { passive: true });
 
+  // Enable the audio debug HUD via ?audioDebug=1 in the URL.
+  if (new URLSearchParams(window.location.search).has('audioDebug')) {
+    SoundEngine.get().enableDebugHud();
+  }
+
   // When the tab returns to foreground the AudioContext may have been suspended
   // by the browser. Attempt a resume — works without a gesture on Android Chrome;
   // on iOS the next user touch will handle it via the listeners above.
@@ -158,6 +163,10 @@ function startGame(): void {
             height: GAME_HEIGHT,
           },
           scene: [BootScene, HubScene, RoomScene, WoodsScene, CabinScene, AlleyScene],
+          // We manage all audio via our SoundEngine singleton. Disabling Phaser's
+          // internal WebAudioSoundManager prevents it from creating a second
+          // AudioContext that competes with ours on iOS Safari.
+          audio: { disableWebAudio: true, noAudio: true },
           callbacks: {
             preBoot: (g) => {
               const state = authStore.getState();
