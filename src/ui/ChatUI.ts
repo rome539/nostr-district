@@ -63,10 +63,6 @@ export class ChatUI {
     this.input.addEventListener('focus', () => {
       this.input.style.borderColor = `color-mix(in srgb,var(--nd-accent) 75%,transparent)`;
       this.input.style.boxShadow = `0 0 10px color-mix(in srgb,var(--nd-accent) 18%,transparent)`;
-      // iOS Safari scrolls the page when a text input is focused — scroll it back immediately
-      if ('ontouchstart' in window) {
-        setTimeout(() => { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; }, 50);
-      }
       this.showLog();
     });
     this.input.addEventListener('blur', () => {

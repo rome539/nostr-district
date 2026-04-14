@@ -652,24 +652,64 @@ export class SoundEngine {
     this.osc(440, 'sine', t + 0.16, 0.13, 0.07, d);
   }
 
-  private _fileEls: HTMLAudioElement[] = [];
+  // Decoded SFX buffers cached by URL. Web Audio buffer sources give us precise
+  // timing (no HTMLAudioElement play() startup delay) and are not subject to iOS's
+  // "only one HTMLAudioElement at a time" throttling, which was making tarot/fortune
+  // SFX only play once per session.
+  private _fileBufCache = new Map<string, Promise<AudioBuffer>>();
+  private _fileSrcs: Array<{ src: AudioBufferSourceNode; gain: GainNode }> = [];
+
+  private _loadFileBuf(path: string): Promise<AudioBuffer> {
+    let p = this._fileBufCache.get(path);
+    if (!p) {
+      const ctx = this.ac();
+      p = fetch(path)
+        .then((r) => r.arrayBuffer())
+        .then((ab) => ctx.decodeAudioData(ab));
+      this._fileBufCache.set(path, p);
+      p.catch((e) => {
+        this._fileBufCache.delete(path);
+        if (e?.name !== 'AbortError') console.warn('[SoundEngine] file decode failed for', path, e);
+      });
+    }
+    return p;
+  }
 
   private _playFile(path: string, volume = 1.0, startAt = 0, stopAfterMs = 0): void {
-    const el = new Audio(path);
-    el.disableRemotePlayback = true;
-    el.volume = this._muted ? 0 : Math.min(1, this._sfxVol * volume);
-    el.currentTime = startAt;
-    el.play().catch(() => {});
-    this._fileEls.push(el);
-    el.onended = () => { this._fileEls = this._fileEls.filter(e => e !== el); };
-    if (stopAfterMs > 0) {
-      setTimeout(() => { el.pause(); this._fileEls = this._fileEls.filter(e => e !== el); }, stopAfterMs);
-    }
+    this._loadFileBuf(path).then((buf) => {
+      const ctx = this.ac();
+      if (ctx.state !== 'running') return;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      gain.gain.value = Math.min(1, volume);
+      src.connect(gain);
+      gain.connect(this.sfx());
+
+      const entry = { src, gain };
+      this._fileSrcs.push(entry);
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+        try { gain.disconnect(); } catch {}
+        this._fileSrcs = this._fileSrcs.filter((e) => e !== entry);
+      };
+
+      const offset = Math.max(0, startAt);
+      src.start(0, offset);
+      if (stopAfterMs > 0) {
+        const stopIn = Math.min(stopAfterMs / 1000, Math.max(0, buf.duration - offset));
+        src.stop(ctx.currentTime + stopIn);
+      }
+    }).catch(() => {});
   }
 
   stopFileSounds(): void {
-    this._fileEls.forEach(el => { el.pause(); el.currentTime = 0; });
-    this._fileEls = [];
+    this._fileSrcs.forEach(({ src, gain }) => {
+      try { src.stop(); } catch {}
+      try { src.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    });
+    this._fileSrcs = [];
   }
 
   tarotCardFlip(): void {

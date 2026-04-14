@@ -133,6 +133,23 @@ let game: Phaser.Game | null = null;
 let gameStarting = false;
 let loginInProgress = false;
 
+// Mobile: keep #game-container fit inside the visual viewport so the software
+// keyboard overlays from below instead of iOS scrolling the page and clipping
+// the top of the canvas. Runs regardless of whether the game is started yet.
+if ('ontouchstart' in window && window.visualViewport) {
+  const vv = window.visualViewport;
+  const fitToVisualViewport = () => {
+    const container = document.getElementById('game-container');
+    if (!container) return;
+    const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    container.style.top = `${vv.offsetTop}px`;
+    container.style.bottom = `${kbHeight}px`;
+    if (game) game.scale.refresh();
+  };
+  vv.addEventListener('resize', fitToVisualViewport);
+  vv.addEventListener('scroll', fitToVisualViewport);
+}
+
 function startGame(): void {
   if (gameStarting || game) return;
   gameStarting = true;
