@@ -45,6 +45,14 @@ export class SoundEngine {
   private _audioUnlocked = false;
   // Room to restart after the AudioContext unlocks (set when setRoom is called while context is suspended)
   private _pendingRoomRestart: RoomId | null = null;
+  // Decoded buffer cached while waiting for the AudioContext to unlock.
+  // Avoids a second fetch when the context finally becomes 'running'.
+  private _pendingBuffer: AudioBuffer | null = null;
+  private _pendingBufferLoopAt: number | undefined;
+  private _pendingBufferGainMult = 1.0;
+  // AbortController for the in-flight _startStreamGapless fetch — cancelled
+  // when a new fetch is started so stale callbacks can't cause double-play.
+  private _fetchAbort: AbortController | null = null;
   // Silent looping source that keeps the AudioContext from being auto-suspended by iOS
   private _keepAliveNode: AudioBufferSourceNode | null = null;
 
@@ -81,49 +89,67 @@ export class SoundEngine {
       silentSrc.start(0);
     } catch {}
 
-    const onUnlocked = () => {
-      this._audioUnlocked = true;
-      // Keep-alive: loop a 1-second silent buffer so iOS never auto-suspends the
-      // AudioContext after a period of silence. This prevents hub oscillators and
-      // SFX from going dead between interactions.
-      if (!this._keepAliveNode) {
-        try {
-          // Non-zero buffer: a 1 Hz sine at -100 dB (amplitude 1e-5, completely
-          // inaudible). iOS detects a truly silent (zero-sample) buffer and
-          // auto-suspends the AudioContext anyway — a tiny non-zero signal prevents that.
-          const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-          const data = buf.getChannelData(0);
-          for (let i = 0; i < data.length; i++) {
-            data[i] = Math.sin(2 * Math.PI * i / ctx.sampleRate) * 1e-5;
-          }
-          const src = ctx.createBufferSource();
-          src.buffer = buf;
-          src.loop = true;
-          src.connect(ctx.destination);
-          src.start();
-          this._keepAliveNode = src;
-        } catch {}
-      }
-      // Retry HTML audio elements that had their .play() blocked
-      if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
-      if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
-      // Restart Web Audio ambient that was set up while the context was suspended.
-      // Buffer sources and oscillators started while suspended don't reliably resume
-      // on iOS Safari, so we tear down and rebuild the ambient now that context is running.
-      if (this._pendingRoomRestart) {
-        const room = this._pendingRoomRestart;
-        this._pendingRoomRestart = null;
+    if (ctx.state === 'suspended') {
+      // The statechange listener on the AudioContext handles the 'running' transition
+      // reliably. ctx.resume().then() is also called as a nudge, but we do NOT check
+      // ctx.state inside the .then() — on iOS Safari the promise can resolve before
+      // the state actually flips, causing onContextRunning to be skipped entirely.
+      ctx.resume().catch(() => {});
+    } else if (ctx.state === 'running') {
+      this._onContextRunning();
+    }
+  }
+
+  /**
+   * Called whenever the AudioContext transitions to 'running' — either via the
+   * statechange event listener (primary path, reliable on iOS) or directly from
+   * unlock() when the context is already running. Idempotent: safe to call many times.
+   */
+  private _onContextRunning(): void {
+    this._audioUnlocked = true;
+    // Keep-alive: loop a 1-second non-silent buffer so iOS never auto-suspends the
+    // AudioContext. A zero-sample buffer is detected as silence and doesn't help;
+    // a 1 Hz sine at -100 dB (amplitude 1e-5) keeps the scheduler ticking.
+    if (!this._keepAliveNode && this.ctx) {
+      try {
+        const ctx = this.ctx;
+        const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = Math.sin(2 * Math.PI * i / ctx.sampleRate) * 1e-5;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.connect(ctx.destination);
+        src.start();
+        this._keepAliveNode = src;
+      } catch {}
+    }
+    // Retry HTML audio elements that had their .play() blocked (cabin, lounge, myroom).
+    if (this.streamEl?.paused) this.streamEl.play().catch(() => {});
+    if (this._loopEl?.paused)  this._loopEl.play().catch(() => {});
+    // Restart Web Audio ambient (hub, alley, woods) that was set up while the context
+    // was suspended. If the buffer was already decoded, use it directly without
+    // re-fetching. Otherwise re-trigger setRoom which starts a fresh fetch.
+    if (this._pendingRoomRestart) {
+      const room = this._pendingRoomRestart;
+      const buf  = this._pendingBuffer;
+      const loopAt   = this._pendingBufferLoopAt;
+      const gainMult = this._pendingBufferGainMult;
+      this._pendingRoomRestart = null;
+      this._pendingBuffer = null;
+      this._pendingBufferLoopAt = undefined;
+      this._pendingBufferGainMult = 1.0;
+      if (buf) {
+        // Buffer is already decoded — start the crossfade loop immediately.
+        // currentRoom is already set to `room` from the original setRoom() call.
+        this._startCrossfadeLoop(buf, loopAt, gainMult);
+      } else {
+        // Fetch hadn't completed yet when the context unlocked — re-trigger.
         this.currentRoom = ''; // reset so setRoom() won't bail on the equality check
         this.setRoom(room);
       }
-    };
-
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-        .then(() => { if (ctx.state === 'running') onUnlocked(); })
-        .catch(() => {});
-    } else if (ctx.state === 'running') {
-      onUnlocked();
     }
   }
 
@@ -166,21 +192,29 @@ export class SoundEngine {
    *  loopAt: seconds into the track to start the crossfade (default: auto). */
   private _startStreamGapless(url: string, forRoom: RoomId, loopAt?: number, gainMult = 1.0): void {
     this._stopStream();
+    // Cancel any previous in-flight fetch for this room so its callback can't
+    // race and cause double-play if a second _startStreamGapless call is made.
+    if (this._fetchAbort) { this._fetchAbort.abort(); }
+    this._fetchAbort = new AbortController();
+    const signal = this._fetchAbort.signal;
     const ctx = this.ac();
-    fetch(url)
+    fetch(url, { signal })
       .then(r => r.arrayBuffer())
       .then(ab => ctx.decodeAudioData(ab))
       .then(buf => {
         if (this.currentRoom !== forRoom) return;
-        // If the context suspended during the fetch (keep-alive wasn't enough),
-        // set pending restart so the next user gesture re-triggers this via unlock().
         if (ctx.state !== 'running') {
+          // Context is still suspended — cache the decoded buffer so _onContextRunning
+          // can start playback immediately without a second fetch round-trip.
           this._pendingRoomRestart = forRoom;
+          this._pendingBuffer = buf;
+          this._pendingBufferLoopAt = loopAt;
+          this._pendingBufferGainMult = gainMult;
           return;
         }
         this._startCrossfadeLoop(buf, loopAt, gainMult);
       })
-      .catch(() => {});
+      .catch(() => {}); // covers fetch abort and decodeAudioData failures
   }
 
   /** Crossfade loop — each node loops internally (loop=true) and a new instance
@@ -288,6 +322,13 @@ export class SoundEngine {
   private ac(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext();
+
+      // Reliable unlock detection: statechange fires when the context actually
+      // transitions to 'running', even on iOS Safari where ctx.resume()'s promise
+      // can resolve before the state is truly updated.
+      this.ctx.addEventListener('statechange', () => {
+        if (this.ctx?.state === 'running') this._onContextRunning();
+      });
 
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this._muted ? 0 : 1;
@@ -605,7 +646,12 @@ export class SoundEngine {
   setRoom(room: RoomId | ''): void {
     if (room === this.currentRoom) return;
     this._stopAmbient();
-    this._pendingRoomRestart = null; // clear stale pending from previous room
+    // Clear all pending state from the previous room so a stale restart or
+    // cached buffer can't trigger audio for the wrong room after a room change.
+    this._pendingRoomRestart = null;
+    this._pendingBuffer = null;
+    this._pendingBufferLoopAt = undefined;
+    this._pendingBufferGainMult = 1.0;
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
@@ -631,9 +677,10 @@ export class SoundEngine {
     }
 
     // If the AudioContext isn't running yet (mobile browsers start it suspended),
-    // mark this room so unlock() can restart the ambient once the context resumes.
-    // HTML-audio rooms (lounge, myroom, cabin, alley) are already retried via
-    // streamEl/loopEl in onUnlocked — only Web Audio rooms need the pending restart.
+    // mark this room so _onContextRunning() can restart the ambient once it resumes.
+    // HTML-audio rooms (lounge, myroom, cabin) are retried via streamEl/loopEl in
+    // _onContextRunning — Web Audio rooms (hub, alley, woods, oscillator rooms) need
+    // the pending restart path.
     const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin';
     if (usesWebAudio && this.ctx && this.ctx.state !== 'running') {
       this._pendingRoomRestart = room;
