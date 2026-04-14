@@ -88,11 +88,18 @@ export class SoundEngine {
       // SFX from going dead between interactions.
       if (!this._keepAliveNode) {
         try {
+          // Non-zero buffer: a 1 Hz sine at -100 dB (amplitude 1e-5, completely
+          // inaudible). iOS detects a truly silent (zero-sample) buffer and
+          // auto-suspends the AudioContext anyway — a tiny non-zero signal prevents that.
           const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < data.length; i++) {
+            data[i] = Math.sin(2 * Math.PI * i / ctx.sampleRate) * 1e-5;
+          }
           const src = ctx.createBufferSource();
           src.buffer = buf;
           src.loop = true;
-          src.connect(ctx.destination); // bypass masterGain — it's truly silent
+          src.connect(ctx.destination);
           src.start();
           this._keepAliveNode = src;
         } catch {}
@@ -165,6 +172,12 @@ export class SoundEngine {
       .then(ab => ctx.decodeAudioData(ab))
       .then(buf => {
         if (this.currentRoom !== forRoom) return;
+        // If the context suspended during the fetch (keep-alive wasn't enough),
+        // set pending restart so the next user gesture re-triggers this via unlock().
+        if (ctx.state !== 'running') {
+          this._pendingRoomRestart = forRoom;
+          return;
+        }
         this._startCrossfadeLoop(buf, loopAt, gainMult);
       })
       .catch(() => {});
@@ -596,7 +609,7 @@ export class SoundEngine {
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
-      this._startStream('/assets/audio/hub-ambient.m4a');
+      this._startStreamGapless('/assets/audio/hub-ambient.m4a', 'hub');
     } else if (room === 'woods') {
       this._startStreamGapless('/assets/audio/woods-night.mp3', 'woods');
       this._startLoopEl('/assets/audio/cabin-fire.m4a', 2.5);
@@ -621,7 +634,7 @@ export class SoundEngine {
     // mark this room so unlock() can restart the ambient once the context resumes.
     // HTML-audio rooms (lounge, myroom, cabin, alley) are already retried via
     // streamEl/loopEl in onUnlocked — only Web Audio rooms need the pending restart.
-    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin' && room !== 'hub';
+    const usesWebAudio = room !== 'lounge' && room !== 'myroom' && room !== 'cabin';
     if (usesWebAudio && this.ctx && this.ctx.state !== 'running') {
       this._pendingRoomRestart = room;
     }

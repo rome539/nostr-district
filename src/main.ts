@@ -25,14 +25,10 @@ window.addEventListener('pagehide', (e) => {
 // retrying on every touchend/click/pointerdown until audioUnlocked is confirmed —
 // touchstart is unreliable on iOS Safari for this purpose.
 {
-  const unlockAudio = () => {
-    SoundEngine.get().unlock();
-    if (SoundEngine.get().audioUnlocked) {
-      document.removeEventListener('touchend',   unlockAudio, false);
-      document.removeEventListener('click',      unlockAudio, false);
-      document.removeEventListener('pointerdown',unlockAudio, false);
-    }
-  };
+  // Keep listeners permanent — iOS can re-suspend the AudioContext at any time
+  // (phone call, lock screen, backgrounding). Every gesture re-runs unlock() which
+  // is idempotent when running and picks up any _pendingRoomRestart if suspended.
+  const unlockAudio = () => { SoundEngine.get().unlock(); };
   document.addEventListener('touchend',    unlockAudio, { passive: true });
   document.addEventListener('click',       unlockAudio);
   document.addEventListener('pointerdown', unlockAudio, { passive: true });
