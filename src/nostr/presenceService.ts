@@ -104,7 +104,10 @@ export function connectPresence(cb: PresenceCallback): void {
           msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
         }
       }
-      if (msg.type === 'join') callbacks?.onPlayerJoin(msg);
+      if (msg.type === 'join') {
+        // Drop join broadcasts from other rooms (race: player left before server processed our room change)
+        if (!msg.room || msg.room === currentRoom) callbacks?.onPlayerJoin(msg);
+      }
       if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y, msg.f);
       if (msg.type === 'leave') callbacks?.onPlayerLeave(msg.pubkey);
       if (msg.type === 'count') callbacks?.onCountUpdate(msg.count);

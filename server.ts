@@ -68,7 +68,7 @@ wss.on('connection', (ws) => {
           }
         });
         ws.send(JSON.stringify({ type: 'players', room, players: others }));
-        broadcastToRoom(room, { type: 'join', pubkey: myPubkey, name: msg.name, x: msg.x, y: msg.y, avatar: msg.avatar || '', status: (msg.status || '').slice(0, 60) }, myPubkey);
+        broadcastToRoom(room, { type: 'join', pubkey: myPubkey, name: msg.name, x: msg.x, y: msg.y, avatar: msg.avatar || '', status: (msg.status || '').slice(0, 60), room }, myPubkey);
         broadcastCount();
       }
 
@@ -115,7 +115,7 @@ wss.on('connection', (ws) => {
           }
         });
         ws.send(JSON.stringify({ type: 'players', room: newRoom, players: others }));
-        broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar, status: player.status }, myPubkey);
+        broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar, status: player.status, room: newRoom }, myPubkey);
         broadcastCount();
       }
 
