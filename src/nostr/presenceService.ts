@@ -50,8 +50,10 @@ let callbacks: PresenceCallback | null = null;
 let lastSentX = 0;
 let lastSentY = 0;
 let currentRoom = 'hub';
+let presenceReady = false; // true once the server's initial players list arrives
 
 export function getCurrentRoom(): string { return currentRoom; }
+export function isPresenceReady(): boolean { return presenceReady; }
 
 export function connectPresence(cb: PresenceCallback): void {
   if (ws) {
@@ -77,6 +79,7 @@ export function connectPresence(cb: PresenceCallback): void {
 
   ws.onopen = () => {
     console.log('[Presence] Connected');
+    presenceReady = false;
     const state = authStore.getState();
     ws!.send(JSON.stringify({
       type: 'join',
@@ -95,6 +98,7 @@ export function connectPresence(cb: PresenceCallback): void {
       const msg = JSON.parse(event.data);
 
       if (msg.type === 'players') {
+        presenceReady = true; // server has synced — room navigation now allowed
         // Drop stale player lists that arrived after a room change
         if (!msg.room || msg.room === currentRoom) {
           msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
@@ -200,6 +204,7 @@ export function sendChat(text: string): void {
 }
 
 export function sendRoomChange(room: string, x?: number, y?: number): void {
+  if (!presenceReady) return; // block until server has confirmed initial player sync
   if (ws?.readyState === WebSocket.OPEN) {
     currentRoom = room;
     ws.send(JSON.stringify({ type: 'room', room, x: x || 400, y: y || 348, avatar: serializeAvatar(getAvatar()) }));
@@ -225,6 +230,7 @@ export function sendStatusUpdate(status: string): void {
 }
 
 export function disconnectPresence(): void {
+  presenceReady = false;
   callbacks = null;
   onRoomRequest = null;
   onRoomGranted = null;
