@@ -219,23 +219,26 @@ export class CrewPanel {
 
   private renderMyCrew(): void {
     if (!this.bodyEl) return;
-    this.bodyEl.innerHTML = '<div class="cp-loading">Loading your crews…</div>';
+    this.bodyEl.innerHTML = '<div class="cp-body-scroll"><div class="cp-loading">Loading your crews…</div></div>';
 
     fetchMyCrews().then(crews => {
       if (!this.bodyEl || this.activeCrew || this.activeTab !== 'mine') return;
       if (crews.length === 0) {
         this.bodyEl.innerHTML = `
-          <div class="cp-empty">
+          <div class="cp-body-scroll"><div class="cp-empty">
             <div style="color:var(--nd-text);font-weight:bold;margin-bottom:6px">No crew yet</div>
             <div style="color:var(--nd-subtext);font-size:12px">Find a crew to join,<br>or create your own.</div>
-          </div>
+          </div></div>
         `;
         return;
       }
+      const scroll = document.createElement('div');
+      scroll.className = 'cp-body-scroll';
+      crews.forEach(crew => scroll.appendChild(this.buildCrewCard(crew, true)));
       this.bodyEl.innerHTML = '';
-      crews.forEach(crew => this.bodyEl!.appendChild(this.buildCrewCard(crew, true)));
+      this.bodyEl.appendChild(scroll);
     }).catch(() => {
-      if (this.bodyEl) this.bodyEl.innerHTML = `<div class="cp-empty"><div style="color:var(--nd-subtext);font-size:12px">Couldn't load crews.</div></div>`;
+      if (this.bodyEl) this.bodyEl.innerHTML = `<div class="cp-body-scroll"><div class="cp-empty"><div style="color:var(--nd-subtext);font-size:12px">Couldn't load crews.</div></div></div>`;
     });
   }
 
@@ -249,7 +252,7 @@ export class CrewPanel {
     if (this.allCrews.length > 0) {
       this.renderCrewList();
     } else {
-      this.bodyEl.innerHTML = '<div class="cp-loading">Searching for crews…</div>';
+      this.bodyEl.innerHTML = '<div class="cp-body-scroll"><div class="cp-loading">Searching for crews…</div></div>';
     }
 
     this.discoverLoading = true;
@@ -278,11 +281,14 @@ export class CrewPanel {
   private renderCrewList(): void {
     if (!this.bodyEl) return;
     if (this.allCrews.length === 0) {
-      this.bodyEl.innerHTML = '<div class="cp-empty">No crews found yet.<br>Be the first to create one!</div>';
+      this.bodyEl.innerHTML = '<div class="cp-body-scroll"><div class="cp-empty">No crews found yet.<br>Be the first to create one!</div></div>';
       return;
     }
+    const scroll = document.createElement('div');
+    scroll.className = 'cp-body-scroll';
+    this.allCrews.forEach(crew => scroll.appendChild(this.buildCrewCard(crew, false)));
     this.bodyEl.innerHTML = '';
-    this.allCrews.forEach(crew => this.bodyEl!.appendChild(this.buildCrewCard(crew, false)));
+    this.bodyEl.appendChild(scroll);
   }
 
   // ── Crew card (shared) ─────────────────────────────────────────────────────
@@ -1020,10 +1026,19 @@ export class CrewPanel {
       });
 
       const editEmblemInput = overlay.querySelector('#cme-custom-emblem') as HTMLInputElement;
+      const editStatus = overlay.querySelector('.cp-manage-edit-status') as HTMLElement;
 
       editEmblemInput.addEventListener('input', () => {
         const v = editEmblemInput.value.trim();
-        if (!v) return;
+        if (!v) { editStatus.textContent = ''; return; }
+        const isUrl = v.startsWith('http://') || v.startsWith('https://');
+        const isShortEmoji = !isUrl && v.length <= 10;
+        if (!isUrl && !isShortEmoji) {
+          editStatus.style.color = '#e85454';
+          editStatus.textContent = 'Emblem must be a single emoji or an image URL (https://…)';
+          return;
+        }
+        editStatus.textContent = '';
         editEmblem = v;
         overlay.querySelectorAll('#cme-emojis .cp-emoji-btn').forEach(b => b.classList.remove('active'));
         refreshEditPreview();
@@ -1039,7 +1054,6 @@ export class CrewPanel {
       });
 
       const editSaveBtn = overlay.querySelector('.cp-manage-edit-save') as HTMLButtonElement;
-      const editStatus = overlay.querySelector('.cp-manage-edit-status') as HTMLElement;
       editSaveBtn.addEventListener('click', async () => {
         const name = (overlay.querySelector('#cme-name') as HTMLInputElement).value.trim();
         const about = (overlay.querySelector('#cme-about') as HTMLInputElement).value.trim();
@@ -1360,10 +1374,18 @@ export class CrewPanel {
     });
 
     const customEmblemInput = modal.querySelector('#cpm-custom-emblem') as HTMLInputElement;
+    const emblemStatus = modal.querySelector('.cp-modal-status') as HTMLElement;
 
     customEmblemInput.addEventListener('input', () => {
       const val = customEmblemInput.value.trim();
-      if (!val) return;
+      if (!val) { emblemStatus.textContent = ''; return; }
+      const isUrl = val.startsWith('http://') || val.startsWith('https://');
+      const isShortEmoji = !isUrl && val.length <= 10;
+      if (!isUrl && !isShortEmoji) {
+        emblemStatus.textContent = 'Emblem must be a single emoji or an image URL (https://…)';
+        return;
+      }
+      emblemStatus.textContent = '';
       selEmoji = val;
       modal.querySelectorAll('.cp-emoji-btn').forEach(b => b.classList.remove('active'));
       updatePreview();
@@ -1438,8 +1460,9 @@ export class CrewPanel {
         border-radius: 4px; color: var(--nd-subtext);
         cursor: pointer; padding: 4px 10px; font-size: 12px;
         font-family: inherit; transition: all 0.15s;
+        -webkit-tap-highlight-color: transparent; outline: none;
       }
-      .cp-tab.active, .cp-tab:hover {
+      .cp-tab.active, .cp-tab:hover, .cp-tab:active {
         background: color-mix(in srgb,var(--nd-accent) 15%,transparent);
         border-color: color-mix(in srgb,var(--nd-accent) 55%,transparent);
         color: var(--nd-accent);
@@ -1447,13 +1470,19 @@ export class CrewPanel {
       .cp-create-btn, .cp-close-btn {
         background: none; border: none; color: var(--nd-subtext);
         font-size: 18px; cursor: pointer; padding: 4px 8px; transition: color 0.15s;
-        font-family: inherit;
+        font-family: inherit; -webkit-tap-highlight-color: transparent;
+        outline: none;
       }
-      .cp-create-btn:hover { color: var(--nd-accent); }
-      .cp-close-btn:hover { color: var(--nd-text); }
+      .cp-create-btn:hover, .cp-create-btn:active { color: var(--nd-accent); }
+      .cp-close-btn:hover, .cp-close-btn:active { color: var(--nd-text); }
 
       /* Body */
       .cp-body {
+        flex: 1; overflow: hidden; display: flex; flex-direction: column;
+        min-height: 0;
+      }
+      /* Scrollable list views (browse, manage) — don't apply to chat which handles its own scroll */
+      .cp-body-scroll {
         flex: 1; overflow-y: auto; display: flex; flex-direction: column;
         scrollbar-width: thin;
         scrollbar-color: color-mix(in srgb,var(--nd-text) 18%,transparent) transparent;
