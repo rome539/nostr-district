@@ -906,6 +906,10 @@ export class CrewPanel {
           <div class="cp-manage-edit-fields">
             <input class="cp-manage-edit-input" id="cme-name" type="text" maxlength="40" placeholder="Crew name" value="${esc(crew.name)}" />
             <input class="cp-manage-edit-input" id="cme-about" type="text" maxlength="120" placeholder="About" value="${esc(crew.about ?? '')}" />
+            <label class="cp-modal-label cp-toggle-label" style="flex-direction:row;align-items:center;gap:10px;cursor:pointer;margin-top:2px">
+              <span class="cp-toggle"><input type="checkbox" id="cme-open" ${crew.isOpen ? 'checked' : ''} /><span class="cp-toggle-track"></span></span>
+              <span style="font-size:12px;color:var(--nd-subtext)">Open crew (anyone can join)</span>
+            </label>
           </div>
           <div class="cp-manage-edit-emblem-row">
             <div class="cp-modal-emblem-preview" id="cme-preview" style="${crew.emblem.startsWith('http') ? 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);overflow:hidden;padding:0' : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
@@ -1057,12 +1061,13 @@ export class CrewPanel {
       editSaveBtn.addEventListener('click', async () => {
         const name = (overlay.querySelector('#cme-name') as HTMLInputElement).value.trim();
         const about = (overlay.querySelector('#cme-about') as HTMLInputElement).value.trim();
+        const isOpenChecked = (overlay.querySelector('#cme-open') as HTMLInputElement).checked;
         if (!name) { editStatus.style.color = '#e85454'; editStatus.textContent = 'Name required.'; return; }
         editSaveBtn.disabled = true; editSaveBtn.textContent = 'Saving…';
         try {
-          await updateCrewDefinition(crew.id, { name, about, emblem: editEmblem, color: editColor });
+          await updateCrewDefinition(crew.id, { name, about, emblem: editEmblem, color: editColor, isOpen: isOpenChecked });
           // Patch local crew reference so the panel header re-renders correctly
-          crew.name = name; crew.about = about; crew.emblem = editEmblem; crew.color = editColor;
+          crew.name = name; crew.about = about; crew.emblem = editEmblem; crew.color = editColor; crew.isOpen = isOpenChecked;
           editStatus.style.color = 'var(--nd-accent)'; editStatus.textContent = 'Saved!';
           editSaveBtn.textContent = 'Save Changes';
           editSaveBtn.disabled = false;

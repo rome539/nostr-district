@@ -45,6 +45,9 @@ export class PollBoard {
   // list loading
   private isLoading = false;
 
+  // scroll memory
+  private listScrollTop = 0;
+
   private cleanAuthorName(name: string): string {
     const cleaned = name
       .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, '')
@@ -88,8 +91,10 @@ export class PollBoard {
     this.container.id = 'poll-board';
     document.body.appendChild(this.container);
 
-    this.container.addEventListener('mousedown', (e) => {
-      if (e.target === this.container) this.close();
+    this.container.addEventListener('pointerdown', (e) => {
+      const panel = this.container?.querySelector('.pb-panel');
+      if (!panel || panel.contains(e.target as Node)) return;
+      this.close();
     });
     this.container.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -332,7 +337,13 @@ export class PollBoard {
 
     this.container.querySelector('#pb-close')?.addEventListener('click', () => this.close());
     this.container.querySelector('#pb-back')?.addEventListener('click', () => {
-      if (this.view === 'detail') { this.view = 'list'; this.selectedPoll = null; this.selectedOptions.clear(); this.renderView(); }
+      if (this.view === 'detail') {
+        this.view = 'list'; this.selectedPoll = null; this.selectedOptions.clear();
+        this.renderView();
+        // Restore list scroll position
+        const body = this.container?.querySelector('.pb-body') as HTMLElement | null;
+        if (body) body.scrollTop = this.listScrollTop;
+      }
       if (this.view === 'create') { this.view = 'list'; this.renderView(); }
     });
     this.container.querySelector('#pb-open-create')?.addEventListener('click', () => {
@@ -357,6 +368,9 @@ export class PollBoard {
         if (!id) return;
         const poll = this.polls.find(p => p.id === id);
         if (!poll) return;
+        // Save list scroll position before leaving
+        const body = this.container?.querySelector('.pb-body') as HTMLElement | null;
+        if (body) this.listScrollTop = body.scrollTop;
         this.selectedPoll = poll;
         this.selectedOptions.clear();
         this.view = 'detail';
