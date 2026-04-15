@@ -676,8 +676,12 @@ export class SoundEngine {
   }
 
   private _playFile(path: string, volume = 1.0, startAt = 0, stopAfterMs = 0): void {
-    this._loadFileBuf(path).then((buf) => {
+    this._loadFileBuf(path).then(async (buf) => {
       const ctx = this.ac();
+      // If suspended, attempt resume before playing (e.g. keyboard event re-enters after inactivity)
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch {}
+      }
       if (ctx.state !== 'running') return;
       const src = ctx.createBufferSource();
       src.buffer = buf;

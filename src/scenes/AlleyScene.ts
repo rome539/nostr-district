@@ -134,17 +134,20 @@ export class AlleyScene extends BaseScene {
     this.setupCommonKeyboardHandlers();
 
     // Tarot machine prompt
+    const isTouch = this.sys.game.device.input.touch;
     this.tarotPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
     this.tarotPromptBg.fillStyle(hexToNum(P.bg), 0.9);
     this.tarotPromptBg.fillRoundedRect(0, 0, 148, 28, 5);
     this.tarotPromptBg.lineStyle(1, 0x4488cc, 0.6);
     this.tarotPromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.tarotPromptText = this.add.text(0, 0, '[E] Draw a Card',
+    this.tarotPromptText = this.add.text(0, 0, isTouch ? '[TAP] Draw a Card' : '[E] Draw a Card',
       { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#70b8ee', fontStyle: 'bold', align: 'center' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.tarotPromptArrow = this.add.text(0, 0, '▼',
       { fontFamily: 'monospace', fontSize: '9px', color: '#4488cc' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    this.tarotPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 148, 28), Phaser.Geom.Rectangle.Contains);
+    this.tarotPromptBg.on('pointerdown', () => { if (this.nearTarot && !TarotModal.isOpen()) TarotModal.show(); });
 
     // Fortune teller prompt
     this.fortunePromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
@@ -152,12 +155,14 @@ export class AlleyScene extends BaseScene {
     this.fortunePromptBg.fillRoundedRect(0, 0, 148, 28, 5);
     this.fortunePromptBg.lineStyle(1, 0x9966cc, 0.6);
     this.fortunePromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.fortunePromptText = this.add.text(0, 0, '[E] Ask Your Fortune',
+    this.fortunePromptText = this.add.text(0, 0, isTouch ? '[TAP] Ask Your Fortune' : '[E] Ask Your Fortune',
       { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#c0a0ff', fontStyle: 'bold', align: 'center' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.fortunePromptArrow = this.add.text(0, 0, '▼',
       { fontFamily: 'monospace', fontSize: '9px', color: '#9966cc' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    this.fortunePromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 148, 28), Phaser.Geom.Rectangle.Contains);
+    this.fortunePromptBg.on('pointerdown', () => { if (this.nearFortune && !FortuneTellerModal.isOpen()) FortuneTellerModal.show(); });
 
     // Exit door prompt (left opening back to Hub)
     this.exitPromptBg = this.add.graphics().setDepth(50).setVisible(false);
