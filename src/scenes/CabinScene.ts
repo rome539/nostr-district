@@ -13,7 +13,7 @@ import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
 import {
-  sendPosition, sendChat, sendRoomChange,
+  sendPosition, sendChat, sendRoomChange, isPresenceReady,
 } from '../nostr/presenceService';
 
 import { ChatUI } from '../ui/ChatUI';
@@ -401,6 +401,7 @@ export class CabinScene extends BaseScene {
   }
 
   private updateMovement(): void {
+    if (!isPresenceReady()) return; // freeze until server confirms sync
     const CABIN_SPEED = PLAYER_SPEED * 1.5;
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
     if (c) { if (c.left.isDown) vx = -CABIN_SPEED; else if (c.right.isDown) vx = CABIN_SPEED; }

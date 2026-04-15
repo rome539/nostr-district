@@ -8,7 +8,7 @@ import {
   sendRoomResponse, setRoomRequestHandler, setRoomKickHandler, sendRoomRequest,
   setRoomGrantedHandler, setRoomDeniedHandler, requestOnlinePlayers, setOnlinePlayersHandler,
   clearRoomRequestHandler, clearRoomKickHandler, clearRoomGrantedHandler, clearRoomDeniedHandler,
-  sendAvatarUpdate, sendNameUpdate,
+  sendAvatarUpdate, sendNameUpdate, isPresenceReady,
 } from '../nostr/presenceService';
 import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
 import { getRelayManager } from '../nostr/dmService';
@@ -894,6 +894,7 @@ export class RoomScene extends BaseScene {
     );
   }
   private updateMovement(): void {
+    if (!isPresenceReady()) return; // freeze until server confirms sync
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0; let vy = 0; const sp = 250;
     if (c) { if (c.left.isDown) vx = -sp; else if (c.right.isDown) vx = sp; if (c.up.isDown) vy = -sp; else if (c.down.isDown) vy = sp; }
     // Mobile arrow buttons (up = interact, not vertical movement)

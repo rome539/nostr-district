@@ -14,7 +14,7 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
 import {
-  sendPosition, sendChat, sendRoomChange,
+  sendPosition, sendChat, sendRoomChange, isPresenceReady,
 } from '../nostr/presenceService';
 
 import { ChatUI } from '../ui/ChatUI';
@@ -740,6 +740,7 @@ export class AlleyScene extends BaseScene {
   }
 
   private updateMovement(): void {
+    if (!isPresenceReady()) return; // freeze until server confirms sync
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
     if (c) { if (c.left.isDown) vx = -ALLEY_SPEED; else if (c.right.isDown) vx = ALLEY_SPEED; }
     if (vx === 0) { if (this.mobileLeft) vx = -ALLEY_SPEED; else if (this.mobileRight) vx = ALLEY_SPEED; }

@@ -5,6 +5,7 @@ import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendAvatarUpdate,
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
+  isPresenceReady,
 } from '../nostr/presenceService';
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
 import { ChatUI } from '../ui/ChatUI';
@@ -475,6 +476,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
   private updateMovement(): void {
+    if (!isPresenceReady()) return; // freeze until server confirms sync
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
     if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }

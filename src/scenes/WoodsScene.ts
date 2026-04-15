@@ -19,6 +19,7 @@ import {
   sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse,
   requestOnlinePlayers, setOnlinePlayersHandler,
+  isPresenceReady,
 } from '../nostr/presenceService';
 
 import { ChatUI } from '../ui/ChatUI';
@@ -633,6 +634,7 @@ export class WoodsScene extends BaseScene {
   }
 
   private updateMovement(): void {
+    if (!isPresenceReady()) return; // freeze until server confirms sync
     const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
     if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
     if (vx === 0) { if (this.mobileLeft) vx = -PLAYER_SPEED; else if (this.mobileRight) vx = PLAYER_SPEED; }
