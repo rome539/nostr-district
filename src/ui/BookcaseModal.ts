@@ -230,7 +230,13 @@ export const BookcaseModal = {
 
         const qText = document.createElement('div');
         qText.style.cssText = 'color:#e8d5b0;font-size:10px;line-height:1.6;margin-bottom:4px;font-style:italic;';
-        qText.innerHTML = `<span style="color:#7a5a3a">"</span>${q.text.replace(/</g,'&lt;')}<span style="color:#7a5a3a">"</span>`;
+        const openQuote = document.createElement('span');
+        openQuote.style.color = '#7a5a3a'; openQuote.textContent = '\u201c';
+        const closeQuote = document.createElement('span');
+        closeQuote.style.color = '#7a5a3a'; closeQuote.textContent = '\u201d';
+        qText.appendChild(openQuote);
+        qText.appendChild(document.createTextNode(q.text));
+        qText.appendChild(closeQuote);
         row.appendChild(qText);
 
         const metaRow = document.createElement('div');

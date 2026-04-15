@@ -30,6 +30,8 @@ import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+import { safeUrl } from '../utils/sanitize';
+
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -1001,7 +1003,7 @@ export class CrewPanel {
       const refreshEditPreview = () => {
         if (editEmblem.startsWith('http')) {
           editPreview.style.cssText = 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);overflow:hidden;padding:0;';
-          editPreview.innerHTML = `<img src="${editEmblem}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
+          editPreview.innerHTML = `<img src="${safeUrl(editEmblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
         } else {
           editPreview.style.cssText = `background:${editColor}22;border-color:${editColor}55;color:${editColor};`;
           editPreview.innerHTML = renderEmojis(esc(editEmblem));
@@ -1354,7 +1356,7 @@ export class CrewPanel {
     const updatePreview = () => {
       if (isImgUrl(selEmoji)) {
         preview.style.cssText = `background:transparent;border-color:color-mix(in srgb,var(--nd-text) 20%,transparent);overflow:hidden;padding:0;`;
-        preview.innerHTML = `<img src="${selEmoji}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
+        preview.innerHTML = `<img src="${safeUrl(selEmoji)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
       } else {
         preview.style.cssText = `background:${selColor}22;border-color:${selColor}55;color:${selColor};`;
         preview.innerHTML = renderEmojis(esc(selEmoji));

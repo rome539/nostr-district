@@ -2,6 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob: https:;
+    media-src 'self' blob: https:;
+    connect-src 'self' wss: ws: https:;
+    font-src 'self' data:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+  ">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Nostr District — Pixel Art Social World on Nostr</title>
   <meta name="description" content="Nostr District is a free multiplayer pixel art social world built on the Nostr protocol. Walk around, chat live, customize your avatar, visit player rooms, and connect with the Nostr community — no account required to explore.">
