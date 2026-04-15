@@ -52,6 +52,48 @@ let lastSentY = 0;
 let currentRoom = 'hub';
 let presenceReady = false; // true once the server's initial players list arrives
 
+function showLoadingOverlay(): void {
+  let el = document.getElementById('ps-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ps-loading';
+    el.innerHTML = `
+      <div style="
+        background:rgba(3,3,16,0.88);
+        border:1px solid rgba(93,202,165,0.20);
+        border-radius:8px;
+        padding:18px 32px;
+        font-family:'Courier New',monospace;
+        color:#5dcaa5;
+        font-size:11px;
+        letter-spacing:3px;
+        text-transform:uppercase;
+        display:flex;
+        align-items:center;
+        gap:10px;
+      ">
+        <span id="ps-loading-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5dcaa5;"></span>
+        CONNECTING
+      </div>`;
+    el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+    document.body.appendChild(el);
+    // Pulse the dot
+    let bright = true;
+    (el as any)._pulse = setInterval(() => {
+      const dot = document.getElementById('ps-loading-dot');
+      if (dot) { dot.style.opacity = bright ? '1' : '0.2'; bright = !bright; }
+    }, 500);
+  }
+  el.style.display = 'flex';
+}
+
+function hideLoadingOverlay(): void {
+  const el = document.getElementById('ps-loading') as any;
+  if (!el) return;
+  if (el._pulse) { clearInterval(el._pulse); el._pulse = null; }
+  el.style.display = 'none';
+}
+
 export function getCurrentRoom(): string { return currentRoom; }
 export function isPresenceReady(): boolean { return presenceReady; }
 
@@ -80,6 +122,7 @@ export function connectPresence(cb: PresenceCallback): void {
   ws.onopen = () => {
     console.log('[Presence] Connected');
     presenceReady = false;
+    showLoadingOverlay();
     const state = authStore.getState();
     ws!.send(JSON.stringify({
       type: 'join',
@@ -99,6 +142,7 @@ export function connectPresence(cb: PresenceCallback): void {
 
       if (msg.type === 'players') {
         presenceReady = true; // server has synced — room navigation now allowed
+        hideLoadingOverlay();
         // Drop stale player lists that arrived after a room change
         if (!msg.room || msg.room === currentRoom) {
           msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
