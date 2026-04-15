@@ -11,6 +11,7 @@
 
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
+import { captureThumb } from '../stores/sceneThumbs';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange,
@@ -224,6 +225,13 @@ export class AlleyScene extends BaseScene {
   // BACKGROUND (canvas-based, like CabinScene)
   // ══════════════════════════════════════════════════════════════════
   private renderBackground(): void {
+    const c = AlleyScene.generateBg();
+    if (this.textures.exists('alley_bg')) this.textures.remove('alley_bg');
+    this.textures.addCanvas('alley_bg', c);
+    captureThumb('alley', c);
+  }
+
+  static generateBg(): HTMLCanvasElement {
     const c = document.createElement('canvas'); c.width = W; c.height = GAME_HEIGHT;
     const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
     const r = (ax: number, ay: number, aw: number, ah: number, col: string) => { x.fillStyle = col; x.fillRect(ax, ay, aw, ah); };
@@ -602,8 +610,7 @@ export class AlleyScene extends BaseScene {
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,15,0.55)');
     x.fillStyle = vg; x.fillRect(0, 0, W, GAME_HEIGHT);
 
-    if (this.textures.exists('alley_bg')) this.textures.remove('alley_bg');
-    this.textures.addCanvas('alley_bg', c);
+    return c;
   }
 
   // ══════════════════════════════════════════════════════════════════

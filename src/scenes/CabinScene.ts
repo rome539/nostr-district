@@ -8,6 +8,7 @@
 
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
+import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
@@ -160,6 +161,13 @@ export class CabinScene extends BaseScene {
   // BACKGROUND
   // ══════════════════════════════════════════════════════════════════
   private renderBackground(): void {
+    const c = CabinScene.generateBg();
+    if (this.textures.exists('cabin_bg')) this.textures.remove('cabin_bg');
+    this.textures.addCanvas('cabin_bg', c);
+    captureThumb('cabin', c);
+  }
+
+  static generateBg(): HTMLCanvasElement {
     const c = document.createElement('canvas'); c.width = W; c.height = GAME_HEIGHT;
     const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
     const r = (ax: number, ay: number, aw: number, ah: number, col: string) => { x.fillStyle = col; x.fillRect(ax, ay, aw, ah); };
@@ -358,8 +366,7 @@ export class CabinScene extends BaseScene {
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
     x.fillStyle = vg; x.fillRect(0, 0, W, GAME_HEIGHT);
 
-    if (this.textures.exists('cabin_bg')) this.textures.remove('cabin_bg');
-    this.textures.addCanvas('cabin_bg', c);
+    return c;
   }
 
   // ══════════════════════════════════════════════════════════════════

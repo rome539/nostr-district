@@ -181,6 +181,33 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'online_players', players: list }));
       }
 
+      // Request aggregated zone counts for the world map (small payload — no per-player data)
+      if (msg.type === 'zone_counts' && myPubkey) {
+        const counts: Record<string, number> = { hub: 0, alley: 0, woods: 0, cabin: 0 };
+        const roomMap = new Map<string, { ownerName: string; count: number }>();
+
+        players.forEach((p) => {
+          if (p.room in counts) {
+            counts[p.room]++;
+          } else if (p.room.startsWith('myroom:')) {
+            const ownerPubkey = p.room.slice(7);
+            if (!roomMap.has(ownerPubkey)) {
+              const owner = players.get(ownerPubkey);
+              roomMap.set(ownerPubkey, { ownerName: owner?.name ?? ownerPubkey.slice(0, 8), count: 0 });
+            }
+            roomMap.get(ownerPubkey)!.count++;
+          }
+        });
+
+        const rooms = [...roomMap.entries()].map(([owner, data]) => ({
+          owner,
+          ownerName: data.ownerName,
+          count: data.count,
+        }));
+
+        ws.send(JSON.stringify({ type: 'zone_counts', counts, rooms, total: players.size }));
+      }
+
       if (msg.type === 'chat' && myPubkey) {
         const player = players.get(myPubkey);
         if (!player) return;

@@ -909,8 +909,7 @@ export class CrewPanel {
             ${['⚡','🔥','💀','🌙','🐉','🦊','🌊','🎯','💎','🛸','🎮','🗡','🏴'].map(e => `<button class="cp-emoji-btn${e === crew.emblem ? ' active' : ''}" data-emoji="${e}">${e}</button>`).join('')}
           </div>
           <div class="cp-emblem-custom-row" style="margin-top:6px">
-            <input class="cp-modal-input cp-emblem-emoji-input" id="cme-custom-emoji" type="text" maxlength="64" placeholder="Emoji" value="${!crew.emblem.startsWith('http') && !['⚡','🔥','💀','🌙','🐉','🦊','🌊','🎯','💎','🛸','🎮','🗡','🏴'].includes(crew.emblem) ? esc(crew.emblem) : ''}" />
-            <input class="cp-modal-input cp-emblem-img-input" id="cme-custom-img" type="url" maxlength="300" placeholder="Image (https://…)" value="${crew.emblem.startsWith('http') ? esc(crew.emblem) : ''}" />
+            <input class="cp-modal-input" id="cme-custom-emblem" type="text" maxlength="300" placeholder="Custom emoji or https://…" value="${crew.emblem.startsWith('http') || !['⚡','🔥','💀','🌙','🐉','🦊','🌊','🎯','💎','🛸','🎮','🗡','🏴'].includes(crew.emblem) ? esc(crew.emblem) : ''}" />
           </div>
           <div class="cp-manage-members-label" style="margin-top:10px;font-size:10px">Color</div>
           <div class="cp-color-grid" id="cme-colors">
@@ -1015,29 +1014,17 @@ export class CrewPanel {
           editEmblem = (btn as HTMLElement).dataset.emoji!;
           overlay.querySelectorAll('#cme-emojis .cp-emoji-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          (overlay.querySelector('#cme-custom-emoji') as HTMLInputElement).value = '';
-          (overlay.querySelector('#cme-custom-img') as HTMLInputElement).value = '';
+          (overlay.querySelector('#cme-custom-emblem') as HTMLInputElement).value = '';
           refreshEditPreview();
         });
       });
 
-      const editEmojiInput = overlay.querySelector('#cme-custom-emoji') as HTMLInputElement;
-      const editImgInput = overlay.querySelector('#cme-custom-img') as HTMLInputElement;
+      const editEmblemInput = overlay.querySelector('#cme-custom-emblem') as HTMLInputElement;
 
-      editEmojiInput.addEventListener('input', () => {
-        const v = editEmojiInput.value.trim();
+      editEmblemInput.addEventListener('input', () => {
+        const v = editEmblemInput.value.trim();
         if (!v) return;
         editEmblem = v;
-        editImgInput.value = '';
-        overlay.querySelectorAll('#cme-emojis .cp-emoji-btn').forEach(b => b.classList.remove('active'));
-        refreshEditPreview();
-      });
-
-      editImgInput.addEventListener('input', () => {
-        const v = editImgInput.value.trim();
-        if (!v) return;
-        editEmblem = v;
-        editEmojiInput.value = '';
         overlay.querySelectorAll('#cme-emojis .cp-emoji-btn').forEach(b => b.classList.remove('active'));
         refreshEditPreview();
       });
@@ -1324,8 +1311,7 @@ export class CrewPanel {
           ${EMOJIS.map(e => `<button class="cp-emoji-btn${e === selEmoji ? ' active' : ''}" data-emoji="${e}">${e}</button>`).join('')}
         </div>
         <div class="cp-emblem-custom-row">
-          <input class="cp-modal-input cp-emblem-emoji-input" id="cpm-custom-emoji" type="text" maxlength="64" placeholder="Emoji" />
-          <input class="cp-modal-input cp-emblem-img-input" id="cpm-custom-img" type="url" maxlength="300" placeholder="Image (https://…)" />
+          <input class="cp-modal-input" id="cpm-custom-emblem" type="text" maxlength="300" placeholder="Custom emoji or https://…" />
         </div>
 
         <label class="cp-modal-label">Color</label>
@@ -1368,29 +1354,17 @@ export class CrewPanel {
         selEmoji = (btn as HTMLElement).dataset.emoji!;
         modal.querySelectorAll('.cp-emoji-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        (modal.querySelector('#cpm-custom-emoji') as HTMLInputElement).value = '';
-        (modal.querySelector('#cpm-custom-img') as HTMLInputElement).value = '';
+        (modal.querySelector('#cpm-custom-emblem') as HTMLInputElement).value = '';
         updatePreview();
       });
     });
 
-    const customEmojiInput = modal.querySelector('#cpm-custom-emoji') as HTMLInputElement;
-    const customImgInput = modal.querySelector('#cpm-custom-img') as HTMLInputElement;
+    const customEmblemInput = modal.querySelector('#cpm-custom-emblem') as HTMLInputElement;
 
-    customEmojiInput.addEventListener('input', () => {
-      const val = customEmojiInput.value.trim();
+    customEmblemInput.addEventListener('input', () => {
+      const val = customEmblemInput.value.trim();
       if (!val) return;
       selEmoji = val;
-      customImgInput.value = '';
-      modal.querySelectorAll('.cp-emoji-btn').forEach(b => b.classList.remove('active'));
-      updatePreview();
-    });
-
-    customImgInput.addEventListener('input', () => {
-      const val = customImgInput.value.trim();
-      if (!val) return;
-      selEmoji = val;
-      customEmojiInput.value = '';
       modal.querySelectorAll('.cp-emoji-btn').forEach(b => b.classList.remove('active'));
       updatePreview();
     });
@@ -1895,9 +1869,8 @@ export class CrewPanel {
       }
       .cp-modal-input:focus { border-color: color-mix(in srgb,var(--nd-accent) 65%,transparent); }
       .cp-emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-      .cp-emblem-custom-row { display: flex; gap: 8px; margin-top: 6px; }
-      .cp-emblem-emoji-input { flex: 0 0 110px; }
-      .cp-emblem-img-input { flex: 1; }
+      .cp-emblem-custom-row { display: flex; margin-top: 6px; }
+      .cp-emblem-custom-row .cp-modal-input { flex: 1; }
       .cp-emoji-btn {
         width: 34px; height: 34px; font-size: 18px; background: color-mix(in srgb,var(--nd-text) 8%,transparent);
         border: 1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);

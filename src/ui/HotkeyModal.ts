@@ -30,6 +30,7 @@ export class HotkeyModal {
 
     const hotkeys: [string, string][] = [
       ['E / Space', 'Enter room / interact'],
+      ['Tab',       'World map'],
       ['M',         'Messages (DMs)'],
       ['G',         'Crews'],
       ['F',         'Follows list'],
@@ -42,6 +43,7 @@ export class HotkeyModal {
     ];
 
     const navCmds: [string, string][] = [
+      ['/map',          'World map'],
       ['/tp <room>',    'Teleport to a room'],
       ['/dm <name>',    'Open direct message'],
       ['/crew',         'Open crews panel'],

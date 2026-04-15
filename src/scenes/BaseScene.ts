@@ -63,6 +63,7 @@ import { PlayerPicker } from '../ui/PlayerPicker';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RpsGame } from '../ui/RpsGame';
 import { PollBoard } from '../ui/PollBoard';
+import { WorldMap } from '../ui/WorldMap';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
   sendChat, sendNameUpdate, sendRoomResponse,
@@ -153,6 +154,7 @@ export abstract class BaseScene extends Phaser.Scene {
   protected playerPicker  = new PlayerPicker();
   protected rpsGame       = new RpsGame();
   protected pollBoard     = new PollBoard();
+  protected worldMap      = new WorldMap();
 
   // ── Other players (shared by all scenes) ─────────────────────────────────
   protected otherPlayers = new Map<string, OtherPlayer>();
@@ -504,6 +506,16 @@ export abstract class BaseScene extends Phaser.Scene {
     };
     document.addEventListener('keydown', hotkeyHandler);
     this.events.once('shutdown', () => document.removeEventListener('keydown', hotkeyHandler));
+
+    // Tab — World map (document-level so it works outside Phaser focus)
+    const mapHandler = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      if (ci()) return;
+      e.preventDefault();
+      this.worldMap.toggle();
+    };
+    document.addEventListener('keydown', mapHandler);
+    this.events.once('shutdown', () => document.removeEventListener('keydown', mapHandler));
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -584,6 +596,7 @@ export abstract class BaseScene extends Phaser.Scene {
   //   playerPicker → muteList → profile-modal (DOM) → zap-modal (DOM)
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonEsc(): boolean {
+    if (this.worldMap.isOpen())         { this.worldMap.close();        return true; }
     if (this.crewPanel?.isVisible())    { this.crewPanel.pressEsc();    return true; }
     if (this.dmPanel?.isVisible())      { this.dmPanel.close();         return true; }
     if (this.followsPanel?.isVisible()) { this.followsPanel.close();    return true; }
@@ -972,6 +985,10 @@ export abstract class BaseScene extends Phaser.Scene {
       case 'polls':
         this.pollBoard.toggle(); return true;
 
+      // ── World map ──────────────────────────────────────────────────────────
+      case 'map': case 'world':
+        this.worldMap.toggle(); return true;
+
       // ── Status ────────────────────────────────────────────────────────────
       case 'status': {
         const myStatus = getStatus() || '(none)';
@@ -1097,6 +1114,7 @@ export abstract class BaseScene extends Phaser.Scene {
     ProfileModal.destroy();
     this.rpsGame?.destroy();
     this.pollBoard?.destroy();
+    this.worldMap?.destroy();
     this.roomRequestToast?.remove();
     this.roomRequestToast = null;
     clearRoomRequestHandler(this.roomRequestHandler);

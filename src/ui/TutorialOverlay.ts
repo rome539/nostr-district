@@ -47,7 +47,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Panels & Hotkeys',
-    body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><br>Press <b>?</b> anytime to see all hotkeys.',
+    body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><b>Tab</b> — World map<br><br>Press <b>?</b> anytime to see all hotkeys.',
   },
   {
     title: 'Crews',

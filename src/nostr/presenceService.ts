@@ -29,13 +29,21 @@ type RoomRequestHandler = (requesterPubkey: string, requesterName: string) => vo
 type RoomGrantedHandler = (ownerPubkey: string, ownerName: string, room: string, roomConfig?: string) => void;
 type RoomDeniedHandler = (reason: string) => void;
 type RoomKickHandler = (reason: string) => void;
-type OnlinePlayersHandler = (players: { pubkey: string; name: string }[]) => void;
+type OnlinePlayersHandler = (players: { pubkey: string; name: string; room: string }[]) => void;
+
+export interface ZoneCounts {
+  counts: { hub: number; alley: number; woods: number; cabin: number };
+  rooms: { owner: string; ownerName: string; count: number }[];
+  total: number;
+}
+type ZoneCountsHandler = (data: ZoneCounts) => void;
 
 let onRoomRequest: RoomRequestHandler | null = null;
 let onRoomGranted: RoomGrantedHandler | null = null;
 let onRoomDenied: RoomDeniedHandler | null = null;
 let onRoomKick: RoomKickHandler | null = null;
 let onOnlinePlayers: OnlinePlayersHandler | null = null;
+let onZoneCounts: ZoneCountsHandler | null = null;
 
 let ws: WebSocket | null = null;
 let callbacks: PresenceCallback | null = null;
@@ -104,6 +112,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'room_denied') onRoomDenied?.(msg.reason);
       if (msg.type === 'room_kick') onRoomKick?.(msg.reason);
       if (msg.type === 'online_players') { onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
+      if (msg.type === 'zone_counts') onZoneCounts?.(msg as ZoneCounts);
     } catch (e) {}
   };
 
@@ -127,6 +136,11 @@ export function setRoomRequestHandler(handler: RoomRequestHandler | null): void 
 export function setRoomGrantedHandler(handler: RoomGrantedHandler | null): void { onRoomGranted = handler; }
 export function setRoomDeniedHandler(handler: RoomDeniedHandler | null): void { onRoomDenied = handler; }
 export function setRoomKickHandler(handler: RoomKickHandler | null): void { onRoomKick = handler; }
+export function setZoneCountsHandler(handler: ZoneCountsHandler | null): void { onZoneCounts = handler; }
+
+export function requestZoneCounts(): void {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'zone_counts' }));
+}
 export function setOnlinePlayersHandler(handler: OnlinePlayersHandler | null): void { onOnlinePlayers = handler; }
 export function clearRoomRequestHandler(handler: RoomRequestHandler | null): void {
   if (onRoomRequest === handler) onRoomRequest = null;
@@ -214,6 +228,7 @@ export function disconnectPresence(): void {
   onRoomDenied = null;
   onRoomKick = null;
   onOnlinePlayers = null;
+  onZoneCounts = null;
   if (ws) {
     ws.onclose = null;
     ws.close();

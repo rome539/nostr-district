@@ -11,6 +11,7 @@
 
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
+import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
@@ -198,6 +199,13 @@ export class WoodsScene extends BaseScene {
   // MAIN BACKGROUND
   // ══════════════════════════════════════════════════════════════════
   private renderMainBackground(): void {
+    const c = WoodsScene.generateBg();
+    if (this.textures.exists('woods_bg')) this.textures.remove('woods_bg');
+    this.textures.addCanvas('woods_bg', c);
+    captureThumb('woods', c);
+  }
+
+  static generateBg(): HTMLCanvasElement {
     const c = document.createElement('canvas'); c.width = W; c.height = GAME_HEIGHT;
     const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
     const r = (ax: number, ay: number, aw: number, ah: number, col: string) => { x.fillStyle = col; x.fillRect(ax, ay, aw, ah); };
@@ -582,8 +590,7 @@ export class WoodsScene extends BaseScene {
     vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
     x.fillStyle=vg; x.fillRect(0,0,W,GAME_HEIGHT);
 
-    if (this.textures.exists('woods_bg')) this.textures.remove('woods_bg');
-    this.textures.addCanvas('woods_bg', c);
+    return c;
   }
 
   // ══════════════════════════════════════════════════════════════════

@@ -3,6 +3,10 @@ import { WORLD_WIDTH, GAME_HEIGHT, GROUND_Y, P } from '../config/game.config';
 import { getAvatar } from '../stores/avatarStore';
 import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
 import { initFeedService } from '../nostr/feedService';
+import { captureThumb } from '../stores/sceneThumbs';
+import { WoodsScene } from './WoodsScene';
+import { AlleyScene } from './AlleyScene';
+import { CabinScene } from './CabinScene';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -742,6 +746,11 @@ export class BootScene extends Phaser.Scene {
     x.fillRect(0, 0, W, H);
 
     this.textures.addCanvas('district_bg', canvas);
+    captureThumb('hub', canvas);
+    captureThumb('woods', WoodsScene.generateBg());
+    captureThumb('alley', AlleyScene.generateBg());
+    captureThumb('cabin', CabinScene.generateBg());
+    captureThumb('rooms', genRoomPreview());
   }
 
   // ================================================================
@@ -809,4 +818,63 @@ export class BootScene extends Phaser.Scene {
       }
     });
   }
+}
+
+/** Generic private-room interior preview for the Rooms map node. */
+function genRoomPreview(): HTMLCanvasElement {
+  const W = 800, H = 500;
+  const FLOOR = Math.round(H * 0.65);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d')!;
+  const r = (ax: number, ay: number, aw: number, ah: number, col: string) => { x.fillStyle = col; x.fillRect(ax, ay, aw, ah); };
+
+  // Wall
+  const wg = x.createLinearGradient(0, 0, 0, FLOOR);
+  wg.addColorStop(0, '#08060e'); wg.addColorStop(1, '#10102a');
+  x.fillStyle = wg; x.fillRect(0, 0, W, FLOOR);
+  // Subtle horizontal wallpaper lines
+  x.globalAlpha = 0.05;
+  for (let wy = 20; wy < FLOOR; wy += 20) r(0, wy, W, 1, '#ffffff');
+  x.globalAlpha = 1;
+
+  // Window
+  const winX = 320, winY = 22, winW = 160, winH = 140;
+  r(winX, winY, winW, winH, '#060c18');
+  x.globalAlpha = 0.32; r(winX, winY, winW, winH, '#304870'); x.globalAlpha = 1;
+  // Moonlight spill on floor
+  x.globalAlpha = 0.09; x.fillStyle = '#8aaae0';
+  x.beginPath(); x.ellipse(winX + winW / 2, FLOOR + 10, 130, 70, 0, 0, Math.PI * 2); x.fill();
+  x.globalAlpha = 1;
+  // Frame
+  x.fillStyle = '#26200e';
+  r(winX - 3, winY - 3, winW + 6, 3, '#26200e'); r(winX - 3, winY + winH, winW + 6, 3, '#26200e');
+  r(winX - 3, winY - 3, 3, winH + 6, '#26200e'); r(winX + winW, winY - 3, 3, winH + 6, '#26200e');
+  r(winX, winY + Math.floor(winH / 2) - 1, winW, 2, '#1e180c');
+  r(winX + Math.floor(winW / 2) - 1, winY, 2, winH, '#1e180c');
+
+  // Baseboard
+  r(0, FLOOR - 6, W, 10, '#1a1610');
+
+  // Floor
+  const fg = x.createLinearGradient(0, FLOOR, 0, H);
+  fg.addColorStop(0, '#281c0e'); fg.addColorStop(1, '#160e06');
+  x.fillStyle = fg; x.fillRect(0, FLOOR, W, H - FLOOR);
+  x.globalAlpha = 0.28;
+  for (let fy = FLOOR + 4; fy < H; fy += 18) r(0, fy, W, 2, '#1a1008');
+  x.globalAlpha = 0.1;
+  for (let fx = 90; fx < W; fx += 90) r(fx, FLOOR, 1, H - FLOOR, '#0e0a04');
+  x.globalAlpha = 1;
+
+  // Neon accent strip along baseboard
+  x.globalAlpha = 0.18; r(0, FLOOR - 10, W, 3, '#5dcaa5');
+  x.globalAlpha = 0.07;
+  x.beginPath(); x.rect(0, FLOOR - 28, W, 22); x.fill();
+  x.globalAlpha = 1;
+
+  // Vignette
+  const vg = x.createRadialGradient(W / 2, H / 2, W * 0.12, W / 2, H / 2, W * 0.65);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.78)');
+  x.fillStyle = vg; x.fillRect(0, 0, W, H);
+
+  return c;
 }
