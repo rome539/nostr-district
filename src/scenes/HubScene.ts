@@ -217,7 +217,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (p.worldY < GROUND_Y - 10 || p.worldY > 460) return; this.targetX = Phaser.Math.Clamp(p.worldX, 20, WORLD_WIDTH - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (currentlyOver.length > 0) return; if (p.worldY < GROUND_Y - 10 || p.worldY > 460) return; this.targetX = Phaser.Math.Clamp(p.worldX, 20, WORLD_WIDTH - 20); this.isMoving = true; });
     this.input.keyboard?.on('keydown-E', () => this.tryEnter());
     this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
     this.setupPresenceCallbacks(this.registry.get('playerPubkey')); this.setupRoomRequestHandlers();
@@ -400,7 +400,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       nameYOffset: -44, statusYOffset: -59,
       nameColor: P.lcream, nameFontSize: '10px', statusFontSize: '9px',
       nameBg: '#0a0014bb', namePadding: { x: 4, y: 2 },
-      czW: 24, czH: 44, czYOffset: -20,
+      czW: 44, czH: 56, czYOffset: -20,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0x6a4888, 0x4a6080],
       useFadeIn: true, interpolateY: false, emoteContext: 'hub',
     };

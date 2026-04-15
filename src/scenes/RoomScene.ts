@@ -194,7 +194,7 @@ export class RoomScene extends BaseScene {
     this.setupCommonKeyboardHandlers();  // shouldBlockPanelKeys() guards with BookcaseModal.isOpen()
 
     // Click to move
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (this.introActive) return; if (p.worldY < 330 || p.worldY > 470) return; this.targetX = Phaser.Math.Clamp(p.worldX, 40, GAME_WIDTH - 40); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (currentlyOver.length > 0) return; if (this.introActive) return; if (p.worldY < 330 || p.worldY > 470) return; this.targetX = Phaser.Math.Clamp(p.worldX, 40, GAME_WIDTH - 40); this.isMoving = true; });
 
     // Computer interaction prompt (only in myroom)
     this.computerPromptBg = this.add.graphics().setDepth(50).setVisible(false);

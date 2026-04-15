@@ -111,8 +111,9 @@ export class AlleyScene extends BaseScene {
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
       if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      if (currentlyOver.length > 0) return;
       if (p.worldY < FLOOR_Y - 10 || p.worldY > 460) return;
       this.targetX = Phaser.Math.Clamp(p.worldX, 20, W - 28);
       this.isMoving = true;
