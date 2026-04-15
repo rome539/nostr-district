@@ -52,9 +52,19 @@ export type FurnitureId =
   | 'beanbag'    // bean bag chair in the corner
   | 'arcade'     // retro arcade cabinet
   | 'tv'         // wall-mounted TV
-  | 'pet_bed'    // round cushioned pet bed (cat & dog)
-  | 'cat_tree'   // cat tree / scratching post
-  | 'pet_bowl';  // food & water bowl set
+  | 'pet_bed'      // round cushioned pet bed (cat & dog)
+  | 'cat_tree'     // cat tree / scratching post
+  | 'pet_bowl'     // food & water bowl set
+  | 'coffee_table' // low table in front of couch
+  | 'record_player'// vinyl turntable on a stand
+  | 'lava_lamp'    // glowing blob lamp
+  | 'whiteboard'   // wall-mounted whiteboard with diagrams
+  | 'server_rack'   // cyberpunk server rack with blinking LEDs
+  | 'candles'       // clustered candles with warm glow
+  | 'record_crates' // milk crates full of vinyl records
+  | 'trunk'         // vintage wooden storage trunk
+  | 'bookstack'     // messy pile of books on the floor
+  | 'bar_cart';     // rolling bar cart with bottles
 
 export type PosterId =
   | 'none'
@@ -158,8 +168,18 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   arcade:     '#1e1432',  // charcoal
   tv:         '#1a1830',  // dark navy
   pet_bed:    '#7a3858',  // warm rose/mauve cushion
-  cat_tree:   '#5a3a1a',  // natural tan/sisal
-  pet_bowl:   '#2a1e3e',  // dark pewter
+  cat_tree:     '#5a3a1a',  // natural tan/sisal
+  pet_bowl:     '#2a1e3e',  // dark pewter
+  coffee_table: '#2a1a0c',  // dark walnut wood
+  record_player:'#1e1432',  // dark charcoal plastic
+  lava_lamp:    '#e87aab',  // pink blobs
+  whiteboard:   '#2a1a0c',  // dark wood frame
+  server_rack:   '#1e1432',  // dark charcoal
+  candles:       '#f0e0a8',  // warm ivory wax
+  record_crates: '#c87840',  // orange-tan milk crate plastic
+  trunk:         '#3a2410',  // dark walnut wood
+  bookstack:     '#2a1858',  // deep purple (spine color)
+  bar_cart:      '#2a2a2a',  // brushed dark metal
 };
 
 export function setFurnitureColor(id: FurnitureId, color: string): RoomConfig {
@@ -258,9 +278,19 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   beanbag:   { label: 'Bean Bag', emoji: '🫘' },
   arcade:    { label: 'Arcade Cabinet', emoji: '🕹' },
   tv:        { label: 'Wall TV', emoji: '📺' },
-  pet_bed:   { label: 'Pet Bed', emoji: '🛏' },
-  cat_tree:  { label: 'Cat Tree', emoji: '🐾' },
-  pet_bowl:  { label: 'Pet Bowls', emoji: '🥣' },
+  pet_bed:       { label: 'Pet Bed',       emoji: '🛏' },
+  cat_tree:      { label: 'Cat Tree',      emoji: '🐾' },
+  pet_bowl:      { label: 'Pet Bowls',     emoji: '🥣' },
+  coffee_table:  { label: 'Coffee Table',  emoji: '🪵' },
+  record_player: { label: 'Record Player', emoji: '🎵' },
+  lava_lamp:     { label: 'Lava Lamp',     emoji: '🌡' },
+  whiteboard:    { label: 'Whiteboard',    emoji: '📋' },
+  server_rack:   { label: 'Server Rack',   emoji: '🖥' },
+  candles:       { label: 'Candles',       emoji: '🕯' },
+  record_crates: { label: 'Record Crates', emoji: '📦' },
+  trunk:         { label: 'Trunk',         emoji: '🧳' },
+  bookstack:     { label: 'Book Stack',    emoji: '📚' },
+  bar_cart:      { label: 'Bar Cart',      emoji: '🍾' },
 };
 
 /** Poster display data */
@@ -280,7 +310,7 @@ export const POSTER_DATA: Record<PosterId, { label: string; emoji: string }> = {
 };
 
 /** All available furniture IDs */
-export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv', 'pet_bed', 'cat_tree', 'pet_bowl'];
+export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv', 'pet_bed', 'cat_tree', 'pet_bowl', 'coffee_table', 'record_player', 'lava_lamp', 'whiteboard', 'server_rack', 'candles', 'record_crates', 'trunk', 'bookstack', 'bar_cart'];
 
 /** All available poster IDs */
 export const ALL_POSTERS: PosterId[] = ['none', 'bitcoin', 'nostr', 'pixel_art', 'landscape', 'cat', 'skull', 'moon', 'code', 'synthwave', 'matrix', 'space'];

@@ -14,9 +14,11 @@ import {
 } from '../stores/roomStore';
 
 type BlinkingLED = { x: number; y: number; color: string; phase: number };
+export type CandleFlame = { x: number; y: number; phase: number };
 
 export class RoomRenderer {
   public blinkingLEDs: BlinkingLED[] = [];
+  public candleFlames: CandleFlame[] = [];
 
   /** Render a room background to canvas and return the texture key */
   render(
@@ -28,6 +30,7 @@ export class RoomRenderer {
     ownerRoomConfig?: RoomConfig,
   ): string {
     this.blinkingLEDs = [];
+    this.candleFlames = [];
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const x = canvas.getContext('2d')!;
@@ -384,10 +387,107 @@ export class RoomRenderer {
       r(cx + 142, FY - 8, 8, 8, SHELF_BODY);
     }
 
+    // ── Coffee Table ──
+    if (cfg.furniture.includes('coffee_table')) {
+      const ctC = fc('coffee_table');
+      const ctLight = lighten(ctC, 22);
+      const ctDark  = darken(ctC, 18);
+      // Shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.22;
+      x.beginPath(); x.ellipse(94, FY + 22, 66, 8, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Legs
+      r(38, FY + 16, 5, 18, ctDark);
+      r(151, FY + 16, 5, 18, ctDark);
+      // Crossbar
+      r(38, FY + 26, 118, 4, darken(ctC, 10));
+      // Table surface
+      r(30, FY + 8, 130, 10, ctC);
+      r(30, FY + 8, 130, 3, ctLight);
+      r(30, FY + 18, 130, 2, ctDark);
+      // Surface grain
+      x.globalAlpha = 0.08;
+      for (let gx2 = 35; gx2 < 158; gx2 += 12) {
+        x.fillStyle = ctLight; x.fillRect(gx2, FY + 9, 1, 8);
+      }
+      x.globalAlpha = 1;
+    }
+
+    // ── Candles ──
+    if (cfg.furniture.includes('candles')) {
+      const canC   = fc('candles');
+      const canLight = lighten(canC, 20);
+      // If coffee table is present, sit on it; otherwise sit on floor
+      const canY = cfg.furniture.includes('coffee_table') ? FY + 6 : FY - 2;
+      // Tray/saucer
+      r(76, canY, 34, 4, '#1a1208');
+      x.globalAlpha = 0.25; r(77, canY + 1, 32, 2, '#fff'); x.globalAlpha = 1;
+      // Three candles — center tall, left medium, right short
+      const candles3: Array<{ cx: number; h: number; col: string; phase: number }> = [
+        { cx: 86, h: 28, col: canC,             phase: 0 },
+        { cx: 78, h: 18, col: canLight,          phase: 1.3 },
+        { cx: 102, h: 14, col: darken(canC, 8), phase: 2.6 },
+      ];
+      candles3.forEach(({ cx: cv, h, col, phase }) => {
+        // Wax body
+        r(cv - 3, canY - h, 6, h, col);
+        r(cv - 3, canY - h, 6, 2, darken(col, 10));
+        x.globalAlpha = 0.18; r(cv - 1, canY - h + 2, 2, h - 4, '#fff'); x.globalAlpha = 1;
+        // Wax drip
+        x.fillStyle = col; x.globalAlpha = 0.5;
+        x.fillRect(cv + 1, canY - h + 2, 2, Math.floor(h / 4)); x.globalAlpha = 1;
+        // Wick (static)
+        r(cv, canY - h - 4, 1, 4, '#1a0a04');
+        // Register flame position for live animation (drawn in RoomScene update loop)
+        this.candleFlames.push({ x: cv, y: canY - h - 4, phase });
+      });
+    }
+
     // ── Posters ──
     this.drawPoster(x, cfg.posters[0], 50, 40, 80, 100, light);
     this.drawPoster(x, cfg.posters[1], 160, 30, 70, 90, light);
     this.drawPoster(x, cfg.posters[2], 470, 35, 90, 70, light);
+
+    // ── Whiteboard ──
+    if (cfg.furniture.includes('whiteboard')) {
+      const wbC = fc('whiteboard');
+      const wbX = 596; const wbY = 14;
+      // Drop shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.3;
+      x.fillRect(wbX + 3, wbY + 3, 56, 76); x.globalAlpha = 1;
+      // Frame
+      r(wbX, wbY, 56, 76, wbC);
+      x.fillStyle = lighten(wbC, 18); x.globalAlpha = 0.7;
+      x.fillRect(wbX, wbY, 56, 3); x.fillRect(wbX, wbY, 3, 76); x.globalAlpha = 1;
+      x.fillStyle = darken(wbC, 14); x.globalAlpha = 0.7;
+      x.fillRect(wbX, wbY + 73, 56, 3); x.fillRect(wbX + 53, wbY, 3, 76); x.globalAlpha = 1;
+      // Board surface
+      r(wbX + 3, wbY + 3, 50, 66, '#d4cce8');
+      x.globalAlpha = 0.04; r(wbX + 3, wbY + 3, 50, 66, '#fff'); x.globalAlpha = 1;
+      // Pixel scribbles — title underline
+      x.fillStyle = '#806880'; x.globalAlpha = 0.8;
+      x.fillRect(wbX + 6, wbY + 8, 28, 2); x.globalAlpha = 1;
+      // Text lines
+      x.fillStyle = '#504060'; x.globalAlpha = 0.7;
+      [[6,13,32],[6,17,24],[6,21,28],[6,25,18],[6,31,30],[6,35,22],[6,39,26]].forEach(([ox, oy, w2]) => {
+        x.fillRect(wbX + ox, wbY + oy, w2, 2);
+      });
+      x.globalAlpha = 1;
+      // Box diagram
+      x.strokeStyle = '#603878'; x.lineWidth = 1; x.globalAlpha = 0.65;
+      x.strokeRect(wbX + 6, wbY + 46, 16, 10);
+      x.strokeRect(wbX + 28, wbY + 46, 16, 10);
+      // Arrow between boxes
+      x.fillStyle = '#603878'; x.globalAlpha = 0.65;
+      x.fillRect(wbX + 22, wbY + 50, 6, 2);
+      x.fillRect(wbX + 26, wbY + 48, 2, 6);
+      x.globalAlpha = 1;
+      // Ledge
+      r(wbX, wbY + 76, 56, 5, darken(wbC, 6));
+      // Markers on ledge
+      r(wbX + 8,  wbY + 77, 8, 3, '#e87aab');
+      r(wbX + 19, wbY + 77, 8, 3, '#5dcaa5');
+    }
 
     // ── Bookshelf ──
     if (cfg.furniture.includes('bookshelf')) {
@@ -409,6 +509,47 @@ export class RoomRenderer {
           x.fillRect(bx2, shY - bookH, 4, bookH); x.globalAlpha = 1;
         }
       }
+    }
+
+    // ── Server Rack ──
+    if (cfg.furniture.includes('server_rack')) {
+      const srvX = 524; const srvY = FY - 108;
+      const srvC = fc('server_rack');
+      const srvDark  = darken(srvC, 12);
+      const srvLight = lighten(srvC, 14);
+      // Shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(srvX + 16, FY + 2, 16, 4, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Rack body
+      r(srvX, srvY, 32, 108, srvC);
+      // Side ears
+      r(srvX,      srvY, 4, 108, srvDark);
+      r(srvX + 28, srvY, 4, 108, srvDark);
+      // Front panel
+      r(srvX + 4, srvY + 2, 24, 104, darken(srvC, 8));
+      // Rack units (6 × 16px each)
+      const ledColors = [light.primary, P.teal, P.amber, light.primary, P.pink, P.teal];
+      for (let ru = 0; ru < 6; ru++) {
+        const ruY = srvY + 4 + ru * 16;
+        r(srvX + 5, ruY, 22, 14, darken(srvC, 6));
+        r(srvX + 5, ruY, 22, 2, darken(srvC, 14));
+        // Rack screws
+        r(srvX + 6,  ruY + 4, 2, 2, srvDark);
+        r(srvX + 23, ruY + 4, 2, 2, srvDark);
+        // Drive bay slots
+        x.globalAlpha = 0.12;
+        for (let di = 8; di < 20; di += 4) r(srvX + di, ruY + 5, 2, 5, srvLight);
+        x.globalAlpha = 1;
+        // Blinking LED per unit
+        this.blinkingLEDs.push({ x: srvX + 25, y: ruY + 9, color: ledColors[ru], phase: (ru * 1.3) % (Math.PI * 2) });
+      }
+      // Bottom vents
+      x.globalAlpha = 0.3;
+      for (let vy = srvY + 100; vy < srvY + 106; vy += 3) r(srvX + 5, vy, 22, 1, srvDark);
+      x.globalAlpha = 1;
+      // Top rail
+      r(srvX + 4, srvY, 24, 4, srvDark);
     }
 
     // ── Floor Lamp ──
@@ -465,6 +606,47 @@ export class RoomRenderer {
       this.blinkingLEDs.push({ x: 198, y: FY - 42, color: light.primary, phase: Math.random() * Math.PI * 2 });
     }
 
+    // ── Record Player ──
+    if (cfg.furniture.includes('record_player')) {
+      const rpX = 420; const rpC = fc('record_player');
+      const rpDark  = darken(rpC, 16);
+      const rpLight = lighten(rpC, 16);
+      // Stand/crate
+      r(rpX, FY - 22, 28, 22, rpDark);
+      r(rpX + 2, FY - 20, 24, 16, darken(rpC, 8));
+      x.globalAlpha = 0.18;
+      r(rpX + 2, FY - 14, 24, 1, rpLight);
+      r(rpX + 2, FY - 8,  24, 1, rpLight);
+      x.globalAlpha = 1;
+      // Turntable body
+      r(rpX, FY - 38, 28, 16, rpC);
+      r(rpX, FY - 38, 28, 3, rpLight);
+      r(rpX + 1, FY - 35, 26, 13, darken(rpC, 6));
+      // Platter (perspective ellipse)
+      x.fillStyle = '#0a0612';
+      x.beginPath(); x.ellipse(rpX + 14, FY - 30, 11, 4, 0, 0, Math.PI * 2); x.fill();
+      // Vinyl grooves
+      x.strokeStyle = '#2a1848'; x.lineWidth = 1; x.globalAlpha = 0.5;
+      x.beginPath(); x.ellipse(rpX + 14, FY - 30, 9, 3.2, 0, 0, Math.PI * 2); x.stroke();
+      x.beginPath(); x.ellipse(rpX + 14, FY - 30, 6, 2.2, 0, 0, Math.PI * 2); x.stroke();
+      x.globalAlpha = 1;
+      // Record label center
+      x.fillStyle = light.primary; x.globalAlpha = 0.7;
+      x.beginPath(); x.ellipse(rpX + 14, FY - 30, 2.5, 1, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Tonearm
+      x.strokeStyle = rpLight; x.lineWidth = 1.5; x.globalAlpha = 0.8;
+      x.beginPath(); x.moveTo(rpX + 25, FY - 36); x.lineTo(rpX + 16, FY - 30); x.stroke();
+      x.globalAlpha = 1;
+      // Pivot dot
+      x.fillStyle = rpLight;
+      x.beginPath(); x.arc(rpX + 25, FY - 36, 1.5, 0, Math.PI * 2); x.fill();
+      // Subtle glow
+      x.fillStyle = light.primary; x.globalAlpha = 0.03;
+      x.beginPath(); x.arc(rpX + 14, FY - 30, 18, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+    }
+
     // ── Bean Bag — moved to x=350, away from minifridge ──
     if (cfg.furniture.includes('beanbag')) {
       const bx = 350; const by = FY;
@@ -487,6 +669,49 @@ export class RoomRenderer {
       x.beginPath(); x.arc(bx, by - 47, 3, 0, Math.PI * 2); x.fill();
       x.globalAlpha = 1;
     }
+
+    // ── Lava Lamp ──
+    if (cfg.furniture.includes('lava_lamp')) {
+      const llX = 229; const llC = fc('lava_lamp');
+      const llDark  = darken(llC, 20);
+      const llLight = lighten(llC, 25);
+      // Floor shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.18;
+      x.beginPath(); x.ellipse(llX + 9, FY + 2, 12, 3, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Base — wide foot
+      r(llX, FY - 12, 18, 12, llDark);
+      r(llX + 2, FY - 10, 14, 8, darken(llC, 12));
+      x.globalAlpha = 0.2; r(llX + 3, FY - 9, 12, 2, '#fff'); x.globalAlpha = 1;
+      // Glass tube
+      r(llX + 5, FY - 68, 8, 56, '#0a0618');
+      x.fillStyle = llC; x.globalAlpha = 0.15;
+      x.fillRect(llX + 5, FY - 68, 8, 56); x.globalAlpha = 1;
+      // Blobs inside
+      const blobs = [
+        { oy: -52, rx: 2.5, ry: 4 },
+        { oy: -38, rx: 3,   ry: 5 },
+        { oy: -24, rx: 2,   ry: 3.5 },
+      ];
+      blobs.forEach(({ oy, rx: bRx, ry: bRy }) => {
+        x.fillStyle = llC; x.globalAlpha = 0.75;
+        x.beginPath(); x.ellipse(llX + 9, FY + oy, bRx, bRy, 0, 0, Math.PI * 2); x.fill();
+        x.fillStyle = llLight; x.globalAlpha = 0.3;
+        x.beginPath(); x.ellipse(llX + 8, FY + oy - 1, bRx * 0.5, bRy * 0.4, -0.3, 0, Math.PI * 2); x.fill();
+        x.globalAlpha = 1;
+      });
+      // Glass edge highlight
+      x.fillStyle = '#fff'; x.globalAlpha = 0.07;
+      x.fillRect(llX + 5, FY - 68, 2, 56); x.globalAlpha = 1;
+      // Cap top
+      r(llX + 4, FY - 70, 10, 5, llDark);
+      r(llX + 6, FY - 68, 6, 2, darken(llC, 8));
+      // Glow
+      x.fillStyle = llC; x.globalAlpha = 0.04;
+      x.beginPath(); x.arc(llX + 9, FY - 40, 28, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+    }
+
     // ── Arcade Cabinet ──
     if (cfg.furniture.includes('arcade')) {
       const ax = 480; const ay = FY - 110;
@@ -598,126 +823,6 @@ export class RoomRenderer {
       x.beginPath(); x.arc(tvX + tvW - 7, tvY + tvH - 6, 5, 0, Math.PI * 2); x.fill();
       x.globalAlpha = 1;
     }
-    // ── Cat Tree / Scratching Post ──
-    if (cfg.furniture.includes('cat_tree')) {
-      const ctX = 776; const ctBotY = FY + 144;
-      const ctC = fc('cat_tree');
-      const ctLight = lighten(ctC, 22);
-      const ctDark  = darken(ctC, 14);
-      // Floor shadow
-      x.fillStyle = '#000'; x.globalAlpha = 0.2;
-      x.beginPath(); x.ellipse(ctX, ctBotY + 1, 20, 4, 0, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      // Base platform
-      r(ctX - 19, ctBotY - 8, 38, 8, ctDark);
-      r(ctX - 17, ctBotY - 6, 34, 5, ctC);
-      x.fillStyle = ctLight; x.globalAlpha = 0.2; x.fillRect(ctX - 17, ctBotY - 6, 34, 2); x.globalAlpha = 1;
-      // Center post — sisal rope bands
-      r(ctX - 5, ctBotY - 82, 10, 74, ctDark);
-      for (let py2 = ctBotY - 82; py2 < ctBotY - 8; py2 += 5) {
-        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
-      }
-      // Mid platform
-      r(ctX - 20, ctBotY - 52, 40, 6, ctDark);
-      r(ctX - 18, ctBotY - 50, 36, 4, ctC);
-      x.fillStyle = ctLight; x.globalAlpha = 0.18; x.fillRect(ctX - 18, ctBotY - 50, 36, 2); x.globalAlpha = 1;
-      // Post between mid and top
-      r(ctX - 5, ctBotY - 100, 10, 48, ctDark);
-      for (let py2 = ctBotY - 100; py2 < ctBotY - 52; py2 += 5) {
-        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
-      }
-      // Hideout box
-      r(ctX - 15, ctBotY - 130, 30, 30, ctDark);
-      r(ctX - 13, ctBotY - 128, 26, 26, ctC);
-      x.fillStyle = ctLight; x.globalAlpha = 0.1; x.fillRect(ctX - 13, ctBotY - 128, 26, 4); x.globalAlpha = 1;
-      // Entrance hole
-      x.fillStyle = '#06030e';
-      x.beginPath(); x.arc(ctX, ctBotY - 115, 7, 0, Math.PI * 2); x.fill();
-      // Roof cap
-      r(ctX - 17, ctBotY - 132, 34, 5, ctDark);
-      x.fillStyle = ctLight; x.globalAlpha = 0.22; x.fillRect(ctX - 17, ctBotY - 132, 34, 2); x.globalAlpha = 1;
-      // Dangling toy — hangs from mid platform edge
-      x.strokeStyle = darken(ctC, 20); x.lineWidth = 1; x.globalAlpha = 0.6;
-      x.beginPath(); x.moveTo(ctX - 14, ctBotY - 50); x.lineTo(ctX - 14, ctBotY - 36); x.stroke();
-      x.globalAlpha = 1;
-      x.fillStyle = P.pink; x.globalAlpha = 0.9;
-      x.beginPath(); x.arc(ctX - 14, ctBotY - 33, 4, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#fff'; x.globalAlpha = 0.25;
-      x.beginPath(); x.arc(ctX - 16, ctBotY - 35, 1.5, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-    }
-
-    // ── Pet Bowls (food & water) ──
-    if (cfg.furniture.includes('pet_bowl')) {
-      const bwlX = 598; const bwlY = FY + 144;
-      const bowlC = fc('pet_bowl');
-      const bowlLight = lighten(bowlC, 22);
-      // Floor shadow
-      x.fillStyle = '#000'; x.globalAlpha = 0.18;
-      x.beginPath(); x.ellipse(bwlX + 18, bwlY + 8, 24, 5, 0, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      // Left bowl — water
-      x.fillStyle = darken(bowlC, 12);
-      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = bowlC;
-      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#3a8edc'; x.globalAlpha = 0.8;
-      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#fff'; x.globalAlpha = 0.22;
-      x.beginPath(); x.ellipse(bwlX + 5, bwlY + 2, 3, 1.5, -0.4, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      // Right bowl — kibble
-      x.fillStyle = darken(bowlC, 12);
-      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = bowlC;
-      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#7a4820'; x.globalAlpha = 0.9;
-      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      x.fillStyle = '#a06030'; x.globalAlpha = 0.95;
-      [[27,1],[30,0],[33,1],[29,-1],[32,-1]].forEach(([ox, oy]) => {
-        x.beginPath(); x.arc(bwlX + ox, bwlY + oy, 1.5, 0, Math.PI * 2); x.fill();
-      });
-      x.globalAlpha = 1;
-      // Rim highlight on both
-      x.strokeStyle = bowlLight; x.lineWidth = 1; x.globalAlpha = 0.35;
-      x.beginPath(); x.ellipse(bwlX + 8,  bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
-      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
-      x.globalAlpha = 1;
-    }
-
-    // ── Pet Bed ──
-    if (cfg.furniture.includes('pet_bed')) {
-      const bedCX = 704; const bedY = FY + 124;
-      const bedC = fc('pet_bed');
-      const bedLight = lighten(bedC, 28);
-      const bedDark  = darken(bedC, 16);
-      // Floor shadow
-      x.fillStyle = '#000'; x.globalAlpha = 0.2;
-      x.beginPath(); x.ellipse(bedCX, bedY + 22, 30, 6, 0, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      // Bolster ring (donut outline — drawn as large then inner cutout)
-      x.fillStyle = bedDark;
-      x.beginPath(); x.ellipse(bedCX, bedY + 10, 30, 17, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = bedC;
-      x.beginPath(); x.ellipse(bedCX, bedY + 10, 26, 14, 0, 0, Math.PI * 2); x.fill();
-      // Inner well (where the pet curls up)
-      x.fillStyle = bedDark;
-      x.beginPath(); x.ellipse(bedCX, bedY + 11, 17, 9, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = darken(bedC, 8);
-      x.beginPath(); x.ellipse(bedCX, bedY + 11, 14, 7, 0, 0, Math.PI * 2); x.fill();
-      // Top-left rim highlight
-      x.fillStyle = bedLight; x.globalAlpha = 0.35;
-      x.beginPath(); x.ellipse(bedCX - 10, bedY + 5, 13, 6, -0.5, 0, Math.PI * 2); x.fill();
-      x.globalAlpha = 1;
-      // Subtle stitching seam around bolster top
-      x.strokeStyle = bedDark; x.lineWidth = 1; x.globalAlpha = 0.4;
-      x.setLineDash([3, 3]);
-      x.beginPath(); x.ellipse(bedCX, bedY + 8, 22, 12, 0, 0, Math.PI * 2); x.stroke();
-      x.setLineDash([]);
-      x.globalAlpha = 1;
-    }
-
     const lightColor = cfg.ceilingLightColor || light.primary;
     for (let lx = 30; lx < W - 30; lx += 30) {
       r(lx, 14, 30, 1, wall.accent);
@@ -791,8 +896,338 @@ export class RoomRenderer {
     x.fillRect(732, DSY - 24, 2,  8);
     x.globalAlpha = 1;
 
+    // ── Pet Bowls (food & water) ── behind player
+    if (cfg.furniture.includes('pet_bowl')) {
+      const bwlX = 598; const bwlY = FY + 136;
+      const bowlC = fc('pet_bowl');
+      const bowlLight = lighten(bowlC, 22);
+      x.fillStyle = '#000'; x.globalAlpha = 0.18;
+      x.beginPath(); x.ellipse(bwlX + 18, bwlY + 8, 24, 5, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      x.fillStyle = darken(bowlC, 12);
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = bowlC;
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#3a8edc'; x.globalAlpha = 0.8;
+      x.beginPath(); x.ellipse(bwlX + 8, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#fff'; x.globalAlpha = 0.22;
+      x.beginPath(); x.ellipse(bwlX + 5, bwlY + 2, 3, 1.5, -0.4, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      x.fillStyle = darken(bowlC, 12);
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 6, 13, 8, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = bowlC;
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#7a4820'; x.globalAlpha = 0.9;
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 3, 7, 4, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      x.fillStyle = '#a06030'; x.globalAlpha = 0.95;
+      [[27,1],[30,0],[33,1],[29,-1],[32,-1]].forEach(([ox, oy]) => {
+        x.beginPath(); x.arc(bwlX + ox, bwlY + oy, 1.5, 0, Math.PI * 2); x.fill();
+      });
+      x.globalAlpha = 1;
+      x.strokeStyle = bowlLight; x.lineWidth = 1; x.globalAlpha = 0.35;
+      x.beginPath(); x.ellipse(bwlX + 8,  bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
+      x.beginPath(); x.ellipse(bwlX + 30, bwlY + 5, 11, 6, 0, 0, Math.PI * 2); x.stroke();
+      x.globalAlpha = 1;
+    }
+
+    // ── Pet Bed ── behind player
+    if (cfg.furniture.includes('pet_bed')) {
+      const bedX = 668; const bedY = FY + 124;
+      const bedW = 56; const bedH = 40;
+      const bedC = fc('pet_bed');
+      const bedLight = lighten(bedC, 28);
+      const bedDark  = darken(bedC, 16);
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.fillRect(bedX + 3, bedY + bedH + 1, bedW - 2, 4); x.globalAlpha = 1;
+      r(bedX, bedY, bedW, bedH, bedDark);
+      r(bedX + 1, bedY + 1, bedW - 2, bedH - 2, bedC);
+      r(bedX + 1,        bedY + 1,        bedW - 2, 8,  darken(bedC, 4));
+      r(bedX + 1,        bedY + 1,        8, bedH - 2,  darken(bedC, 4));
+      r(bedX + bedW - 9, bedY + 1,        8, bedH - 2,  darken(bedC, 4));
+      r(bedX + 1,        bedY + bedH - 7, bedW - 2, 6,  darken(bedC, 4));
+      r(bedX + 9, bedY + 9, bedW - 18, bedH - 16, darken(bedC, 10));
+      r(bedX + 10, bedY + 10, bedW - 20, bedH - 18, darken(bedC, 7));
+      x.fillStyle = bedLight; x.globalAlpha = 0.22;
+      x.fillRect(bedX + 2, bedY + 1, bedW - 4, 2);
+      x.fillRect(bedX + 1, bedY + 2, 2, bedH - 4); x.globalAlpha = 1;
+      x.strokeStyle = bedDark; x.lineWidth = 1; x.globalAlpha = 0.45;
+      x.setLineDash([3, 2]);
+      x.strokeRect(bedX + 9, bedY + 9, bedW - 18, bedH - 16);
+      x.setLineDash([]); x.globalAlpha = 1;
+    }
+
     // ── Door ──
     this.drawDoor(x, W, H - 64, nc, H);
+  }
+
+  // ════════════════════════════════════════════
+  // FOREGROUND LAYER — rendered on a transparent canvas, displayed in front of the player
+  // ════════════════════════════════════════════
+
+  /** Render foreground furniture to a transparent canvas and return texture key */
+  renderForeground(
+    scene: Phaser.Scene,
+    roomId: string,
+    W: number,
+    H: number,
+    ownerRoomConfig?: RoomConfig,
+  ): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const x = canvas.getContext('2d')!;
+    x.imageSmoothingEnabled = false;
+    const rc = roomId.startsWith('myroom:') ? 'myroom' : roomId;
+    if (rc === 'myroom') this.drawForegroundItems(x, W, H, ownerRoomConfig);
+    const texKey = `roomfg_${roomId.replace(/[^a-z0-9]/g, '_')}`;
+    if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
+    scene.textures.addCanvas(texKey, canvas);
+    return texKey;
+  }
+
+  private drawForegroundItems(x: CanvasRenderingContext2D, _W: number, _H: number, ownerRoomConfig?: RoomConfig): void {
+    const cfg = ownerRoomConfig ?? getRoomConfig();
+    const FY = 300;
+    const r = (ax: number, ay: number, aw: number, ah: number, col: string) => {
+      x.fillStyle = col; x.fillRect(ax, ay, aw, ah);
+    };
+    const fc = (id: string) => getFurnitureColor(cfg, id as Parameters<typeof getFurnitureColor>[1]);
+    const lighten = (hex: string, amt: number): string => {
+      const n = parseInt(hex.slice(1), 16);
+      const clamp = (v: number) => Math.min(255, Math.max(0, v));
+      const rb = clamp(((n >> 16) & 0xff) + amt); const gb = clamp(((n >> 8) & 0xff) + amt); const bb = clamp((n & 0xff) + amt);
+      return `#${rb.toString(16).padStart(2,'0')}${gb.toString(16).padStart(2,'0')}${bb.toString(16).padStart(2,'0')}`;
+    };
+    const darken = (hex: string, amt: number): string => lighten(hex, -amt);
+
+    // ── Record Crates ──
+    if (cfg.furniture.includes('record_crates')) {
+      const crateC = fc('record_crates');
+      const crateLight = lighten(crateC, 22);
+      const crateDark  = darken(crateC, 14);
+      const drawCrate = (cx: number, topY: number, cw: number, ch: number) => {
+        // Shadow
+        x.fillStyle = '#000'; x.globalAlpha = 0.18;
+        x.beginPath(); x.ellipse(cx + cw / 2, topY + ch + 2, cw / 2 - 2, 4, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+        // Crate body
+        r(cx, topY, cw, ch, crateDark);
+        r(cx + 1, topY + 1, cw - 2, ch - 2, crateC);
+        // Grid lines
+        x.strokeStyle = crateDark; x.lineWidth = 1; x.globalAlpha = 0.45;
+        for (let gx2 = cx + 8; gx2 < cx + cw - 2; gx2 += 9) {
+          x.beginPath(); x.moveTo(gx2, topY + 1); x.lineTo(gx2, topY + ch - 1); x.stroke();
+        }
+        for (let gy = topY + 8; gy < topY + ch - 2; gy += 9) {
+          x.beginPath(); x.moveTo(cx + 1, gy); x.lineTo(cx + cw - 1, gy); x.stroke();
+        }
+        x.globalAlpha = 1;
+        // Top highlight
+        x.fillStyle = crateLight; x.globalAlpha = 0.15; x.fillRect(cx + 1, topY + 1, cw - 2, 3); x.globalAlpha = 1;
+        // Vinyl records peeking out the top
+        const recordCols = ['#181828', '#261614', '#141e14', '#22201a'];
+        for (let ri = 0; ri < Math.min(4, Math.floor((cw - 6) / 7)); ri++) {
+          const rx = cx + 3 + ri * 7;
+          r(rx, topY - 9, 5, 11, recordCols[ri % recordCols.length]);
+          x.fillStyle = '#555'; x.globalAlpha = 0.7;
+          x.beginPath(); x.arc(rx + 2, topY - 4, 1.2, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+        }
+      };
+      drawCrate(10, FY + 132, 34, 38);
+      drawCrate(46, FY + 120, 34, 50);
+    }
+
+    // ── Trunk ──
+    if (cfg.furniture.includes('trunk')) {
+      const trX = 100; const trY = FY + 124;
+      const trW = 70; const trH = 40;
+      const trC = fc('trunk');
+      const trLight = lighten(trC, 20);
+      const trDark  = darken(trC, 12);
+      // Shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(trX + trW / 2, trY + trH + 2, trW / 2 - 4, 5, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      // Body
+      r(trX, trY, trW, trH, trDark);
+      r(trX + 1, trY + 1, trW - 2, trH - 2, trC);
+      // Lid top (rounded slightly with a highlight band)
+      r(trX, trY, trW, 6, darken(trC, 6));
+      x.fillStyle = trLight; x.globalAlpha = 0.18; x.fillRect(trX + 2, trY + 1, trW - 4, 3); x.globalAlpha = 1;
+      // Lid dividing line
+      r(trX, trY + 14, trW, 2, trDark);
+      // Metal corner reinforcements
+      const corners = [[trX, trY], [trX + trW - 6, trY], [trX, trY + trH - 6], [trX + trW - 6, trY + trH - 6]];
+      corners.forEach(([cx2, cy2]) => {
+        r(cx2, cy2, 6, 6, '#5a5040');
+        x.fillStyle = '#9a8870'; x.globalAlpha = 0.5;
+        x.fillRect(cx2 + 1, cy2 + 1, 2, 2); x.globalAlpha = 1;
+      });
+      // Horizontal metal straps
+      r(trX, trY + 8, trW, 2, '#5a5040');
+      r(trX, trY + trH - 10, trW, 2, '#5a5040');
+      // Center clasp
+      r(trX + trW / 2 - 5, trY + 12, 10, 6, '#4a4030');
+      r(trX + trW / 2 - 3, trY + 13, 6, 4, '#7a6850');
+      x.fillStyle = '#c0a860'; x.globalAlpha = 0.8;
+      x.fillRect(trX + trW / 2 - 1, trY + 14, 2, 2); x.globalAlpha = 1;
+      // Wood grain lines
+      x.strokeStyle = trDark; x.lineWidth = 1; x.globalAlpha = 0.18;
+      for (let gl = trX + 10; gl < trX + trW - 4; gl += 10) {
+        x.beginPath(); x.moveTo(gl, trY + 2); x.lineTo(gl, trY + trH - 2); x.stroke();
+      }
+      x.globalAlpha = 1;
+    }
+
+    // ── Book Stack ──
+    if (cfg.furniture.includes('bookstack')) {
+      const bsX = 182;
+      const bsC = fc('bookstack');
+      // Books lying flat in a messy pile — each book is a thin horizontal slab
+      // with a colored spine on the left, cream page-edges on the right, slight offsets for chaos
+      const bookData: Array<{ dx: number; w: number; col: string }> = [
+        { dx:  0, w: 44, col: bsC },
+        { dx:  3, w: 38, col: lighten(bsC, 22) },
+        { dx: -2, w: 42, col: darken(bsC, 12) },
+        { dx:  5, w: 36, col: lighten(bsC, 36) },
+        { dx:  1, w: 40, col: darken(bsC, 22) },
+        { dx: -3, w: 34, col: lighten(bsC, 14) },
+        { dx:  2, w: 46, col: darken(bsC, 6) },
+      ];
+      const stackBaseY = FY + 172;
+      const bookH = 8; // each book's thickness in pixels
+      // Ground shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(bsX + 23, stackBaseY + 3, 26, 4, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      bookData.forEach((b, i) => {
+        const bx = bsX + b.dx;
+        const by = stackBaseY - (bookData.length - i) * bookH;
+        // Cover color (top face)
+        r(bx, by, b.w, bookH - 1, b.col);
+        // Spine strip on left (darker, slightly narrower)
+        r(bx, by, 5, bookH - 1, darken(b.col, 14));
+        // Page edges on right (cream/off-white)
+        r(bx + b.w - 6, by, 6, bookH - 1, '#c8c0a8');
+        x.fillStyle = '#e8e0d0'; x.globalAlpha = 0.55;
+        // Thin page lines on the edge for texture
+        for (let pl = by + 1; pl < by + bookH - 2; pl += 2) {
+          x.fillRect(bx + b.w - 5, pl, 4, 1);
+        }
+        x.globalAlpha = 1;
+        // Top highlight on spine
+        x.fillStyle = lighten(b.col, 28); x.globalAlpha = 0.22;
+        x.fillRect(bx + 1, by, 3, bookH - 1); x.globalAlpha = 1;
+        // Thin dark separator line between books
+        x.fillStyle = '#000'; x.globalAlpha = 0.25;
+        x.fillRect(bx, by + bookH - 1, b.w, 1); x.globalAlpha = 1;
+      });
+    }
+
+    // ── Bar Cart ──
+    if (cfg.furniture.includes('bar_cart')) {
+      const bcX = 240; const bcC = fc('bar_cart');
+      const bcLight = lighten(bcC, 28);
+      const bcDark  = darken(bcC, 12);
+      const topShelfY  = FY + 112;
+      const botShelfY  = FY + 141;
+      const cartW = 56; const shelfH = 4;
+      // Shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.18;
+      x.beginPath(); x.ellipse(bcX + cartW / 2, FY + 175, cartW / 2 - 2, 4, 0, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      // Frame legs (vertical bars)
+      const legXs = [bcX + 4, bcX + cartW - 8];
+      legXs.forEach(lx => {
+        r(lx, topShelfY, 4, botShelfY - topShelfY + shelfH + 32, bcDark);
+        x.fillStyle = bcLight; x.globalAlpha = 0.15; x.fillRect(lx + 1, topShelfY, 1, botShelfY - topShelfY + shelfH + 30); x.globalAlpha = 1;
+      });
+      // Cross brace
+      x.strokeStyle = bcDark; x.lineWidth = 2; x.globalAlpha = 0.7;
+      x.beginPath(); x.moveTo(bcX + 6, topShelfY + 14); x.lineTo(bcX + cartW - 6, botShelfY - 6); x.stroke();
+      x.globalAlpha = 1;
+      // Shelves
+      r(bcX, topShelfY, cartW, shelfH, bcC);
+      x.fillStyle = bcLight; x.globalAlpha = 0.2; x.fillRect(bcX + 1, topShelfY, cartW - 2, 2); x.globalAlpha = 1;
+      r(bcX, botShelfY, cartW, shelfH, bcC);
+      x.fillStyle = bcLight; x.globalAlpha = 0.2; x.fillRect(bcX + 1, botShelfY, cartW - 2, 2); x.globalAlpha = 1;
+      // Wheels
+      const wheelY = botShelfY + shelfH + 28;
+      [bcX + 6, bcX + cartW - 10].forEach(wx => {
+        x.fillStyle = bcDark;
+        x.beginPath(); x.arc(wx + 2, wheelY, 5, 0, Math.PI * 2); x.fill();
+        x.fillStyle = bcLight; x.globalAlpha = 0.3;
+        x.beginPath(); x.arc(wx + 1, wheelY - 1, 2, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+      });
+      // Bottles on top shelf
+      const bottleData = [
+        { bx: bcX + 6,  h: 22, w: 8,  col: '#1a3a18' },
+        { bx: bcX + 17, h: 18, w: 7,  col: '#3a1a10' },
+        { bx: bcX + 27, h: 24, w: 7,  col: '#1a1a30' },
+        { bx: bcX + 37, h: 20, w: 6,  col: '#2a3a18' },
+      ];
+      bottleData.forEach(b => {
+        // Bottle body
+        r(b.bx, topShelfY - b.h, b.w, b.h, darken(b.col, 8));
+        r(b.bx + 1, topShelfY - b.h + 1, b.w - 2, b.h - 2, b.col);
+        // Neck
+        r(b.bx + 2, topShelfY - b.h - 6, b.w - 4, 7, darken(b.col, 4));
+        // Label
+        r(b.bx + 1, topShelfY - b.h + 5, b.w - 2, 7, lighten(b.col, 30));
+        // Glass highlight
+        x.fillStyle = '#fff'; x.globalAlpha = 0.1;
+        x.fillRect(b.bx + 1, topShelfY - b.h + 1, 2, b.h - 4); x.globalAlpha = 1;
+      });
+      // Glasses on bottom shelf
+      [[bcX + 8, 10], [bcX + 18, 10], [bcX + 28, 12]].forEach(([gx2, gh]) => {
+        r(gx2, botShelfY - gh, 7, gh, '#d0e8f8');
+        x.fillStyle = '#fff'; x.globalAlpha = 0.25; x.fillRect(gx2 + 1, botShelfY - gh + 1, 2, gh - 2); x.globalAlpha = 1;
+        x.fillStyle = '#000'; x.globalAlpha = 0.1; x.fillRect(gx2, botShelfY - gh, 7, 2); x.globalAlpha = 1;
+      });
+    }
+
+    // ── Cat Tree / Scratching Post ──
+    if (cfg.furniture.includes('cat_tree')) {
+      const ctX = 776; const ctBotY = FY + 172;
+      const ctC = fc('cat_tree');
+      const ctLight = lighten(ctC, 22);
+      const ctDark  = darken(ctC, 14);
+      // Floor shadow
+      x.fillStyle = '#000'; x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(ctX, ctBotY + 1, 20, 4, 0, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+      // Base platform
+      r(ctX - 19, ctBotY - 8, 38, 8, ctDark);
+      r(ctX - 17, ctBotY - 6, 34, 5, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.2; x.fillRect(ctX - 17, ctBotY - 6, 34, 2); x.globalAlpha = 1;
+      // Center post — sisal rope bands
+      r(ctX - 5, ctBotY - 82, 10, 74, ctDark);
+      for (let py2 = ctBotY - 82; py2 < ctBotY - 8; py2 += 5) {
+        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
+      }
+      // Mid platform
+      r(ctX - 20, ctBotY - 52, 40, 6, ctDark);
+      r(ctX - 18, ctBotY - 50, 36, 4, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.18; x.fillRect(ctX - 18, ctBotY - 50, 36, 2); x.globalAlpha = 1;
+      // Post between mid and top
+      r(ctX - 5, ctBotY - 100, 10, 48, ctDark);
+      for (let py2 = ctBotY - 100; py2 < ctBotY - 52; py2 += 5) {
+        x.fillStyle = ctLight; x.globalAlpha = 0.3; x.fillRect(ctX - 5, py2, 10, 3); x.globalAlpha = 1;
+      }
+      // Hideout box
+      r(ctX - 15, ctBotY - 130, 30, 30, ctDark);
+      r(ctX - 13, ctBotY - 128, 26, 26, ctC);
+      x.fillStyle = ctLight; x.globalAlpha = 0.1; x.fillRect(ctX - 13, ctBotY - 128, 26, 4); x.globalAlpha = 1;
+      // Entrance hole
+      x.fillStyle = '#06030e';
+      x.beginPath(); x.arc(ctX, ctBotY - 115, 7, 0, Math.PI * 2); x.fill();
+      // Roof cap
+      r(ctX - 17, ctBotY - 132, 34, 5, ctDark);
+      x.fillStyle = ctLight; x.globalAlpha = 0.22; x.fillRect(ctX - 17, ctBotY - 132, 34, 2); x.globalAlpha = 1;
+      // Dangling toy — hangs from mid platform edge
+      x.strokeStyle = darken(ctC, 20); x.lineWidth = 1; x.globalAlpha = 0.6;
+      x.beginPath(); x.moveTo(ctX - 14, ctBotY - 50); x.lineTo(ctX - 14, ctBotY - 36); x.stroke();
+      x.globalAlpha = 1;
+      x.fillStyle = P.pink; x.globalAlpha = 0.9;
+      x.beginPath(); x.arc(ctX - 14, ctBotY - 33, 4, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#fff'; x.globalAlpha = 0.25;
+      x.beginPath(); x.arc(ctX - 16, ctBotY - 35, 1.5, 0, Math.PI * 2); x.fill();
+      x.globalAlpha = 1;
+    }
+
   }
 
   // ── Poster Drawing Helper ──

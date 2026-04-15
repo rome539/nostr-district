@@ -50,6 +50,7 @@ export class ComputerUI {
   private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'music' = 'walls';
   private activePosterSlot: 0 | 1 | 2 = 0;
   private activeFurnitureColor: FurnitureId | null = null;
+  private activeFurnitureCategory = 'lounge';
   private previewPill: HTMLDivElement | null = null;
   private draftAvatar: AvatarConfig | null = null;
   private draftRoom: RoomConfig | null = null;
@@ -852,86 +853,136 @@ export class ComputerUI {
 
     // Curated palettes per furniture type
     const PALETTES: Record<FurnitureId, { label: string; colors: string[] }> = {
-      desk:       { label: 'Wood Tones',   colors: ['#2e1e0e','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#0e0c08','#4a3020'] },
-      bookshelf:  { label: 'Wood Tones',   colors: ['#2a1a08','#3a2610','#5a3818','#7a5230','#1a1208','#3d3020','#0e0c08','#4a3828'] },
-      couch:      { label: 'Fabric',       colors: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'] },
-      plant:      { label: 'Pot Colors',   colors: ['#1e3a1a','#3a2818','#c87840','#a85030','#2a3a4a','#3a1a3a','#4a4020','#8a6040'] },
-      rug:        { label: 'Fabric',       colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
-      lamp:       { label: 'Metal / Wood', colors: ['#1e1432','#2a2010','#3a3030','#1a2a1a','#302010','#1a1a2a','#2a1a10','#3a2828'] },
-      speaker:    { label: 'Casing',       colors: ['#1e1432','#181818','#1a2818','#281818','#1a1828','#282010','#203028','#282828'] },
-      minifridge: { label: 'Casing',       colors: ['#1e1432','#181828','#1a2a1a','#2a1a1a','#1a2028','#282828','#202820','#1a1818'] },
-      beanbag:    { label: 'Fabric',       colors: ['#c44060','#e0603a','#40a060','#4060c4','#a040a0','#c0a030','#30a0a0','#c06040'] },
-      arcade:     { label: 'Cabinet',      colors: ['#1e1432','#1a0808','#081a08','#08081a','#201008','#0a1020','#181020','#201818'] },
-      tv:         { label: 'Bezel',        colors: ['#1a1830','#181818','#141420','#201418','#181420','#141818','#1a1818','#141414'] },
-      pet_bed:    { label: 'Cushion',      colors: ['#7a3858','#c44060','#6b2840','#3d5a80','#2a6040','#7a4828','#6040a0','#5a5a5a'] },
-      cat_tree:   { label: 'Sisal / Wood', colors: ['#5a3a1a','#7a5530','#3a2810','#8a7050','#2a1808','#6a4a28','#4a3818','#9a8060'] },
-      pet_bowl:   { label: 'Bowl Color',   colors: ['#2a1e3e','#181828','#2a2010','#1a2a1a','#281a18','#1e2a28','#281828','#202028'] },
+      desk:         { label: 'Wood Tones',   colors: ['#2e1e0e','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#0e0c08','#4a3020'] },
+      bookshelf:    { label: 'Wood Tones',   colors: ['#2a1a08','#3a2610','#5a3818','#7a5230','#1a1208','#3d3020','#0e0c08','#4a3828'] },
+      couch:        { label: 'Fabric',       colors: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'] },
+      plant:        { label: 'Pot Colors',   colors: ['#1e3a1a','#3a2818','#c87840','#a85030','#2a3a4a','#3a1a3a','#4a4020','#8a6040'] },
+      rug:          { label: 'Fabric',       colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
+      lamp:         { label: 'Metal / Wood', colors: ['#1e1432','#2a2010','#3a3030','#1a2a1a','#302010','#1a1a2a','#2a1a10','#3a2828'] },
+      speaker:      { label: 'Casing',       colors: ['#1e1432','#181818','#1a2818','#281818','#1a1828','#282010','#203028','#282828'] },
+      minifridge:   { label: 'Casing',       colors: ['#1e1432','#181828','#1a2a1a','#2a1a1a','#1a2028','#282828','#202820','#1a1818'] },
+      beanbag:      { label: 'Fabric',       colors: ['#c44060','#e0603a','#40a060','#4060c4','#a040a0','#c0a030','#30a0a0','#c06040'] },
+      arcade:       { label: 'Cabinet',      colors: ['#1e1432','#1a0808','#081a08','#08081a','#201008','#0a1020','#181020','#201818'] },
+      tv:           { label: 'Bezel',        colors: ['#1a1830','#181818','#141420','#201418','#181420','#141818','#1a1818','#141414'] },
+      pet_bed:      { label: 'Cushion',      colors: ['#7a3858','#c44060','#6b2840','#3d5a80','#2a6040','#7a4828','#6040a0','#5a5a5a'] },
+      cat_tree:     { label: 'Sisal / Wood', colors: ['#5a3a1a','#7a5530','#3a2810','#8a7050','#2a1808','#6a4a28','#4a3818','#9a8060'] },
+      pet_bowl:     { label: 'Bowl Color',   colors: ['#2a1e3e','#181828','#2a2010','#1a2a1a','#281a18','#1e2a28','#281828','#202028'] },
+      coffee_table: { label: 'Wood Tones',   colors: ['#2a1a0c','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#4a3020','#0e0c08'] },
+      record_player:{ label: 'Casing',       colors: ['#1e1432','#181818','#181028','#1a0808','#0a0a18','#201028','#281020','#0a0818'] },
+      lava_lamp:    { label: 'Blob Color',   colors: ['#e87aab','#7b68ee','#5dcaa5','#f0b040','#e85454','#ff6090','#60d0ff','#aaff44'] },
+      whiteboard:   { label: 'Frame Wood',   colors: ['#2a1a0c','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#3a2218','#4a3020'] },
+      server_rack:   { label: 'Casing',       colors: ['#1e1432','#181818','#1a0808','#081a08','#08081a','#201028','#1a1828','#282828'] },
+      candles:       { label: 'Wax Color',    colors: ['#f0e0a8','#f5e8d0','#e8d0b0','#d0c8e0','#e0f0e8','#f0d0d0','#e8e0f0','#f8f0e8'] },
+      record_crates: { label: 'Crate Color',  colors: ['#c87840','#e09050','#a06030','#d0a060','#8a5020','#e8b870','#c06820','#b05818'] },
+      trunk:         { label: 'Wood / Leather', colors: ['#3a2410','#5a3818','#2a1808','#7a5030','#1a1008','#4a3020','#3a2818','#6a4828'] },
+      bookstack:     { label: 'Spine Color',  colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
+      bar_cart:      { label: 'Frame Color',  colors: ['#2a2a2a','#1a1a1a','#3a3030','#2a2018','#383030','#282838','#303828','#383028'] },
     };
 
+    // Furniture categories — each is its own page
+    const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
+      lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'beanbag', 'rug', 'coffee_table', 'candles', 'trunk', 'bar_cart'] },
+      decor:  { label: 'Decor',  emoji: '🌿', items: ['plant', 'lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack'] },
+      tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates'] },
+      pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },
+    };
+
+    const cat = this.activeFurnitureCategory;
+    const catItems = CATEGORIES[cat]?.items ?? CATEGORIES['lounge'].items;
     const activeColor = this.activeFurnitureColor;
     const activePalette = activeColor ? PALETTES[activeColor] : null;
     const currentColor = activeColor ? getFurnitureColor(cfg, activeColor) : null;
 
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Furniture</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">
-        ${ALL_FURNITURE.map(id => {
-          const data = FURNITURE_DATA[id];
-          const active = cfg.furniture.includes(id);
-          const isDesk = id === 'desk';
-          const color = getFurnitureColor(cfg, id);
-          const isExpanded = activeColor === id;
-          return `
-            <div style="
-              border-radius:6px;overflow:hidden;
-              border:1px solid ${isExpanded ? 'var(--nd-accent)' : active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 55%,transparent)' : 'rgba(255,255,255,0.07)'};
-              background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 12%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
-              opacity:${isDesk ? '0.75' : '1'};
-            ">
-              <div class="fur-row" data-fid="${id}" style="
-                padding:8px 10px;display:flex;align-items:center;gap:8px;
-                cursor:${isDesk ? 'default' : 'pointer'};
-              ">
-                <div style="flex:1;min-width:0;">
-                  <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
-                  <div style="font-size:9px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};opacity:${active || isDesk ? '0.6' : '0.8'};">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
-                </div>
-                ${active || isDesk ? `
-                  <div class="fur-palette-btn" data-fid="${id}" style="
-                    width:16px;height:16px;border-radius:3px;flex-shrink:0;
-                    background:${color};border:1px solid rgba(255,255,255,0.2);
-                    cursor:pointer;
-                  " title="Change color"></div>
-                ` : ''}
-              </div>
-              ${isExpanded && activePalette ? `
-                <div style="padding:6px 8px 8px;border-top:1px solid color-mix(in srgb,var(--nd-accent) 13%,transparent);">
-                  <div style="font-size:9px;color:var(--nd-subtext);opacity:0.6;margin-bottom:5px;">${activePalette.label}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                    ${activePalette.colors.map(c => `
-                      <div class="pal-swatch" data-fid="${id}" data-color="${c}" style="
-                        width:20px;height:20px;border-radius:3px;cursor:pointer;
-                        background:${c};
-                        border:2px solid ${currentColor === c ? 'var(--nd-accent)' : 'rgba(255,255,255,0.12)'};
-                        transition:transform 0.1s;
-                      "></div>
-                    `).join('')}
-                    <div class="pal-reset" data-fid="${id}" style="
-                      width:20px;height:20px;border-radius:3px;cursor:pointer;
-                      background:transparent;border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
-                      display:flex;align-items:center;justify-content:center;
-                      font-size:11px;color:var(--nd-dpurp);
-                    " title="Reset">↺</div>
-                  </div>
-                </div>
-              ` : ''}
+    const furItemHTML = (id: FurnitureId) => {
+      const data = FURNITURE_DATA[id];
+      const active = cfg.furniture.includes(id);
+      const isDesk = id === 'desk';
+      const color = getFurnitureColor(cfg, id);
+      const isExpanded = activeColor === id;
+      return `
+        <div style="
+          border-radius:6px;overflow:hidden;
+          border:1px solid ${isExpanded ? 'var(--nd-accent)' : active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 55%,transparent)' : 'rgba(255,255,255,0.07)'};
+          background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 12%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
+          opacity:${isDesk ? '0.75' : '1'};
+        ">
+          <div class="fur-row" data-fid="${id}" style="
+            padding:8px 10px;display:flex;align-items:center;gap:8px;
+            cursor:${isDesk ? 'default' : 'pointer'};
+          ">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
+              <div style="font-size:9px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};opacity:${active || isDesk ? '0.6' : '0.8'};">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
             </div>
+            ${active || isDesk ? `
+              <div class="fur-palette-btn" data-fid="${id}" style="
+                width:16px;height:16px;border-radius:3px;flex-shrink:0;
+                background:${color};border:1px solid rgba(255,255,255,0.2);
+                cursor:pointer;
+              " title="Change color"></div>
+            ` : ''}
+          </div>
+          ${isExpanded && activePalette ? `
+            <div style="padding:6px 8px 8px;border-top:1px solid color-mix(in srgb,var(--nd-accent) 13%,transparent);">
+              <div style="font-size:9px;color:var(--nd-subtext);opacity:0.6;margin-bottom:5px;">${activePalette.label}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                ${activePalette.colors.map(c => `
+                  <div class="pal-swatch" data-fid="${id}" data-color="${c}" style="
+                    width:20px;height:20px;border-radius:3px;cursor:pointer;
+                    background:${c};
+                    border:2px solid ${currentColor === c ? 'var(--nd-accent)' : 'rgba(255,255,255,0.12)'};
+                    transition:transform 0.1s;
+                  "></div>
+                `).join('')}
+                <div class="pal-reset" data-fid="${id}" style="
+                  width:20px;height:20px;border-radius:3px;cursor:pointer;
+                  background:transparent;border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
+                  display:flex;align-items:center;justify-content:center;
+                  font-size:11px;color:var(--nd-dpurp);
+                " title="Reset">↺</div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    container.innerHTML = `
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:8px;">Furniture</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px;">
+        ${Object.entries(CATEGORIES).map(([key, c]) => {
+          const isActive = cat === key;
+          const placedCount = c.items.filter(id => id === 'desk' || cfg.furniture.includes(id)).length;
+          return `
+            <button class="fur-cat" data-cat="${key}" style="
+              padding:6px 4px;border-radius:5px;font-family:'Courier New',monospace;font-size:9px;
+              cursor:pointer;text-align:center;line-height:1.4;
+              background:${isActive ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.45))' : 'rgba(0,0,0,0.25)'};
+              color:${isActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.4)'};
+              border:1px solid ${isActive ? 'color-mix(in srgb,var(--nd-accent) 50%,transparent)' : 'rgba(255,255,255,0.06)'};
+            ">
+              <div style="font-size:13px;line-height:1.2;">${c.emoji}</div>
+              <div style="font-weight:bold;">${c.label}</div>
+              <div style="font-size:8px;opacity:0.55;">${placedCount}/${c.items.length}</div>
+            </button>
           `;
         }).join('')}
       </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">
+        ${catItems.map(id => furItemHTML(id)).join('')}
+      </div>
     `;
 
-    // Toggle place/remove — if palette is open for this item, close it instead of removing
+    // Category tab clicks
+    container.querySelectorAll('.fur-cat').forEach(el => {
+      el.addEventListener('click', () => {
+        this.activeFurnitureCategory = (el as HTMLElement).dataset.cat!;
+        this.activeFurnitureColor = null;
+        this.renderFurniturePicker(container, body);
+      });
+    });
+
+    // Toggle place/remove
     container.querySelectorAll('.fur-row').forEach(el => {
       el.addEventListener('click', (e) => {
         const fid = (el as HTMLElement).dataset.fid as FurnitureId;
@@ -939,16 +990,12 @@ export class ComputerUI {
         if ((e.target as HTMLElement).classList.contains('fur-palette-btn')) return;
         if ((e.target as HTMLElement).classList.contains('pal-swatch')) return;
         if ((e.target as HTMLElement).classList.contains('pal-reset')) return;
-        // If palette is open for this item, just close it
         if (this.activeFurnitureColor === fid) {
           this.activeFurnitureColor = null;
           this.renderFurniturePicker(container, body);
           return;
         }
-        // If palette is open for a different item, close it
-        if (this.activeFurnitureColor !== null) {
-          this.activeFurnitureColor = null;
-        }
+        if (this.activeFurnitureColor !== null) this.activeFurnitureColor = null;
         const base = this.draftRoom ?? getRoomConfig();
         const furniture = [...base.furniture];
         const idx = furniture.indexOf(fid);
@@ -969,7 +1016,7 @@ export class ComputerUI {
       });
     });
 
-    // Pick a swatch color — live preview in room without saving
+    // Pick a swatch color — live preview
     container.querySelectorAll('.pal-swatch').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -982,7 +1029,7 @@ export class ComputerUI {
       });
     });
 
-    // Reset to default — also live previews
+    // Reset to default
     container.querySelectorAll('.pal-reset').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();

@@ -18,7 +18,7 @@ import { showPlayerMenu } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { ZapModal } from '../ui/ZapModal';
 import { PetSprite } from '../entities/PetSprite';
-import { RoomRenderer } from '../rooms/RoomRenderer';
+import { RoomRenderer, CandleFlame } from '../rooms/RoomRenderer';
 import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
 import { authStore } from '../stores/authStore';
@@ -47,6 +47,7 @@ export class RoomScene extends BaseScene {
   private hasBookcase = false;
   private parsedRoomConfig: any = null;
   private roomBgImage!: Phaser.GameObjects.Image;
+  private roomFgImage!: Phaser.GameObjects.Image;
   private readonly incomingRoomRequestHandler = (rp: string, rn: string) => this.showIncomingRoomRequest(rp, rn);
   private readonly roomKickHandler = (r: string) => { this.chatUI.addMessage('system', r || 'Owner left', P.amber); setTimeout(() => this.leaveRoom(), 1500); };
   private readonly roomGrantedHandler = (op: string, on: string, room: string, roomConfig?: string) => {
@@ -69,6 +70,7 @@ export class RoomScene extends BaseScene {
 
   // Animated elements
   private ledGraphics!: Phaser.GameObjects.Graphics;
+  private flameGraphics!: Phaser.GameObjects.Graphics;
   private ambientGraphics!: Phaser.GameObjects.Graphics;
   private feedGraphics!: Phaser.GameObjects.Graphics;
   private loungeGraphics!: Phaser.GameObjects.Graphics;
@@ -142,9 +144,12 @@ export class RoomScene extends BaseScene {
     this.hasBookcase = Array.isArray(this.parsedRoomConfig?.furniture) && this.parsedRoomConfig.furniture.includes('bookshelf');
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT, parsedOwnerConfig);
     this.roomBgImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(-1);
+    const fgTexKey = this.roomRenderer.renderForeground(this, this.roomConfig.id, GAME_WIDTH, GAME_HEIGHT, parsedOwnerConfig);
+    this.roomFgImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, fgTexKey).setDepth(12);
 
     // Graphics layers
     this.ledGraphics = this.add.graphics().setDepth(3);
+    this.flameGraphics = this.add.graphics().setDepth(3);
     this.ambientGraphics = this.add.graphics().setDepth(2);
     this.feedGraphics = this.add.graphics().setDepth(4);
     this.loungeGraphics = this.add.graphics().setDepth(4);
@@ -377,6 +382,8 @@ export class RoomScene extends BaseScene {
     if (!this.hasBookcase) this.setBookcasePromptVisible(false);
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT);
     this.roomBgImage.setTexture(texKey);
+    const fgTexKey = this.roomRenderer.renderForeground(this, this.roomConfig.id, GAME_WIDTH, GAME_HEIGHT);
+    this.roomFgImage.setTexture(fgTexKey);
   }
 
   private setComputerPromptVisible(visible: boolean): void {
@@ -405,6 +412,7 @@ export class RoomScene extends BaseScene {
     this.playerStatusText.setPosition(this.player.x, this.player.y - 165);
     this.pet?.update(delta);
     this.updateBlinkingLEDs(time);
+    this.updateCandleFlames(time);
     this.updateAmbient(time);
 
     // Smoke
@@ -625,6 +633,28 @@ export class RoomScene extends BaseScene {
   private updateBlinkingLEDs(time: number): void {
     if (this.roomRenderer.blinkingLEDs.length === 0) return; this.ledGraphics.clear();
     this.roomRenderer.blinkingLEDs.forEach(led => { const on = Math.sin(time * 0.003 + led.phase) > -0.2 + Math.random() * 0.1; if (on) { const rgb = hexToRgb(led.color); const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b); this.ledGraphics.fillStyle(c, 0.5 + Math.random() * 0.3); this.ledGraphics.fillRect(led.x, led.y, 4, 4); this.ledGraphics.fillStyle(c, 0.08); this.ledGraphics.fillRect(led.x - 2, led.y - 2, 8, 8); } });
+  }
+  private updateCandleFlames(time: number): void {
+    const flames = this.roomRenderer.candleFlames;
+    this.flameGraphics.clear();
+    if (flames.length === 0) return;
+    flames.forEach((f: CandleFlame) => {
+      // Flicker: vary height and sway with sin waves
+      const flicker  = Math.sin(time * 0.009 + f.phase) * 0.4 + Math.sin(time * 0.017 + f.phase * 2.1) * 0.2;
+      const sway     = Math.sin(time * 0.006 + f.phase * 1.7) * 1.2;
+      const h        = 6 + flicker * 3;
+      const cx       = f.x + sway;
+      const baseY    = f.y;
+      // Outer flame — orange
+      this.flameGraphics.fillStyle(0xff8800, 0.82 + flicker * 0.1);
+      this.flameGraphics.fillEllipse(cx, baseY - h * 0.55, 5, h);
+      // Inner core — bright yellow-white
+      this.flameGraphics.fillStyle(0xffee88, 0.9);
+      this.flameGraphics.fillEllipse(cx, baseY - h * 0.65, 2.5, h * 0.6);
+      // Glow halo
+      this.flameGraphics.fillStyle(0xff6600, 0.04 + Math.abs(flicker) * 0.02);
+      this.flameGraphics.fillCircle(cx, baseY - h * 0.4, 10);
+    });
   }
   private updateAmbient(time: number): void {
     this.ambientGraphics.clear(); const rgb = hexToRgb(this.roomConfig.neonColor); const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b);
