@@ -63,7 +63,7 @@ import { PlayerPicker } from '../ui/PlayerPicker';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RpsGame } from '../ui/RpsGame';
 import { PollBoard } from '../ui/PollBoard';
-import { WorldMap } from '../ui/WorldMap';
+import { worldMap } from '../ui/WorldMap';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
   sendChat, sendNameUpdate, sendRoomResponse,
@@ -154,7 +154,7 @@ export abstract class BaseScene extends Phaser.Scene {
   protected playerPicker  = new PlayerPicker();
   protected rpsGame       = new RpsGame();
   protected pollBoard     = new PollBoard();
-  protected worldMap      = new WorldMap();
+  protected worldMap      = worldMap;
 
   // ── Other players (shared by all scenes) ─────────────────────────────────
   protected otherPlayers = new Map<string, OtherPlayer>();
@@ -411,6 +411,7 @@ export abstract class BaseScene extends Phaser.Scene {
   // so they persist across scene transitions.
   // ══════════════════════════════════════════════════════════════════════════
   protected setupRegistryPanels(myPubkey: string): void {
+    this.worldMap.refreshActive(); // update active zone highlight for this scene
     this.dmPanel = this.registry.get('dmPanel') as DMPanel;
     if (!this.dmPanel) {
       this.dmPanel = new DMPanel(myPubkey);
@@ -1114,7 +1115,7 @@ export abstract class BaseScene extends Phaser.Scene {
     ProfileModal.destroy();
     this.rpsGame?.destroy();
     this.pollBoard?.destroy();
-    this.worldMap?.destroy();
+    // worldMap is a singleton — don't destroy, just leave it as-is
     this.roomRequestToast?.remove();
     this.roomRequestToast = null;
     clearRoomRequestHandler(this.roomRequestHandler);
