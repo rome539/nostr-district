@@ -73,12 +73,12 @@ export function showPlayerMenu(
 
   const menu = document.createElement('div');
   menu.id = MENU_ID;
+  const vh = window.visualViewport?.height ?? window.innerHeight;
   const menuW = Math.min(200, window.innerWidth - 16);
-  const clampX = Math.min(screenX, window.innerWidth  - menuW - 8);
-  const clampY = Math.min(screenY - 10, window.innerHeight - 220);
+  const clampX = Math.max(8, Math.min(screenX, window.innerWidth - menuW - 8));
   menu.style.cssText = `
     position: fixed; z-index: 3000;
-    left: ${Math.max(8, clampX)}px; top: ${Math.max(8, clampY)}px;
+    left: ${clampX}px; top: -9999px;
     background: linear-gradient(180deg, var(--nd-bg) 0%, var(--nd-navy) 100%);
     border: 1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent); border-radius: 8px;
     padding: 6px 0; font-family: 'Courier New', monospace;
@@ -100,6 +100,14 @@ export function showPlayerMenu(
   menu.addEventListener('pointerdown', (e) => e.stopPropagation());
   menu.addEventListener('click', (e) => e.stopPropagation());
   document.body.appendChild(menu);
+
+  // Position vertically after render so we know the real height
+  const menuH = menu.offsetHeight;
+  const spaceBelow = vh - screenY - 8;
+  const topY = spaceBelow >= menuH
+    ? screenY - 10                      // fits below tap — open downward
+    : Math.max(8, screenY - menuH - 4); // flip above tap point
+  menu.style.top = `${topY}px`;
 
   // Hover effects
   menu.querySelectorAll('.ctx-profile,.ctx-dm,.ctx-zap,.ctx-visit,.ctx-mute').forEach(el => {
