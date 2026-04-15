@@ -107,6 +107,8 @@ export function connectPresence(cb: PresenceCallback): void {
   }
 
   callbacks = cb;
+  presenceReady = false;
+  showLoadingOverlay();
 
   try {
     ws = new WebSocket(
@@ -122,7 +124,6 @@ export function connectPresence(cb: PresenceCallback): void {
   ws.onopen = () => {
     console.log('[Presence] Connected');
     presenceReady = false;
-    showLoadingOverlay();
     const state = authStore.getState();
     ws!.send(JSON.stringify({
       type: 'join',
