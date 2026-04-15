@@ -95,7 +95,10 @@ export function connectPresence(cb: PresenceCallback): void {
       const msg = JSON.parse(event.data);
 
       if (msg.type === 'players') {
-        msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
+        // Drop stale player lists that arrived after a room change
+        if (!msg.room || msg.room === currentRoom) {
+          msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
+        }
       }
       if (msg.type === 'join') callbacks?.onPlayerJoin(msg);
       if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y, msg.f);

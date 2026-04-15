@@ -67,7 +67,7 @@ wss.on('connection', (ws) => {
             others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
           }
         });
-        ws.send(JSON.stringify({ type: 'players', players: others }));
+        ws.send(JSON.stringify({ type: 'players', room, players: others }));
         broadcastToRoom(room, { type: 'join', pubkey: myPubkey, name: msg.name, x: msg.x, y: msg.y, avatar: msg.avatar || '', status: (msg.status || '').slice(0, 60) }, myPubkey);
         broadcastCount();
       }
@@ -86,7 +86,7 @@ wss.on('connection', (ws) => {
               others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
             }
           });
-          ws.send(JSON.stringify({ type: 'players', players: others }));
+          ws.send(JSON.stringify({ type: 'players', room: newRoom, players: others }));
           return;
         }
 
@@ -114,7 +114,7 @@ wss.on('connection', (ws) => {
             others.push({ pubkey: p.pubkey, name: p.name, x: p.x, y: p.y, avatar: p.avatar, status: p.status });
           }
         });
-        ws.send(JSON.stringify({ type: 'players', players: others }));
+        ws.send(JSON.stringify({ type: 'players', room: newRoom, players: others }));
         broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar, status: player.status }, myPubkey);
         broadcastCount();
       }
