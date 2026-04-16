@@ -333,7 +333,14 @@ export class DMPanel {
     this.conversations.set(convPubkey, {
       pubkey: convPubkey,
       name: msg.senderName || existing?.name || this.toNpub(convPubkey),
-      lastMessage: isGifUrl(msg.content.trim()) ? '[GIF]' : /^https?:\/\//i.test(msg.content.trim()) ? '[Link]' : msg.content.slice(0, 50),
+      lastMessage: (() => {
+        const t = msg.content.trim();
+        if (isGifUrl(t)) return '[GIF]';
+        if (/^nd-invite:/.test(t)) return '[Crew Invite]';
+        if (/^nd-decline:/.test(t)) return '[Crew Decline]';
+        if (/^https?:\/\//i.test(t)) return '[Link]';
+        return t.slice(0, 50);
+      })(),
       lastTime: msg.createdAt,
       unread: (this.activePubkey === convPubkey) ? 0 : (existing?.unread || 0) + (!msg.isOwn && msg.createdAt > this.getLastRead(convPubkey) ? 1 : 0),
     });
@@ -646,6 +653,8 @@ export class DMPanel {
       const isGif = isGifUrl(t);
       const isLink = !isGif && isPlainUrl(t);
       const inviteMatch = !isGif && !isLink && t.match(/^nd-invite:([^:]+):([^:]+):([^:]+)$/);
+      const declineMatch = !isGif && !isLink && !inviteMatch && t.match(/^nd-decline:([^:]+):(.+)$/);
+      const isCrewCard = !!(inviteMatch || declineMatch);
       const contentHtml = isGif
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
@@ -662,11 +671,17 @@ export class DMPanel {
                       ? '<div class="dm-invite-sent">Invite used</div>'
                       : `<button class="dm-invite-btn" data-crew-id="${this.escapeHtml(inviteMatch[1])}" data-crew-name="${this.escapeHtml(inviteMatch[2])}" data-token="${this.escapeHtml(inviteMatch[3])}">Accept</button>`}
               </div>`
-            : renderEmojis(this.escapeHtml(msg.content), msg.emojis);
+            : declineMatch
+              ? `<div class="dm-invite-card dm-decline-card">
+                  <div class="dm-invite-label dm-decline-label">Crew Decline</div>
+                  <div class="dm-invite-name">${this.escapeHtml(declineMatch[2])}</div>
+                  <div class="dm-invite-sent">${msg.isOwn ? 'Decline sent' : 'Your request was declined'}</div>
+                </div>`
+              : renderEmojis(this.escapeHtml(msg.content), msg.emojis);
 
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">
-          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${inviteMatch ? ' dm-msg-invite' : ''}">${contentHtml}</div>
+          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${isCrewCard ? ' dm-msg-invite' : ''}">${contentHtml}</div>
           <div class="dm-msg-time">${timeStr}</div>
         </div>
       `;
@@ -1008,6 +1023,11 @@ export class DMPanel {
       .dm-invite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .dm-invite-btn-joined { background: color-mix(in srgb,var(--nd-accent) 30%,transparent) !important; color: var(--nd-accent) !important; cursor: default !important; }
       .dm-invite-sent { font-size: 11px; color: var(--nd-subtext); }
+      .dm-decline-card {
+        border-color: color-mix(in srgb,#e85454 40%,transparent) !important;
+        background: color-mix(in srgb,#e85454 6%,transparent) !important;
+      }
+      .dm-decline-label { color: #e85454 !important; }
       .dm-msg-own .dm-msg-time { text-align: right; }
       .dm-msg-error { text-align: center; color: #e85454; font-size: 12px; padding: 4px; opacity: 0.7; }
 

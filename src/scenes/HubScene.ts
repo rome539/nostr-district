@@ -8,6 +8,7 @@ import {
   isPresenceReady,
 } from '../nostr/presenceService';
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
+import { startCrewJoinReqSubscription } from '../nostr/crewService';
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
@@ -248,6 +249,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.setupRegistryPanels(this.registry.get('playerPubkey') || null);
     ProfileModal.setDMPanel(this.dmPanel);
     if (!this.isReturning && canUseDMs()) startDMSubscription();
+    if (!this.isReturning) startCrewJoinReqSubscription().catch(() => {});
     this.setupCommonKeyboardHandlers();
 
     this.setupEscHandler();

@@ -13,7 +13,8 @@ import {
   Crew, CrewMember, CrewAnnouncement, CrewChatMessage,
   createCrew, fetchAllCrews, fetchMyCrews, fetchCrew, fetchCrewMembers,
   fetchCrewAnnouncements, postCrewAnnouncement, deleteCrewAnnouncement,
-  joinCrew, leaveCrew, deleteCrew, isCrewMember, isCrewAdmin, isCrewOfficer, updateCrewMember, updateCrewDefinition, kickCrewMember, unKickCrewMember, isKickedLocally, clearMembership, sendJoinRequest,
+  joinCrew, leaveCrew, deleteCrew, isCrewMember, isCrewAdmin, isCrewOfficer, updateCrewMember, updateCrewDefinition, kickCrewMember, unKickCrewMember, isKickedLocally, clearMembership, sendJoinRequest, declineCrewJoinRequest,
+  onCrewJoinRequest,
   subscribeCrewChat, sendCrewChat,
   resolveNames, getCachedName,
 } from '../nostr/crewService';
@@ -75,6 +76,37 @@ export class CrewPanel {
     window.addEventListener('nd-panel-open', (e: Event) => {
       if ((e as CustomEvent).detail !== 'crew' && this.isOpen) this.close();
     });
+    onCrewJoinRequest(req => this.showJoinReqToast(req));
+  }
+
+  private async showJoinReqToast(req: { crewId: string; crewName: string; requesterPubkey: string; createdAt: number }): Promise<void> {
+    // Skip if the user is already viewing this crew's chat
+    if (this.isOpen && this.activeCrew?.id === req.crewId && this.activeCrewTab === 'chat') return;
+    let name: string;
+    try {
+      const p = await fetchProfile(req.requesterPubkey);
+      name = p?.display_name || p?.name || this.shortNpub(req.requesterPubkey);
+    } catch { name = this.shortNpub(req.requesterPubkey); }
+    const existing = document.getElementById('cp-joinreq-toast-' + req.crewId);
+    existing?.remove();
+    const toast = document.createElement('div');
+    toast.id = 'cp-joinreq-toast-' + req.crewId;
+    toast.className = 'cp-joinreq-toast';
+    toast.innerHTML = `
+      <div class="cp-joinreq-toast-title">Join request</div>
+      <div class="cp-joinreq-toast-body"><b>${esc(name)}</b> wants to join <b>${esc(req.crewName)}</b></div>
+      <div class="cp-joinreq-toast-hint">Click to review</div>
+    `;
+    toast.addEventListener('click', async () => {
+      toast.remove();
+      const crew = await fetchCrew(req.crewId);
+      if (!crew) return;
+      if (!this.isOpen) this.open();
+      this.openCrew(crew);
+    });
+    document.body.appendChild(toast);
+    try { SoundEngine.get().dmPing(); } catch {}
+    setTimeout(() => toast.remove(), 8000);
   }
 
   // ══════════════════════════════════════════
@@ -146,11 +178,12 @@ export class CrewPanel {
   private buildDOM(): void {
     this.container = document.createElement('div');
     this.container.className = 'cp-panel';
+    const refreshSvg = `<svg class="cp-tab-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"></path><polyline points="21 3 21 8 16 8"></polyline></svg>`;
     this.container.innerHTML = `
       <div class="cp-header">
         <div class="cp-tabs">
-          <button class="cp-tab cp-tab-mine active" data-tab="mine">Crews</button>
-          <button class="cp-tab cp-tab-find" data-tab="find">Find a Crew</button>
+          <button class="cp-tab cp-tab-mine active" data-tab="mine"><span class="cp-tab-label">Crews</span>${refreshSvg}</button>
+          <button class="cp-tab cp-tab-find" data-tab="find"><span class="cp-tab-label">Find a Crew</span>${refreshSvg}</button>
         </div>
         <button class="cp-create-btn" title="Create crew">＋</button>
         <button class="cp-close-btn" title="Close">✕</button>
@@ -170,7 +203,12 @@ export class CrewPanel {
     this.container.querySelectorAll('.cp-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn as HTMLElement).dataset.tab as 'mine' | 'find';
-        this.switchTab(tab);
+        if (tab === this.activeTab && !this.activeCrew) {
+          this.spinTabRefresh(btn as HTMLElement);
+          this.refetchCurrentTab();
+        } else {
+          this.switchTab(tab);
+        }
       });
     });
   }
@@ -185,6 +223,27 @@ export class CrewPanel {
     } else if (this.activeTab === 'mine') {
       this.renderMyCrew();
     } else {
+      this.renderFindCrew();
+    }
+  }
+
+  private spinTabRefresh(tabEl: HTMLElement): void {
+    const icon = tabEl.querySelector('.cp-tab-refresh') as HTMLElement | null;
+    if (!icon) return;
+    icon.classList.remove('cp-tab-refresh-spin');
+    void icon.offsetWidth;
+    icon.classList.add('cp-tab-refresh-spin');
+  }
+
+  private refetchCurrentTab(): void {
+    if (this.activeTab === 'mine') {
+      this.renderMyCrew();
+    } else {
+      this.allCrews = [];
+      fetchAllCrews(true).then(crews => {
+        this.allCrews = crews;
+        if (this.activeTab === 'find' && !this.activeCrew) this.renderCrewList();
+      }).catch(() => {});
       this.renderFindCrew();
     }
   }
@@ -492,8 +551,9 @@ export class CrewPanel {
       if (this.chatMsgEl) {
         this.chatMsgEl.querySelector('.cp-loading')?.remove();
         this.appendChatMessage(msg, myPubkey);
-        // Real-time: if a "joined" system message arrives, remove request cards older than it
-        if (msg.isSystem && msg.systemSubjectPubkey && msg.content?.includes('joined the crew')) {
+        // Real-time: if a "joined" or "declined" system message arrives, remove request cards older than it
+        if (msg.isSystem && msg.systemSubjectPubkey &&
+            (msg.content?.includes('joined the crew') || msg.content?.includes('request to join was declined'))) {
           this.chatMsgEl.querySelectorAll(`[data-joinreq="${CSS.escape(msg.systemSubjectPubkey)}"]`).forEach(card => {
             const reqTs = parseInt((card as HTMLElement).dataset.ts || '0');
             if (msg.createdAt > reqTs) card.remove();
@@ -504,21 +564,21 @@ export class CrewPanel {
     }, onKick).then(unsub => {
       this.chatUnsub = unsub;
       this.chatMsgEl?.querySelector('.cp-loading')?.remove();
-      // After history loads, remove request cards where a "joined" message arrived after the request
-      // Build latest-join timestamp map per pubkey
-      const joinedAtMap = new Map<string, number>();
+      // After history loads, remove request cards where a "joined" or "declined" message arrived after the request
+      const resolvedAtMap = new Map<string, number>();
       this.chatMessages
-        .filter(m => m.isSystem && m.systemSubjectPubkey && m.content?.includes('joined the crew'))
+        .filter(m => m.isSystem && m.systemSubjectPubkey &&
+          (m.content?.includes('joined the crew') || m.content?.includes('request to join was declined')))
         .forEach(m => {
-          const prev = joinedAtMap.get(m.systemSubjectPubkey!);
-          if (!prev || m.createdAt > prev) joinedAtMap.set(m.systemSubjectPubkey!, m.createdAt);
+          const prev = resolvedAtMap.get(m.systemSubjectPubkey!);
+          if (!prev || m.createdAt > prev) resolvedAtMap.set(m.systemSubjectPubkey!, m.createdAt);
         });
       this.chatMsgEl?.querySelectorAll('[data-joinreq]').forEach(card => {
         const el = card as HTMLElement;
         const pk = el.dataset.joinreq!;
         const reqTs = parseInt(el.dataset.ts || '0');
-        const joinTs = joinedAtMap.get(pk);
-        if (joinTs && joinTs > reqTs) card.remove();
+        const resolvedTs = resolvedAtMap.get(pk);
+        if (resolvedTs && resolvedTs > reqTs) card.remove();
       });
     });
 
@@ -581,12 +641,13 @@ export class CrewPanel {
     if (msg.isJoinRequest) {
       const crew = this.activeCrew!;
       const { pubkey: myPubkey } = authStore.getState();
-      // Skip if this person joined AFTER this specific request (relay-based, works for all viewers)
-      const hasJoinedAfter = this.chatMessages.some(m =>
+      // Skip if this person joined OR was declined AFTER this specific request
+      const hasResolvedAfter = this.chatMessages.some(m =>
         m.isSystem && m.systemSubjectPubkey === msg.pubkey &&
-        m.content?.includes('joined the crew') && m.createdAt > msg.createdAt
+        (m.content?.includes('joined the crew') || m.content?.includes('request to join was declined')) &&
+        m.createdAt > msg.createdAt
       );
-      if (hasJoinedAfter) return;
+      if (hasResolvedAfter) return;
       // Replace any earlier card from the same person with the newest request
       const existing = this.chatMsgEl.querySelector(`[data-joinreq="${CSS.escape(msg.pubkey)}"]`);
       existing?.remove();
@@ -598,21 +659,36 @@ export class CrewPanel {
       if (msg.requestToken) el.dataset.token = msg.requestToken;
       el.innerHTML = `
         <span class="cp-msg-joinreq-text"><b>${esc(name)}</b> wants to join the crew</span>
-        ${canAccept ? `<button class="cp-msg-accept-btn" data-pk="${esc(msg.pubkey)}">Accept</button>` : ''}
+        ${canAccept ? `
+          <div class="cp-msg-joinreq-btns">
+            <button class="cp-msg-accept-btn" data-pk="${esc(msg.pubkey)}">Accept</button>
+            <button class="cp-msg-decline-btn" data-pk="${esc(msg.pubkey)}">Decline</button>
+          </div>
+        ` : ''}
       `;
       if (canAccept) {
-        el.querySelector('.cp-msg-accept-btn')!.addEventListener('click', async (e) => {
-          const btn = e.currentTarget as HTMLButtonElement;
-          btn.disabled = true; btn.textContent = 'Sending…';
+        const acceptBtn = el.querySelector('.cp-msg-accept-btn') as HTMLButtonElement;
+        const declineBtn = el.querySelector('.cp-msg-decline-btn') as HTMLButtonElement;
+        acceptBtn.addEventListener('click', async () => {
+          acceptBtn.disabled = true; declineBtn.disabled = true; acceptBtn.textContent = 'Sending…';
           try {
             const currentCrew = await (await import('../nostr/crewService')).fetchCrew(crew.id) ?? crew;
             const wasKicked = (currentCrew.kickedPubkeys ?? []).includes(msg.pubkey);
             if (wasKicked) await unKickCrewMember(crew.id, msg.pubkey);
             const inviteToken = Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2,'0')).join('');
             await sendDirectMessage(msg.pubkey, `nd-invite:${crew.id}:${crew.name}:${inviteToken}`);
-            btn.textContent = 'Invited ✓';
+            acceptBtn.textContent = 'Invited ✓';
             setTimeout(() => el.remove(), 1500);
-          } catch { btn.textContent = 'Failed'; btn.disabled = false; }
+          } catch { acceptBtn.textContent = 'Failed'; acceptBtn.disabled = false; declineBtn.disabled = false; }
+        });
+        declineBtn.addEventListener('click', async () => {
+          acceptBtn.disabled = true; declineBtn.disabled = true; declineBtn.textContent = 'Declining…';
+          try {
+            await sendDirectMessage(msg.pubkey, `nd-decline:${crew.id}:${crew.name}`);
+            await declineCrewJoinRequest(crew.id, msg.pubkey);
+            declineBtn.textContent = 'Declined';
+            setTimeout(() => el.remove(), 1500);
+          } catch { declineBtn.textContent = 'Failed'; acceptBtn.disabled = false; declineBtn.disabled = false; }
         });
       }
       this.chatMsgEl.appendChild(el);
@@ -887,22 +963,25 @@ export class CrewPanel {
       <div class="cp-modal cp-manage-modal">
         <div class="cp-modal-title">Manage Crew</div>
 
-        <div class="cp-manage-members-label">Members</div>
-        <div class="cp-manage-member-list cp-loading" style="padding:12px 0">Loading members…</div>
-
-        <div class="cp-manage-invite-section">
-          <div class="cp-manage-members-label" style="margin-top:14px">Invite by npub</div>
-          <div class="cp-manage-invite-row">
-            <input class="cp-manage-invite-input" type="text" placeholder="npub1… or hex pubkey" maxlength="120" />
-            <button class="cp-manage-invite-btn">Send Invite</button>
+        <div class="cp-manage-section">
+          <button class="cp-manage-section-toggle" data-section="members">Members ▾</button>
+          <div class="cp-manage-section-body" data-section="members">
+            <div class="cp-manage-member-list cp-loading" style="padding:12px 0">Loading members…</div>
+            <div class="cp-manage-invite-section">
+              <div class="cp-manage-members-label" style="margin-top:14px">Invite by npub</div>
+              <div class="cp-manage-invite-row">
+                <input class="cp-manage-invite-input" type="text" placeholder="npub1… or hex pubkey" maxlength="120" />
+                <button class="cp-manage-invite-btn">Send Invite</button>
+              </div>
+              <div class="cp-manage-invite-status"></div>
+            </div>
           </div>
-          <div class="cp-manage-invite-status"></div>
         </div>
 
         ${isFounder ? `
-        <div class="cp-manage-edit-section">
-          <button class="cp-manage-edit-toggle">Edit Crew ▸</button>
-          <div class="cp-manage-edit-body" style="display:none">
+        <div class="cp-manage-section cp-manage-edit-section">
+          <button class="cp-manage-section-toggle cp-manage-edit-toggle" data-section="edit">Edit Crew ▸</button>
+          <div class="cp-manage-section-body cp-manage-edit-body" data-section="edit" style="display:none">
           <div class="cp-manage-edit-fields">
             <input class="cp-manage-edit-input" id="cme-name" type="text" maxlength="40" placeholder="Crew name" value="${esc(crew.name)}" />
             <input class="cp-manage-edit-input" id="cme-about" type="text" maxlength="120" placeholder="About" value="${esc(crew.about ?? '')}" />
@@ -929,9 +1008,13 @@ export class CrewPanel {
           <div class="cp-manage-edit-status"></div>
           </div>
         </div>
-        <div class="cp-manage-danger">
-          <div class="cp-manage-danger-label">Danger Zone</div>
-          <button class="cp-manage-delete-btn">Delete Crew</button>
+        <div class="cp-manage-section cp-manage-danger">
+          <button class="cp-manage-section-toggle cp-manage-danger-toggle" data-section="danger">Danger Zone ▸</button>
+          <div class="cp-manage-section-body" data-section="danger" style="display:none">
+            <div class="cp-manage-danger-kicked"></div>
+            <div class="cp-manage-danger-divider"></div>
+            <button class="cp-manage-delete-btn">Delete Crew</button>
+          </div>
         </div>` : ''}
       </div>
     `;
@@ -962,6 +1045,7 @@ export class CrewPanel {
         const wasKicked = (currentCrew.kickedPubkeys ?? []).includes(targetPubkey);
         if (wasKicked) {
           await unKickCrewMember(crew.id, targetPubkey);
+          crew.kickedPubkeys = (crew.kickedPubkeys ?? []).filter(p => p !== targetPubkey);
         }
         const token = Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2,'0')).join('');
         const msg = `nd-invite:${crew.id}:${crew.name}:${token}`;
@@ -994,15 +1078,32 @@ export class CrewPanel {
       });
     }
 
+    // Section toggles — only one open at a time
+    const setSectionOpen = (name: string, open: boolean) => {
+      const body = overlay.querySelector(`.cp-manage-section-body[data-section="${name}"]`) as HTMLElement | null;
+      const toggle = overlay.querySelector(`.cp-manage-section-toggle[data-section="${name}"]`) as HTMLButtonElement | null;
+      if (!body || !toggle) return;
+      body.style.display = open ? 'block' : 'none';
+      const label = name === 'members' ? 'Members' : name === 'edit' ? 'Edit Crew' : 'Danger Zone';
+      toggle.textContent = open ? `${label} ▾` : `${label} ▸`;
+    };
+    overlay.querySelectorAll('.cp-manage-section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.section!;
+        const body = overlay.querySelector(`.cp-manage-section-body[data-section="${name}"]`) as HTMLElement;
+        const isOpen = body.style.display !== 'none';
+        overlay.querySelectorAll('.cp-manage-section-toggle').forEach(b => {
+          setSectionOpen((b as HTMLElement).dataset.section!, false);
+        });
+        if (!isOpen) {
+          setSectionOpen(name, true);
+          if (name === 'members' || name === 'danger') renderMemberList();
+        }
+      });
+    });
+
     // Edit crew section (founder only)
     if (isFounder) {
-      const editToggle = overlay.querySelector('.cp-manage-edit-toggle') as HTMLButtonElement;
-      const editBody = overlay.querySelector('.cp-manage-edit-body') as HTMLElement;
-      editToggle.addEventListener('click', () => {
-        const open = editBody.style.display !== 'none';
-        editBody.style.display = open ? 'none' : 'block';
-        editToggle.textContent = open ? 'Edit Crew ▸' : 'Edit Crew ▾';
-      });
 
       const PRESET_EMOJIS = ['⚡','🔥','💀','🌙','🐉','🦊','🌊','🎯','💎','🛸','🎮','🗡','🏴'];
       let editEmblem = crew.emblem;
@@ -1085,7 +1186,8 @@ export class CrewPanel {
 
     const renderMemberList = () => {
       listEl.innerHTML = '<span style="padding:12px 0;color:var(--nd-subtext);font-size:12px">Loading members…</span>';
-      fetchCrewMembers(crew.id).then(members => {
+      Promise.all([fetchCrewMembers(crew.id), fetchCrew(crew.id)]).then(([members, fresh]) => {
+        if (fresh) crew.kickedPubkeys = fresh.kickedPubkeys ?? [];
         resolveNames(members.map(m => m.pubkey)).then(() => {
           listEl.innerHTML = '';
           listEl.classList.remove('cp-loading');
@@ -1167,37 +1269,13 @@ export class CrewPanel {
           });
           if (!members.length) listEl.innerHTML = '<div style="color:var(--nd-subtext);font-size:12px;padding:8px 0">No members found.</div>';
 
-          // Show kicked members at the bottom (founder only — only founder can unkick)
+          // Kicked section lives in Danger Zone (founder only)
           if (isFounder) {
-            const kickedPubkeys = crew.kickedPubkeys ?? [];
-            if (kickedPubkeys.length) {
-              resolveNames(kickedPubkeys).then(() => {
-                const sep = document.createElement('div');
-                sep.style.cssText = 'font-size:10px;font-weight:bold;letter-spacing:.08em;color:color-mix(in srgb,#e85454 60%,transparent);text-transform:uppercase;margin:14px 0 6px';
-                sep.textContent = 'Kicked';
-                listEl.appendChild(sep);
-                kickedPubkeys.forEach(pk => {
-                  const krow = document.createElement('div');
-                  krow.className = 'cp-manage-member-row';
-                  krow.style.opacity = '0.7';
-                  krow.innerHTML = `
-                    <span class="cp-manage-mname">${esc(getCachedName(pk))}</span>
-                    <div class="cp-manage-mcontrols">
-                      <button class="cp-manage-save-btn" style="border-color:color-mix(in srgb,#4cff91 40%,transparent);color:#4cff91;background:color-mix(in srgb,#4cff91 10%,transparent)">Unkick</button>
-                    </div>
-                  `;
-                  krow.querySelector('button')!.addEventListener('click', async (e) => {
-                    const btn = e.currentTarget as HTMLButtonElement;
-                    btn.disabled = true; btn.textContent = '…';
-                    try {
-                      await unKickCrewMember(crew.id, pk);
-                      krow.remove();
-                      if (!listEl.querySelector('[style*="Kicked"]') && !listEl.querySelector('.cp-manage-member-row[style*="0.7"]')) sep.remove();
-                    } catch { btn.disabled = false; btn.textContent = 'Unkick'; }
-                  });
-                  listEl.appendChild(krow);
-                });
-              });
+            const dangerKicked = overlay.querySelector('.cp-manage-danger-kicked') as HTMLElement | null;
+            if (dangerKicked) {
+              dangerKicked.innerHTML = '';
+              const kickedPubkeys = crew.kickedPubkeys ?? [];
+              if (kickedPubkeys.length) this.renderKickedSection(dangerKicked, crew, kickedPubkeys);
             }
           }
         });
@@ -1205,6 +1283,87 @@ export class CrewPanel {
     };
 
     renderMemberList();
+  }
+
+  private renderKickedSection(listEl: HTMLElement, crew: Crew, kickedPubkeys: string[]): void {
+    const PAGE_SIZE = 25;
+    const SHOW_SEARCH_AT = 10;
+
+    const container = document.createElement('div');
+    container.className = 'cp-kicked-section';
+    container.innerHTML = `
+      <div class="cp-kicked-header">Kicked (${kickedPubkeys.length})</div>
+      ${kickedPubkeys.length > SHOW_SEARCH_AT ? `<input class="cp-kicked-search" type="text" placeholder="Search kicked…" />` : ''}
+      <div class="cp-kicked-list"></div>
+      <button class="cp-kicked-more" style="display:none">Show more</button>
+    `;
+    listEl.appendChild(container);
+
+    const listBody = container.querySelector('.cp-kicked-list') as HTMLElement;
+    const moreBtn = container.querySelector('.cp-kicked-more') as HTMLButtonElement;
+    const searchInput = container.querySelector('.cp-kicked-search') as HTMLInputElement | null;
+    searchInput?.addEventListener('keydown', e => e.stopPropagation());
+
+    let filtered = kickedPubkeys.slice();
+    let visibleCount = 0;
+
+    const buildRow = (pk: string) => {
+      const krow = document.createElement('div');
+      krow.className = 'cp-manage-member-row';
+      krow.style.opacity = '0.7';
+      krow.innerHTML = `
+        <span class="cp-manage-mname">${esc(getCachedName(pk))}</span>
+        <div class="cp-manage-mcontrols">
+          <button class="cp-manage-save-btn" style="border-color:color-mix(in srgb,#4cff91 40%,transparent);color:#4cff91;background:color-mix(in srgb,#4cff91 10%,transparent)">Unkick</button>
+        </div>
+      `;
+      krow.querySelector('button')!.addEventListener('click', async (e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.disabled = true; btn.textContent = '…';
+        try {
+          await unKickCrewMember(crew.id, pk);
+          crew.kickedPubkeys = (crew.kickedPubkeys ?? []).filter(p => p !== pk);
+          krow.remove();
+          const headerEl = container.querySelector('.cp-kicked-header') as HTMLElement;
+          const remaining = (crew.kickedPubkeys ?? []).length;
+          if (!remaining) container.remove();
+          else headerEl.textContent = `Kicked (${remaining})`;
+        } catch { btn.disabled = false; btn.textContent = 'Unkick'; }
+      });
+      return krow;
+    };
+
+    const renderNextPage = async () => {
+      const slice = filtered.slice(visibleCount, visibleCount + PAGE_SIZE);
+      await resolveNames(slice);
+      slice.forEach(pk => listBody.appendChild(buildRow(pk)));
+      visibleCount += slice.length;
+      const remaining = filtered.length - visibleCount;
+      moreBtn.style.display = remaining > 0 ? 'block' : 'none';
+      moreBtn.textContent = remaining > 0 ? `Show ${Math.min(remaining, PAGE_SIZE)} more` : '';
+    };
+
+    moreBtn.addEventListener('click', () => { renderNextPage(); });
+
+    const applyFilter = (q: string) => {
+      const needle = q.trim().toLowerCase();
+      filtered = needle
+        ? kickedPubkeys.filter(pk => getCachedName(pk).toLowerCase().includes(needle) || pk.toLowerCase().includes(needle))
+        : kickedPubkeys.slice();
+      visibleCount = 0;
+      listBody.innerHTML = '';
+      renderNextPage();
+    };
+
+    if (searchInput) {
+      let debounce: ReturnType<typeof setTimeout> | null = null;
+      searchInput.addEventListener('input', () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => applyFilter(searchInput.value), 150);
+      });
+    }
+
+    renderNextPage();
   }
 
   private showPostExpanded(content: string, authorName: string, createdAt: number): void {
@@ -1460,6 +1619,7 @@ export class CrewPanel {
       }
       .cp-tabs { display: flex; gap: 4px; flex: 1; }
       .cp-tab {
+        display: inline-flex; align-items: center; gap: 6px;
         background: transparent;
         border: 1px solid color-mix(in srgb,var(--nd-text) 18%,transparent);
         border-radius: 4px; color: var(--nd-subtext);
@@ -1471,6 +1631,16 @@ export class CrewPanel {
         background: color-mix(in srgb,var(--nd-accent) 15%,transparent);
         border-color: color-mix(in srgb,var(--nd-accent) 55%,transparent);
         color: var(--nd-accent);
+      }
+      .cp-tab-refresh {
+        width: 11px; height: 11px; opacity: 0.6;
+        transition: opacity 0.15s, transform 0.15s;
+      }
+      .cp-tab.active .cp-tab-refresh, .cp-tab:hover .cp-tab-refresh { opacity: 0.9; }
+      .cp-tab-refresh-spin { animation: cp-refresh-spin 0.6s linear; }
+      @keyframes cp-refresh-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(-360deg); }
       }
       .cp-create-btn, .cp-close-btn {
         background: none; border: none; color: var(--nd-subtext);
@@ -1604,14 +1774,15 @@ export class CrewPanel {
       }
       .cp-manage-save-btn:hover { background: color-mix(in srgb,var(--nd-accent) 25%,transparent); }
       .cp-manage-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-      .cp-manage-edit-section { border-top: 1px solid color-mix(in srgb,var(--nd-text) 12%,transparent); padding-top: 10px; margin-top: 4px; }
-      .cp-manage-edit-toggle {
+      .cp-manage-section { border-top: 1px solid color-mix(in srgb,var(--nd-text) 12%,transparent); padding-top: 10px; margin-top: 4px; }
+      .cp-manage-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+      .cp-manage-section-toggle {
         background: none; border: none; color: var(--nd-subtext); font-family: inherit;
         font-size: 11px; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase;
         cursor: pointer; padding: 0; width: 100%; text-align: left; transition: color 0.15s;
       }
-      .cp-manage-edit-toggle:hover { color: var(--nd-text); }
-      .cp-manage-edit-body { padding-top: 12px; }
+      .cp-manage-section-toggle:hover { color: var(--nd-text); }
+      .cp-manage-section-body { padding-top: 12px; }
       .cp-manage-edit-fields { display: flex; flex-direction: column; gap: 6px; }
       .cp-manage-edit-emblem-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; }
       .cp-manage-edit-input {
@@ -1628,8 +1799,9 @@ export class CrewPanel {
       .cp-manage-edit-save:hover { background: color-mix(in srgb,var(--nd-accent) 25%,transparent); }
       .cp-manage-edit-save:disabled { opacity: 0.5; cursor: not-allowed; }
       .cp-manage-edit-status { font-size: 11px; min-height: 16px; margin-top: 4px; }
-      .cp-manage-danger { border-top: 1px solid color-mix(in srgb,#e85454 25%,transparent); padding-top: 14px; margin-top: 4px; }
-      .cp-manage-danger-label { font-size: 10px; font-weight: bold; letter-spacing: 0.08em; color: color-mix(in srgb,#e85454 60%,transparent); text-transform: uppercase; margin-bottom: 8px; }
+      .cp-manage-danger { border-top-color: color-mix(in srgb,#e85454 25%,transparent); }
+      .cp-manage-danger-toggle { color: color-mix(in srgb,#e85454 65%,transparent); }
+      .cp-manage-danger-toggle:hover { color: #e85454; }
       .cp-manage-delete-btn {
         background: color-mix(in srgb,#e85454 10%,transparent); border: 1px solid color-mix(in srgb,#e85454 35%,transparent);
         color: #e85454; border-radius: 4px; font-family: inherit; font-size: 12px; padding: 6px 14px;
@@ -1658,6 +1830,34 @@ export class CrewPanel {
       .cp-manage-invite-btn:hover { background: color-mix(in srgb,var(--nd-accent) 25%,transparent); }
       .cp-manage-invite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .cp-manage-invite-status { font-size: 11px; margin-top: 4px; min-height: 16px; }
+
+      .cp-kicked-section { margin-top: 0; margin-bottom: 0; }
+      .cp-manage-danger-kicked:empty { display: none; }
+      .cp-manage-danger-kicked:empty + .cp-manage-danger-divider { display: none; }
+      .cp-manage-danger-divider {
+        height: 1px; margin: 18px 0;
+        background: color-mix(in srgb,#e85454 18%,transparent);
+      }
+      .cp-kicked-header {
+        font-size: 10px; font-weight: bold; letter-spacing: .08em;
+        color: color-mix(in srgb,#e85454 60%,transparent);
+        text-transform: uppercase; margin: 0 0 6px;
+      }
+      .cp-kicked-search {
+        width: 100%; box-sizing: border-box;
+        background: color-mix(in srgb,var(--nd-text) 5%,transparent); color: var(--nd-text);
+        border: 1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);
+        border-radius: 4px; font-family: inherit; font-size: 11px; padding: 4px 8px;
+        margin-bottom: 6px;
+      }
+      .cp-kicked-search:focus { outline: none; border-color: color-mix(in srgb,var(--nd-accent) 50%,transparent); }
+      .cp-kicked-more {
+        display: block; width: 100%; margin-top: 6px;
+        background: none; border: 1px dashed color-mix(in srgb,var(--nd-text) 20%,transparent);
+        color: var(--nd-subtext); border-radius: 4px; font-family: inherit;
+        font-size: 11px; padding: 5px 8px; cursor: pointer; transition: all 0.15s;
+      }
+      .cp-kicked-more:hover { color: var(--nd-text); border-color: color-mix(in srgb,var(--nd-text) 35%,transparent); }
 
       /* Detail tabs */
       .cp-detail-tabs {
@@ -1697,12 +1897,37 @@ export class CrewPanel {
         max-width: 90%;
       }
       .cp-msg-joinreq-text { color: var(--nd-text); }
-      .cp-msg-accept-btn {
-        background: var(--nd-accent); color: var(--nd-bg); border: none;
+      .cp-joinreq-toast {
+        position: fixed; top: 18px; right: 18px; z-index: 5000;
+        max-width: 320px; padding: 12px 16px;
+        background: var(--nd-bg);
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 50%, transparent);
+        border-left: 3px solid var(--nd-accent);
+        border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        font-family: 'Courier New', monospace; cursor: pointer;
+        animation: cp-toast-in 0.25s ease-out;
+      }
+      @keyframes cp-toast-in {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      .cp-joinreq-toast-title {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--nd-accent); margin-bottom: 4px;
+      }
+      .cp-joinreq-toast-body { font-size: 13px; color: var(--nd-text); margin-bottom: 4px; }
+      .cp-joinreq-toast-hint { font-size: 11px; color: var(--nd-subtext); }
+      .cp-msg-joinreq-btns { display: flex; gap: 6px; }
+      .cp-msg-accept-btn, .cp-msg-decline-btn {
         border-radius: 5px; padding: 3px 10px; font-size: 11px; font-family: inherit;
         font-weight: bold; cursor: pointer; white-space: nowrap;
       }
-      .cp-msg-accept-btn:disabled { opacity: 0.6; cursor: default; }
+      .cp-msg-accept-btn { background: var(--nd-accent); color: var(--nd-bg); border: none; }
+      .cp-msg-decline-btn {
+        background: transparent; color: #e85454;
+        border: 1px solid color-mix(in srgb, #e85454 50%, transparent);
+      }
+      .cp-msg-accept-btn:disabled, .cp-msg-decline-btn:disabled { opacity: 0.6; cursor: default; }
       .cp-msg-name { font-size: 11px; font-weight: bold; margin-bottom: 3px; color: var(--nd-accent); }
       .cp-msg-own .cp-msg-name { color: #f0b040; }
       .cp-msg-bubble {

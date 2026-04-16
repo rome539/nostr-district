@@ -217,7 +217,24 @@ export class LoginScreen {
         display: flex; align-items: flex-start; gap: 8px;
         font-size: 12px; color: #f0b040; cursor: pointer;
       }
-      .warning-check input { margin-top: 2px; }
+      .warning-check input[type="checkbox"] {
+        appearance: none; -webkit-appearance: none;
+        width: 14px; height: 14px; margin: 2px 0 0; flex-shrink: 0;
+        background: rgba(240,176,64,0.08);
+        border: 1px solid rgba(240,176,64,0.5);
+        border-radius: 3px; cursor: pointer;
+        display: inline-grid; place-content: center;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .warning-check input[type="checkbox"]:hover { border-color: #f0b040; }
+      .warning-check input[type="checkbox"]:checked {
+        background: rgba(240,176,64,0.2); border-color: #f0b040;
+      }
+      .warning-check input[type="checkbox"]:checked::after {
+        content: ''; width: 8px; height: 8px;
+        background: #f0b040;
+        clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0, 43% 62%);
+      }
       .nsec-input-wrap { display: flex; gap: 6px; }
       .nsec-input {
         flex: 1; background: var(--nd-navy);

@@ -923,12 +923,18 @@ export async function subscribeCrewChat(
 
   const since = Math.floor(Date.now() / 1000) - 60 * 60 * 24;
 
-  // Load history
+  // Load history from all chat relays — crew messages live on NIP-29 relays, but
+  // join requests land on discovery relays (NIP-29 relays reject non-member posts).
   try {
-    // Only query NIP-29 relays for history — that's where crew chat lives; no need to hit all 7 relays
-    const history = await pool.querySync(NIP29_RELAYS, { kinds: [9], '#h': [gid], since, limit: 50 });
-    // Process history sequentially to avoid decrypting all messages in one synchronous burst
-    for (const ev of history.sort((a: any, b: any) => a.created_at - b.created_at)) {
+    const history = await pool.querySync(CHAT_RELAYS, { kinds: [9], '#h': [gid], since, limit: 100 });
+    // Dedupe by event id (same event may arrive from multiple relays)
+    const seenIds = new Set<string>();
+    const unique = history.filter((ev: any) => {
+      if (seenIds.has(ev.id)) return false;
+      seenIds.add(ev.id);
+      return true;
+    });
+    for (const ev of unique.sort((a: any, b: any) => a.created_at - b.created_at)) {
       await emit(ev);
     }
   } catch (_) {}
@@ -1004,6 +1010,81 @@ export async function sendJoinRequest(crewId: string): Promise<void> {
     pubkey,
   });
   await publishToChat(event);
+}
+
+/**
+ * Publish a system message announcing a join request was declined.
+ * Tagged with `p` = requester pubkey so other clients can match and remove the
+ * corresponding join-request card, mirroring how "joined the crew" clears it on accept.
+ */
+export async function declineCrewJoinRequest(crewId: string, requesterPubkey: string): Promise<void> {
+  const profile = await fetchProfile(requesterPubkey).catch(() => null);
+  const name = profile?.display_name || profile?.name || requesterPubkey.slice(0, 8) + '…';
+  await sendCrewSystemMessage(crewId, `${name}'s request to join was declined`, requesterPubkey);
+}
+
+// ── Background join-request notifications ────────────────────────────────────
+// Lets users see new join requests on their crews even when the crew chat is closed.
+// Subscribes to NIP-29 chat relays for every crew where the user is founder/admin/officer
+// and emits a notification when a fresh request arrives.
+
+export interface JoinReqNotification {
+  crewId: string;
+  crewName: string;
+  requesterPubkey: string;
+  createdAt: number;
+}
+
+const joinReqListeners: ((req: JoinReqNotification) => void)[] = [];
+const joinReqDedupe = new Set<string>();
+let joinReqRm: RelayManager | null = null;
+
+export function onCrewJoinRequest(handler: (req: JoinReqNotification) => void): () => void {
+  joinReqListeners.push(handler);
+  return () => {
+    const i = joinReqListeners.indexOf(handler);
+    if (i >= 0) joinReqListeners.splice(i, 1);
+  };
+}
+
+export async function startCrewJoinReqSubscription(): Promise<void> {
+  const { pubkey } = authStore.getState();
+  if (!pubkey) return;
+  joinReqRm?.destroy();
+  joinReqRm = null;
+
+  // Find crews where the user has authority to handle requests
+  const crews = await fetchMyCrews().catch(() => [] as Crew[]);
+  const watchable = crews.filter(c =>
+    c.founderPubkey === pubkey || isCrewAdmin(c.id, pubkey) || isCrewOfficer(c.id, pubkey)
+  );
+  if (watchable.length === 0) return;
+
+  const crewByGid = new Map<string, Crew>(watchable.map(c => [groupId(c.id), c]));
+  const gids = [...crewByGid.keys()];
+
+  joinReqRm = new RelayManager(NIP29_RELAYS);
+  joinReqRm.connectAll();
+  joinReqRm.subscribe(
+    `crew-joinreqs-${pubkey.slice(0, 8)}`,
+    [{ kinds: [9], '#h': gids, '#t': ['nd-joinreq'], since: Math.floor(Date.now() / 1000) }],
+    (ev: any) => {
+      if (joinReqDedupe.has(ev.id)) return;
+      joinReqDedupe.add(ev.id);
+      const requester = ev.tags?.find((t: string[]) => t[0] === 'p')?.[1];
+      const gid = ev.tags?.find((t: string[]) => t[0] === 'h')?.[1];
+      const crew = crewByGid.get(gid ?? '');
+      if (!requester || !crew || requester === pubkey) return;
+      joinReqListeners.forEach(fn => fn({
+        crewId: crew.id, crewName: crew.name, requesterPubkey: requester, createdAt: ev.created_at,
+      }));
+    }
+  );
+}
+
+export function stopCrewJoinReqSubscription(): void {
+  joinReqRm?.destroy();
+  joinReqRm = null;
 }
 
 // ── Posts (kind:9 with #t nd-post, on all relays) ─────────────────────────────
