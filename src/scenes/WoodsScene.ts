@@ -78,6 +78,14 @@ export class WoodsScene extends BaseScene {
   private telescopePromptArrow!: Phaser.GameObjects.Text;
   private telescopeOverlay: HTMLElement | null = null;
 
+  private boatGraphics!: Phaser.GameObjects.Graphics;
+
+  // boat prompt
+  private nearBoat = false;
+  private boatPromptBg!: Phaser.GameObjects.Graphics;
+  private boatPromptText!: Phaser.GameObjects.Text;
+  private boatPromptArrow!: Phaser.GameObjects.Text;
+
   // fishing
   private nearDockTip = false;
   private fishingState: 'idle' | 'waiting' | 'bite' = 'idle';
@@ -100,6 +108,8 @@ export class WoodsScene extends BaseScene {
 
     this.shootingStarGraphics = this.add.graphics().setDepth(-1);
     this.waterGraphics = this.add.graphics().setDepth(1);
+    this.boatGraphics = this.add.graphics().setDepth(2);
+    this.drawBoat();
     this.campfireGraphics = this.add.graphics().setDepth(3);
     this.chimneyGraphics = this.add.graphics().setDepth(4);
     this.fireflyGraphics = this.add.graphics().setDepth(12);
@@ -197,6 +207,15 @@ export class WoodsScene extends BaseScene {
       if (this.nearDockTip) this.handleFishingPress();
     });
 
+    // Boat prompt
+    this.boatPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.boatPromptBg.fillStyle(0x020c0a, 0.92); this.boatPromptBg.fillRoundedRect(0, 0, 148, 28, 5);
+    this.boatPromptBg.lineStyle(1, 0x2a5040, 0.7); this.boatPromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
+    this.boatPromptText = this.add.text(0, 0, 'COMING SOON', {
+      fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#5dcaa5', fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.boatPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#5dcaa5' }).setOrigin(0.5).setDepth(51).setVisible(false);
+
     this.setupPresenceCallbacks(myPubkey);
     sendRoomChange('woods', this.spawnX, this.playerY);
     this.setupRoomRequestHandlers();
@@ -211,7 +230,9 @@ export class WoodsScene extends BaseScene {
       this.telescopePromptBg?.destroy(); this.telescopePromptText?.destroy(); this.telescopePromptArrow?.destroy();
       this.telescopeOverlay?.remove(); this.telescopeOverlay = null;
       this.dockPromptBg?.destroy(); this.dockPromptText?.destroy(); this.dockPromptArrow?.destroy();
+      this.boatPromptBg?.destroy(); this.boatPromptText?.destroy(); this.boatPromptArrow?.destroy();
       this.fishingLineGraphics?.destroy();
+      this.boatGraphics?.destroy();
     });
   }
 
@@ -431,38 +452,6 @@ export class WoodsScene extends BaseScene {
     x.globalAlpha=0.07; x.beginPath(); x.arc(DOCK_X+9,FLOOR_Y-52,34,0,Math.PI*2); x.fill();
     x.globalAlpha=1;
 
-    // ── Rowboat (tied to dock tip) ──
-    { const bx = 344, by = FLOOR_Y + 10;
-      // Hull
-      x.fillStyle = '#1e1006';
-      x.beginPath();
-      x.moveTo(bx - 22, by - 4);
-      x.quadraticCurveTo(bx - 27, by + 3, bx - 20, by + 10);
-      x.lineTo(bx + 20, by + 10);
-      x.quadraticCurveTo(bx + 27, by + 3, bx + 22, by - 4);
-      x.closePath();
-      x.fill();
-      // Rim
-      x.fillStyle = '#3a2810'; x.fillRect(bx - 22, by - 6, 44, 3);
-      // Interior floor
-      x.fillStyle = '#160c04'; x.fillRect(bx - 16, by - 1, 32, 8);
-      // Seat plank
-      x.fillStyle = '#2a1c0a'; x.fillRect(bx - 9, by + 2, 18, 3);
-      // Left oar
-      x.strokeStyle = '#3a2810'; x.lineWidth = 1.5;
-      x.beginPath(); x.moveTo(bx - 10, by + 1); x.lineTo(bx - 36, by + 6); x.stroke();
-      x.fillStyle = '#2e2008'; x.fillRect(bx - 40, by + 4, 7, 4);
-      // Right oar
-      x.beginPath(); x.moveTo(bx + 10, by + 1); x.lineTo(bx + 36, by + 6); x.stroke();
-      x.fillStyle = '#2e2008'; x.fillRect(bx + 33, by + 4, 7, 4);
-      // Mooring rope from boat to dock post
-      x.strokeStyle = '#3a3028'; x.lineWidth = 0.8;
-      x.beginPath(); x.moveTo(bx + 20, by + 2); x.lineTo(DOCK_X + 2, FLOOR_Y + 6); x.stroke();
-      // Water reflection
-      x.globalAlpha = 0.1; x.fillStyle = '#1e1006';
-      x.fillRect(bx - 18, by + 11, 36, 5);
-      x.globalAlpha = 1;
-    }
 
     // Campfire pit
     const fx=FIRE_X, fy=FIRE_Y;
@@ -715,6 +704,7 @@ export class WoodsScene extends BaseScene {
     this.updateCabinProximity();
     this.updateTelescopeProximity();
     this.updateDockTipProximity();
+    this.updateBoatProximity();
     this.updateFishing(time, delta);
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -1029,18 +1019,242 @@ export class WoodsScene extends BaseScene {
   }
 
   // ══════════════════════════════════════════════════════════════════
+  // BOAT
+  // ══════════════════════════════════════════════════════════════════
+  private drawBoat(): void {
+    const g = this.boatGraphics;
+    const bx = 490;             // center x — in the lake off the dock
+    const wl = FLOOR_Y + 50;   // waterline y — sit low in the water
+
+    // Water shadow beneath hull
+    g.fillStyle(0x040c18, 0.5);
+    g.fillEllipse(bx, wl + 10, 100, 14);
+
+    // Hull body — classic rowboat profile, bow right (pointing out to lake), stern left
+    g.fillStyle(0x3a2210, 1);
+    g.fillPoints([
+      { x: bx - 48, y: wl - 6 },   // stern top-left
+      { x: bx - 46, y: wl + 8 },   // stern bottom
+      { x: bx - 20, y: wl + 12 },  // keel mid-left
+      { x: bx + 10, y: wl + 14 },  // keel center
+      { x: bx + 36, y: wl + 10 },  // keel mid-right
+      { x: bx + 54, y: wl + 2 },   // bow bottom
+      { x: bx + 58, y: wl - 6 },   // bow tip
+      { x: bx + 52, y: wl - 14 },  // bow top
+      { x: bx + 30, y: wl - 18 },  // gunwale right
+      { x: bx,      y: wl - 20 },  // gunwale center (highest)
+      { x: bx - 30, y: wl - 18 },  // gunwale left
+      { x: bx - 48, y: wl - 12 },  // stern top
+    ], true);
+
+    // Hull plank lines
+    g.lineStyle(0.8, 0x2a1608, 0.7);
+    for (let py = wl - 14; py <= wl + 8; py += 5) {
+      g.beginPath();
+      g.moveTo(bx - 44, py);
+      g.lineTo(bx + 52, py - 2);
+      g.strokePath();
+    }
+
+    // Hull inner (visible inside of boat)
+    g.fillStyle(0x2a1808, 1);
+    g.fillPoints([
+      { x: bx - 42, y: wl - 10 },
+      { x: bx - 40, y: wl + 4 },
+      { x: bx - 16, y: wl + 8 },
+      { x: bx + 12, y: wl + 9 },
+      { x: bx + 34, y: wl + 6 },
+      { x: bx + 48, y: wl - 2 },
+      { x: bx + 46, y: wl - 10 },
+      { x: bx + 28, y: wl - 14 },
+      { x: bx,      y: wl - 16 },
+      { x: bx - 26, y: wl - 14 },
+    ], true);
+
+    // Inner shadow gradient
+    g.fillStyle(0x1a0e04, 0.5);
+    g.fillPoints([
+      { x: bx - 38, y: wl - 4 },
+      { x: bx - 14, y: wl + 6 },
+      { x: bx + 14, y: wl + 7 },
+      { x: bx + 40, y: wl + 2 },
+      { x: bx + 44, y: wl - 6 },
+      { x: bx + 26, y: wl - 10 },
+      { x: bx,      y: wl - 12 },
+      { x: bx - 24, y: wl - 10 },
+    ], true);
+
+    // Gunwale (top rail) — thick visible rail
+    g.lineStyle(2.5, 0x4e3418, 1);
+    g.beginPath();
+    g.moveTo(bx - 48, wl - 9);
+    g.lineTo(bx - 30, wl - 18);
+    g.lineTo(bx, wl - 20);
+    g.lineTo(bx + 30, wl - 18);
+    g.lineTo(bx + 52, wl - 14);
+    g.lineTo(bx + 58, wl - 6);
+    g.strokePath();
+    // Gunwale highlight
+    g.lineStyle(1, 0x6a4c20, 0.5);
+    g.beginPath();
+    g.moveTo(bx - 28, wl - 18);
+    g.lineTo(bx, wl - 20);
+    g.lineTo(bx + 28, wl - 18);
+    g.strokePath();
+
+    // Stern transom (flat back wall)
+    g.fillStyle(0x3e2814, 1);
+    g.fillPoints([
+      { x: bx - 48, y: wl - 12 },
+      { x: bx - 48, y: wl - 6 },
+      { x: bx - 46, y: wl + 6 },
+      { x: bx - 44, y: wl + 6 },
+      { x: bx - 44, y: wl - 8 },
+      { x: bx - 46, y: wl - 12 },
+    ], true);
+
+    // Thwarts (seat planks) — front and rear
+    g.fillStyle(0x3a2410, 1);
+    g.fillRect(bx - 22, wl - 15, 18, 4);  // rear seat
+    g.fillRect(bx + 14, wl - 16, 18, 4);  // front seat
+    // Seat highlights
+    g.fillStyle(0x4a3418, 1);
+    g.fillRect(bx - 22, wl - 15, 18, 1);
+    g.fillRect(bx + 14, wl - 16, 18, 1);
+    // Seat supports
+    g.fillStyle(0x2a1808, 1);
+    g.fillRect(bx - 20, wl - 11, 3, 6);
+    g.fillRect(bx - 7, wl - 11, 3, 6);
+    g.fillRect(bx + 16, wl - 12, 3, 6);
+    g.fillRect(bx + 29, wl - 12, 3, 6);
+
+    // Oarlocks (metal brackets on gunwale)
+    g.fillStyle(0x505050, 1);
+    g.fillRect(bx - 10, wl - 22, 3, 4);
+    g.fillRect(bx + 8, wl - 22, 3, 4);
+
+    // Oars resting in oarlocks
+    g.lineStyle(1.5, 0x4a3418, 1);
+    g.beginPath();
+    g.moveTo(bx - 10, wl - 20);
+    g.lineTo(bx - 42, wl - 8);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(bx + 9, wl - 20);
+    g.lineTo(bx - 26, wl - 6);
+    g.strokePath();
+    // Oar blades
+    g.fillStyle(0x3a2810, 1);
+    g.fillPoints([
+      { x: bx - 42, y: wl - 12 },
+      { x: bx - 50, y: wl - 6 },
+      { x: bx - 46, y: wl - 2 },
+      { x: bx - 38, y: wl - 6 },
+    ], true);
+    g.fillPoints([
+      { x: bx - 26, y: wl - 10 },
+      { x: bx - 34, y: wl - 4 },
+      { x: bx - 30, y: wl },
+      { x: bx - 22, y: wl - 4 },
+    ], true);
+
+    // Bow cap (decorative prow tip)
+    g.fillStyle(0x5a3c18, 1);
+    g.fillPoints([
+      { x: bx + 56, y: wl - 14 },
+      { x: bx + 60, y: wl - 8 },
+      { x: bx + 58, y: wl - 4 },
+      { x: bx + 54, y: wl - 12 },
+    ], true);
+
+    // Mooring rope to dock (catenary-like sag)
+    g.lineStyle(1, 0x4a4038, 0.8);
+    g.beginPath();
+    const ropeStartX = bx - 46, ropeStartY = wl - 10;
+    const ropeEndX = DOCK_X + 24, ropeEndY = FLOOR_Y + 4;
+    g.moveTo(ropeStartX, ropeStartY);
+    const ropeMidX = (ropeStartX + ropeEndX) / 2;
+    const ropeSag = FLOOR_Y + 12;
+    // Approximate quadratic curve with line segments
+    for (let t = 0.1; t <= 1.0; t += 0.1) {
+      const rx = (1 - t) * (1 - t) * ropeStartX + 2 * (1 - t) * t * ropeMidX + t * t * ropeEndX;
+      const ry = (1 - t) * (1 - t) * ropeStartY + 2 * (1 - t) * t * ropeSag + t * t * ropeEndY;
+      g.lineTo(rx, ry);
+    }
+    g.strokePath();
+    // Rope knot on dock post
+    g.fillStyle(0x4a4038, 1);
+    g.fillCircle(DOCK_X + 24, FLOOR_Y + 4, 2);
+
+    // Lantern hanging from bow
+    g.fillStyle(0x2a1c0c, 1);
+    g.fillRect(bx + 52, wl - 22, 5, 3);  // bracket
+    g.fillStyle(0x1a1008, 1);
+    g.fillRect(bx + 51, wl - 24, 7, 8);  // lantern frame
+    g.fillStyle(0xd09020, 0.8);
+    g.fillRect(bx + 52, wl - 23, 5, 6);  // amber glow
+    // Lantern glow
+    g.fillStyle(0xf0a030, 0.08);
+    g.fillCircle(bx + 54, wl - 20, 16);
+    g.fillStyle(0xf0a030, 0.04);
+    g.fillCircle(bx + 54, wl - 20, 28);
+  }
+
+  private updateBoatProximity(): void {
+    const boatCenterX = 490;
+    const near = this.player.x >= boatCenterX - 60 && this.player.x <= boatCenterX + 60;
+    if (near !== this.nearBoat) this.nearBoat = near;
+
+    this.boatPromptBg.setVisible(near);
+    this.boatPromptText.setVisible(near);
+    this.boatPromptArrow.setVisible(near);
+    if (near) {
+      const px = boatCenterX, py = FLOOR_Y - 70;
+      this.boatPromptBg.setPosition(px - 74, py - 2);
+      this.boatPromptText.setPosition(px, py + 8);
+      this.boatPromptArrow.setPosition(px, py + 22);
+      if (!this.tweens.isTweening(this.boatPromptArrow)) {
+        this.tweens.add({ targets: this.boatPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    } else {
+      this.tweens.killTweensOf(this.boatPromptArrow);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
   // FISHING
   // ══════════════════════════════════════════════════════════════════
   private static readonly FISH_TABLE = [
+    // Common
     { name: 'tiny carp',                    kg: '0.2', rare: false, junk: false },
     { name: 'silver trout',                 kg: '1.4', rare: false, junk: false },
     { name: 'moonfish',                     kg: '0.8', rare: false, junk: false },
+    { name: 'bluegill',                     kg: '0.4', rare: false, junk: false },
+    { name: 'mud catfish',                  kg: '1.8', rare: false, junk: false },
+    { name: 'speckled sunfish',             kg: '0.3', rare: false, junk: false },
+    { name: 'lake minnow',                  kg: '0.1', rare: false, junk: false },
+    { name: 'striped dace',                 kg: '0.6', rare: false, junk: false },
+    // Rare
     { name: 'darkwater bass',               kg: '2.3', rare: true,  junk: false },
     { name: 'luminous eel',                 kg: '0.5', rare: true,  junk: false },
     { name: 'crystal perch',                kg: '3.1', rare: true,  junk: false },
+    { name: 'ghost pike',                   kg: '4.2', rare: true,  junk: false },
+    { name: 'midnight sturgeon',            kg: '6.8', rare: true,  junk: false },
+    { name: 'starscale koi',                kg: '1.1', rare: true,  junk: false },
+    { name: 'abyssal anglerfish',           kg: '2.7', rare: true,  junk: false },
+    { name: 'ancient goldfish',             kg: '0.9', rare: true,  junk: false },
+    // Junk
     { name: 'old boot',                     kg: '?',   rare: false, junk: true  },
     { name: 'soggy message in a bottle',    kg: '0.3', rare: false, junk: true  },
-  ];
+    { name: 'rusty tin can',                kg: '?',   rare: false, junk: true  },
+    { name: 'waterlogged hat',              kg: '?',   rare: false, junk: true  },
+    { name: 'tangled fishing line',         kg: '?',   rare: false, junk: true  },
+    { name: 'broken lantern',               kg: '?',   rare: false, junk: true  },
+    // Legendary
+    { name: 'ostrich',                      kg: '63.5', rare: false, junk: false, legendary: true },
+    { name: 'golden satoshi coin',          kg: '0.01', rare: false, junk: false, legendary: true },
+    { name: 'enchanted trident',            kg: '8.4', rare: false, junk: false, legendary: true },
+  ] as const;
 
   private updateDockTipProximity(): void {
     const near = this.player.x < DOCK_X + 48;
@@ -1070,8 +1284,11 @@ export class WoodsScene extends BaseScene {
     this.fishingLineGraphics.clear();
     if (this.fishingState === 'idle') return;
 
-    const rodTipX = this.player.x - 8;
-    const rodTipY = this.player.y - 32;
+    // Rod grip is at player's left hand, tip arcs up-left overhead
+    const gripX = this.player.x - 4;
+    const gripY = this.player.y - 18;
+    const rodTipX = this.player.x - 20;
+    const rodTipY = this.player.y - 52;
     const bobberX = DOCK_X - 22;
 
     this.fishingBobPhase += delta * 0.002;
@@ -1081,7 +1298,19 @@ export class WoodsScene extends BaseScene {
       : Math.sin(this.fishingBobPhase) * 1.5;
     const bobberY = FLOOR_Y + 10 + bobAmt;
 
-    // Fishing line
+    // Fishing rod — thick base tapering to tip
+    this.fishingLineGraphics.lineStyle(3, 0x3a2810, 1);
+    this.fishingLineGraphics.beginPath();
+    this.fishingLineGraphics.moveTo(gripX, gripY);
+    this.fishingLineGraphics.lineTo(gripX - 8, gripY - 20);
+    this.fishingLineGraphics.strokePath();
+    this.fishingLineGraphics.lineStyle(2, 0x4a3418, 1);
+    this.fishingLineGraphics.beginPath();
+    this.fishingLineGraphics.moveTo(gripX - 8, gripY - 20);
+    this.fishingLineGraphics.lineTo(rodTipX, rodTipY);
+    this.fishingLineGraphics.strokePath();
+
+    // Fishing line from rod tip to bobber
     this.fishingLineGraphics.lineStyle(1, 0xc8b89a, 0.7);
     this.fishingLineGraphics.beginPath();
     this.fishingLineGraphics.moveTo(rodTipX, rodTipY);
@@ -1152,26 +1381,33 @@ export class WoodsScene extends BaseScene {
 
   private reelIn(): void {
     const table = WoodsScene.FISH_TABLE;
-    // Weighted: 50% common, 30% uncommon/rare, 20% junk
+    // Weighted: 1% legendary, 19.8% junk, 29.7% rare, 49.5% common
     const roll = Math.random();
     let catch_: typeof table[number];
-    if (roll < 0.20) {
+    if (roll < 0.005) {
+      const legendary = table.filter(f => 'legendary' in f && f.legendary);
+      catch_ = legendary[Math.floor(Math.random() * legendary.length)];
+    } else if (roll < 0.21) {
       const junk = table.filter(f => f.junk);
       catch_ = junk[Math.floor(Math.random() * junk.length)];
-    } else if (roll < 0.50) {
+    } else if (roll < 0.51) {
       const rare = table.filter(f => f.rare);
       catch_ = rare[Math.floor(Math.random() * rare.length)];
     } else {
-      const common = table.filter(f => !f.rare && !f.junk);
+      const common = table.filter(f => !f.rare && !f.junk && !('legendary' in f && f.legendary));
       catch_ = common[Math.floor(Math.random() * common.length)];
     }
 
-    const msg = catch_.junk
-      ? `* reeled in a ${catch_.name}. unfortunate.`
-      : catch_.rare
-        ? `* hooked a ${catch_.name} (${catch_.kg}kg)! ✦`
-        : `* caught a ${catch_.name} (${catch_.kg}kg)`;
-    this.chatUI.addMessage('system', msg, catch_.rare ? '#aaff44' : WOODS_ACCENT);
+    const isLegendary = 'legendary' in catch_ && catch_.legendary;
+    const msg = isLegendary
+      ? `* pulled a ${catch_.name} out of the lake?! (${catch_.kg}kg) ✦✦✦`
+      : catch_.junk
+        ? `* reeled in a ${catch_.name}. unfortunate.`
+        : catch_.rare
+          ? `* hooked a ${catch_.name} (${catch_.kg}kg)! ✦`
+          : `* caught a ${catch_.name} (${catch_.kg}kg)`;
+    const color = isLegendary ? '#ffd700' : catch_.rare ? '#aaff44' : WOODS_ACCENT;
+    this.chatUI.addMessage('system', msg, color);
     sendChat(msg);
     this.resetFishingState();
   }
