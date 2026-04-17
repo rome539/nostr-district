@@ -67,7 +67,7 @@ import { worldMap } from '../ui/WorldMap';
 import { ZapModal } from '../ui/ZapModal';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
-  sendChat, sendNameUpdate, sendRoomResponse, sendRoomRequest,
+  sendChat, sendNameUpdate, sendRoomChange, sendRoomResponse, sendRoomRequest,
   setPresenceCallbacks, sendAvatarUpdate,
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, clearRoomRequestHandler,
   requestOnlinePlayers,
@@ -858,15 +858,118 @@ export abstract class BaseScene extends Phaser.Scene {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // ROOM ALIAS MAP + TELEPORT
+  // ══════════════════════════════════════════════════════════════════════════
+  private static readonly ROOM_ALIASES: Record<string, string> = {
+    hub: 'hub', woods: 'woods', forest: 'woods', camp: 'woods',
+    cabin: 'cabin', relay: 'relay', feed: 'feed', thefeed: 'feed',
+    myroom: 'myroom', room: 'picker', lounge: 'lounge', rooftop: 'lounge',
+    market: 'market', shop: 'market', store: 'market',
+  };
+
+  protected teleportToRoom(roomId: string): void {
+    const ac = this.getSceneAccent();
+
+    if (roomId === 'picker') {
+      const pk = this.registry.get('playerPubkey');
+      const n = this.registry.get('playerName') || 'My Room';
+      this.playerPicker.open(
+        pk, n,
+        () => {
+          sendRoomChange('hub');
+          this.chatUI.destroy();
+          this.scene.start('RoomScene', {
+            id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk,
+          });
+        },
+        (opk) => {
+          sendRoomChange(opk);
+          this.chatUI.addMessage('system', 'Requesting access...', ac);
+        },
+      );
+      return;
+    }
+
+    if (roomId === 'myroom') {
+      const pk = this.registry.get('playerPubkey');
+      const n = this.registry.get('playerName') || 'My Room';
+      sendRoomChange('hub');
+      this.chatUI.destroy();
+      this.scene.start('RoomScene', {
+        id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk,
+      });
+      return;
+    }
+
+    if (roomId === 'hub') {
+      if (this.isLeavingScene) return;
+      this.isLeavingScene = true;
+      sendRoomChange('hub');
+      this.chatUI.destroy();
+      this.cameras.main.fadeOut(300, 10, 0, 20);
+      this.time.delayedCall(300, () => {
+        if (!this.scene.isActive()) return;
+        this.scene.start('HubScene', { _returning: true });
+      });
+      return;
+    }
+
+    if (roomId === 'woods') {
+      if (this.isLeavingScene) return;
+      this.isLeavingScene = true;
+      sendRoomChange('woods');
+      this.chatUI.destroy();
+      this.cameras.main.fadeOut(300, 10, 0, 20);
+      this.time.delayedCall(300, () => {
+        if (!this.scene.isActive()) return;
+        this.scene.start('WoodsScene');
+      });
+      return;
+    }
+
+    if (roomId === 'cabin') {
+      if (this.isLeavingScene) return;
+      this.isLeavingScene = true;
+      sendRoomChange('cabin');
+      this.chatUI.destroy();
+      this.cameras.main.fadeOut(300, 4, 2, 0);
+      this.time.delayedCall(300, () => {
+        if (!this.scene.isActive()) return;
+        this.scene.start('CabinScene');
+      });
+      return;
+    }
+
+    sendRoomChange('hub');
+    this.chatUI.destroy();
+    this.scene.start('RoomScene', {
+      id: roomId,
+      name: roomId.charAt(0).toUpperCase() + roomId.slice(1),
+      neonColor: P.teal,
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // COMMON COMMAND HANDLER
-  // Call from every scene's handleCommand default case.
-  // Returns true if the command was handled, false if unknown.
-  // Scene-specific commands (leave, tp, dm, zap, players, visit) stay in each
-  // scene's own switch before this is called.
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonCommand(cmd: string, arg: string): boolean {
     const ac = this.getSceneAccent();
     switch (cmd) {
+      // ── Teleport ──────────────────────────────────────────────────────────
+      case 'tp': case 'teleport': case 'go': {
+        if (!arg) {
+          this.chatUI.addMessage('system', 'Rooms: hub, woods, cabin, relay, feed, myroom, lounge, market', ac);
+          return true;
+        }
+        const rid = BaseScene.ROOM_ALIASES[arg.toLowerCase().replace(/\s+/g, '')];
+        if (!rid) {
+          this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber);
+          return true;
+        }
+        this.teleportToRoom(rid);
+        return true;
+      }
+
       // ── Online count ──────────────────────────────────────────────────────
       case 'players': case 'who': case 'online': {
         if (this.onlineCount >= 100) {

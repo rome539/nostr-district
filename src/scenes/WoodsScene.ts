@@ -17,7 +17,6 @@ import { onNextAvatarSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange,
-  sendRoomRequest, sendRoomResponse,
   requestOnlinePlayers, setOnlinePlayersHandler,
   isPresenceReady,
 } from '../nostr/presenceService';
@@ -52,6 +51,7 @@ interface ChimneyPuff { x: number; y: number; vx: number; vy: number; life: numb
 
 export class WoodsScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
+  private playerGlow!: Phaser.GameObjects.Graphics;
 
   private parallaxBg!: Phaser.GameObjects.Image;
   private fireflyGraphics!: Phaser.GameObjects.Graphics;
@@ -96,7 +96,11 @@ export class WoodsScene extends BaseScene {
 
     this.fireflies = [];
     for (let i = 0; i < 50; i++) {
-      this.fireflies.push({ x: 40 + Math.random() * (W - 80), y: 40 + Math.random() * (FLOOR_Y - 60), vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.3, phase: Math.random() * Math.PI * 2, size: 1.5 + Math.random() * 1.5 });
+      this.fireflies.push({
+        x: 40 + Math.random() * (W - 80), y: 40 + Math.random() * (FLOOR_Y - 60),
+        vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.3,
+        phase: Math.random() * Math.PI * 2, size: 1.5 + Math.random() * 1.5,
+      });
     }
 
     this.createPlayer();
@@ -115,7 +119,14 @@ export class WoodsScene extends BaseScene {
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (currentlyOver.length > 0) return; if (p.worldY < FLOOR_Y - 10 || p.worldY > 460) return; if (p.worldX < DOCK_X) return; this.targetX = Phaser.Math.Clamp(p.worldX, DOCK_X, W - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      if (currentlyOver.length > 0) return;
+      if (p.worldY < FLOOR_Y - 10 || p.worldY > 460) return;
+      if (p.worldX < DOCK_X) return;
+      this.targetX = Phaser.Math.Clamp(p.worldX, DOCK_X, W - 20);
+      this.isMoving = true;
+    });
 
     const myPubkey = this.registry.get('playerPubkey');
     this.snd.setRoom('woods');
@@ -205,29 +216,61 @@ export class WoodsScene extends BaseScene {
   }
 
   static generateBg(): HTMLCanvasElement {
-    const c = document.createElement('canvas'); c.width = W; c.height = GAME_HEIGHT;
-    const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
-    const r = (ax: number, ay: number, aw: number, ah: number, col: string) => { x.fillStyle = col; x.fillRect(ax, ay, aw, ah); };
+    const c = document.createElement('canvas');
+    c.width = W; c.height = GAME_HEIGHT;
+    const x = c.getContext('2d')!;
+    x.imageSmoothingEnabled = false;
+    const r = (ax: number, ay: number, aw: number, ah: number, col: string) => {
+      x.fillStyle = col; x.fillRect(ax, ay, aw, ah);
+    };
 
     // Sky
     const sg = x.createLinearGradient(0, 0, 0, FLOOR_Y);
-    sg.addColorStop(0, '#010008'); sg.addColorStop(0.2, '#020012'); sg.addColorStop(0.5, '#04081a'); sg.addColorStop(0.8, '#061020'); sg.addColorStop(1, '#081420');
-    x.fillStyle = sg; x.fillRect(0, 0, W, FLOOR_Y);
+    sg.addColorStop(0, '#010008');
+    sg.addColorStop(0.2, '#020012');
+    sg.addColorStop(0.5, '#04081a');
+    sg.addColorStop(0.8, '#061020');
+    sg.addColorStop(1, '#081420');
+    x.fillStyle = sg;
+    x.fillRect(0, 0, W, FLOOR_Y);
 
     // Stars
-    for (let i = 0; i < 300; i++) { x.fillStyle = ['#fad480','#fff','#fff','#fff','#b8a8f8','#8aecd0'][Math.floor(Math.random()*6)]; x.globalAlpha = 0.15+Math.random()*0.6; x.fillRect(Math.random()*W, Math.random()*(FLOOR_Y-80), Math.random()>0.92?2:1, 1); }
-    for (let i = 0; i < 8; i++) { const sx=Math.random()*W, sy=10+Math.random()*150; x.fillStyle='#fff'; x.globalAlpha=0.4+Math.random()*0.3; x.fillRect(sx,sy,2,2); x.globalAlpha=0.08; x.fillRect(sx-2,sy,6,1); x.fillRect(sx,sy-2,1,6); }
+    const starColors = ['#fad480', '#fff', '#fff', '#fff', '#b8a8f8', '#8aecd0'];
+    for (let i = 0; i < 300; i++) {
+      x.fillStyle = starColors[Math.floor(Math.random() * 6)];
+      x.globalAlpha = 0.15 + Math.random() * 0.6;
+      x.fillRect(Math.random() * W, Math.random() * (FLOOR_Y - 80), Math.random() > 0.92 ? 2 : 1, 1);
+    }
+    for (let i = 0; i < 8; i++) {
+      const sx = Math.random() * W, sy = 10 + Math.random() * 150;
+      x.fillStyle = '#fff';
+      x.globalAlpha = 0.4 + Math.random() * 0.3;
+      x.fillRect(sx, sy, 2, 2);
+      x.globalAlpha = 0.08;
+      x.fillRect(sx - 2, sy, 6, 1);
+      x.fillRect(sx, sy - 2, 1, 6);
+    }
     x.globalAlpha = 1;
 
     // Moon
     const moonX = 1100;
     x.fillStyle = '#f5e8d0';
-    [0.04,0.08,0.2,0.45,0.7].forEach((a,i) => { x.globalAlpha=a; x.beginPath(); x.arc(moonX,55,40-i*7,0,Math.PI*2); x.fill(); });
+    [0.04, 0.08, 0.2, 0.45, 0.7].forEach((a, i) => {
+      x.globalAlpha = a;
+      x.beginPath(); x.arc(moonX, 55, 40 - i * 7, 0, Math.PI * 2); x.fill();
+    });
     x.globalAlpha = 1;
 
     // Mid treeline
     x.fillStyle = '#050c08';
-    for (let tx = -20; tx < W+30; tx += 16+Math.random()*25) { const th=50+Math.random()*110, tw=14+Math.random()*26; x.beginPath(); x.moveTo(tx+tw/2, FLOOR_Y-40-th); x.lineTo(tx+tw+3, FLOOR_Y-35); x.lineTo(tx-3, FLOOR_Y-35); x.closePath(); x.fill(); }
+    for (let tx = -20; tx < W + 30; tx += 16 + Math.random() * 25) {
+      const th = 50 + Math.random() * 110, tw = 14 + Math.random() * 26;
+      x.beginPath();
+      x.moveTo(tx + tw / 2, FLOOR_Y - 40 - th);
+      x.lineTo(tx + tw + 3, FLOOR_Y - 35);
+      x.lineTo(tx - 3, FLOOR_Y - 35);
+      x.closePath(); x.fill();
+    }
 
     // Near silhouette trees — front layer (closest, darkest)
     { let ntx = -40;
@@ -606,6 +649,7 @@ export class WoodsScene extends BaseScene {
     this.snd.setLoopElVolume(fireT * fireT);
     this.updateWater(time, delta);
     this.updateShootingStar(delta);
+    this.updatePlayerGlow(time);
     this.updateCabinProximity();
     this.updateTelescopeProximity();
 
@@ -632,15 +676,41 @@ export class WoodsScene extends BaseScene {
   }
 
   private updateMovement(): void {
-    if (!isPresenceReady()) return; // freeze until server confirms sync
-    const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
-    if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
-    if (vx === 0) { if (this.mobileLeft) vx = -PLAYER_SPEED; else if (this.mobileRight) vx = PLAYER_SPEED; }
+    if (!isPresenceReady()) return;
+    const c = this.input.keyboard?.createCursorKeys();
+    let vx = 0;
+    if (c) {
+      if (c.left.isDown) vx = -PLAYER_SPEED;
+      else if (c.right.isDown) vx = PLAYER_SPEED;
+    }
+    if (vx === 0) {
+      if (this.mobileLeft) vx = -PLAYER_SPEED;
+      else if (this.mobileRight) vx = PLAYER_SPEED;
+    }
     this.isKeyboardMoving = vx !== 0;
-    if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } }
+
+    if (vx !== 0) {
+      this.targetX = null;
+      this.isMoving = false;
+      this.player.x += vx / 60;
+      this.facingRight = vx > 0;
+    } else if (this.isMoving && this.targetX !== null) {
+      const dx = this.targetX - this.player.x;
+      if (Math.abs(dx) < 3) {
+        this.isMoving = false;
+        this.targetX = null;
+      } else {
+        this.player.x += Math.sign(dx) * PLAYER_SPEED / 60;
+        this.facingRight = dx > 0;
+      }
+    }
+
     this.player.x = Phaser.Math.Clamp(this.player.x, DOCK_X, W - 20);
-    if (this.player.x < DOCK_X) { this.player.x = DOCK_X; this.targetX = null; this.isMoving = false; }
+    if (this.player.x < DOCK_X) {
+      this.player.x = DOCK_X;
+      this.targetX = null;
+      this.isMoving = false;
+    }
     this.player.setFlipX(!this.facingRight);
   }
 
@@ -686,17 +756,58 @@ export class WoodsScene extends BaseScene {
   private updateCampfire(time: number, delta: number): void {
     this.campfireGraphics.clear();
     const fx = FIRE_X, fy = FIRE_Y;
+
     const gp = 0.06 + Math.sin(time * 0.003) * 0.015;
-    this.campfireGraphics.fillStyle(0xf0b040, gp); this.campfireGraphics.fillCircle(fx, fy, 90);
-    this.campfireGraphics.fillStyle(0xe85454, gp * 0.5); this.campfireGraphics.fillCircle(fx, fy, 55);
+    this.campfireGraphics.fillStyle(0xf0b040, gp);
+    this.campfireGraphics.fillCircle(fx, fy, 90);
+    this.campfireGraphics.fillStyle(0xe85454, gp * 0.5);
+    this.campfireGraphics.fillCircle(fx, fy, 55);
+
     const fc = [0xf0b040, 0xe87830, 0xe85454, 0xfad480, 0xffe060];
-    for (let i = 0; i < 7; i++) { const ox=Math.sin(time*0.005+i*1.2)*5, fh=10+Math.sin(time*0.008+i*0.8)*5+Math.random()*3, fw=2.5+Math.random()*2.5, bx=fx-10+i*3.2+ox, a=0.4+Math.sin(time*0.006+i*1.5)*0.2; this.campfireGraphics.fillStyle(fc[i%fc.length],a); this.campfireGraphics.fillRect(bx-fw/2,fy-fh,fw,fh); this.campfireGraphics.fillStyle(0xfad480,a*0.6); this.campfireGraphics.fillRect(bx-1,fy-fh*0.7,2,fh*0.5); }
-    this.campfireGraphics.fillStyle(0xf0b040, 0.3+Math.sin(time*0.004)*0.1); this.campfireGraphics.fillRect(fx-10,fy-2,20,4);
-    if (Math.random()>0.65) this.embers.push({x:fx+(Math.random()-0.5)*12,y:fy-8-Math.random()*6,vx:(Math.random()-0.5)*0.6,vy:-0.3-Math.random()*0.5,life:0,maxLife:600+Math.random()*800,size:1+Math.random()});
-    const dt=delta/16;
-    for (let i=this.embers.length-1;i>=0;i--) { const e=this.embers[i]; e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx+=(Math.random()-0.5)*0.02; e.life+=delta; const p=e.life/e.maxLife; if(p>=1){this.embers.splice(i,1);continue;} const a=p<0.2?p/0.2:(1-p)/0.8; this.campfireGraphics.fillStyle(p<0.5?0xfad480:0xf0b040,a*0.7); this.campfireGraphics.fillRect(e.x,e.y,e.size,e.size); }
+    for (let i = 0; i < 7; i++) {
+      const ox = Math.sin(time * 0.005 + i * 1.2) * 5;
+      const fh = 10 + Math.sin(time * 0.008 + i * 0.8) * 5 + Math.random() * 3;
+      const fw = 2.5 + Math.random() * 2.5;
+      const bx = fx - 10 + i * 3.2 + ox;
+      const a = 0.4 + Math.sin(time * 0.006 + i * 1.5) * 0.2;
+      this.campfireGraphics.fillStyle(fc[i % fc.length], a);
+      this.campfireGraphics.fillRect(bx - fw / 2, fy - fh, fw, fh);
+      this.campfireGraphics.fillStyle(0xfad480, a * 0.6);
+      this.campfireGraphics.fillRect(bx - 1, fy - fh * 0.7, 2, fh * 0.5);
+    }
+
+    this.campfireGraphics.fillStyle(0xf0b040, 0.3 + Math.sin(time * 0.004) * 0.1);
+    this.campfireGraphics.fillRect(fx - 10, fy - 2, 20, 4);
+
+    if (Math.random() > 0.65) {
+      this.embers.push({
+        x: fx + (Math.random() - 0.5) * 12, y: fy - 8 - Math.random() * 6,
+        vx: (Math.random() - 0.5) * 0.6, vy: -0.3 - Math.random() * 0.5,
+        life: 0, maxLife: 600 + Math.random() * 800, size: 1 + Math.random(),
+      });
+    }
+
+    const dt = delta / 16;
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.vx += (Math.random() - 0.5) * 0.02;
+      e.life += delta;
+      const p = e.life / e.maxLife;
+      if (p >= 1) { this.embers.splice(i, 1); continue; }
+      const a = p < 0.2 ? p / 0.2 : (1 - p) / 0.8;
+      this.campfireGraphics.fillStyle(p < 0.5 ? 0xfad480 : 0xf0b040, a * 0.7);
+      this.campfireGraphics.fillRect(e.x, e.y, e.size, e.size);
+    }
     if (this.embers.length > 30) this.embers = this.embers.slice(-20);
-    for (let s=0;s<4;s++) { const sx=fx+Math.sin(time*0.002+s*2)*10, sy=fy-22-s*14-Math.sin(time*0.003+s)*4; this.campfireGraphics.fillStyle(0xcccccc,0.035-s*0.008); this.campfireGraphics.fillRect(sx-3,sy-2,6,4); }
+
+    for (let s = 0; s < 4; s++) {
+      const sx = fx + Math.sin(time * 0.002 + s * 2) * 10;
+      const sy = fy - 22 - s * 14 - Math.sin(time * 0.003 + s) * 4;
+      this.campfireGraphics.fillStyle(0xcccccc, 0.035 - s * 0.008);
+      this.campfireGraphics.fillRect(sx - 3, sy - 2, 6, 4);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -704,16 +815,27 @@ export class WoodsScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   private updateFireflies(time: number, delta: number): void {
     this.fireflyGraphics.clear();
-    const dt=delta/16;
+    const dt = delta / 16;
     for (const f of this.fireflies) {
-      f.x+=f.vx*dt; f.y+=f.vy*dt; f.vx+=(Math.random()-0.5)*0.015; f.vy+=(Math.random()-0.5)*0.012;
-      f.vx=Phaser.Math.Clamp(f.vx,-0.6,0.6); f.vy=Phaser.Math.Clamp(f.vy,-0.4,0.4);
-      if(f.x<20||f.x>W-20)f.vx*=-0.8; if(f.y<40||f.y>FLOOR_Y-20)f.vy*=-0.8;
-      f.x=Phaser.Math.Clamp(f.x,10,W-10); f.y=Phaser.Math.Clamp(f.y,30,FLOOR_Y-10);
-      const pulse=0.3+Math.sin(time*0.003+f.phase)*0.35, alpha=Math.max(0,pulse);
-      this.fireflyGraphics.fillStyle(0xaaff44,alpha*0.08); this.fireflyGraphics.fillCircle(f.x,f.y,f.size*4);
-      this.fireflyGraphics.fillStyle(0xccff66,alpha*0.2); this.fireflyGraphics.fillCircle(f.x,f.y,f.size*2);
-      this.fireflyGraphics.fillStyle(0xeeffaa,alpha*0.8); this.fireflyGraphics.fillRect(f.x-f.size/2,f.y-f.size/2,f.size,f.size);
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vx += (Math.random() - 0.5) * 0.015;
+      f.vy += (Math.random() - 0.5) * 0.012;
+      f.vx = Phaser.Math.Clamp(f.vx, -0.6, 0.6);
+      f.vy = Phaser.Math.Clamp(f.vy, -0.4, 0.4);
+      if (f.x < 20 || f.x > W - 20) f.vx *= -0.8;
+      if (f.y < 40 || f.y > FLOOR_Y - 20) f.vy *= -0.8;
+      f.x = Phaser.Math.Clamp(f.x, 10, W - 10);
+      f.y = Phaser.Math.Clamp(f.y, 30, FLOOR_Y - 10);
+
+      const pulse = 0.3 + Math.sin(time * 0.003 + f.phase) * 0.35;
+      const alpha = Math.max(0, pulse);
+      this.fireflyGraphics.fillStyle(0xaaff44, alpha * 0.08);
+      this.fireflyGraphics.fillCircle(f.x, f.y, f.size * 4);
+      this.fireflyGraphics.fillStyle(0xccff66, alpha * 0.2);
+      this.fireflyGraphics.fillCircle(f.x, f.y, f.size * 2);
+      this.fireflyGraphics.fillStyle(0xeeffaa, alpha * 0.8);
+      this.fireflyGraphics.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
     }
   }
 
@@ -722,13 +844,49 @@ export class WoodsScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   private updateWater(time: number, delta: number): void {
     this.waterGraphics.clear();
-    for (let wy=FLOOR_Y+4;wy<GAME_HEIGHT;wy+=12) for (let wx=LAKE_LEFT+20;wx<LAKE_RIGHT-10;wx+=18) { const off=Math.sin(time*0.001+wx*0.03+wy*0.02)*3, a=0.04+Math.sin(time*0.002+wx*0.05)*0.02; this.waterGraphics.fillStyle(0x5dcaa5,a); this.waterGraphics.fillRect(wx+off,wy,10,1); }
-    const mrx=1100, mry=FLOOR_Y+30, sh=Math.sin(time*0.004)*0.03;
-    this.waterGraphics.fillStyle(0xf5e8d0,0.04+sh); this.waterGraphics.fillRect(mrx-6,mry-15,12,50);
-    this.waterGraphics.fillStyle(0xf5e8d0,0.02+sh*0.5); this.waterGraphics.fillRect(mrx-10,mry-5,20,30);
-    this.rippleTimer+=delta;
-    if(this.rippleTimer>2500+Math.random()*3500){this.rippleTimer=0;this.ripples.push({x:LAKE_LEFT+50+Math.random()*(LAKE_RIGHT-LAKE_LEFT-100),y:FLOOR_Y+15+Math.random()*(GAME_HEIGHT-FLOOR_Y-30),radius:0,maxRadius:6+Math.random()*10,alpha:0.1});}
-    for(let i=this.ripples.length-1;i>=0;i--){const rp=this.ripples[i];rp.radius+=delta*0.008;rp.alpha-=delta*0.00004;if(rp.alpha<=0||rp.radius>=rp.maxRadius){this.ripples.splice(i,1);continue;}this.waterGraphics.lineStyle(0.5,0x5dcaa5,rp.alpha);this.waterGraphics.strokeCircle(rp.x,rp.y,rp.radius);}
+
+    for (let wy = FLOOR_Y + 4; wy < GAME_HEIGHT; wy += 12) {
+      for (let wx = LAKE_LEFT + 20; wx < LAKE_RIGHT - 10; wx += 18) {
+        const off = Math.sin(time * 0.001 + wx * 0.03 + wy * 0.02) * 3;
+        const a = 0.04 + Math.sin(time * 0.002 + wx * 0.05) * 0.02;
+        this.waterGraphics.fillStyle(0x5dcaa5, a);
+        this.waterGraphics.fillRect(wx + off, wy, 10, 1);
+      }
+    }
+
+    const mrx = 1100, mry = FLOOR_Y + 30, sh = Math.sin(time * 0.004) * 0.03;
+    this.waterGraphics.fillStyle(0xf5e8d0, 0.04 + sh);
+    this.waterGraphics.fillRect(mrx - 6, mry - 15, 12, 50);
+    this.waterGraphics.fillStyle(0xf5e8d0, 0.02 + sh * 0.5);
+    this.waterGraphics.fillRect(mrx - 10, mry - 5, 20, 30);
+
+    this.rippleTimer += delta;
+    if (this.rippleTimer > 2500 + Math.random() * 3500) {
+      this.rippleTimer = 0;
+      this.ripples.push({
+        x: LAKE_LEFT + 50 + Math.random() * (LAKE_RIGHT - LAKE_LEFT - 100),
+        y: FLOOR_Y + 15 + Math.random() * (GAME_HEIGHT - FLOOR_Y - 30),
+        radius: 0, maxRadius: 6 + Math.random() * 10, alpha: 0.1,
+      });
+    }
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const rp = this.ripples[i];
+      rp.radius += delta * 0.008;
+      rp.alpha -= delta * 0.00004;
+      if (rp.alpha <= 0 || rp.radius >= rp.maxRadius) { this.ripples.splice(i, 1); continue; }
+      this.waterGraphics.lineStyle(0.5, 0x5dcaa5, rp.alpha);
+      this.waterGraphics.strokeCircle(rp.x, rp.y, rp.radius);
+    }
+  }
+
+  private updatePlayerGlow(t: number): void {
+    const p = 0.06 + Math.sin(t * ANIM.breatheSpeed) * 0.025;
+    this.playerGlow.clear();
+    this.playerGlow.setPosition(this.player.x, this.player.y);
+    this.playerGlow.fillStyle(hexToNum(WOODS_ACCENT), p * 0.4);
+    this.playerGlow.fillEllipse(0, -1, 36, 10);
+    this.playerGlow.fillStyle(hexToNum(WOODS_ACCENT), p);
+    this.playerGlow.fillEllipse(0, -1, 24, 6);
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -740,11 +898,17 @@ export class WoodsScene extends BaseScene {
     if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
     this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
+    this.playerGlow = this.add.graphics().setDepth(9);
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY - 44, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.add.text(this.player.x, this.playerY - 44, name.slice(0, 14), {
+      fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT,
+      align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 },
+    }).setOrigin(0.5).setDepth(11);
     const ms = getStatus();
-    this.playerStatusText = this.add.text(this.player.x, this.playerY - 59, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
+    this.playerStatusText = this.add.text(this.player.x, this.playerY - 59, ms, {
+      fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center',
+    }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
 
   private updateShootingStar(d: number): void {
@@ -754,20 +918,49 @@ export class WoodsScene extends BaseScene {
       if (this.shootingStarTimer > 8000 + Math.random() * 12000) {
         this.shootingStarTimer = 0;
         const goRight = Math.random() > 0.5;
-        this.shootingStar = { x: goRight ? Math.random() * W * 0.4 : W * 0.6 + Math.random() * W * 0.4, y: 8 + Math.random() * 35, vx: goRight ? 4.5 + Math.random() * 3 : -(4.5 + Math.random() * 3), vy: 1.2 + Math.random() * 1.4, life: 0, maxLife: 450 + Math.random() * 350 };
+        this.shootingStar = {
+          x: goRight ? Math.random() * W * 0.4 : W * 0.6 + Math.random() * W * 0.4,
+          y: 8 + Math.random() * 35,
+          vx: goRight ? 4.5 + Math.random() * 3 : -(4.5 + Math.random() * 3),
+          vy: 1.2 + Math.random() * 1.4,
+          life: 0, maxLife: 450 + Math.random() * 350,
+        };
       }
       return;
     }
+
     const s = this.shootingStar;
     const dt = d / 16;
-    s.x += s.vx * dt; s.y += s.vy * dt; s.life += d;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.life += d;
     const pr = s.life / s.maxLife;
     const a = pr < 0.15 ? pr / 0.15 : pr > 0.65 ? (1 - pr) / 0.35 : 1;
-    for (let i = 1; i <= 10; i++) { const tx = s.x - s.vx * i * 2.0, ty = s.y - s.vy * i * 2.0, ta = a * (0.22 - i * 0.018); if (ta > 0) { this.shootingStarGraphics.fillStyle(0xc8b8ff, ta); this.shootingStarGraphics.fillRect(tx - 1, ty, 3, 2); } }
-    for (let i = 1; i <= 10; i++) { const tx = s.x - s.vx * i * 1.8, ty = s.y - s.vy * i * 1.8, ta = a * (0.65 - i * 0.06); if (ta > 0) { this.shootingStarGraphics.fillStyle(i < 4 ? 0xfff5e6 : 0xb8a8f8, ta); this.shootingStarGraphics.fillRect(tx, ty, i < 4 ? 2 : 1, 1); } }
-    this.shootingStarGraphics.fillStyle(0xddd0ff, a * 0.2); this.shootingStarGraphics.fillRect(s.x - 2, s.y - 2, 6, 6);
-    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.5); this.shootingStarGraphics.fillRect(s.x - 1, s.y - 1, 4, 4);
-    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.95); this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
+
+    for (let i = 1; i <= 10; i++) {
+      const tx = s.x - s.vx * i * 2.0, ty = s.y - s.vy * i * 2.0;
+      const ta = a * (0.22 - i * 0.018);
+      if (ta > 0) {
+        this.shootingStarGraphics.fillStyle(0xc8b8ff, ta);
+        this.shootingStarGraphics.fillRect(tx - 1, ty, 3, 2);
+      }
+    }
+    for (let i = 1; i <= 10; i++) {
+      const tx = s.x - s.vx * i * 1.8, ty = s.y - s.vy * i * 1.8;
+      const ta = a * (0.65 - i * 0.06);
+      if (ta > 0) {
+        this.shootingStarGraphics.fillStyle(i < 4 ? 0xfff5e6 : 0xb8a8f8, ta);
+        this.shootingStarGraphics.fillRect(tx, ty, i < 4 ? 2 : 1, 1);
+      }
+    }
+
+    this.shootingStarGraphics.fillStyle(0xddd0ff, a * 0.2);
+    this.shootingStarGraphics.fillRect(s.x - 2, s.y - 2, 6, 6);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.5);
+    this.shootingStarGraphics.fillRect(s.x - 1, s.y - 1, 4, 4);
+    this.shootingStarGraphics.fillStyle(0xffffff, a * 0.95);
+    this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
+
     if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > W + 20) this.shootingStar = null;
   }
 
@@ -781,6 +974,25 @@ export class WoodsScene extends BaseScene {
     this.snd.roomLeave(); sendRoomChange('cabin'); this.chatUI.destroy();
     this.cameras.main.fadeOut(300, 4, 2, 0);
     this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); });
+  }
+
+  protected override teleportToRoom(roomId: string): void {
+    if (roomId === 'hub') {
+      this.leaveToDistrict();
+      return;
+    }
+    if (roomId === 'cabin') {
+      if (!this.isLeavingScene) {
+        this.isLeavingScene = true;
+        this.enterCabin();
+      }
+      return;
+    }
+    if (roomId === 'woods') {
+      this.chatUI.addMessage('system', 'Already in the woods!', WOODS_ACCENT);
+      return;
+    }
+    super.teleportToRoom(roomId);
   }
 
   private updateTelescopeProximity(): void {
@@ -1286,11 +1498,16 @@ export class WoodsScene extends BaseScene {
   protected override getSceneAccent(): string { return WOODS_ACCENT; }
 
   private handleCommand(text: string): void {
-    const parts=text.slice(1).split(' ');const cmd=parts[0].toLowerCase();const arg=parts.slice(1).join(' ').trim();
-    switch(cmd){
-      case 'tp':case 'teleport':case 'go':{if(!arg){this.chatUI.addMessage('system','Rooms: hub, cabin, relay, feed, myroom, lounge, market',WOODS_ACCENT);return;}const al:Record<string,string>={hub:'hub',cabin:'cabin',relay:'relay',feed:'feed',thefeed:'feed',myroom:'myroom',room:'picker',lounge:'lounge',rooftop:'lounge',market:'market',shop:'market',store:'market'};const rid=al[arg.toLowerCase().replace(/\s+/g,'')];if(rid==='hub'){this.leaveToDistrict();return;}if(rid==='cabin'){if(!this.isLeavingScene){this.isLeavingScene=true;this.enterCabin();}return;}if(rid==='myroom'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});return;}if(rid==='picker'){const pk=this.registry.get('playerPubkey');const n=this.registry.get('playerName')||'My Room';this.playerPicker.open(pk,n,()=>{sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:`myroom:${pk}`,name:`${n}'s Room`,neonColor:P.teal,ownerPubkey:pk});},(opk)=>{sendRoomChange(opk);this.chatUI.addMessage('system','Requesting access...',WOODS_ACCENT);});return;}if(rid){sendRoomChange('hub');this.chatUI.destroy();this.scene.start('RoomScene',{id:rid,name:rid.charAt(0).toUpperCase()+rid.slice(1),neonColor:P.teal});return;}this.chatUI.addMessage('system',`Unknown room "${arg}"`,P.amber);break;}
-      case 'players':case 'who':case 'online':{const ps:string[]=[];this.otherPlayers.forEach(o=>ps.push(o.name));this.chatUI.addMessage('system',ps.length?`${ps.length} here: ${ps.join(', ')}`:'No other players',WOODS_ACCENT);break;}
-      default:{if(!this.handleCommonCommand(cmd,arg))this.chatUI.addMessage('system',`Unknown: /${cmd}`,P.amber);break;}
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+
+    switch (cmd) {
+      default: {
+        if (!this.handleCommonCommand(cmd, arg))
+          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+        break;
+      }
     }
     this.chatUI.flashLog();
   }

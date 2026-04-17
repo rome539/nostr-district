@@ -192,7 +192,14 @@ export class RoomScene extends BaseScene {
     this.setupCommonKeyboardHandlers();  // shouldBlockPanelKeys() guards with BookcaseModal.isOpen()
 
     // Click to move
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (currentlyOver.length > 0) return; if (this.introActive) return; if (p.worldY < 330 || p.worldY > 470) return; this.targetX = Phaser.Math.Clamp(p.worldX, 40, GAME_WIDTH - 40); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      if (currentlyOver.length > 0) return;
+      if (this.introActive) return;
+      if (p.worldY < 330 || p.worldY > 470) return;
+      this.targetX = Phaser.Math.Clamp(p.worldX, 40, GAME_WIDTH - 40);
+      this.isMoving = true;
+    });
 
     // Computer interaction prompt (only in myroom)
     this.computerPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -621,16 +628,54 @@ export class RoomScene extends BaseScene {
 
   // ── Lounge Room ──
   private updateLoungeRoom(time: number, delta: number): void {
-    this.loungeGraphics.clear(); const FY = 300; const W = GAME_WIDTH;
-    for (let row = 0; row < 2; row++) { const ry = 197 + row * 10; for (let lx = 8; lx < W - 8; lx += 16) { const cs = [P.pink, P.amber, P.teal, P.purp, P.lcream, P.red]; const ci = Math.floor((lx + row * 7) / 16) % cs.length; const rgb = hexToRgb(cs[ci]); const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b); const tw = 0.3 + Math.sin(time * 0.004 + lx * 0.15 + row * 2.5) * 0.4; this.loungeGraphics.fillStyle(c, tw); this.loungeGraphics.fillRect(lx, ry, 2, 2); this.loungeGraphics.fillStyle(c, tw * 0.03); this.loungeGraphics.fillCircle(lx + 1, ry + 1, 3); } }
-    const fx = 715; const fy = FY - 50; [P.amber, P.red, P.amber, '#fad480', P.amber, P.red, '#ffe060', P.amber].forEach((cl, i) => { const rgb = hexToRgb(cl); const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b); const fl = Math.sin(time * 0.008 + i * 1.3) * 0.25; const h = 5 + Math.random() * 10 + Math.sin(time * 0.006 + i * 0.9) * 4; this.loungeGraphics.fillStyle(c, 0.3 + fl); this.loungeGraphics.fillRect(fx + 8 + i * 3.5, fy - h, 3, h); });
-    this.loungeGraphics.fillStyle(hexToNum(P.amber), 0.06 + Math.sin(time * 0.005) * 0.03); this.loungeGraphics.fillCircle(fx + 20, fy - 8, 40);
+    this.loungeGraphics.clear();
+    const FY = 300;
+    const W = GAME_WIDTH;
+
+    for (let row = 0; row < 2; row++) {
+      const ry = 197 + row * 10;
+      for (let lx = 8; lx < W - 8; lx += 16) {
+        const cs = [P.pink, P.amber, P.teal, P.purp, P.lcream, P.red];
+        const ci = Math.floor((lx + row * 7) / 16) % cs.length;
+        const rgb = hexToRgb(cs[ci]);
+        const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b);
+        const tw = 0.3 + Math.sin(time * 0.004 + lx * 0.15 + row * 2.5) * 0.4;
+        this.loungeGraphics.fillStyle(c, tw);
+        this.loungeGraphics.fillRect(lx, ry, 2, 2);
+        this.loungeGraphics.fillStyle(c, tw * 0.03);
+        this.loungeGraphics.fillCircle(lx + 1, ry + 1, 3);
+      }
+    }
+
+    const fx = 715, fy = FY - 50;
+    [P.amber, P.red, P.amber, '#fad480', P.amber, P.red, '#ffe060', P.amber].forEach((cl, i) => {
+      const rgb = hexToRgb(cl);
+      const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b);
+      const fl = Math.sin(time * 0.008 + i * 1.3) * 0.25;
+      const h = 5 + Math.random() * 10 + Math.sin(time * 0.006 + i * 0.9) * 4;
+      this.loungeGraphics.fillStyle(c, 0.3 + fl);
+      this.loungeGraphics.fillRect(fx + 8 + i * 3.5, fy - h, 3, h);
+    });
+
+    this.loungeGraphics.fillStyle(hexToNum(P.amber), 0.06 + Math.sin(time * 0.005) * 0.03);
+    this.loungeGraphics.fillCircle(fx + 20, fy - 8, 40);
   }
 
   // ── Animated Elements ──
   private updateBlinkingLEDs(time: number): void {
-    if (this.roomRenderer.blinkingLEDs.length === 0) return; this.ledGraphics.clear();
-    this.roomRenderer.blinkingLEDs.forEach(led => { const on = Math.sin(time * 0.003 + led.phase) > -0.2 + Math.random() * 0.1; if (on) { const rgb = hexToRgb(led.color); const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b); this.ledGraphics.fillStyle(c, 0.5 + Math.random() * 0.3); this.ledGraphics.fillRect(led.x, led.y, 4, 4); this.ledGraphics.fillStyle(c, 0.08); this.ledGraphics.fillRect(led.x - 2, led.y - 2, 8, 8); } });
+    if (this.roomRenderer.blinkingLEDs.length === 0) return;
+    this.ledGraphics.clear();
+    this.roomRenderer.blinkingLEDs.forEach(led => {
+      const on = Math.sin(time * 0.003 + led.phase) > -0.2 + Math.random() * 0.1;
+      if (on) {
+        const rgb = hexToRgb(led.color);
+        const c = Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b);
+        this.ledGraphics.fillStyle(c, 0.5 + Math.random() * 0.3);
+        this.ledGraphics.fillRect(led.x, led.y, 4, 4);
+        this.ledGraphics.fillStyle(c, 0.08);
+        this.ledGraphics.fillRect(led.x - 2, led.y - 2, 8, 8);
+      }
+    });
   }
   private updateCandleFlames(time: number): void {
     const flames = this.roomRenderer.candleFlames;
@@ -818,6 +863,72 @@ export class RoomScene extends BaseScene {
   }
   private isMyRoom(): boolean { return this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === this.registry.get('playerPubkey'); }
 
+  protected override teleportToRoom(roomId: string): void {
+    if (roomId === 'hub') {
+      this.leaveRoom();
+      return;
+    }
+    if (roomId === 'woods') {
+      sendRoomChange('woods');
+      this.chatUI.destroy();
+      this.cameras.main.fadeOut(300, 10, 0, 20);
+      this.time.delayedCall(300, () => {
+        if (!this.scene.isActive()) return;
+        this.scene.start('WoodsScene');
+      });
+      return;
+    }
+    if (roomId === 'cabin') {
+      sendRoomChange('cabin');
+      this.chatUI.destroy();
+      this.cameras.main.fadeOut(300, 4, 2, 0);
+      this.time.delayedCall(300, () => {
+        if (!this.scene.isActive()) return;
+        this.scene.start('CabinScene');
+      });
+      return;
+    }
+    if (roomId === 'myroom') {
+      const pk = this.registry.get('playerPubkey');
+      const n = this.registry.get('playerName') || 'My Room';
+      this.chatUI.destroy();
+      this.scene.start('RoomScene', {
+        id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk,
+      });
+      return;
+    }
+    if (roomId === 'picker') {
+      const pk = this.registry.get('playerPubkey');
+      const n = this.registry.get('playerName') || 'My Room';
+      this.playerPicker.open(
+        pk, n,
+        () => {
+          this.chatUI.destroy();
+          this.scene.start('RoomScene', {
+            id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk,
+          });
+        },
+        (opk) => {
+          this.chatUI.addMessage('system', 'Requesting access...', P.teal);
+          this.waitingForAccess = true;
+          sendRoomRequest(opk);
+          setTimeout(() => {
+            if (this.waitingForAccess) {
+              this.waitingForAccess = false;
+              this.chatUI.addMessage('system', 'Request timed out', P.amber);
+            }
+          }, 30000);
+        },
+      );
+      return;
+    }
+    this.scene.start('RoomScene', {
+      id: roomId,
+      name: roomId.charAt(0).toUpperCase() + roomId.slice(1),
+      neonColor: P.teal,
+    });
+  }
+
   private spawnPet(sel: PetSelection): void {
     if (sel.species === 'none') return;
     this.pet = new PetSprite();
@@ -892,16 +1003,43 @@ export class RoomScene extends BaseScene {
     );
   }
   private updateMovement(): void {
-    if (!isPresenceReady()) return; // freeze until server confirms sync
-    const c = this.input.keyboard?.createCursorKeys(); let vx = 0; let vy = 0; const sp = 250;
-    if (c) { if (c.left.isDown) vx = -sp; else if (c.right.isDown) vx = sp; if (c.up.isDown) vy = -sp; else if (c.down.isDown) vy = sp; }
-    // Mobile arrow buttons (up = interact, not vertical movement)
-    if (vx === 0) { if (this.mobileLeft) vx = -sp; else if (this.mobileRight) vx = sp; }
-    if (vx !== 0 || vy !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.player.y += vy / 60; if (vx !== 0) this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * sp / 60; this.facingRight = dx > 0; } }
+    if (!isPresenceReady()) return;
+    const c = this.input.keyboard?.createCursorKeys();
+    let vx = 0, vy = 0;
+    const sp = 250;
+
+    if (c) {
+      if (c.left.isDown) vx = -sp;
+      else if (c.right.isDown) vx = sp;
+      if (c.up.isDown) vy = -sp;
+      else if (c.down.isDown) vy = sp;
+    }
+    if (vx === 0) {
+      if (this.mobileLeft) vx = -sp;
+      else if (this.mobileRight) vx = sp;
+    }
+
+    if (vx !== 0 || vy !== 0) {
+      this.targetX = null;
+      this.isMoving = false;
+      this.player.x += vx / 60;
+      this.player.y += vy / 60;
+      if (vx !== 0) this.facingRight = vx > 0;
+    } else if (this.isMoving && this.targetX !== null) {
+      const dx = this.targetX - this.player.x;
+      if (Math.abs(dx) < 3) {
+        this.isMoving = false;
+        this.targetX = null;
+      } else {
+        this.player.x += Math.sign(dx) * sp / 60;
+        this.facingRight = dx > 0;
+      }
+    }
+
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, GAME_WIDTH - 40);
     this.player.y = Phaser.Math.Clamp(this.player.y, 340, 470);
-    this.playerY = this.player.y; this.player.setFlipX(!this.facingRight);
+    this.playerY = this.player.y;
+    this.player.setFlipX(!this.facingRight);
     this.isWalking = vx !== 0 || vy !== 0 || (this.isMoving && this.targetX !== null);
   }
 
@@ -909,11 +1047,16 @@ export class RoomScene extends BaseScene {
   protected override getSceneAccent(): string { return this.roomConfig?.neonColor ?? P.teal; }
 
   private handleCommand(text: string): void {
-    const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+
     switch (cmd) {
-      case 'visit': case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /tp <room> or /tp <player>', P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', hub:'hub', woods:'woods', cabin:'cabin', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(opk); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); }); return; } if (rid === 'hub') { this.leaveRoom(); return; } if (rid === 'woods') { sendRoomChange('woods'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('WoodsScene'); }); return; } if (rid === 'cabin') { sendRoomChange('cabin'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 4, 2, 0); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('CabinScene'); }); return; } if (rid) { this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } let target: string | null = null; this.otherPlayers.forEach((o, pk) => { if (o.nameText?.text?.toLowerCase().includes(arg.toLowerCase())) target = pk; }); if (target) { this.chatUI.addMessage('system', 'Requesting access...', P.teal); this.waitingForAccess = true; sendRoomRequest(target); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); } }, 30000); } else this.chatUI.addMessage('system', `Unknown room or player "${arg}"`, P.amber); break; }
-      case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => { if (o.name) ps.push(o.name); }); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', P.teal); break; }
-      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
+      default: {
+        if (!this.handleCommonCommand(cmd, arg))
+          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+        break;
+      }
     }
     this.chatUI.flashLog();
   }

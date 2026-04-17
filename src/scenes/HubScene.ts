@@ -217,10 +217,17 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
     this.setupMobileCamera();
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => { if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return; if (currentlyOver.length > 0) return; if (p.worldY < GROUND_Y - 10 || p.worldY > 460) return; this.targetX = Phaser.Math.Clamp(p.worldX, 20, WORLD_WIDTH - 20); this.isMoving = true; });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      if (currentlyOver.length > 0) return;
+      if (p.worldY < GROUND_Y - 10 || p.worldY > 460) return;
+      this.targetX = Phaser.Math.Clamp(p.worldX, 20, WORLD_WIDTH - 20);
+      this.isMoving = true;
+    });
     this.input.keyboard?.on('keydown-E', () => this.tryEnter());
     this.input.keyboard?.on('keydown-SPACE', () => this.tryEnter());
-    this.setupPresenceCallbacks(this.registry.get('playerPubkey')); this.setupRoomRequestHandlers();
+    this.setupPresenceCallbacks(this.registry.get('playerPubkey'));
+    this.setupRoomRequestHandlers();
 
     this.setupProfileSubscription();
 
@@ -326,21 +333,49 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
   // ── Player Picker ──
   private showPlayerPicker(): void {
-    const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room';
+    const myPk = this.registry.get('playerPubkey');
+    const myName = this.registry.get('playerName') || 'My Room';
     this.playerPicker.open(myPk, myName,
       () => this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk),
       (pk) => this.requestRoomAccess(pk),
     );
   }
-  private requestRoomAccess(op: string): void { this.chatUI.addMessage('system', `Requesting access...`, P.teal); this.waitingForAccess = true; sendRoomRequest(op); setTimeout(() => { if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Timed out', P.amber); } }, 30000); }
+
+  private requestRoomAccess(op: string): void {
+    this.chatUI.addMessage('system', `Requesting access...`, P.teal);
+    this.waitingForAccess = true;
+    sendRoomRequest(op);
+    setTimeout(() => {
+      if (this.waitingForAccess) {
+        this.waitingForAccess = false;
+        this.chatUI.addMessage('system', 'Timed out', P.amber);
+      }
+    }, 30000);
+  }
+
   private enterRoom(rid: string, rn: string, nc: string, op?: string, ownerRoomConfig?: string): void {
     if (this.isLeavingScene) return;
     this.isLeavingScene = true;
     this.snd.roomEnter();
     this.snd.setRoom('');
-    this.chatUI.destroy(); const f = this.add.graphics().setDepth(200); const rgb = hexToRgb(nc); f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35); f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
-    const f2 = this.add.graphics().setDepth(201); f2.fillStyle(0xffffff, 0.15); f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
-    this.tweens.add({ targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut', onComplete: () => { f.destroy(); f2.destroy(); this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op, ownerRoomConfig }); } });
+    this.chatUI.destroy();
+
+    const rgb = hexToRgb(nc);
+    const f = this.add.graphics().setDepth(200);
+    f.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), 0.35);
+    f.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    const f2 = this.add.graphics().setDepth(201);
+    f2.fillStyle(0xffffff, 0.15);
+    f2.fillRect(this.cameras.main.scrollX, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    this.tweens.add({
+      targets: [f, f2], alpha: 0, duration: ANIM.enterFlashDuration, ease: 'Quad.easeOut',
+      onComplete: () => {
+        f.destroy(); f2.destroy();
+        this.scene.start('RoomScene', { id: rid, name: rn, neonColor: nc, ownerPubkey: op, ownerRoomConfig });
+      },
+    });
   }
 
   private enterWoods(): void {
@@ -358,6 +393,37 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       if (!this.scene.isActive()) return;
       this.scene.start('WoodsScene', { fromCabin: false });
     });
+  }
+
+  protected override teleportToRoom(roomId: string): void {
+    if (roomId === 'woods') {
+      this.enterWoods();
+      return;
+    }
+    if (roomId === 'picker') {
+      this.showPlayerPicker();
+      return;
+    }
+    if (roomId === 'myroom') {
+      const myPk = this.registry.get('playerPubkey');
+      const myName = this.registry.get('playerName') || 'My Room';
+      this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk);
+      return;
+    }
+    const b = ENTERABLE.find(e => e.id === roomId);
+    if (b) {
+      this.enterRoom(b.id, b.name, b.neonColor);
+      return;
+    }
+    if (roomId === 'hub') {
+      this.chatUI.addMessage('system', 'Already in the hub!', P.teal);
+      return;
+    }
+    if (roomId === 'cabin') {
+      this.enterWoods();
+      return;
+    }
+    super.teleportToRoom(roomId);
   }
 
   private notifyWoodsClosed(): void {
@@ -410,16 +476,51 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     return renderHubSprite(cfg);
   }
   protected override afterAddOtherPlayer(pk: string, name: string): void {
-    this.playerNames.set(pk, name.slice(0, 14)); this.playerNames.set(name.toLowerCase(), pk);
+    this.playerNames.set(pk, name.slice(0, 14));
+    this.playerNames.set(name.toLowerCase(), pk);
   }
+
   protected override onBeforeRemoveOtherPlayer(pk: string): void {
-    const n = this.playerNames.get(pk); if (n) this.playerNames.delete(n.toLowerCase()); this.playerNames.delete(pk);
+    const n = this.playerNames.get(pk);
+    if (n) this.playerNames.delete(n.toLowerCase());
+    this.playerNames.delete(pk);
   }
 
   // ── Visuals ──
-  private updateParallax(): void { this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor; }
-  private initDustParticles(): void { const c = [P.pink, P.purp, P.amber, P.teal, P.lcream]; for (let i = 0; i < 40; i++) this.dustParticles.push({ x: Math.random() * WORLD_WIDTH, y: 50 + Math.random() * (GROUND_Y - 60), vx: -0.1 + Math.random() * 0.2, vy: -0.05 + Math.random() * 0.1, alpha: 0.05 + Math.random() * 0.12, size: Math.random() > 0.8 ? 2 : 1, color: c[Math.floor(Math.random() * c.length)] }); }
-  private updateDustParticles(d: number): void { this.dustGraphics.clear(); const dt = d / 16; this.dustParticles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; if (p.x < 0) p.x = WORLD_WIDTH; if (p.x > WORLD_WIDTH) p.x = 0; if (p.y < 40) p.y = GROUND_Y - 20; if (p.y > GROUND_Y - 10) p.y = 50; const rgb = hexToRgb(p.color); this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha); this.dustGraphics.fillRect(p.x, p.y, p.size, p.size); }); }
+  private updateParallax(): void {
+    this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor;
+  }
+
+  private initDustParticles(): void {
+    const c = [P.pink, P.purp, P.amber, P.teal, P.lcream];
+    for (let i = 0; i < 40; i++) {
+      this.dustParticles.push({
+        x: Math.random() * WORLD_WIDTH,
+        y: 50 + Math.random() * (GROUND_Y - 60),
+        vx: -0.1 + Math.random() * 0.2,
+        vy: -0.05 + Math.random() * 0.1,
+        alpha: 0.05 + Math.random() * 0.12,
+        size: Math.random() > 0.8 ? 2 : 1,
+        color: c[Math.floor(Math.random() * c.length)],
+      });
+    }
+  }
+
+  private updateDustParticles(d: number): void {
+    this.dustGraphics.clear();
+    const dt = d / 16;
+    this.dustParticles.forEach(p => {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.x < 0) p.x = WORLD_WIDTH;
+      if (p.x > WORLD_WIDTH) p.x = 0;
+      if (p.y < 40) p.y = GROUND_Y - 20;
+      if (p.y > GROUND_Y - 10) p.y = 50;
+      const rgb = hexToRgb(p.color);
+      this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha);
+      this.dustGraphics.fillRect(p.x, p.y, p.size, p.size);
+    });
+  }
   private updateChimneySmoke(delta: number): void {
     this.chimneySpawnTimer += delta;
     if (this.chimneySpawnTimer > 90) {
@@ -455,18 +556,50 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     }
     if (this.chimneyParticles.length > 120) this.chimneyParticles = this.chimneyParticles.slice(-90);
   }
-  private updateNeonFlicker(d: number): void { this.neonTimer += d; if (this.neonTimer > ANIM.neonFlicker + Math.random() * 200) { this.neonTimer = 0; this.neonFrame = (this.neonFrame + 1) % 4; } }
-  private updatePlayerGlow(t: number): void { const p = 0.06 + Math.sin(t * ANIM.breatheSpeed) * 0.025; this.playerGlow.clear(); this.playerGlow.setPosition(this.player.x, this.player.y); this.playerGlow.fillStyle(hexToNum(P.teal), p * 0.4); this.playerGlow.fillEllipse(0, -1, 36, 10); this.playerGlow.fillStyle(hexToNum(P.teal), p); this.playerGlow.fillEllipse(0, -1, 24, 6); }
+  private updateNeonFlicker(d: number): void {
+    this.neonTimer += d;
+    if (this.neonTimer > ANIM.neonFlicker + Math.random() * 200) {
+      this.neonTimer = 0;
+      this.neonFrame = (this.neonFrame + 1) % 4;
+    }
+  }
+
+  private updatePlayerGlow(t: number): void {
+    const p = 0.06 + Math.sin(t * ANIM.breatheSpeed) * 0.025;
+    this.playerGlow.clear();
+    this.playerGlow.setPosition(this.player.x, this.player.y);
+    this.playerGlow.fillStyle(hexToNum(P.teal), p * 0.4);
+    this.playerGlow.fillEllipse(0, -1, 36, 10);
+    this.playerGlow.fillStyle(hexToNum(P.teal), p);
+    this.playerGlow.fillEllipse(0, -1, 24, 6);
+  }
 
   // ── Player ──
   private createPlayer(): void {
     this.playerGlow = this.add.graphics().setDepth(9);
-    let sx = 400; if (this.returnFromRoom === 'woods') { sx = 60; } else if (this.returnFromRoom === 'alley') { sx = 310; } else if (this.returnFromRoom) { const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom')); if (d) sx = d.doorX; }
+
+    let sx = 400;
+    if (this.returnFromRoom === 'woods') {
+      sx = 60;
+    } else if (this.returnFromRoom === 'alley') {
+      sx = 310;
+    } else if (this.returnFromRoom) {
+      const d = ENTERABLE.find(e => e.id === this.returnFromRoom || (this.returnFromRoom?.startsWith('myroom') && e.id === 'myroom'));
+      if (d) sx = d.doorX;
+    }
+
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(sx, this.playerY - 44, n.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.add.text(sx, this.playerY - 44, n.slice(0, 14), {
+      fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal,
+      align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 },
+    }).setOrigin(0.5).setDepth(11);
+
     const myStatus = getStatus();
-    this.playerStatusText = this.add.text(sx, this.playerY - 59, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
+    this.playerStatusText = this.add.text(sx, this.playerY - 59, myStatus, {
+      fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center',
+    }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
+
     this.generateWalkFrames(getAvatar());
   }
 
@@ -477,71 +610,132 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
   }
   private updateMovement(): void {
-    if (!isPresenceReady()) return; // freeze until server confirms sync
+    if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
-    if (c) { if (c.left.isDown) vx = -PLAYER_SPEED; else if (c.right.isDown) vx = PLAYER_SPEED; }
-    // Mobile arrow buttons
-    if (vx === 0) { if (this.mobileLeft) vx = -PLAYER_SPEED; else if (this.mobileRight) vx = PLAYER_SPEED; }
+    if (c) {
+      if (c.left.isDown) vx = -PLAYER_SPEED;
+      else if (c.right.isDown) vx = PLAYER_SPEED;
+    }
+    if (vx === 0) {
+      if (this.mobileLeft) vx = -PLAYER_SPEED;
+      else if (this.mobileRight) vx = PLAYER_SPEED;
+    }
     this.isKeyboardMoving = vx !== 0;
-    // Clear proximity prompts the moment the player starts moving so they don't linger
+
     if (vx !== 0 && (this.nearBuilding || this.nearCrewBoard || this.nearBulletinBoard)) {
-      this.nearBuilding = null; this.nearCrewBoard = false; this.nearBulletinBoard = false;
-      this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
+      this.nearBuilding = null;
+      this.nearCrewBoard = false;
+      this.nearBulletinBoard = false;
+      this.promptBg.setVisible(false);
+      this.promptText.setVisible(false);
+      this.promptArrow.setVisible(false);
       this.tweens.killTweensOf(this.promptArrow);
     }
-    if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * PLAYER_SPEED / 60; this.facingRight = dx > 0; } }
+
+    if (vx !== 0) {
+      this.targetX = null;
+      this.isMoving = false;
+      this.player.x += vx / 60;
+      this.facingRight = vx > 0;
+    } else if (this.isMoving && this.targetX !== null) {
+      const dx = this.targetX - this.player.x;
+      if (Math.abs(dx) < 3) {
+        this.isMoving = false;
+        this.targetX = null;
+      } else {
+        this.player.x += Math.sign(dx) * PLAYER_SPEED / 60;
+        this.facingRight = dx > 0;
+      }
+    }
+
     this.player.x = Phaser.Math.Clamp(this.player.x, 20, WORLD_WIDTH - 20);
     this.player.setFlipX(!this.facingRight);
   }
+  private showPrompt(px: number, py: number, label: string, color: string): void {
+    this.promptBg.setVisible(true);
+    this.promptText.setVisible(true);
+    this.promptArrow.setVisible(true);
+    this.promptBg.setPosition(px - 62, py - 2);
+    this.promptText.setPosition(px, py + 8);
+    this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${label}`);
+    this.promptText.setColor(color);
+    this.promptArrow.setPosition(px, py + 22);
+    this.promptArrow.setColor(color);
+    this.tweens.add({
+      targets: this.promptArrow, y: py + 26, duration: 500,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+  }
+
+  private hidePrompt(): void {
+    this.promptBg.setVisible(false);
+    this.promptText.setVisible(false);
+    this.promptArrow.setVisible(false);
+    this.tweens.killTweensOf(this.promptArrow);
+  }
+
   private updateProximity(): void {
-    // Check crew board
     const cdist = Math.abs(this.player.x - this.CREW_BOARD_X);
     const wasNearCrew = this.nearCrewBoard;
     this.nearCrewBoard = cdist < 52;
     if (this.nearCrewBoard !== wasNearCrew) {
-      if (this.nearCrewBoard) {
-        const px = this.CREW_BOARD_X; const py = GROUND_Y - 75;
-        this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true);
-        this.promptBg.setPosition(px - 62, py - 2);
-        this.promptText.setPosition(px, py + 8); this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} Crews`); this.promptText.setColor(P.teal);
-        this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(P.teal);
-        this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      } else {
-        this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
-        this.tweens.killTweensOf(this.promptArrow);
-      }
+      if (this.nearCrewBoard) this.showPrompt(this.CREW_BOARD_X, GROUND_Y - 75, 'Crews', P.teal);
+      else this.hidePrompt();
     }
     if (this.nearCrewBoard) return;
 
-    // Check bulletin board
     const bdist = Math.abs(this.player.x - this.BULLETIN_X);
     const wasNearBoard = this.nearBulletinBoard;
     this.nearBulletinBoard = bdist < 52;
     if (this.nearBulletinBoard !== wasNearBoard) {
       if (this.nearBulletinBoard) {
-        const px = this.BULLETIN_X; const py = GROUND_Y - 75;
-        this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true);
-        this.promptBg.setPosition(px - 62, py - 2);
-        this.promptText.setPosition(px, py + 8); this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} View Polls`); this.promptText.setColor(P.amber);
-        this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(P.amber);
-        this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.showPrompt(this.BULLETIN_X, GROUND_Y - 75, 'View Polls', P.amber);
         this.nearBuilding = null;
         return;
       } else {
-        this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false);
-        this.tweens.killTweensOf(this.promptArrow);
+        this.hidePrompt();
       }
     }
     if (this.nearBulletinBoard) return;
 
-    let fi = -1; let cd = Infinity;
-    for (let i = 0; i < ENTERABLE.length; i++) { const d = Math.abs(this.player.x - ENTERABLE[i].doorX); if (d < 48 && d < cd) { fi = i; cd = d; } }
+    let fi = -1;
+    let cd = Infinity;
+    for (let i = 0; i < ENTERABLE.length; i++) {
+      const d = Math.abs(this.player.x - ENTERABLE[i].doorX);
+      if (d < 48 && d < cd) { fi = i; cd = d; }
+    }
     const f = fi >= 0 ? ENTERABLE[fi] : null;
-    if (f !== this.nearBuilding) { this.nearBuilding = f; if (f) { this.promptBg.setVisible(true); this.promptText.setVisible(true); this.promptArrow.setVisible(true); const px = f.doorX; const py = GROUND_Y - 75; this.promptBg.setPosition(px - 62, py - 2); this.promptText.setPosition(px, py + 8); this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} Enter ${f.name}`); this.promptText.setColor(f.neonColor); this.promptArrow.setPosition(px, py + 22); this.promptArrow.setColor(f.neonColor); this.tweens.add({ targets: this.promptArrow, y: py + 26, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }); } else { this.promptBg.setVisible(false); this.promptText.setVisible(false); this.promptArrow.setVisible(false); this.tweens.killTweensOf(this.promptArrow); } }
+    if (f !== this.nearBuilding) {
+      this.nearBuilding = f;
+      if (f) this.showPrompt(f.doorX, GROUND_Y - 75, `Enter ${f.name}`, f.neonColor);
+      else this.hidePrompt();
+    }
   }
-  private createInteractPrompt(): void { this.promptBg = this.add.graphics(); this.promptBg.fillStyle(hexToNum(P.bg), 0.88); this.promptBg.fillRoundedRect(0, 0, 124, 28, 5); this.promptBg.lineStyle(1, hexToNum(P.dpurp), 0.4); this.promptBg.strokeRoundedRect(0, 0, 124, 28, 5); this.promptBg.setDepth(50); this.promptBg.setVisible(false); this.promptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 124, 28), Phaser.Geom.Rectangle.Contains); this.promptBg.on('pointerdown', () => this.tryEnter()); this.promptText = this.add.text(0, 0, '', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51); this.promptText.setVisible(false); this.promptText.setInteractive(); this.promptText.on('pointerdown', () => this.tryEnter()); this.promptArrow = this.add.text(0, 0, '\u25BC', { fontFamily: 'monospace', fontSize: '9px', color: P.teal, align: 'center' }).setOrigin(0.5).setDepth(51); this.promptArrow.setVisible(false); }
+
+  private createInteractPrompt(): void {
+    this.promptBg = this.add.graphics();
+    this.promptBg.fillStyle(hexToNum(P.bg), 0.88);
+    this.promptBg.fillRoundedRect(0, 0, 124, 28, 5);
+    this.promptBg.lineStyle(1, hexToNum(P.dpurp), 0.4);
+    this.promptBg.strokeRoundedRect(0, 0, 124, 28, 5);
+    this.promptBg.setDepth(50).setVisible(false);
+    this.promptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 124, 28), Phaser.Geom.Rectangle.Contains);
+    this.promptBg.on('pointerdown', () => this.tryEnter());
+
+    this.promptText = this.add.text(0, 0, '', {
+      fontFamily: '"Courier New", monospace', fontSize: '10px',
+      color: P.teal, fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51);
+    this.promptText.setVisible(false);
+    this.promptText.setInteractive();
+    this.promptText.on('pointerdown', () => this.tryEnter());
+
+    this.promptArrow = this.add.text(0, 0, '\u25BC', {
+      fontFamily: 'monospace', fontSize: '9px', color: P.teal, align: 'center',
+    }).setOrigin(0.5).setDepth(51);
+    this.promptArrow.setVisible(false);
+  }
   private createBulletinBoard(): void {
     const bx = this.BULLETIN_X;
     const g = this.add.graphics().setDepth(4);
@@ -668,10 +862,16 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
   // ── Commands ──
   private handleCommand(text: string): void {
-    const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+
     switch (cmd) {
-      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } if (rid === 'picker') { this.showPlayerPicker(); return; } if (rid === 'myroom') { const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room'; this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; this.enterRoom(b.id, b.name, b.neonColor); break; }
-      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
+      default: {
+        if (!this.handleCommonCommand(cmd, arg))
+          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+        break;
+      }
     }
     this.chatUI.flashLog();
   }

@@ -65,10 +65,6 @@ export class AlleyScene extends BaseScene {
   private tarotPromptArrow!: Phaser.GameObjects.Text;
 
   // Exit door prompt
-  private nearExit = false;
-  private exitPromptBg!: Phaser.GameObjects.Graphics;
-  private exitPromptText!: Phaser.GameObjects.Text;
-  private exitPromptArrow!: Phaser.GameObjects.Text;
 
   // Subway prompt
   private nearSubway = false;
@@ -162,25 +158,6 @@ export class AlleyScene extends BaseScene {
     this.fortunePromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 148, 28), Phaser.Geom.Rectangle.Contains);
     this.fortunePromptBg.on('pointerdown', () => { if (this.nearFortune && !FortuneTellerModal.isOpen()) FortuneTellerModal.show(); });
 
-    // Exit door prompt (left opening back to Hub)
-    this.exitPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.exitPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.exitPromptBg.fillRoundedRect(0, 0, 138, 28, 5);
-    this.exitPromptBg.lineStyle(1, hexToNum(ALLEY_ACCENT), 0.5);
-    this.exitPromptBg.strokeRoundedRect(0, 0, 138, 28, 5);
-    this.exitPromptText = this.add.text(0, 0,
-      this.sys.game.device.input.touch ? '[TAP] Back to Hub' : '[E] Back to Hub',
-      { fontFamily: '"Courier New", monospace', fontSize: '10px', color: ALLEY_ACCENT, fontStyle: 'bold', align: 'center' }
-    ).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.exitPromptArrow = this.add.text(0, 0, '▼',
-      { fontFamily: 'monospace', fontSize: '9px', color: ALLEY_ACCENT }
-    ).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.exitPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 138, 28), Phaser.Geom.Rectangle.Contains);
-    this.exitPromptBg.on('pointerdown', () => {
-      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
-      if (this.nearExit && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToHub(); }
-    });
-
     // Subway prompt (right end — closed)
     this.subwayPromptBg = this.add.graphics().setDepth(50).setVisible(false);
     this.subwayPromptBg.fillStyle(hexToNum(P.bg), 0.9);
@@ -201,7 +178,6 @@ export class AlleyScene extends BaseScene {
       if (TarotModal.isOpen()) { TarotModal.destroy(); return; }
       if (this.nearFortune) { FortuneTellerModal.show(); return; }
       if (this.nearTarot) { TarotModal.show(); return; }
-      if (this.nearExit && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToHub(); }
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);
@@ -220,7 +196,6 @@ export class AlleyScene extends BaseScene {
       TarotModal.destroy();
       this.fortunePromptBg?.destroy(); this.fortunePromptText?.destroy(); this.fortunePromptArrow?.destroy();
       this.tarotPromptBg?.destroy(); this.tarotPromptText?.destroy(); this.tarotPromptArrow?.destroy();
-      this.exitPromptBg?.destroy(); this.exitPromptText?.destroy(); this.exitPromptArrow?.destroy();
       this.subwayPromptBg?.destroy(); this.subwayPromptText?.destroy(); this.subwayPromptArrow?.destroy();
     });
   }
@@ -711,11 +686,15 @@ export class AlleyScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   update(time: number, delta: number): void {
     this.updateMovement();
+    if (this.player.x <= EXIT_X + 10 && !this.isLeavingScene) {
+      this.isLeavingScene = true;
+      this.leaveToHub();
+      return;
+    }
     this.updateParticles(delta);
     this.updateNeon(delta);
     this.updateFortuneProximity();
     this.updateTarotProximity();
-    this.updateExitProximity();
     this.updateSubwayProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -744,13 +723,35 @@ export class AlleyScene extends BaseScene {
   }
 
   private updateMovement(): void {
-    if (!isPresenceReady()) return; // freeze until server confirms sync
-    const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
-    if (c) { if (c.left.isDown) vx = -ALLEY_SPEED; else if (c.right.isDown) vx = ALLEY_SPEED; }
-    if (vx === 0) { if (this.mobileLeft) vx = -ALLEY_SPEED; else if (this.mobileRight) vx = ALLEY_SPEED; }
+    if (!isPresenceReady()) return;
+    const c = this.input.keyboard?.createCursorKeys();
+    let vx = 0;
+    if (c) {
+      if (c.left.isDown) vx = -ALLEY_SPEED;
+      else if (c.right.isDown) vx = ALLEY_SPEED;
+    }
+    if (vx === 0) {
+      if (this.mobileLeft) vx = -ALLEY_SPEED;
+      else if (this.mobileRight) vx = ALLEY_SPEED;
+    }
     this.isKeyboardMoving = vx !== 0;
-    if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * ALLEY_SPEED / 60; this.facingRight = dx > 0; } }
+
+    if (vx !== 0) {
+      this.targetX = null;
+      this.isMoving = false;
+      this.player.x += vx / 60;
+      this.facingRight = vx > 0;
+    } else if (this.isMoving && this.targetX !== null) {
+      const dx = this.targetX - this.player.x;
+      if (Math.abs(dx) < 3) {
+        this.isMoving = false;
+        this.targetX = null;
+      } else {
+        this.player.x += Math.sign(dx) * ALLEY_SPEED / 60;
+        this.facingRight = dx > 0;
+      }
+    }
+
     this.player.x = Phaser.Math.Clamp(this.player.x, 20, W - 28);
     this.player.setFlipX(!this.facingRight);
   }
@@ -904,25 +905,7 @@ export class AlleyScene extends BaseScene {
     }
   }
 
-  private updateExitProximity(): void {
-    const near = Math.abs(this.player.x - EXIT_X) < 52;
-    if (near !== this.nearExit) {
-      this.nearExit = near;
-      this.exitPromptBg.setVisible(near);
-      this.exitPromptText.setVisible(near);
-      this.exitPromptArrow.setVisible(near);
-      if (!near) this.tweens.killTweensOf(this.exitPromptArrow);
-    }
-    if (near) {
-      const px = EXIT_X, py = this.player.y - 120;
-      this.exitPromptBg.setPosition(px - 69, py - 2);
-      this.exitPromptText.setPosition(px, py + 8);
-      this.exitPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.exitPromptArrow)) {
-        this.tweens.add({ targets: this.exitPromptArrow, y: py + 26, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      }
-    }
-  }
+
 
   private updateSubwayProximity(): void {
     const near = Math.abs(this.player.x - SUBWAY_X) < 60;
@@ -963,11 +946,23 @@ export class AlleyScene extends BaseScene {
   protected override getSceneAccent(): string { return P.lpurp; }
 
   private handleCommand(text: string): void {
-    const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+
     switch (cmd) {
-      case 'leave': case 'exit': case 'out': { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToHub(); } break; }
-      case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'Just you in the alley', ALLEY_ACCENT); break; }
-      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
+      case 'leave': case 'exit': case 'out': {
+        if (!this.isLeavingScene) {
+          this.isLeavingScene = true;
+          this.leaveToHub();
+        }
+        break;
+      }
+      default: {
+        if (!this.handleCommonCommand(cmd, arg))
+          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+        break;
+      }
     }
     this.chatUI.flashLog();
   }

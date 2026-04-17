@@ -400,14 +400,36 @@ export class CabinScene extends BaseScene {
   }
 
   private updateMovement(): void {
-    if (!isPresenceReady()) return; // freeze until server confirms sync
+    if (!isPresenceReady()) return;
     const CABIN_SPEED = PLAYER_SPEED * 1.5;
-    const c = this.input.keyboard?.createCursorKeys(); let vx = 0;
-    if (c) { if (c.left.isDown) vx = -CABIN_SPEED; else if (c.right.isDown) vx = CABIN_SPEED; }
-    if (vx === 0) { if (this.mobileLeft) vx = -CABIN_SPEED; else if (this.mobileRight) vx = CABIN_SPEED; }
+    const c = this.input.keyboard?.createCursorKeys();
+    let vx = 0;
+    if (c) {
+      if (c.left.isDown) vx = -CABIN_SPEED;
+      else if (c.right.isDown) vx = CABIN_SPEED;
+    }
+    if (vx === 0) {
+      if (this.mobileLeft) vx = -CABIN_SPEED;
+      else if (this.mobileRight) vx = CABIN_SPEED;
+    }
     this.isKeyboardMoving = vx !== 0;
-    if (vx !== 0) { this.targetX = null; this.isMoving = false; this.player.x += vx / 60; this.facingRight = vx > 0; }
-    else if (this.isMoving && this.targetX !== null) { const dx = this.targetX - this.player.x; if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; } else { this.player.x += Math.sign(dx) * CABIN_SPEED / 60; this.facingRight = dx > 0; } }
+
+    if (vx !== 0) {
+      this.targetX = null;
+      this.isMoving = false;
+      this.player.x += vx / 60;
+      this.facingRight = vx > 0;
+    } else if (this.isMoving && this.targetX !== null) {
+      const dx = this.targetX - this.player.x;
+      if (Math.abs(dx) < 3) {
+        this.isMoving = false;
+        this.targetX = null;
+      } else {
+        this.player.x += Math.sign(dx) * CABIN_SPEED / 60;
+        this.facingRight = dx > 0;
+      }
+    }
+
     this.player.x = Phaser.Math.Clamp(this.player.x, 20, W - 52);
     this.player.setFlipX(!this.facingRight);
   }
@@ -428,15 +450,54 @@ export class CabinScene extends BaseScene {
     const fc = [0xf0a040, 0xe87030, 0xe85030, 0xfac060, 0xffe040];
     const flameCount = stoked ? 10 : 6;
     const flameH = stoked ? 16 + stokeT * 10 : 0;
-    for (let i = 0; i < flameCount; i++) { const ox = Math.sin(time * 0.005 + i * 1.3) * (stoked ? 7 : 4), fh = (stoked ? flameH : 8) + Math.sin(time * 0.008 + i * 0.9) * 4 + Math.random() * 3, fw = 2 + Math.random() * 2.5, bx = fx - (stoked ? 14 : 8) + i * (stoked ? 3 : 3) + ox, a = 0.4 + Math.sin(time * 0.006 + i * 1.4) * 0.2; this.fireplaceGraphics.fillStyle(fc[i % fc.length], a); this.fireplaceGraphics.fillRect(bx - fw / 2, fy - fh, fw, fh); this.fireplaceGraphics.fillStyle(0xfac060, a * 0.5); this.fireplaceGraphics.fillRect(bx - 1, fy - fh * 0.6, 2, fh * 0.45); }
-    this.fireplaceGraphics.fillStyle(0xf0a040, 0.25 + Math.sin(time * 0.004) * 0.08); this.fireplaceGraphics.fillRect(fx - 9, fy - 2, 18, 4);
+    for (let i = 0; i < flameCount; i++) {
+      const ox = Math.sin(time * 0.005 + i * 1.3) * (stoked ? 7 : 4);
+      const fh = (stoked ? flameH : 8) + Math.sin(time * 0.008 + i * 0.9) * 4 + Math.random() * 3;
+      const fw = 2 + Math.random() * 2.5;
+      const bx = fx - (stoked ? 14 : 8) + i * (stoked ? 3 : 3) + ox;
+      const a = 0.4 + Math.sin(time * 0.006 + i * 1.4) * 0.2;
+      this.fireplaceGraphics.fillStyle(fc[i % fc.length], a);
+      this.fireplaceGraphics.fillRect(bx - fw / 2, fy - fh, fw, fh);
+      this.fireplaceGraphics.fillStyle(0xfac060, a * 0.5);
+      this.fireplaceGraphics.fillRect(bx - 1, fy - fh * 0.6, 2, fh * 0.45);
+    }
+
+    this.fireplaceGraphics.fillStyle(0xf0a040, 0.25 + Math.sin(time * 0.004) * 0.08);
+    this.fireplaceGraphics.fillRect(fx - 9, fy - 2, 18, 4);
+
     const emberThresh = stoked ? 0.3 : 0.7;
-    if (Math.random() > emberThresh) this.embers.push({ x: fx + (Math.random() - 0.5) * (stoked ? 18 : 10), y: fy - 6 - Math.random() * 4, vx: (Math.random() - 0.5) * (stoked ? 1.2 : 0.5), vy: -0.3 - Math.random() * (stoked ? 1.0 : 0.4), life: 0, maxLife: 500 + Math.random() * 700, size: 1 + Math.random() });
+    if (Math.random() > emberThresh) {
+      this.embers.push({
+        x: fx + (Math.random() - 0.5) * (stoked ? 18 : 10),
+        y: fy - 6 - Math.random() * 4,
+        vx: (Math.random() - 0.5) * (stoked ? 1.2 : 0.5),
+        vy: -0.3 - Math.random() * (stoked ? 1.0 : 0.4),
+        life: 0, maxLife: 500 + Math.random() * 700, size: 1 + Math.random(),
+      });
+    }
+
     const dt = delta / 16;
-    for (let i = this.embers.length - 1; i >= 0; i--) { const e = this.embers[i]; e.x += e.vx * dt; e.y += e.vy * dt; e.vx += (Math.random() - 0.5) * 0.02; e.life += delta; const p = e.life / e.maxLife; if (p >= 1) { this.embers.splice(i, 1); continue; } const a = p < 0.2 ? p / 0.2 : (1 - p) / 0.8; this.fireplaceGraphics.fillStyle(p < 0.5 ? 0xfac060 : 0xf0a040, a * 0.65); this.fireplaceGraphics.fillRect(e.x, e.y, e.size, e.size); }
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.vx += (Math.random() - 0.5) * 0.02;
+      e.life += delta;
+      const p = e.life / e.maxLife;
+      if (p >= 1) { this.embers.splice(i, 1); continue; }
+      const a = p < 0.2 ? p / 0.2 : (1 - p) / 0.8;
+      this.fireplaceGraphics.fillStyle(p < 0.5 ? 0xfac060 : 0xf0a040, a * 0.65);
+      this.fireplaceGraphics.fillRect(e.x, e.y, e.size, e.size);
+    }
     if (this.embers.length > (stoked ? 60 : 25)) this.embers = this.embers.slice(stoked ? -50 : -18);
-    // Smoke puffs rising up the chimney
-    for (let s = 0; s < 3; s++) { const sx = fx + Math.sin(time * 0.002 + s * 2) * 6, sy = fy - 20 - s * 12 - Math.sin(time * 0.003 + s) * 4; this.smokeLayerGraphics.clear(); this.smokeLayerGraphics.fillStyle(0xaaaaaa, 0.025 - s * 0.007); this.smokeLayerGraphics.fillRect(sx - 3, sy - 2, 6, 4); }
+
+    for (let s = 0; s < 3; s++) {
+      const sx = fx + Math.sin(time * 0.002 + s * 2) * 6;
+      const sy = fy - 20 - s * 12 - Math.sin(time * 0.003 + s) * 4;
+      this.smokeLayerGraphics.clear();
+      this.smokeLayerGraphics.fillStyle(0xaaaaaa, 0.025 - s * 0.007);
+      this.smokeLayerGraphics.fillRect(sx - 3, sy - 2, 6, 4);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -887,6 +948,34 @@ export class CabinScene extends BaseScene {
     this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('WoodsScene', { fromCabin: true }); });
   }
 
+  protected override teleportToRoom(roomId: string): void {
+    if (roomId === 'woods') {
+      if (!this.isLeavingScene) {
+        this.isLeavingScene = true;
+        this.leaveToWoods();
+      }
+      return;
+    }
+    if (roomId === 'cabin') {
+      this.chatUI.addMessage('system', 'Already in the cabin!', CABIN_ACCENT);
+      return;
+    }
+    if (roomId === 'hub') {
+      if (!this.isLeavingScene) {
+        this.isLeavingScene = true;
+        sendRoomChange('hub');
+        this.chatUI.destroy();
+        this.cameras.main.fadeOut(300, 10, 0, 20);
+        this.time.delayedCall(300, () => {
+          if (!this.scene.isActive()) return;
+          this.scene.start('HubScene', { _returning: true });
+        });
+      }
+      return;
+    }
+    super.teleportToRoom(roomId);
+  }
+
   // ══════════════════════════════════════════════════════════════════
   // OTHER PLAYERS
   // ══════════════════════════════════════════════════════════════════
@@ -929,12 +1018,23 @@ export class CabinScene extends BaseScene {
   protected override getSceneAccent(): string { return CABIN_ACCENT; }
 
   private handleCommand(text: string): void {
-    const parts = text.slice(1).split(' '); const cmd = parts[0].toLowerCase(); const arg = parts.slice(1).join(' ').trim();
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+
     switch (cmd) {
-      case 'leave': case 'exit': case 'outside': { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } break; }
-      case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: hub, woods, relay, feed, myroom, lounge, market, cabin', CABIN_ACCENT); return; } const al: Record<string, string> = { hub: 'hub', woods: 'woods', cabin: 'cabin', relay: 'relay', feed: 'feed', thefeed: 'feed', myroom: 'myroom', room: 'picker', lounge: 'lounge', rooftop: 'lounge', market: 'market', shop: 'market', store: 'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'woods') { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } return; } if (rid === 'cabin') { this.chatUI.addMessage('system', 'Already in the cabin!', CABIN_ACCENT); return; } if (rid === 'hub') { if (!this.isLeavingScene) { this.isLeavingScene = true; sendRoomChange('hub'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('HubScene', { _returning: true }); }); } return; } if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { sendRoomChange(opk); this.chatUI.addMessage('system', 'Requesting access...', CABIN_ACCENT); }); return; } if (rid) { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); break; }
-      case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', CABIN_ACCENT); break; }
-      default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
+      case 'leave': case 'exit': case 'outside': {
+        if (!this.isLeavingScene) {
+          this.isLeavingScene = true;
+          this.leaveToWoods();
+        }
+        break;
+      }
+      default: {
+        if (!this.handleCommonCommand(cmd, arg))
+          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+        break;
+      }
     }
     this.chatUI.flashLog();
   }
