@@ -78,6 +78,17 @@ export class WoodsScene extends BaseScene {
   private telescopePromptArrow!: Phaser.GameObjects.Text;
   private telescopeOverlay: HTMLElement | null = null;
 
+  // fishing
+  private nearDockTip = false;
+  private fishingState: 'idle' | 'waiting' | 'bite' = 'idle';
+  private fishingLineGraphics!: Phaser.GameObjects.Graphics;
+  private fishingTimer = 0;
+  private fishingBiteMs = 0;
+  private fishingBobPhase = 0;
+  private dockPromptBg!: Phaser.GameObjects.Graphics;
+  private dockPromptText!: Phaser.GameObjects.Text;
+  private dockPromptArrow!: Phaser.GameObjects.Text;
+
   constructor() { super({ key: 'WoodsScene' }); }
   init(data?: { fromCabin?: boolean }): void { super.init(data); this.spawnX = data?.fromCabin ? CABIN_DOOR_X - 10 : 1400; }
 
@@ -155,7 +166,8 @@ export class WoodsScene extends BaseScene {
       if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
-      if (this.nearTelescope) { this.openTelescopeView(); }
+      if (this.nearTelescope) { this.openTelescopeView(); return; }
+      if (this.nearDockTip) { this.handleFishingPress(); }
     });
 
     // Telescope prompt
@@ -168,6 +180,21 @@ export class WoodsScene extends BaseScene {
     this.telescopePromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearTelescope) this.openTelescopeView();
+    });
+
+    // Dock / fishing prompt
+    this.fishingLineGraphics = this.add.graphics().setDepth(2);
+    this.dockPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.dockPromptBg.fillStyle(0x020c0a, 0.92); this.dockPromptBg.fillRoundedRect(0, 0, 116, 28, 5);
+    this.dockPromptBg.lineStyle(1, 0x1a5040, 0.7); this.dockPromptBg.strokeRoundedRect(0, 0, 116, 28, 5);
+    this.dockPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Cast Line' : '[E] Cast Line', {
+      fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#5dcaa5', fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.dockPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#5dcaa5' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.dockPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 116, 28), Phaser.Geom.Rectangle.Contains);
+    this.dockPromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearDockTip) this.handleFishingPress();
     });
 
     this.setupPresenceCallbacks(myPubkey);
@@ -183,6 +210,8 @@ export class WoodsScene extends BaseScene {
       this.cabinPromptBg?.destroy(); this.cabinPromptText?.destroy(); this.cabinPromptArrow?.destroy();
       this.telescopePromptBg?.destroy(); this.telescopePromptText?.destroy(); this.telescopePromptArrow?.destroy();
       this.telescopeOverlay?.remove(); this.telescopeOverlay = null;
+      this.dockPromptBg?.destroy(); this.dockPromptText?.destroy(); this.dockPromptArrow?.destroy();
+      this.fishingLineGraphics?.destroy();
     });
   }
 
@@ -401,6 +430,39 @@ export class WoodsScene extends BaseScene {
     x.beginPath(); x.arc(DOCK_X+9,FLOOR_Y-52,20,0,Math.PI*2); x.fill();
     x.globalAlpha=0.07; x.beginPath(); x.arc(DOCK_X+9,FLOOR_Y-52,34,0,Math.PI*2); x.fill();
     x.globalAlpha=1;
+
+    // ── Rowboat (tied to dock tip) ──
+    { const bx = 344, by = FLOOR_Y + 10;
+      // Hull
+      x.fillStyle = '#1e1006';
+      x.beginPath();
+      x.moveTo(bx - 22, by - 4);
+      x.quadraticCurveTo(bx - 27, by + 3, bx - 20, by + 10);
+      x.lineTo(bx + 20, by + 10);
+      x.quadraticCurveTo(bx + 27, by + 3, bx + 22, by - 4);
+      x.closePath();
+      x.fill();
+      // Rim
+      x.fillStyle = '#3a2810'; x.fillRect(bx - 22, by - 6, 44, 3);
+      // Interior floor
+      x.fillStyle = '#160c04'; x.fillRect(bx - 16, by - 1, 32, 8);
+      // Seat plank
+      x.fillStyle = '#2a1c0a'; x.fillRect(bx - 9, by + 2, 18, 3);
+      // Left oar
+      x.strokeStyle = '#3a2810'; x.lineWidth = 1.5;
+      x.beginPath(); x.moveTo(bx - 10, by + 1); x.lineTo(bx - 36, by + 6); x.stroke();
+      x.fillStyle = '#2e2008'; x.fillRect(bx - 40, by + 4, 7, 4);
+      // Right oar
+      x.beginPath(); x.moveTo(bx + 10, by + 1); x.lineTo(bx + 36, by + 6); x.stroke();
+      x.fillStyle = '#2e2008'; x.fillRect(bx + 33, by + 4, 7, 4);
+      // Mooring rope from boat to dock post
+      x.strokeStyle = '#3a3028'; x.lineWidth = 0.8;
+      x.beginPath(); x.moveTo(bx + 20, by + 2); x.lineTo(DOCK_X + 2, FLOOR_Y + 6); x.stroke();
+      // Water reflection
+      x.globalAlpha = 0.1; x.fillStyle = '#1e1006';
+      x.fillRect(bx - 18, by + 11, 36, 5);
+      x.globalAlpha = 1;
+    }
 
     // Campfire pit
     const fx=FIRE_X, fy=FIRE_Y;
@@ -652,6 +714,8 @@ export class WoodsScene extends BaseScene {
     this.updatePlayerGlow(time);
     this.updateCabinProximity();
     this.updateTelescopeProximity();
+    this.updateDockTipProximity();
+    this.updateFishing(time, delta);
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
@@ -962,6 +1026,168 @@ export class WoodsScene extends BaseScene {
     this.shootingStarGraphics.fillRect(s.x, s.y, 2, 2);
 
     if (s.life >= s.maxLife || s.y > 130 || s.x < -20 || s.x > W + 20) this.shootingStar = null;
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // FISHING
+  // ══════════════════════════════════════════════════════════════════
+  private static readonly FISH_TABLE = [
+    { name: 'tiny carp',                    kg: '0.2', rare: false, junk: false },
+    { name: 'silver trout',                 kg: '1.4', rare: false, junk: false },
+    { name: 'moonfish',                     kg: '0.8', rare: false, junk: false },
+    { name: 'darkwater bass',               kg: '2.3', rare: true,  junk: false },
+    { name: 'luminous eel',                 kg: '0.5', rare: true,  junk: false },
+    { name: 'crystal perch',                kg: '3.1', rare: true,  junk: false },
+    { name: 'old boot',                     kg: '?',   rare: false, junk: true  },
+    { name: 'soggy message in a bottle',    kg: '0.3', rare: false, junk: true  },
+  ];
+
+  private updateDockTipProximity(): void {
+    const near = this.player.x < DOCK_X + 48;
+    if (near !== this.nearDockTip) {
+      this.nearDockTip = near;
+      if (!near && this.fishingState !== 'idle') this.cancelFishing();
+    }
+    // Show / update prompt only in idle state while near
+    const showPrompt = near && this.fishingState === 'idle';
+    this.dockPromptBg.setVisible(showPrompt);
+    this.dockPromptText.setVisible(showPrompt);
+    this.dockPromptArrow.setVisible(showPrompt);
+    if (showPrompt) {
+      const px = DOCK_X + 12, py = FLOOR_Y - 90;
+      this.dockPromptBg.setPosition(px - 58, py - 2);
+      this.dockPromptText.setPosition(px, py + 8);
+      this.dockPromptArrow.setPosition(px, py + 22);
+      if (!this.tweens.isTweening(this.dockPromptArrow)) {
+        this.tweens.add({ targets: this.dockPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    } else {
+      this.tweens.killTweensOf(this.dockPromptArrow);
+    }
+  }
+
+  private updateFishing(time: number, delta: number): void {
+    this.fishingLineGraphics.clear();
+    if (this.fishingState === 'idle') return;
+
+    const rodTipX = this.player.x - 8;
+    const rodTipY = this.player.y - 32;
+    const bobberX = DOCK_X - 22;
+
+    this.fishingBobPhase += delta * 0.002;
+    const isBite = this.fishingState === 'bite';
+    const bobAmt = isBite
+      ? Math.sin(this.fishingBobPhase * 4.5) * 5
+      : Math.sin(this.fishingBobPhase) * 1.5;
+    const bobberY = FLOOR_Y + 10 + bobAmt;
+
+    // Fishing line
+    this.fishingLineGraphics.lineStyle(1, 0xc8b89a, 0.7);
+    this.fishingLineGraphics.beginPath();
+    this.fishingLineGraphics.moveTo(rodTipX, rodTipY);
+    this.fishingLineGraphics.lineTo(bobberX, bobberY);
+    this.fishingLineGraphics.strokePath();
+
+    // Bobber float
+    const bobColor = isBite ? 0xff4444 : 0xe05028;
+    this.fishingLineGraphics.fillStyle(bobColor, 0.9);
+    this.fishingLineGraphics.fillRect(bobberX - 2, bobberY - 4, 5, 4); // top (red/orange)
+    this.fishingLineGraphics.fillStyle(0xf0f0f0, 0.85);
+    this.fishingLineGraphics.fillRect(bobberX - 2, bobberY, 5, 4);     // bottom (white)
+
+    // Water rings around bobber
+    const ringAlpha = 0.08 + Math.sin(this.fishingBobPhase * 0.7) * 0.04;
+    this.fishingLineGraphics.lineStyle(0.5, 0x5dcaa5, ringAlpha);
+    this.fishingLineGraphics.strokeCircle(bobberX, bobberY + 2, 6);
+    this.fishingLineGraphics.strokeCircle(bobberX, bobberY + 2, 11);
+
+    // Bite state: show prompt + timeout check
+    if (isBite) {
+      const px = DOCK_X + 12, py = FLOOR_Y - 90;
+      this.dockPromptText.setText(this.sys.game.device.input.touch ? '[TAP] Reel In!' : '[E] Reel In!');
+      this.dockPromptText.setColor('#ff8888');
+      this.dockPromptBg.setVisible(true);
+      this.dockPromptText.setVisible(true);
+      this.dockPromptArrow.setVisible(true);
+      this.dockPromptBg.setPosition(px - 58, py - 2);
+      this.dockPromptText.setPosition(px, py + 8);
+      this.dockPromptArrow.setPosition(px, py + 22);
+      this.fishingTimer += delta;
+      if (this.fishingTimer > 4000) {
+        // Fish escaped
+        this.chatUI.addMessage('system', '* the fish got away...', WOODS_ACCENT);
+        this.resetFishingState();
+      }
+    } else {
+      // Waiting for bite
+      this.fishingTimer += delta;
+      if (this.fishingTimer >= this.fishingBiteMs) {
+        this.fishingState = 'bite';
+        this.fishingTimer = 0;
+        this.chatUI.addMessage('system', '* something tugs the line!', '#ff8888');
+        this.snd.coinFlip();
+      } else if (this.fishingTimer > 45000) {
+        // Nothing biting after 45s
+        this.chatUI.addMessage('system', '* nothing biting tonight...', WOODS_ACCENT);
+        this.resetFishingState();
+      }
+    }
+  }
+
+  private handleFishingPress(): void {
+    if (this.fishingState === 'idle') {
+      this.fishingState = 'waiting';
+      this.fishingTimer = 0;
+      this.fishingBiteMs = 4000 + Math.random() * 12000;
+      this.fishingBobPhase = 0;
+      this.chatUI.addMessage('system', '* casts line into the dark water...', WOODS_ACCENT);
+      sendChat('* casts a fishing line');
+    } else if (this.fishingState === 'bite') {
+      this.reelIn();
+    } else {
+      // Cancel cast
+      this.cancelFishing();
+    }
+  }
+
+  private reelIn(): void {
+    const table = WoodsScene.FISH_TABLE;
+    // Weighted: 50% common, 30% uncommon/rare, 20% junk
+    const roll = Math.random();
+    let catch_: typeof table[number];
+    if (roll < 0.20) {
+      const junk = table.filter(f => f.junk);
+      catch_ = junk[Math.floor(Math.random() * junk.length)];
+    } else if (roll < 0.50) {
+      const rare = table.filter(f => f.rare);
+      catch_ = rare[Math.floor(Math.random() * rare.length)];
+    } else {
+      const common = table.filter(f => !f.rare && !f.junk);
+      catch_ = common[Math.floor(Math.random() * common.length)];
+    }
+
+    const msg = catch_.junk
+      ? `* reeled in a ${catch_.name}. unfortunate.`
+      : catch_.rare
+        ? `* hooked a ${catch_.name} (${catch_.kg}kg)! ✦`
+        : `* caught a ${catch_.name} (${catch_.kg}kg)`;
+    this.chatUI.addMessage('system', msg, catch_.rare ? '#aaff44' : WOODS_ACCENT);
+    sendChat(msg);
+    this.resetFishingState();
+  }
+
+  private cancelFishing(): void {
+    this.chatUI.addMessage('system', '* reels in the line.', WOODS_ACCENT);
+    this.resetFishingState();
+  }
+
+  private resetFishingState(): void {
+    this.fishingState = 'idle';
+    this.fishingTimer = 0;
+    this.fishingLineGraphics.clear();
+    this.dockPromptText.setText(this.sys.game.device.input.touch ? '[TAP] Cast Line' : '[E] Cast Line');
+    this.dockPromptText.setColor('#5dcaa5');
+    this.tweens.killTweensOf(this.dockPromptArrow);
   }
 
   private leaveToDistrict(): void {
@@ -1503,6 +1729,10 @@ export class WoodsScene extends BaseScene {
     const arg = parts.slice(1).join(' ').trim();
 
     switch (cmd) {
+      case 'fish': case 'cast':
+        if (this.nearDockTip) this.handleFishingPress();
+        else this.chatUI.addMessage('system', 'Head to the end of the dock to fish.', WOODS_ACCENT);
+        break;
       default: {
         if (!this.handleCommonCommand(cmd, arg))
           this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
