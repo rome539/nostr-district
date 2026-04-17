@@ -188,8 +188,8 @@ export function setPresenceCallbacks(cb: PresenceCallback): void {
 // ── Room request system ──
 
 export function setRoomRequestHandler(handler: RoomRequestHandler | null): void { onRoomRequest = handler; }
-export function setRoomGrantedHandler(handler: RoomGrantedHandler | null): void { onRoomGranted = handler; }
-export function setRoomDeniedHandler(handler: RoomDeniedHandler | null): void { onRoomDenied = handler; }
+export function setRoomGrantedHandler(handler: RoomGrantedHandler | null): RoomGrantedHandler | null { const prev = onRoomGranted; onRoomGranted = handler; return prev; }
+export function setRoomDeniedHandler(handler: RoomDeniedHandler | null): RoomDeniedHandler | null { const prev = onRoomDenied; onRoomDenied = handler; return prev; }
 export function setRoomKickHandler(handler: RoomKickHandler | null): void { onRoomKick = handler; }
 export function setZoneCountsHandler(handler: ZoneCountsHandler | null): void { onZoneCounts = handler; }
 

@@ -44,7 +44,7 @@ Commands are typed in the chat input. All commands are case-insensitive.
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/tp <room>` | `/teleport`, `/go` | Teleport to a room: `hub`, `relay`, `feed`, `myroom`, `lounge`, `market`, `woods` |
-| `/visit <player>` | — | Request access to another player's private room (Hub only) |
+| `/visit <player or npub>` | — | Request access to another player's private room. Accepts a name or npub1. |
 
 Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `rooftop` → lounge, `shop` / `store` → market, `forest` / `camp` → woods
 
@@ -64,7 +64,7 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/terminal` | `/outfit`, `/avatar`, `/computer` | Open the avatar & room customizer. |
-| `/polls` | — | Open the poll board (Hub only). |
+| `/polls` | — | Open the poll board. |
 | `/map` | `/world` | Open the district world map. Also toggleable with Tab. |
 
 ### Emotes
@@ -102,7 +102,7 @@ All emotes are toggles — run the command again to stop.
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/mute` | — | Toggle chat mute (stops sending and receiving messages). |
-| `/mutelist` | `/mutes`, `/blocked` | Open the mute list panel (Hub only). |
+| `/mutelist` | `/mutes`, `/blocked` | Open the mute list panel. |
 | `/filter [word]` | — | Add a word to the chat filter. No argument lists current filters. |
 | `/unfilter <word>` | — | Remove a word from the chat filter. |
 
@@ -188,7 +188,8 @@ All kind 30078 events are namespaced by their `d` tag:
 Crews are persistent guilds backed by NIP-29 groups on dedicated relay infrastructure. Each crew has:
 
 - **Founder** — creates and fully controls the crew; can promote/kick anyone
-- **Admins** — can accept join requests and kick regular members
+- **Admins** — can accept/decline join requests and kick officers and members
+- **Officers** — can accept/decline join requests and kick members
 - **Members** — can chat, post, and react in the crew channel
 
 ### How membership works

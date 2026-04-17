@@ -67,7 +67,7 @@ import { worldMap } from '../ui/WorldMap';
 import { ZapModal } from '../ui/ZapModal';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
-  sendChat, sendNameUpdate, sendRoomResponse,
+  sendChat, sendNameUpdate, sendRoomResponse, sendRoomRequest,
   setPresenceCallbacks, sendAvatarUpdate,
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, clearRoomRequestHandler,
   requestOnlinePlayers,
@@ -187,6 +187,7 @@ export abstract class BaseScene extends Phaser.Scene {
 
   // ── Scene state ────────────────────────────────────────────────────────────
   protected isLeavingScene = false;
+  private _visitTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubProfile?: () => void;
   private roomRequestToast: HTMLElement | null = null;
   private readonly roomRequestHandler = (rp: string, rn: string) => this.showRoomRequestToast(rp, rn);
@@ -990,6 +991,48 @@ export abstract class BaseScene extends Phaser.Scene {
       // ── World map ──────────────────────────────────────────────────────────
       case 'map': case 'world':
         this.worldMap.toggle(); return true;
+
+      // ── Visit ────────────────────────────────────────────────────────────
+      case 'visit': {
+        if (!arg) { this.chatUI.addMessage('system', 'Usage: /visit <name or npub>', ac); return true; }
+        const resolvePk = async (): Promise<string | null> => {
+          if (arg.startsWith('npub1')) {
+            try {
+              const { nip19 } = await import('nostr-tools');
+              const d = nip19.decode(arg);
+              if (d.type === 'npub') return d.data as string;
+            } catch {}
+            return null;
+          }
+          let found: string | null = null;
+          this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) found = pk; });
+          return found;
+        };
+        resolvePk().then(pk => {
+          if (!pk) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; }
+          this.chatUI.addMessage('system', 'Requesting access…', ac);
+          const prevGranted = setRoomGrantedHandler((op, on, room, roomConfig) => {
+            if (this._visitTimer) { clearTimeout(this._visitTimer); this._visitTimer = null; }
+            this.chatUI.addMessage('system', `${on} accepted!`, ac);
+            this.chatUI.destroy();
+            this.scene.start('RoomScene', { id: room, name: `${on}'s Room`, neonColor: P.teal, ownerPubkey: op, ownerRoomConfig: roomConfig });
+          });
+          const prevDenied = setRoomDeniedHandler((r) => {
+            if (this._visitTimer) { clearTimeout(this._visitTimer); this._visitTimer = null; }
+            this.chatUI.addMessage('system', r || 'Denied', P.amber);
+            setRoomGrantedHandler(prevGranted);
+            setRoomDeniedHandler(prevDenied);
+          });
+          sendRoomRequest(pk);
+          this._visitTimer = setTimeout(() => {
+            this._visitTimer = null;
+            this.chatUI.addMessage('system', 'Timed out', P.amber);
+            setRoomGrantedHandler(prevGranted);
+            setRoomDeniedHandler(prevDenied);
+          }, 30000);
+        });
+        return true;
+      }
 
       // ── Zap ─────────────────────────────────────────────────────────────
       case 'zap': {
