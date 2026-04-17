@@ -658,6 +658,7 @@ export class SoundEngine {
   // SFX only play once per session.
   private _fileBufCache = new Map<string, Promise<AudioBuffer>>();
   private _fileSrcs: Array<{ src: AudioBufferSourceNode; gain: GainNode }> = [];
+  private _fileEpoch = 0;
 
   private _loadFileBuf(path: string): Promise<AudioBuffer> {
     let p = this._fileBufCache.get(path);
@@ -676,13 +677,15 @@ export class SoundEngine {
   }
 
   private _playFile(path: string, volume = 1.0, startAt = 0, stopAfterMs = 0): void {
+    const epoch = this._fileEpoch;
     this._loadFileBuf(path).then(async (buf) => {
+      if (epoch !== this._fileEpoch) return;
       const ctx = this.ac();
-      // If suspended, attempt resume before playing (e.g. keyboard event re-enters after inactivity)
       if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch {}
       }
       if (ctx.state !== 'running') return;
+      if (epoch !== this._fileEpoch) return;
       const src = ctx.createBufferSource();
       src.buffer = buf;
       const gain = ctx.createGain();
@@ -708,6 +711,7 @@ export class SoundEngine {
   }
 
   stopFileSounds(): void {
+    this._fileEpoch++;
     this._fileSrcs.forEach(({ src, gain }) => {
       try { src.stop(); } catch {}
       try { src.disconnect(); } catch {}

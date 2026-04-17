@@ -288,8 +288,7 @@ export const TarotModal = {
     const draw = getDailyDraw();
     const isFresh = draw[0].fresh;
     SoundEngine.get().tarotCardFlip();
-    // Stop 2s after last card flips (last flip at 600 + 2*180 = 960ms)
-    setTimeout(() => SoundEngine.get().stopFileSounds(), 960 + 2000);
+    setTimeout(() => { if (overlay) SoundEngine.get().stopFileSounds(); }, 960 + 2000);
 
     const isTouch = 'ontouchstart' in window;
     // Cards must fit 3-across in available width. Landscape phones use height as

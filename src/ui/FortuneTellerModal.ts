@@ -272,8 +272,7 @@ export const FortuneTellerModal = {
       status.style.fontSize = '11px';
       status.style.letterSpacing = '0.5px';
       typewrite(status, `"${fortune}"`, 28);
-      // Stop sound 2s after typewriter finishes
-      setTimeout(() => SoundEngine.get().stopFileSounds(), (fortune.length + 2) * 28 + 2000);
+      setTimeout(() => { if (overlay) SoundEngine.get().stopFileSounds(); }, (fortune.length + 2) * 28 + 2000);
     }, 1300);
   },
 
