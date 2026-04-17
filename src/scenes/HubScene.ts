@@ -19,7 +19,6 @@ import { authStore } from '../stores/authStore';
 import { loadNostrTheme } from '../nostr/nostrThemeService';
 import { initEmojiService } from '../nostr/emojiService';
 import { subscribeToZapReceipts } from '../nostr/zapService';
-import { ZapModal } from '../ui/ZapModal';
 import { showZapToast } from '../ui/ZapToast';
 import { LoginScreen } from '../ui/LoginScreen';
 import {
@@ -673,7 +672,6 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     switch (cmd) {
       case 'visit': { if (!arg) return; this.resolvePlayerPubkey(arg).then(tp => { if (tp) this.requestRoomAccess(tp); else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); }); break; }
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', `Rooms: relay, feed, myroom, lounge, market${HubScene.WOODS_OPEN ? ', woods' : ''}`, P.teal); return; } const al: Record<string, string> = { relay:'relay', feed:'feed', thefeed:'feed', myroom:'myroom', room:'picker', lounge:'lounge', rooftop:'lounge', market:'market', shop:'market', store:'market', woods:'woods', forest:'woods', camp:'woods' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (!rid) { this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); return; } if (rid === 'woods') { this.enterWoods(); return; } if (rid === 'picker') { this.showPlayerPicker(); return; } if (rid === 'myroom') { const myPk = this.registry.get('playerPubkey'); const myName = this.registry.get('playerName') || 'My Room'; this.enterRoom(`myroom:${myPk}`, `${myName}'s Room`, P.teal, myPk); return; } const b = ENTERABLE.find(e => e.id === rid); if (!b) return; this.enterRoom(b.id, b.name, b.neonColor); break; }
-      case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', P.teal); return; } const auth2 = authStore.getState(); if (!auth2.pubkey || auth2.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zapTarget: string | null = null; let zapName = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; } }); if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zapTarget, zapName); break; }
       default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }
     this.chatUI.flashLog();

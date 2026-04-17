@@ -7,8 +7,10 @@ A pixel art social world built on Nostr. Walk around a cyberpunk city, hang out 
 Nostr District is a browser-based MMO where your Nostr identity is your character. Log in with a remote signer, browser extension, or private key — and you're in. Your room, your avatar, your presence on the network.
 
 - **Hub** — shared public space where all players appear in real time
-- **Rooms** — personal spaces tied to your pubkey; decorate them, invite people in
+- **Alley** — cyberpunk side-street with a fortune teller, tarot reader, and subway entrance
 - **Woods** — outdoor exploration area with its own chat and presence
+- **Cabin** — cozy retreat with a fireplace and ambient music
+- **Rooms** — personal spaces tied to your pubkey; decorate them, invite people in
 - **Feed Room** — live global Nostr feed scrolling in real time
 - **Relay Room** — live relay connection status and event stats
 - **Chat** — room chat over Nostr ephemeral events (NIP-28)
@@ -50,9 +52,9 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `/dm [player]` | — | Open a DM with a player. No argument lists online players. |
+| `/dm [player]` | `/dms`, `/messages`, `/msg` | Open a DM with a player. No argument lists online players. |
 | `/crew` | `/crews` | Open the Crews panel. |
-| `/zap <player>` | — | Open the zap modal to send a lightning tip. Requires login. |
+| `/zap <player or npub>` | — | Open the zap modal to send a lightning tip. Accepts a name or npub1. |
 | `/players` | `/who`, `/online` | List players currently in the scene. |
 | `/follows` | `/following`, `/friends` | Open the follows / friends panel. |
 | `/status` | — | Display your current status (Hub only). |
@@ -61,19 +63,39 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `/terminal` | `/wardrobe`, `/outfit`, `/avatar` | Open the avatar & room customizer. In a private room, add `/computer`. |
+| `/terminal` | `/outfit`, `/avatar`, `/computer` | Open the avatar & room customizer. |
 | `/polls` | — | Open the poll board (Hub only). |
+| `/map` | `/world` | Open the district world map. Also toggleable with Tab. |
+
+### Emotes
+
+| Command | Description |
+|---------|-------------|
+| `/smoke` | Cigarette smoke |
+| `/coffee` | Coffee cup |
+| `/music` | Music notes |
+| `/zzz` | Sleeping |
+| `/think` | Thought bubble |
+| `/hearts` | Hearts |
+| `/angry` | Anger symbol |
+| `/sweat` | Sweat drop |
+| `/sparkle` | Sparkles |
+| `/confetti` | Confetti |
+| `/fire` | Flames |
+| `/ghost` | Ghost (turns semi-transparent) |
+| `/rain` | Rain cloud |
+
+All emotes are toggles — run the command again to stop.
 
 ### Fun
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `/smoke` | — | Toggle cigarette smoke emote. |
-| `/flip` | `/coin` | Flip a coin and broadcast the result (Hub only). |
-| `/8ball <question>` | — | Ask the magic 8-ball a question (Hub only). |
+| `/flip` | `/coin` | Flip a coin and broadcast the result. |
+| `/8ball <question>` | — | Ask the magic 8-ball a question. |
 | `/rps <rock\|paper\|scissors>` | — | Challenge another player to rock-paper-scissors (Hub only). |
 | `/slots` | — | Play the slot machine (Hub only). |
-| `/ship <name1> <name2>` | — | Calculate compatibility between two names (Hub only). |
+| `/ship <name1> <name2>` | — | Calculate compatibility between two names. |
 
 ### Moderation
 

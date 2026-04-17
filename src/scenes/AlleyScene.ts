@@ -19,10 +19,8 @@ import {
 
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
-import { ZapModal } from '../ui/ZapModal';
 import { renderHubSprite } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
-import { authStore } from '../stores/authStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
@@ -969,7 +967,6 @@ export class AlleyScene extends BaseScene {
     switch (cmd) {
       case 'leave': case 'exit': case 'out': { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToHub(); } break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'Just you in the alley', ALLEY_ACCENT); break; }
-      case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', ALLEY_ACCENT); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.name; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
       default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }
     this.chatUI.flashLog();

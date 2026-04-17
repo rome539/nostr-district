@@ -18,10 +18,8 @@ import {
 
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
-import { ZapModal } from '../ui/ZapModal';
 import { renderHubSprite } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
-import { authStore } from '../stores/authStore';
 
 const CABIN_ACCENT = '#f0a030';
 const W = 1000;             // cabin world width
@@ -935,7 +933,6 @@ export class CabinScene extends BaseScene {
     switch (cmd) {
       case 'leave': case 'exit': case 'outside': { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } break; }
       case 'tp': case 'teleport': case 'go': { if (!arg) { this.chatUI.addMessage('system', 'Rooms: hub, woods, relay, feed, myroom, lounge, market, cabin', CABIN_ACCENT); return; } const al: Record<string, string> = { hub: 'hub', woods: 'woods', cabin: 'cabin', relay: 'relay', feed: 'feed', thefeed: 'feed', myroom: 'myroom', room: 'picker', lounge: 'lounge', rooftop: 'lounge', market: 'market', shop: 'market', store: 'market' }; const rid = al[arg.toLowerCase().replace(/\s+/g, '')]; if (rid === 'woods') { if (!this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); } return; } if (rid === 'cabin') { this.chatUI.addMessage('system', 'Already in the cabin!', CABIN_ACCENT); return; } if (rid === 'hub') { if (!this.isLeavingScene) { this.isLeavingScene = true; sendRoomChange('hub'); this.chatUI.destroy(); this.cameras.main.fadeOut(300, 10, 0, 20); this.time.delayedCall(300, () => { if (!this.scene.isActive()) return; this.scene.start('HubScene', { _returning: true }); }); } return; } if (rid === 'myroom') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); return; } if (rid === 'picker') { const pk = this.registry.get('playerPubkey'); const n = this.registry.get('playerName') || 'My Room'; this.playerPicker.open(pk, n, () => { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk }); }, (opk) => { sendRoomChange(opk); this.chatUI.addMessage('system', 'Requesting access...', CABIN_ACCENT); }); return; } if (rid) { sendRoomChange('hub'); this.chatUI.destroy(); this.scene.start('RoomScene', { id: rid, name: rid.charAt(0).toUpperCase() + rid.slice(1), neonColor: P.teal }); return; } this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber); break; }
-      case 'zap': { if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name>', CABIN_ACCENT); return; } const za = authStore.getState(); if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return; } let zt: string | null = null; let zn = arg; this.otherPlayers.forEach((o, pk) => { if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zt = pk; zn = o.name; } }); if (!zt) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return; } ZapModal.show(zt, zn); break; }
       case 'players': case 'who': case 'online': { const ps: string[] = []; this.otherPlayers.forEach(o => ps.push(o.name)); this.chatUI.addMessage('system', ps.length ? `${ps.length} here: ${ps.join(', ')}` : 'No other players', CABIN_ACCENT); break; }
       default: { if (!this.handleCommonCommand(cmd, arg)) this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber); break; }
     }

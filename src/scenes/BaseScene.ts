@@ -64,6 +64,7 @@ import { ProfileModal } from '../ui/ProfileModal';
 import { RpsGame } from '../ui/RpsGame';
 import { PollBoard } from '../ui/PollBoard';
 import { worldMap } from '../ui/WorldMap';
+import { ZapModal } from '../ui/ZapModal';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
   sendChat, sendNameUpdate, sendRoomResponse,
@@ -989,6 +990,33 @@ export abstract class BaseScene extends Phaser.Scene {
       // ── World map ──────────────────────────────────────────────────────────
       case 'map': case 'world':
         this.worldMap.toggle(); return true;
+
+      // ── Zap ─────────────────────────────────────────────────────────────
+      case 'zap': {
+        if (!arg) { this.chatUI.addMessage('system', 'Usage: /zap <name or npub>', ac); return true; }
+        const za = authStore.getState();
+        if (!za.pubkey || za.isGuest) { this.chatUI.addMessage('system', 'Login to zap', P.amber); return true; }
+        if (arg.startsWith('npub1')) {
+          import('nostr-tools').then(({ nip19 }) => {
+            try {
+              const decoded = nip19.decode(arg);
+              if (decoded.type !== 'npub') throw new Error();
+              const pk = decoded.data as string;
+              const name = this.otherPlayers.get(pk)?.name ?? arg.slice(0, 13) + '…';
+              ZapModal.show(pk, name);
+            } catch { this.chatUI.addMessage('system', 'Invalid npub', P.amber); }
+          });
+          return true;
+        }
+        let zapTarget: string | null = null;
+        let zapName = arg;
+        this.otherPlayers.forEach((o, pk) => {
+          if (o.name?.toLowerCase().includes(arg.toLowerCase())) { zapTarget = pk; zapName = o.name; }
+        });
+        if (!zapTarget) { this.chatUI.addMessage('system', `"${arg}" not found`, P.amber); return true; }
+        ZapModal.show(zapTarget, zapName);
+        return true;
+      }
 
       // ── Status ────────────────────────────────────────────────────────────
       case 'status': {
