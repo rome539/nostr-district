@@ -1240,6 +1240,10 @@ export class WoodsScene extends BaseScene {
     { name: 'whiskered loach',             kg: '0.3', rare: false, junk: false },
     { name: 'spotted rudd',               kg: '0.7', rare: false, junk: false },
     { name: 'common bream',               kg: '1.2', rare: false, junk: false },
+    { name: 'river roach',                kg: '0.4', rare: false, junk: false },
+    { name: 'flathead chub',              kg: '0.8', rare: false, junk: false },
+    { name: 'golden shiner',              kg: '0.3', rare: false, junk: false },
+    { name: 'pumpkinseed',                kg: '0.5', rare: false, junk: false },
     // Rare
     { name: 'darkwater bass',      kg: '2.3', rare: true, junk: false, lore: 'It only surfaces when the moon is hidden. Its scales absorb light rather than reflect it.' },
     { name: 'luminous eel',        kg: '0.5', rare: true, junk: false, lore: 'Locals once used them as lanterns. They stopped when the eels started remembering the way home.' },
@@ -1260,7 +1264,9 @@ export class WoodsScene extends BaseScene {
     // Legendary
     { name: 'ostrich',             kg: '63.5', rare: false, junk: false, legendary: true, flavor: '🪶 Something enormous thrashed at the end of the line. It wasn\'t a fish.', lore: 'They say an ostrich fell into the lake decades ago during a traveling circus that passed through the district. No one believed it survived down there — until now.' },
     { name: 'golden satoshi coin', kg: '0.01', rare: false, junk: false, legendary: true, flavor: '🪙 The line went taut on something tiny but impossibly heavy. It glowed when it broke the surface.', lore: 'An ancient coin stamped with the letter ₿, cold to the touch and humming faintly. The old-timers say Satoshi himself tossed it into the lake the night the district was founded, a blessing for whoever found it.' },
-    { name: 'enchanted trident',   kg: '8.4', rare: false, junk: false, legendary: true, flavor: '🔱 The water split apart as something rose on its own, the fishing line barely holding it back.', lore: 'The handle is wrapped in kelp that never dries and the prongs glow faintly under moonlight. Legend has it the lake spirit forged it to guard the deepest waters — and it chose to let you take it.' },
+    { name: 'enchanted trident',   kg: '8.4',  rare: false, junk: false, legendary: true, flavor: '🔱 The water split apart as something rose on its own, the fishing line barely holding it back.', lore: 'The handle is wrapped in kelp that never dries and the prongs glow faintly under moonlight. Legend has it the lake spirit forged it to guard the deepest waters — and it chose to let you take it.' },
+    { name: 'leviathan coelacanth', kg: '91.2',  rare: false, junk: false, legendary: true, flavor: '🐟 The line went still. Then the lake itself seemed to inhale.', lore: 'A living fossil thought extinct for 65 million years. Its scales are the color of deep ocean and its eyes hold no reflection. Scientists would lose their minds. You decide not to tell anyone.' },
+    { name: 'meteor from Andromeda', kg: '???', rare: false, junk: false, legendary: true, flavor: '☄️ It didn\'t feel like a fish. It didn\'t feel like anything from here.', lore: 'Still warm. Faintly humming. The surface is pitted like it survived something unimaginable — 2.5 million light years of it. The lake has no business holding this. Neither do you.' },
   ] as const;
 
   private updateDockTipProximity(): void {
@@ -1432,7 +1438,7 @@ export class WoodsScene extends BaseScene {
     const { pubkey, loginMethod } = authStore.getState();
     if (!pubkey || loginMethod === 'guest') return;
 
-    const noteContent = `${flavor}\n\n🎣 Just pulled a ${name} (${kg}kg) out of the lake in Nostr District! ✦✦✦\n\n"${lore}"\n\nhttps://www.districtn.online/\n\n#nostrdistrict #fishing`;
+    const noteContent = `${flavor}\n\n🎣 Just pulled a ${name} (${kg}kg) out of the lake in Nostr District! ✦✦✦\n\n"${lore}"\n\nhttps://thedistrict.online/\n\n#nostrdistrict #fishing`;
 
     const overlay = document.createElement('div');
     overlay.style.cssText = `position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);font-family:'Courier New',monospace;`;
