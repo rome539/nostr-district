@@ -13,7 +13,8 @@ import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync } from '../nostr/nostrService';
+import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
+import { authStore } from '../stores/authStore';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange,
@@ -93,6 +94,7 @@ export class WoodsScene extends BaseScene {
   private fishingTimer = 0;
   private fishingBiteMs = 0;
   private fishingBobPhase = 0;
+  private fishingCastDist = 0;   // random offset for bobber X each cast
   private dockPromptBg!: Phaser.GameObjects.Graphics;
   private dockPromptText!: Phaser.GameObjects.Text;
   private dockPromptArrow!: Phaser.GameObjects.Text;
@@ -1234,15 +1236,20 @@ export class WoodsScene extends BaseScene {
     { name: 'speckled sunfish',             kg: '0.3', rare: false, junk: false },
     { name: 'lake minnow',                  kg: '0.1', rare: false, junk: false },
     { name: 'striped dace',                 kg: '0.6', rare: false, junk: false },
+    { name: 'green sunperch',              kg: '0.5', rare: false, junk: false },
+    { name: 'whiskered loach',             kg: '0.3', rare: false, junk: false },
+    { name: 'spotted rudd',               kg: '0.7', rare: false, junk: false },
+    { name: 'common bream',               kg: '1.2', rare: false, junk: false },
     // Rare
-    { name: 'darkwater bass',               kg: '2.3', rare: true,  junk: false },
-    { name: 'luminous eel',                 kg: '0.5', rare: true,  junk: false },
-    { name: 'crystal perch',                kg: '3.1', rare: true,  junk: false },
-    { name: 'ghost pike',                   kg: '4.2', rare: true,  junk: false },
-    { name: 'midnight sturgeon',            kg: '6.8', rare: true,  junk: false },
-    { name: 'starscale koi',                kg: '1.1', rare: true,  junk: false },
-    { name: 'abyssal anglerfish',           kg: '2.7', rare: true,  junk: false },
-    { name: 'ancient goldfish',             kg: '0.9', rare: true,  junk: false },
+    { name: 'darkwater bass',      kg: '2.3', rare: true, junk: false, lore: 'It only surfaces when the moon is hidden. Its scales absorb light rather than reflect it.' },
+    { name: 'luminous eel',        kg: '0.5', rare: true, junk: false, lore: 'Locals once used them as lanterns. They stopped when the eels started remembering the way home.' },
+    { name: 'crystal perch',       kg: '3.1', rare: true, junk: false, lore: 'Almost completely transparent. You can see its heart beating through its chest, slow and deliberate.' },
+    { name: 'ghost pike',          kg: '4.2', rare: true, junk: false, lore: 'Other fish scatter when it passes. The dock cat refuses to eat it. You almost put it back.' },
+    { name: 'midnight sturgeon',   kg: '6.8', rare: true, junk: false, lore: 'Ancient and patient. It has outlived everyone who ever fished this lake. You wonder if it let you catch it.' },
+    { name: 'starscale koi',       kg: '1.1', rare: true, junk: false, lore: 'Its scales map the night sky — every constellation perfectly arranged, slowly shifting as the real stars move.' },
+    { name: 'abyssal anglerfish',  kg: '2.7', rare: true, junk: false, lore: 'The lake is not supposed to be deep enough for this. You decide not to think about that too long.' },
+    { name: 'ancient goldfish',    kg: '0.9', rare: true, junk: false, lore: 'Carnival goldfish live two years. This one has rings like a tree. You count thirty-seven.' },
+    { name: 'love letter',         kg: '0.0', rare: true, junk: false, lore: 'Sealed in a glass vial, perfectly dry. No signature. You put it in your pocket and don\'t say why.' },
     // Junk
     { name: 'old boot',                     kg: '?',   rare: false, junk: true  },
     { name: 'soggy message in a bottle',    kg: '0.3', rare: false, junk: true  },
@@ -1251,9 +1258,9 @@ export class WoodsScene extends BaseScene {
     { name: 'tangled fishing line',         kg: '?',   rare: false, junk: true  },
     { name: 'broken lantern',               kg: '?',   rare: false, junk: true  },
     // Legendary
-    { name: 'ostrich',                      kg: '63.5', rare: false, junk: false, legendary: true },
-    { name: 'golden satoshi coin',          kg: '0.01', rare: false, junk: false, legendary: true },
-    { name: 'enchanted trident',            kg: '8.4', rare: false, junk: false, legendary: true },
+    { name: 'ostrich',             kg: '63.5', rare: false, junk: false, legendary: true, flavor: '🪶 Something enormous thrashed at the end of the line. It wasn\'t a fish.', lore: 'They say an ostrich fell into the lake decades ago during a traveling circus that passed through the district. No one believed it survived down there — until now.' },
+    { name: 'golden satoshi coin', kg: '0.01', rare: false, junk: false, legendary: true, flavor: '🪙 The line went taut on something tiny but impossibly heavy. It glowed when it broke the surface.', lore: 'An ancient coin stamped with the letter ₿, cold to the touch and humming faintly. The old-timers say Satoshi himself tossed it into the lake the night the district was founded, a blessing for whoever found it.' },
+    { name: 'enchanted trident',   kg: '8.4', rare: false, junk: false, legendary: true, flavor: '🔱 The water split apart as something rose on its own, the fishing line barely holding it back.', lore: 'The handle is wrapped in kelp that never dries and the prongs glow faintly under moonlight. Legend has it the lake spirit forged it to guard the deepest waters — and it chose to let you take it.' },
   ] as const;
 
   private updateDockTipProximity(): void {
@@ -1289,7 +1296,7 @@ export class WoodsScene extends BaseScene {
     const gripY = this.player.y - 18;
     const rodTipX = this.player.x - 20;
     const rodTipY = this.player.y - 52;
-    const bobberX = DOCK_X - 22;
+    const bobberX = DOCK_X - this.fishingCastDist;
 
     this.fishingBobPhase += delta * 0.002;
     const isBite = this.fishingState === 'bite';
@@ -1369,8 +1376,8 @@ export class WoodsScene extends BaseScene {
       this.fishingTimer = 0;
       this.fishingBiteMs = 4000 + Math.random() * 12000;
       this.fishingBobPhase = 0;
-      this.chatUI.addMessage('system', '* casts line into the dark water...', WOODS_ACCENT);
-      sendChat('* casts a fishing line');
+      this.fishingCastDist = 30 + Math.random() * 80;  // 30–110px out from dock edge
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, '* casts a line...', WOODS_ACCENT, 3000);
     } else if (this.fishingState === 'bite') {
       this.reelIn();
     } else {
@@ -1407,9 +1414,88 @@ export class WoodsScene extends BaseScene {
           ? `* hooked a ${catch_.name} (${catch_.kg}kg)! ✦`
           : `* caught a ${catch_.name} (${catch_.kg}kg)`;
     const color = isLegendary ? '#ffd700' : catch_.rare ? '#aaff44' : WOODS_ACCENT;
-    this.chatUI.addMessage('system', msg, color);
     sendChat(msg);
+    if (catch_.rare && !isLegendary && 'lore' in catch_) {
+      this.time.delayedCall(600, () => {
+        this.chatUI.addMessage('system', `"${catch_.lore}"`, '#7a9a7a');
+      });
+    }
+    if (isLegendary) {
+      const flavor = 'flavor' in catch_ ? catch_.flavor : '';
+      const lore = 'lore' in catch_ ? catch_.lore : '';
+      this.showLegendaryPostPrompt(catch_.name, catch_.kg, flavor, lore);
+    }
     this.resetFishingState();
+  }
+
+  private showLegendaryPostPrompt(name: string, kg: string, flavor: string, lore: string): void {
+    const { pubkey, loginMethod } = authStore.getState();
+    if (!pubkey || loginMethod === 'guest') return;
+
+    const noteContent = `${flavor}\n\n🎣 Just pulled a ${name} (${kg}kg) out of the lake in Nostr District! ✦✦✦\n\n"${lore}"\n\nhttps://www.districtn.online/\n\n#nostrdistrict #fishing`;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);font-family:'Courier New',monospace;`;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `background:#0a0a1a;border:2px solid #ffd700;border-radius:12px;padding:24px 28px;max-width:420px;width:90vw;text-align:center;box-shadow:0 0 40px rgba(255,215,0,0.2);`;
+
+    const title = document.createElement('div');
+    title.style.cssText = `color:#ffd700;font-size:18px;font-weight:bold;margin-bottom:8px;`;
+    title.textContent = '✦ LEGENDARY CATCH ✦';
+
+    const desc = document.createElement('div');
+    desc.style.cssText = `color:#f5e8d0;font-size:14px;margin-bottom:12px;line-height:1.5;`;
+    desc.textContent = `You pulled a ${name} (${kg}kg) out of the lake!`;
+
+    const loreEl = document.createElement('div');
+    loreEl.style.cssText = `color:#c0a860;font-size:12px;font-style:italic;margin-bottom:16px;line-height:1.6;padding:0 8px;`;
+    loreEl.textContent = `"${lore}"`;
+
+    const notePreview = document.createElement('div');
+    notePreview.style.cssText = `color:#777;font-size:11px;margin-bottom:16px;background:#111;border-radius:6px;padding:10px 12px;text-align:left;line-height:1.6;white-space:pre-wrap;border:1px solid #222;`;
+    notePreview.textContent = noteContent;
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = `display:flex;gap:10px;justify-content:center;`;
+
+    const postBtn = document.createElement('button');
+    postBtn.textContent = 'Post to Nostr';
+    postBtn.style.cssText = `background:#ffd700;color:#0a0a1a;border:none;border-radius:6px;padding:10px 20px;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;cursor:pointer;`;
+    postBtn.addEventListener('click', async () => {
+      postBtn.textContent = 'Posting...';
+      postBtn.style.opacity = '0.6';
+      try {
+        const event = await signEvent({
+          kind: 1,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [['client', 'Nostr District'], ['t', 'nostrdistrict'], ['t', 'fishing']],
+          content: noteContent,
+        });
+        const ok = await publishEvent(event);
+        postBtn.textContent = ok ? 'Posted!' : 'Failed';
+        setTimeout(() => overlay.remove(), 1200);
+      } catch {
+        postBtn.textContent = 'Failed';
+        setTimeout(() => overlay.remove(), 1200);
+      }
+    });
+
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = 'Skip';
+    skipBtn.style.cssText = `background:none;border:1px solid #444;color:#888;border-radius:6px;padding:10px 20px;font-family:'Courier New',monospace;font-size:13px;cursor:pointer;`;
+    skipBtn.addEventListener('click', () => overlay.remove());
+
+    btnRow.appendChild(postBtn);
+    btnRow.appendChild(skipBtn);
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(loreEl);
+    modal.appendChild(notePreview);
+    modal.appendChild(btnRow);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
   }
 
   private cancelFishing(): void {
