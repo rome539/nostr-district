@@ -16,7 +16,7 @@ export interface AvatarConfig {
   hatColor: string;
   accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring';
   accessoryColor: string;
-  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow';
+  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart';
   eyeColor: string;
 }
 
@@ -81,7 +81,7 @@ export const AVATAR_OPTIONS = {
   bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls', 'leggings', 'jeans', 'miniskirt'] as const,
   hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy'] as const,
   accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones', 'watch', 'mask', 'monocle', 'ring'] as const,
-  eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow'] as const,
+  eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross', 'glow', 'heart'] as const,
 };
 
 // ── Outfit presets ────────────────────────────────────────────────────────────

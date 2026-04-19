@@ -527,7 +527,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(4, oY + 14, 16, 4);
     x.fillRect(4, oY + 18, 16, 10);
     x.fillRect(6, oY + 28, 12, 2);
-    x.fillRect(8, oY + 10, 8, 4);
+    x.fillRect(7, oY + 10, 10, 4);
     x.fillStyle = a.skinColor;
     x.fillRect(4, oY + 18, 2, 10);
     x.fillRect(18, oY + 18, 2, 10);
@@ -940,16 +940,17 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
   switch (acc) {
     case 'glasses':
       x.globalAlpha = 0.8;
-      x.fillRect(cx - 1 * s, hy + 3 * s, 1 * s, 0.5 * s);
-      x.fillRect(cx + 0.5 * s, hy + 3 * s, 1 * s, 0.5 * s);
-      x.fillRect(cx - 0.5 * s, hy + 3 * s, 1 * s, 0.5 * s);
+      x.fillRect(cx - 1 * s,   hy + 3 * s + 1, 1 * s, 0.5 * s);
+      x.fillRect(cx + 0.5 * s, hy + 3 * s + 1, 1 * s, 0.5 * s);
+      x.fillRect(cx - 0.5 * s, hy + 3 * s + 1, 1 * s, 0.5 * s);
       x.globalAlpha = 1;
       break;
     case 'sunglasses':
       x.globalAlpha = 0.9;
-      x.fillRect(cx - 1.5 * s, hy + 2.5 * s, 1.5 * s, 1 * s);
-      x.fillRect(cx + 0.5 * s, hy + 2.5 * s, 1.5 * s, 1 * s);
-      x.fillRect(cx - 0.5 * s, hy + 2.5 * s, 1 * s, 0.5 * s);
+      x.fillRect(cx - 1.5 * s, hy + 2.5 * s + 1, 1.5 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s - 1, hy + 2.5 * s + 1, 1, 1);
+      x.fillRect(cx + 0.5 * s, hy + 2.5 * s + 1, 1.5 * s, 1 * s);
+      x.fillRect(cx - 0.5 * s, hy + 2.5 * s + 1, 1 * s, 0.5 * s);
       x.globalAlpha = 1;
       break;
     case 'bandana': {
@@ -1039,11 +1040,11 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
     case 'monocle':
       // Single-lens monocle over left eye + thin chain
       x.globalAlpha = 0.85;
-      x.fillRect(cx - 1.5 * s, hy + 2.5 * s, 1.5 * s, 1.5 * s); // lens frame
+      x.fillRect(cx - 1.5 * s, hy + 2.5 * s + 1, 1.5 * s, 1.5 * s); // lens frame
       x.fillStyle = lighten(savedColor, 35); x.globalAlpha = 0.4;
-      x.fillRect(cx - 1.5 * s, hy + 2.5 * s, 0.5 * s, 0.5 * s);  // lens glint
+      x.fillRect(cx - 1.5 * s, hy + 2.5 * s + 1, 0.5 * s, 0.5 * s);  // lens glint
       x.fillStyle = savedColor; x.globalAlpha = 0.55;
-      x.fillRect(cx - 0.5 * s, hy + 4 * s,   0.25 * s, 1.5 * s); // chain
+      x.fillRect(cx - 0.5 * s, hy + 4 * s + 1,   0.25 * s, 1.5 * s); // chain
       x.globalAlpha = 1;
       break;
     case 'ring': {
@@ -1198,16 +1199,18 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
   x.fillStyle = col;
   switch (a.eyes) {
     case 'wide':
+      // 2x2 blocks at cols 7-8 and 11-12, gap at 9-10
       x.globalAlpha = 0.85;
-      x.fillRect(cx - 2, ey - 1, 2, 2);
-      x.fillRect(cx + 1, ey - 1, 2, 2);
+      x.fillRect(cx - 3, ey, 2, 2);
+      x.fillRect(cx + 1, ey, 2, 2);
       break;
     case 'angry':
+      // pupils at ey+1, brows shifted outward (cols 7-8 / 11-12) for symmetric V
       x.globalAlpha = 0.75;
-      x.fillRect(cx - 2, ey, 1, 1);
-      x.fillRect(cx + 1, ey, 1, 1);
-      x.fillRect(cx - 2, ey - 2, 2, 1);
-      x.fillRect(cx + 1, ey - 2, 2, 1);
+      x.fillRect(cx - 2, ey + 1, 1, 1);
+      x.fillRect(cx + 1, ey + 1, 1, 1);
+      x.fillRect(cx - 3, ey,     2, 1);
+      x.fillRect(cx + 1, ey,     2, 1);
       break;
     case 'happy':
       x.globalAlpha = 0.75;
@@ -1215,29 +1218,79 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
       x.fillRect(cx + 1, ey + 1, 2, 1);
       break;
     case 'wink':
+      // Left: 2x2 open square; right: horizontal line (the wink)
       x.globalAlpha = 0.9;
-      x.fillRect(cx + 1, ey - 1, 1, 2);
-      x.fillRect(cx - 2, ey, 2, 1);
+      x.fillRect(cx - 3, ey,     2, 2);  // open eye: cols 7-8, rows ey..ey+1
+      x.fillRect(cx + 1, ey + 1, 2, 1);  // wink line: cols 11-12, row ey+1
       break;
     case 'star':
+      // Plus-sign centered at col 7 and col 12 (1px outward from default pupils)
+      // This puts left eye at cols 6-8 and right at cols 11-13 with a clean gap
       x.globalAlpha = 0.9;
-      x.fillRect(cx - 2, ey + 1, 2, 1);
-      x.fillRect(cx - 1, ey, 1, 3);
-      x.fillRect(cx + 1, ey + 1, 2, 1);
-      x.fillRect(cx + 2, ey, 1, 3);
+      x.fillRect(cx - 3, ey,     1, 3);  // left vert: col 7
+      x.fillRect(cx - 4, ey + 1, 3, 1);  // left horiz: cols 6-8
+      x.fillRect(cx + 2, ey,     1, 3);  // right vert: col 12
+      x.fillRect(cx + 1, ey + 1, 3, 1);  // right horiz: cols 11-13
       break;
     case 'hollow':
+      // 3x3 ring centered at col 7 and col 12 — gap between eyes shows naturally
       x.globalAlpha = 0.85;
-      x.fillRect(cx - 2, ey - 1, 2, 2);
-      x.fillRect(cx + 1, ey - 1, 2, 2);
-      x.fillStyle = a.skinColor;
-      x.fillRect(cx - 1, ey, 1, 1);
-      x.fillRect(cx + 2, ey, 1, 1);
+      x.fillRect(cx - 4, ey,     3, 1);  // left top: cols 6-8
+      x.fillRect(cx - 4, ey + 1, 1, 1);  // left side: col 6
+      x.fillRect(cx - 2, ey + 1, 1, 1);  // left side: col 8
+      x.fillRect(cx - 4, ey + 2, 3, 1);  // left bottom: cols 6-8
+      x.fillRect(cx + 1, ey,     3, 1);  // right top: cols 11-13
+      x.fillRect(cx + 1, ey + 1, 1, 1);  // right side: col 11
+      x.fillRect(cx + 3, ey + 1, 1, 1);  // right side: col 13
+      x.fillRect(cx + 1, ey + 2, 3, 1);  // right bottom: cols 11-13
+      break;
+    case 'sleepy':
+      // 3-wide bar (wider than happy's 2-wide) at cols 6-8 and 11-13
+      x.globalAlpha = 0.75;
+      x.fillRect(cx - 4, ey + 1, 3, 1);
+      x.fillRect(cx + 1, ey + 1, 3, 1);
+      break;
+    case 'cross':
+      // X centered at col 7 and col 12 — diagonals at cols 6,8 and 11,13 (no merge)
+      x.globalAlpha = 0.85;
+      x.fillRect(cx - 4, ey,     1, 1); x.fillRect(cx - 2, ey,     1, 1);
+      x.fillRect(cx - 3, ey + 1, 1, 1);
+      x.fillRect(cx - 4, ey + 2, 1, 1); x.fillRect(cx - 2, ey + 2, 1, 1);
+      x.fillRect(cx + 1, ey,     1, 1); x.fillRect(cx + 3, ey,     1, 1);
+      x.fillRect(cx + 2, ey + 1, 1, 1);
+      x.fillRect(cx + 1, ey + 2, 1, 1); x.fillRect(cx + 3, ey + 2, 1, 1);
+      break;
+    case 'glow':
+      // 1px bright pupil + faint halo around each pupil
+      x.globalAlpha = 1;
+      x.fillRect(cx - 2, ey + 1, 1, 1);
+      x.fillRect(cx + 1, ey + 1, 1, 1);
+      x.globalAlpha = 0.3;
+      // left halo
+      x.fillRect(cx - 3, ey + 1, 1, 1);
+      x.fillRect(cx - 1, ey + 1, 1, 1);
+      x.fillRect(cx - 2, ey,     1, 1);
+      x.fillRect(cx - 2, ey + 2, 1, 1);
+      // right halo
+      x.fillRect(cx,     ey + 1, 1, 1);
+      x.fillRect(cx + 2, ey + 1, 1, 1);
+      x.fillRect(cx + 1, ey,     1, 1);
+      x.fillRect(cx + 1, ey + 2, 1, 1);
+      break;
+    case 'heart':
+      // Heart centered at col 7 and col 12 — body at cols 6-8 and 11-13 (no merge)
+      x.globalAlpha = 0.9;
+      x.fillRect(cx - 4, ey,     1, 1); x.fillRect(cx - 2, ey,     1, 1);
+      x.fillRect(cx - 4, ey + 1, 3, 1);
+      x.fillRect(cx - 3, ey + 2, 1, 1);
+      x.fillRect(cx + 1, ey,     1, 1); x.fillRect(cx + 3, ey,     1, 1);
+      x.fillRect(cx + 1, ey + 1, 3, 1);
+      x.fillRect(cx + 2, ey + 2, 1, 1);
       break;
     default:
       x.globalAlpha = 0.7;
-      x.fillRect(cx - 2, ey, 1, 1);
-      x.fillRect(cx + 1, ey, 1, 1);
+      x.fillRect(cx - 2, ey + 1, 1, 1);
+      x.fillRect(cx + 1, ey + 1, 1, 1);
   }
   x.globalAlpha = 1;
 }
@@ -1258,8 +1311,8 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       x.globalAlpha = 0.8;
       x.fillRect(7, oY + 5, 2, 2);
       x.fillRect(14, oY + 5, 2, 2);
-      x.fillRect(7, oY + 3, 3, 1);
-      x.fillRect(13, oY + 3, 3, 1);
+      x.fillRect(7, oY + 4, 3, 1);
+      x.fillRect(13, oY + 4, 3, 1);
       break;
     case 'happy':
       x.globalAlpha = 0.8;
@@ -1285,6 +1338,50 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       x.fillStyle = a.skinColor;
       x.fillRect(7, oY + 5, 2, 2);
       x.fillRect(15, oY + 5, 2, 2);
+      break;
+    case 'sleepy':
+      x.globalAlpha = 0.8;
+      x.fillRect(6, oY + 5, 4, 1);
+      x.fillRect(14, oY + 5, 4, 1);
+      // tiny lashes beneath
+      x.globalAlpha = 0.5;
+      x.fillRect(7, oY + 6, 1, 1);
+      x.fillRect(9, oY + 6, 1, 1);
+      x.fillRect(15, oY + 6, 1, 1);
+      x.fillRect(17, oY + 6, 1, 1);
+      break;
+    case 'cross':
+      x.globalAlpha = 0.85;
+      // left X (3x3)
+      x.fillRect(6, oY + 4, 1, 1); x.fillRect(8, oY + 4, 1, 1);
+      x.fillRect(7, oY + 5, 1, 1);
+      x.fillRect(6, oY + 6, 1, 1); x.fillRect(8, oY + 6, 1, 1);
+      // right X
+      x.fillRect(14, oY + 4, 1, 1); x.fillRect(16, oY + 4, 1, 1);
+      x.fillRect(15, oY + 5, 1, 1);
+      x.fillRect(14, oY + 6, 1, 1); x.fillRect(16, oY + 6, 1, 1);
+      break;
+    case 'glow':
+      // Default 2x2 pupils with tight cardinal ring
+      x.globalAlpha = 1;
+      x.fillRect(7,  oY + 5, 2, 2);
+      x.fillRect(14, oY + 5, 2, 2);
+      x.globalAlpha = 0.3;
+      x.fillRect(7,  oY + 4, 2, 1); x.fillRect(7,  oY + 7, 2, 1);
+      x.fillRect(6,  oY + 5, 1, 2); x.fillRect(9,  oY + 5, 1, 2);
+      x.fillRect(14, oY + 4, 2, 1); x.fillRect(14, oY + 7, 2, 1);
+      x.fillRect(13, oY + 5, 1, 2); x.fillRect(16, oY + 5, 1, 2);
+      break;
+    case 'heart':
+      x.globalAlpha = 0.9;
+      // left heart (3x3): two bumps on top row, full middle row, point at bottom
+      x.fillRect(6, oY + 4, 1, 1); x.fillRect(8, oY + 4, 1, 1);
+      x.fillRect(6, oY + 5, 3, 1);
+      x.fillRect(7, oY + 6, 1, 1);
+      // right heart
+      x.fillRect(14, oY + 4, 1, 1); x.fillRect(16, oY + 4, 1, 1);
+      x.fillRect(14, oY + 5, 3, 1);
+      x.fillRect(15, oY + 6, 1, 1);
       break;
     default:
       x.globalAlpha = 0.7;
