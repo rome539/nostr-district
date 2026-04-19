@@ -1217,7 +1217,7 @@ export abstract class BaseScene extends Phaser.Scene {
 
     const btnSize = Math.round(Math.min(64, Math.max(48, window.innerWidth * 0.14)));
     const gap     = Math.max(6, Math.round(btnSize * 0.14));
-    const margin  = Math.round(window.innerWidth * 0.03);
+    const margin  = Math.round(Math.max(16, window.innerWidth * 0.055));
 
     // Tell ChatUI how much horizontal space the button groups occupy
     document.documentElement.style.setProperty('--nd-ctrl-offset', `${btnSize + margin + 6}px`);
@@ -1264,14 +1264,14 @@ export abstract class BaseScene extends Phaser.Scene {
     // Left group: ▲ (top) + ◀ (bottom) — interact accessible for left-handed players
     const leftWrap = document.createElement('div');
     leftWrap.id = 'nd-mobile-controls';
-    leftWrap.style.cssText = `position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:${margin}px;display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+    leftWrap.style.cssText = `position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + ${margin}px);display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
     leftWrap.appendChild(upBtnL);
     leftWrap.appendChild(leftBtn);
 
     // Right group: ▶ (top) + ▲ (bottom) — interact accessible for right-handed players
     const rightWrap = document.createElement('div');
     rightWrap.id = 'nd-mobile-controls-r';
-    rightWrap.style.cssText = `position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);right:${margin}px;display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+    rightWrap.style.cssText = `position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + ${margin}px);display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
     rightWrap.appendChild(upBtnR);
     rightWrap.appendChild(rightBtn);
 

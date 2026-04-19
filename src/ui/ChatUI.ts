@@ -238,31 +238,37 @@ export class ChatUI {
       const worldX = bx;
       const worldY = by - 16;
       const wrap = document.createElement('div');
-      wrap.style.cssText = `position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity 0.2s ease;transform:translateX(-50%) translateY(-100%);`;
+      wrap.style.cssText = `position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity 0.2s ease;transform:translate(-50%,-100%);will-change:left,top;`;
       const img = document.createElement('img');
       img.src = gifSrcAttr(text.trim());
       img.style.cssText = `max-width:120px;max-height:80px;border-radius:6px;display:block;border:2px solid ${tint}88;box-shadow:0 2px 12px rgba(0,0,0,0.7);`;
-      img.onerror = () => { cleanup(); wrap.remove(); };
+      img.onerror = () => { alive = false; wrap.remove(); };
       wrap.appendChild(img);
       document.body.appendChild(wrap);
 
+      let alive = true;
+      let rafId = 0;
       const updatePos = () => {
+        if (!alive) return;
         const cam = scene.cameras.main;
         const canvas = scene.sys.game.canvas;
         const rect = canvas.getBoundingClientRect();
         const scaleX = rect.width / canvas.width;
         const scaleY = rect.height / canvas.height;
-        wrap.style.left = `${rect.left + (worldX - cam.scrollX) * cam.zoom * scaleX}px`;
-        wrap.style.top  = `${rect.top  + (worldY - cam.scrollY) * cam.zoom * scaleY}px`;
+        const sx = (worldX - cam.worldView.x) * cam.zoom + cam.x;
+        const sy = (worldY - cam.worldView.y) * cam.zoom + cam.y;
+        wrap.style.left = `${rect.left + sx * scaleX}px`;
+        wrap.style.top  = `${rect.top  + sy * scaleY}px`;
+        rafId = requestAnimationFrame(updatePos);
       };
 
       const cleanup = () => {
-        scene.events.off('prerender', updatePos);
-        scene.events.off('shutdown', cleanup);
+        alive = false;
+        cancelAnimationFrame(rafId);
+        scene.events.off(Phaser.Scenes.Events.SHUTDOWN, cleanup);
       };
 
-      scene.events.on('prerender', updatePos);
-      scene.events.once('shutdown', cleanup);
+      scene.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
       updatePos();
       requestAnimationFrame(() => { wrap.style.opacity = '1'; });
       setTimeout(() => {
@@ -282,7 +288,7 @@ export class ChatUI {
       const wrap = document.createElement('div');
       wrap.style.cssText = `
         position:fixed;z-index:200;pointer-events:none;opacity:0;
-        transition:opacity 0.2s ease;transform:translateX(-50%) translateY(-100%);
+        transition:opacity 0.2s ease;transform:translate(-50%,-100%);will-change:left,top;
         background:#0a0014cc;border-radius:6px;padding:4px 8px;
         font-family:'Courier New',monospace;font-size:12px;color:${tint};
         max-width:200px;text-align:center;line-height:1.5;
@@ -291,23 +297,29 @@ export class ChatUI {
       wrap.innerHTML = rendered;
       document.body.appendChild(wrap);
 
+      let alive = true;
+      let rafId = 0;
       const updatePos = () => {
+        if (!alive) return;
         const cam    = scene.cameras.main;
         const canvas = scene.sys.game.canvas;
         const rect   = canvas.getBoundingClientRect();
         const scaleX = rect.width  / canvas.width;
         const scaleY = rect.height / canvas.height;
-        wrap.style.left = `${rect.left + (worldX - cam.scrollX) * cam.zoom * scaleX}px`;
-        wrap.style.top  = `${rect.top  + (worldY - cam.scrollY) * cam.zoom * scaleY}px`;
+        const sx = (worldX - cam.worldView.x) * cam.zoom + cam.x;
+        const sy = (worldY - cam.worldView.y) * cam.zoom + cam.y;
+        wrap.style.left = `${rect.left + sx * scaleX}px`;
+        wrap.style.top  = `${rect.top  + sy * scaleY}px`;
+        rafId = requestAnimationFrame(updatePos);
       };
 
       const cleanup = () => {
-        scene.events.off('prerender', updatePos);
-        scene.events.off('shutdown', cleanup);
+        alive = false;
+        cancelAnimationFrame(rafId);
+        scene.events.off(Phaser.Scenes.Events.SHUTDOWN, cleanup);
       };
 
-      scene.events.on('prerender', updatePos);
-      scene.events.once('shutdown', cleanup);
+      scene.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
       updatePos();
       requestAnimationFrame(() => { wrap.style.opacity = '1'; });
       setTimeout(() => {
