@@ -1272,8 +1272,8 @@ export abstract class BaseScene extends Phaser.Scene {
     const rightWrap = document.createElement('div');
     rightWrap.id = 'nd-mobile-controls-r';
     rightWrap.style.cssText = `position:fixed;bottom:8px;right:${margin}px;display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
-    rightWrap.appendChild(rightBtn);
     rightWrap.appendChild(upBtnR);
+    rightWrap.appendChild(rightBtn);
 
     document.body.appendChild(leftWrap);
     document.body.appendChild(rightWrap);
