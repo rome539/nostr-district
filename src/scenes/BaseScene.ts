@@ -1217,7 +1217,7 @@ export abstract class BaseScene extends Phaser.Scene {
 
     const btnSize = Math.round(Math.min(52, window.innerWidth * 0.11));
     const gap     = Math.max(4, Math.round(btnSize * 0.1));
-    const margin  = 4;
+    const margin  = Math.round(window.innerWidth * 0.04);
 
     // Tell ChatUI how much horizontal space the button groups occupy
     document.documentElement.style.setProperty('--nd-ctrl-offset', `${btnSize + margin * 2 + 2}px`);
