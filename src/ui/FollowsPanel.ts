@@ -56,6 +56,7 @@ export class FollowsPanel {
   private loaded        = false;
   private activeTab:    'follows' | 'online' = 'follows';
   private onlineProfileCache = new Map<string, string>(); // pubkey → picture url
+  private pollTimer:    ReturnType<typeof setInterval> | null = null;
 
   constructor() { this.injectStyles(); _panelInstance = this; }
 
@@ -85,12 +86,19 @@ export class FollowsPanel {
 
     if (!this.loaded) this.load();
     else requestOnlinePlayers();
+
+    // Poll the server for online players while the panel is open so joins/leaves
+    // show up within ~5s without requiring a manual refresh.
+    if (this.pollTimer === null) {
+      this.pollTimer = setInterval(() => { if (this.isOpen) requestOnlinePlayers(); }, 5000);
+    }
   }
 
   close(): void {
     this.container?.classList.remove('fp-open');
     this.isOpen = false;
     setOnlinePlayersHandler(null);
+    if (this.pollTimer !== null) { clearInterval(this.pollTimer); this.pollTimer = null; }
   }
 
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
@@ -126,6 +134,7 @@ export class FollowsPanel {
 
   destroy(): void {
     setOnlinePlayersHandler(null);
+    if (this.pollTimer !== null) { clearInterval(this.pollTimer); this.pollTimer = null; }
     this.container?.remove();
     this.container = null;
   }
