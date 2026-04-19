@@ -1211,29 +1211,31 @@ export abstract class BaseScene extends Phaser.Scene {
     if (!this.sys.game.device.input.touch) return;
     // Remove any stale controls left by a previous scene visit
     document.getElementById('nd-mobile-controls')?.remove();
+    document.getElementById('nd-mobile-controls-r')?.remove();
     this.mobileLeft  = false;
     this.mobileRight = false;
 
-    const btnSize = Math.round(Math.min(64, window.innerWidth * 0.13));
-    const gap     = Math.max(6, Math.round(btnSize * 0.18));
+    const btnSize = Math.round(Math.min(52, window.innerWidth * 0.11));
+    const gap     = Math.max(4, Math.round(btnSize * 0.1));
+    const margin  = 4;
 
-    const wrap = document.createElement('div');
-    wrap.id = 'nd-mobile-controls';
-    wrap.style.cssText = `position:fixed;bottom:${68 + gap}px;left:50%;transform:translateX(-50%);display:flex;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+    // Tell ChatUI how much horizontal space the button groups occupy
+    document.documentElement.style.setProperty('--nd-ctrl-offset', `${btnSize + margin * 2 + 2}px`);
 
     const makeBtn = (label: string): HTMLButtonElement => {
       const b = document.createElement('button');
       b.textContent = label;
-      b.style.cssText = `width:${btnSize}px;height:${btnSize}px;background:rgba(10,0,20,0.65);border:1.5px solid rgba(155,127,232,0.35);border-radius:${Math.round(btnSize * 0.22)}px;color:rgba(200,168,255,0.85);font-size:${Math.round(btnSize * 0.44)}px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;line-height:1;padding:0;font-family:monospace;`;
+      b.style.cssText = `width:${btnSize}px;height:${btnSize}px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1.5px solid color-mix(in srgb,var(--nd-dpurp) 55%,transparent);border-radius:${Math.round(btnSize * 0.22)}px;color:var(--nd-text);font-size:${Math.round(btnSize * 0.44)}px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;line-height:1;padding:0;font-family:monospace;`;
       return b;
     };
 
     const leftBtn  = makeBtn('◀');
-    const upBtn    = makeBtn('▲');
+    const upBtnL   = makeBtn('▲'); // left side — for left-handed players
     const rightBtn = makeBtn('▶');
+    const upBtnR   = makeBtn('▲'); // right side — for right-handed players
 
-    const active = (b: HTMLButtonElement) => { b.style.background = 'rgba(93,202,165,0.25)'; b.style.borderColor = 'rgba(93,202,165,0.7)'; b.style.color = 'rgba(93,202,165,1)'; };
-    const idle   = (b: HTMLButtonElement) => { b.style.background = 'rgba(10,0,20,0.65)'; b.style.borderColor = 'rgba(155,127,232,0.35)'; b.style.color = 'rgba(200,168,255,0.85)'; };
+    const active = (b: HTMLButtonElement) => { b.style.background = 'color-mix(in srgb,var(--nd-accent) 25%,transparent)'; b.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 70%,transparent)'; b.style.color = 'var(--nd-accent)'; };
+    const idle   = (b: HTMLButtonElement) => { b.style.background = 'color-mix(in srgb,black 55%,var(--nd-bg))'; b.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 55%,transparent)'; b.style.color = 'var(--nd-text)'; };
 
     // ◀ Left — touchend also retries audio unlock (touchstart unreliable on iOS)
     leftBtn.addEventListener('touchend',      ()  => { this.snd.unlock(); });
@@ -1250,16 +1252,32 @@ export abstract class BaseScene extends Phaser.Scene {
     rightBtn.addEventListener('pointerleave',  ()  => { this.mobileRight = false; idle(rightBtn); });
 
     // ▲ Interact — fires 'E' key so every scene's keydown-E handler responds
-    upBtn.addEventListener('touchend',      ()  => { this.snd.unlock(); });
-    upBtn.addEventListener('pointerdown',   (e) => { e.preventDefault(); active(upBtn); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', keyCode: 69, bubbles: true, cancelable: true })); });
-    upBtn.addEventListener('pointerup',     () => idle(upBtn));
-    upBtn.addEventListener('pointercancel', () => idle(upBtn));
+    const wireInteract = (btn: HTMLButtonElement) => {
+      btn.addEventListener('touchend',      ()  => { this.snd.unlock(); });
+      btn.addEventListener('pointerdown',   (e) => { e.preventDefault(); active(btn); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', keyCode: 69, bubbles: true, cancelable: true })); });
+      btn.addEventListener('pointerup',     () => idle(btn));
+      btn.addEventListener('pointercancel', () => idle(btn));
+    };
+    wireInteract(upBtnL);
+    wireInteract(upBtnR);
 
-    wrap.appendChild(leftBtn);
-    wrap.appendChild(upBtn);
-    wrap.appendChild(rightBtn);
-    document.body.appendChild(wrap);
-    this.mobileControlsEl = wrap;
+    // Left group: ▲ (top) + ◀ (bottom) — interact accessible for left-handed players
+    const leftWrap = document.createElement('div');
+    leftWrap.id = 'nd-mobile-controls';
+    leftWrap.style.cssText = `position:fixed;bottom:8px;left:${margin}px;display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+    leftWrap.appendChild(upBtnL);
+    leftWrap.appendChild(leftBtn);
+
+    // Right group: ▶ (top) + ▲ (bottom) — interact accessible for right-handed players
+    const rightWrap = document.createElement('div');
+    rightWrap.id = 'nd-mobile-controls-r';
+    rightWrap.style.cssText = `position:fixed;bottom:8px;right:${margin}px;display:flex;flex-direction:column;gap:${gap}px;z-index:900;pointer-events:none;user-select:none;-webkit-user-select:none;`;
+    rightWrap.appendChild(rightBtn);
+    rightWrap.appendChild(upBtnR);
+
+    document.body.appendChild(leftWrap);
+    document.body.appendChild(rightWrap);
+    this.mobileControlsEl = leftWrap;
   }
 
   protected shutdownCommonPanels(): void {
@@ -1295,5 +1313,7 @@ export abstract class BaseScene extends Phaser.Scene {
     clearRoomRequestHandler(this.roomRequestHandler);
     this.mobileControlsEl?.remove();
     this.mobileControlsEl = null;
+    document.getElementById('nd-mobile-controls-r')?.remove();
+    document.documentElement.style.removeProperty('--nd-ctrl-offset');
   }
 }
