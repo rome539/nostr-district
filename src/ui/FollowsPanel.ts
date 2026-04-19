@@ -33,8 +33,10 @@ interface OnlinePlayer {
 const PAGE_SIZE  = 20;
 const META_BATCH = 10;
 
-let _followChangeHandler: (() => void) | null = null;
-export function notifyFollowChange(): void { _followChangeHandler?.(); }
+let _panelInstance: FollowsPanel | null = null;
+export function notifyFollowChange(pubkey?: string, added?: boolean): void {
+  _panelInstance?.applyFollowChange(pubkey, added);
+}
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -55,7 +57,7 @@ export class FollowsPanel {
   private activeTab:    'follows' | 'online' = 'follows';
   private onlineProfileCache = new Map<string, string>(); // pubkey → picture url
 
-  constructor() { this.injectStyles(); }
+  constructor() { this.injectStyles(); _panelInstance = this; }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -81,7 +83,6 @@ export class FollowsPanel {
       if (!this.loading) this.render();
     });
 
-    _followChangeHandler = () => this.refresh();
     if (!this.loaded) this.load();
     else requestOnlinePlayers();
   }
@@ -89,7 +90,6 @@ export class FollowsPanel {
   close(): void {
     this.container?.classList.remove('fp-open');
     this.isOpen = false;
-    _followChangeHandler = null;
     setOnlinePlayersHandler(null);
   }
 
@@ -101,6 +101,27 @@ export class FollowsPanel {
     this.follows = [];
     this.metaQueue = [];
     if (this.isOpen) this.load();
+  }
+
+  /**
+   * Apply a follow/unfollow immediately so the UI reflects the change before
+   * relays propagate the new kind:3. Also invalidates the cache so the next
+   * open re-fetches authoritative state.
+   */
+  applyFollowChange(pubkey?: string, added?: boolean): void {
+    if (pubkey && added === true) {
+      if (!this.follows.some(f => f.pubkey === pubkey)) {
+        this.follows.push({ pubkey, displayName: pubkey.slice(0, 8) + '...', picture: '', nip05: '', metaLoaded: false });
+        this.metaQueue.push(pubkey);
+        this.fetchNextBatch();
+      }
+    } else if (pubkey && added === false) {
+      this.follows = this.follows.filter(f => f.pubkey !== pubkey);
+    }
+    // Force a relay re-fetch next time the panel opens, so we pick up the
+    // authoritative kind:3 once it propagates.
+    this.loaded = false;
+    if (this.isOpen) this.render();
   }
 
   destroy(): void {
