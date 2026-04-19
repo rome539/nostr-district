@@ -113,7 +113,7 @@ export function connectPresence(cb: PresenceCallback): void {
   try {
     ws = new WebSocket(
   import.meta.env.PROD
-    ? 'wss://nostr-district-production.up.railway.app'
+    ? 'wss://relay.thedistrict.online'
     : 'ws://localhost:3100'
 );
   } catch (e) {
