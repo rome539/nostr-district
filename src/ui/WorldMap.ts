@@ -62,6 +62,7 @@ export class WorldMap {
       ['wm-hub',   'hub'],
       ['wm-alley', 'alley'],
       ['wm-rooms', 'rooms'],
+      // wm-boat and wm-door are placeholders — no thumbnails yet
     ];
     for (const [id, zone] of thumbZones) {
       const node = this.svgEl.querySelector(`#${id}`) as SVGGElement | null;
@@ -101,29 +102,32 @@ export class WorldMap {
   }
 
   private buildSVG(): string {
-    // viewBox 310×232 — nodes 100×56, padded for corner brackets
-    // Left col:  x=30,  cx=80  (cabin, woods)
-    // Right col: x=180, cx=230 (rooms, hub, alley)
-    const node = (id: string, label: string, icon: string, x: number, y: number, iconStyle = '') => `
-      <g class="wm-node" id="${id}">
-        <rect x="${x}" y="${y}" width="100" height="56" rx="6" class="wm-node-bg"/>
-        <image class="wm-thumb-img" x="${x}" y="${y}" width="100" height="56"
+    // viewBox 470×218 — nodes 80×46, padded for corner brackets
+    // Col 1 (boat):            x=30,  cx=70
+    // Col 2 (cabin/woods):     x=140, cx=180
+    // Col 3 (rooms/hub/alley): x=250, cx=290
+    // Col 4 (east/door ?):     x=360, cx=400
+    // Rows: y=20 (cabin/rooms), 86 (boat/woods/hub/east), 152 (alley/door)
+    const node = (id: string, label: string, icon: string, x: number, y: number, iconStyle = '', soon = false) => `
+      <g class="wm-node${soon ? ' wm-node-soon' : ''}" id="${id}">
+        <rect x="${x}" y="${y}" width="80" height="46" rx="5" class="wm-node-bg"/>
+        <image class="wm-thumb-img" x="${x}" y="${y}" width="80" height="46"
                clip-path="url(#wm-clip-${id.replace('wm-','')})" preserveAspectRatio="xMidYMid slice" href=""/>
-        <rect x="${x}" y="${y}" width="100" height="56" rx="6" class="wm-thumb-overlay" fill="url(#wm-thumb-fade)"/>
-        <rect x="${x}" y="${y + 38}" width="100" height="18" class="wm-label-bar"/>
-        <text x="${x + 50}" y="${y + 22}" text-anchor="middle" class="wm-icon" ${iconStyle}>${icon}</text>
-        <text x="${x + 50}" y="${y + 51}" text-anchor="middle" class="wm-label">${label}</text>
+        <rect x="${x}" y="${y}" width="80" height="46" rx="5" class="wm-thumb-overlay" fill="url(#wm-thumb-fade)"/>
+        <rect x="${x}" y="${y + 31}" width="80" height="15" class="wm-label-bar"/>
+        <text x="${x + 40}" y="${y + 20}" text-anchor="middle" class="wm-icon" ${iconStyle}>${icon}</text>
+        <text x="${x + 40}" y="${y + 42}" text-anchor="middle" class="wm-label">${label}</text>
         <!-- corner brackets -->
-        <path d="M${x - 1} ${y + 7} L${x - 1} ${y - 1} L${x + 7} ${y - 1}" class="wm-bracket"/>
-        <path d="M${x + 93} ${y - 1} L${x + 101} ${y - 1} L${x + 101} ${y + 7}" class="wm-bracket"/>
-        <path d="M${x - 1} ${y + 49} L${x - 1} ${y + 57} L${x + 7} ${y + 57}" class="wm-bracket"/>
-        <path d="M${x + 93} ${y + 57} L${x + 101} ${y + 57} L${x + 101} ${y + 49}" class="wm-bracket"/>
+        <path d="M${x - 1} ${y + 5} L${x - 1} ${y - 1} L${x + 5} ${y - 1}" class="wm-bracket"/>
+        <path d="M${x + 75} ${y - 1} L${x + 81} ${y - 1} L${x + 81} ${y + 5}" class="wm-bracket"/>
+        <path d="M${x - 1} ${y + 41} L${x - 1} ${y + 47} L${x + 5} ${y + 47}" class="wm-bracket"/>
+        <path d="M${x + 75} ${y + 47} L${x + 81} ${y + 47} L${x + 81} ${y + 41}" class="wm-bracket"/>
         <!-- active pulse ring -->
-        <rect x="${x - 2}" y="${y - 2}" width="104" height="60" rx="7" class="wm-pulse"/>
+        <rect x="${x - 2}" y="${y - 2}" width="84" height="50" rx="6" class="wm-pulse"/>
       </g>`;
 
     return `
-    <svg class="wm-svg" viewBox="0 0 310 232" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="wm-svg" viewBox="0 0 470 218" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <filter id="wm-glow" x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur stdDeviation="2.5" result="blur"/>
@@ -143,39 +147,57 @@ export class WorldMap {
           <stop offset="30%"  stop-color="#000" stop-opacity="0"/>
           <stop offset="100%" stop-color="#000" stop-opacity="0.85"/>
         </linearGradient>
-        <clipPath id="wm-clip-cabin"><rect x="30"  y="20"  width="100" height="56" rx="6"/></clipPath>
-        <clipPath id="wm-clip-rooms"><rect x="180" y="20"  width="100" height="56" rx="6"/></clipPath>
-        <clipPath id="wm-clip-woods"><rect x="30"  y="88"  width="100" height="56" rx="6"/></clipPath>
-        <clipPath id="wm-clip-hub">  <rect x="180" y="88"  width="100" height="56" rx="6"/></clipPath>
-        <clipPath id="wm-clip-alley"><rect x="180" y="156" width="100" height="56" rx="6"/></clipPath>
+        <clipPath id="wm-clip-cabin"><rect x="140" y="20"  width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-rooms"><rect x="250" y="20"  width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-boat"> <rect x="30"  y="86"  width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-woods"><rect x="140" y="86"  width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-hub">  <rect x="250" y="86"  width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-alley"><rect x="250" y="152" width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-door"> <rect x="360" y="152" width="80" height="46" rx="5"/></clipPath>
+        <clipPath id="wm-clip-east"> <rect x="360" y="86"  width="80" height="46" rx="5"/></clipPath>
       </defs>
 
       <!-- Connection lines + flowing data dashes -->
       <g class="wm-lines">
         <!-- Cabin → Woods (vertical) -->
-        <line x1="80"  y1="76"  x2="80"  y2="88"  stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
-        <line x1="80"  y1="76"  x2="80"  y2="88"  class="wm-line-flow"/>
+        <line x1="180" y1="66"  x2="180" y2="86"  stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
+        <line x1="180" y1="66"  x2="180" y2="86"  class="wm-line-flow"/>
         <!-- Rooms → Hub (vertical) -->
-        <line x1="230" y1="76"  x2="230" y2="88"  stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
-        <line x1="230" y1="76"  x2="230" y2="88"  class="wm-line-flow"/>
+        <line x1="290" y1="66"  x2="290" y2="86"  stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
+        <line x1="290" y1="66"  x2="290" y2="86"  class="wm-line-flow"/>
+        <!-- Boat → Woods (horizontal) -->
+        <line x1="110" y1="109" x2="140" y2="109" stroke="url(#wm-hline-grad)" stroke-width="1.5" filter="url(#wm-glow)" opacity="0.6"/>
+        <line x1="110" y1="109" x2="140" y2="109" class="wm-line-flow wm-line-soon"/>
         <!-- Woods → Hub (horizontal) -->
-        <line x1="130" y1="116" x2="180" y2="116" stroke="url(#wm-hline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
-        <line x1="130" y1="116" x2="180" y2="116" class="wm-line-flow"/>
+        <line x1="220" y1="109" x2="250" y2="109" stroke="url(#wm-hline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
+        <line x1="220" y1="109" x2="250" y2="109" class="wm-line-flow"/>
         <!-- Hub → Alley (vertical) -->
-        <line x1="230" y1="144" x2="230" y2="156" stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
-        <line x1="230" y1="144" x2="230" y2="156" class="wm-line-flow"/>
+        <line x1="290" y1="132" x2="290" y2="152" stroke="url(#wm-vline-grad)" stroke-width="1.5" filter="url(#wm-glow)"/>
+        <line x1="290" y1="132" x2="290" y2="152" class="wm-line-flow"/>
+        <!-- Alley → Door (horizontal) -->
+        <line x1="330" y1="175" x2="360" y2="175" stroke="url(#wm-hline-grad)" stroke-width="1.5" filter="url(#wm-glow)" opacity="0.6"/>
+        <line x1="330" y1="175" x2="360" y2="175" class="wm-line-flow wm-line-soon"/>
+        <!-- Hub → East (horizontal) -->
+        <line x1="330" y1="109" x2="360" y2="109" stroke="url(#wm-hline-grad)" stroke-width="1.5" filter="url(#wm-glow)" opacity="0.6"/>
+        <line x1="330" y1="109" x2="360" y2="109" class="wm-line-flow wm-line-soon"/>
         <!-- Junction dots -->
-        <circle cx="80"  cy="82"  r="1.6" class="wm-junction"/>
-        <circle cx="230" cy="82"  r="1.6" class="wm-junction"/>
-        <circle cx="155" cy="116" r="1.6" class="wm-junction"/>
-        <circle cx="230" cy="150" r="1.6" class="wm-junction"/>
+        <circle cx="180" cy="76"  r="1.4" class="wm-junction"/>
+        <circle cx="290" cy="76"  r="1.4" class="wm-junction"/>
+        <circle cx="125" cy="109" r="1.4" class="wm-junction wm-junction-soon"/>
+        <circle cx="235" cy="109" r="1.4" class="wm-junction"/>
+        <circle cx="345" cy="109" r="1.4" class="wm-junction wm-junction-soon"/>
+        <circle cx="290" cy="142" r="1.4" class="wm-junction"/>
+        <circle cx="345" cy="175" r="1.4" class="wm-junction wm-junction-soon"/>
       </g>
 
-      ${node('wm-cabin', 'CABIN', '⌂',  30,  20)}
-      ${node('wm-rooms', 'ROOMS', '▣', 180, 20,  'style="font-size:12px"')}
-      ${node('wm-woods', 'WOODS', '✦',  30,  88)}
-      ${node('wm-hub',   'HUB',   '◈', 180,  88)}
-      ${node('wm-alley', 'ALLEY', '▸', 180, 156)}
+      ${node('wm-cabin', 'CABIN', '⌂', 140,  20)}
+      ${node('wm-rooms', 'ROOMS', '▣', 250, 20,  'style="font-size:11px"')}
+      ${node('wm-boat',  '???',   '?',  30,  86, '', true)}
+      ${node('wm-woods', 'WOODS', '✦', 140,  86)}
+      ${node('wm-hub',   'HUB',   '◈', 250,  86)}
+      ${node('wm-east',  '???',   '?', 360,  86, '', true)}
+      ${node('wm-alley', 'ALLEY', '▸', 250, 152)}
+      ${node('wm-door',  '???',   '?', 360, 152, '', true)}
     </svg>`;
   }
 
@@ -230,7 +252,7 @@ export class WorldMap {
       /* Frame container */
       .wm-frame {
         position: relative;
-        width: min(720px, 92vw);
+        width: min(740px, 94vw);
         padding: 12px 16px 10px;
         background: linear-gradient(180deg,
           rgba(8,12,18,0.92) 0%,
@@ -332,15 +354,15 @@ export class WorldMap {
       .wm-node.wm-has-thumb .wm-label-bar { opacity: 1; }
 
       .wm-icon {
-        font-size: 14px;
+        font-size: 12px;
         fill: rgba(93,202,165,0.55);
         font-family: 'Courier New', monospace;
       }
       .wm-label {
-        font-size: 7px;
+        font-size: 6.5px;
         fill: rgba(255,255,255,0.55);
         font-family: 'Courier New', monospace;
-        letter-spacing: 1.5px;
+        letter-spacing: 1.3px;
         font-weight: bold;
       }
 
@@ -398,6 +420,22 @@ export class WorldMap {
         opacity: 0.7;
         filter: drop-shadow(0 0 3px rgba(93,202,165,0.7));
       }
+      .wm-junction-soon { opacity: 0.35; filter: none; }
+      .wm-line-soon     { opacity: 0.3; }
+
+      /* ───── Placeholder "coming soon" nodes ───── */
+      .wm-node-soon .wm-node-bg {
+        fill: #05050f;
+        stroke: rgba(93,202,165,0.15);
+        stroke-dasharray: 3 2;
+      }
+      .wm-node-soon .wm-bracket { stroke: rgba(93,202,165,0.18); }
+      .wm-node-soon .wm-icon    {
+        fill: rgba(93,202,165,0.35);
+        font-size: 18px;
+        font-weight: bold;
+      }
+      .wm-node-soon .wm-label   { fill: rgba(255,255,255,0.25); letter-spacing: 2.2px; }
     `;
     document.head.appendChild(s);
   }
