@@ -637,15 +637,16 @@ export abstract class BaseScene extends Phaser.Scene {
   // message. Identical across all scenes — subclasses just call this.
   // ══════════════════════════════════════════════════════════════════════════
   protected handleEmoteCommand(name: string): void {
+    const ac = this.getSceneAccent();
     if (this.emoteSet.isActive(name)) {
       this.emoteSet.stop(name);
-      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
+      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', ac);
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
       if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      this.chatUI.addMessage('system', flavor, P.dpurp);
+      this.chatUI.addMessage('system', flavor, ac);
       sendChat(`/emote ${name}_on`);
     }
   }
@@ -772,8 +773,8 @@ export abstract class BaseScene extends Phaser.Scene {
                 o.emotes.start(emoteName);
                 const flavor = EMOTE_FLAVORS[emoteName];
                 if (flavor) {
-                  if (this.showEmoteAsBubble()) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + this.getBubbleYOffset(), flavor, P.dpurp);
-                  if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, flavor, P.dpurp, pk);
+                  if (this.showEmoteAsBubble()) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + this.getBubbleYOffset(), flavor, P.lpurp);
+                  if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, flavor, P.lpurp, pk);
                 }
               } else { o.emotes.stop(emoteName); }
             }

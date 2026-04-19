@@ -2073,15 +2073,16 @@ export class WoodsScene extends BaseScene {
   // WoodsScene shows an in-world speech bubble for emotes in addition to the
   // chat log message, so we override the base implementation.
   protected override handleEmoteCommand(name: string): void {
+    const ac = this.getSceneAccent();
     if (this.emoteSet.isActive(name)) {
       this.emoteSet.stop(name);
-      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', P.dpurp);
+      this.chatUI.addMessage('system', EMOTE_OFF_MSGS[name] ?? 'Done', ac);
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
       if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, P.dpurp);
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, ac);
       sendChat(`/emote ${name}_on`);
     }
   }
