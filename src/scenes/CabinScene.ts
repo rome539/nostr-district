@@ -82,7 +82,7 @@ export class CabinScene extends BaseScene {
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
-    this.setupMobileCamera();
+    this.setupMobileCamera(1.6);
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
       if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
