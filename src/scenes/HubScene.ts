@@ -822,7 +822,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
   private tryEnter(): void {
     if (this.isLeavingScene) return;
-    if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+    if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay, #zap-modal')) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
