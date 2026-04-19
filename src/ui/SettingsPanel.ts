@@ -277,9 +277,13 @@ export class SettingsPanel {
             border:1px solid color-mix(in srgb,var(--nd-accent) 22%,transparent);
             color:var(--nd-accent);font-size:11px;">✓ Browser wallet detected</div>`;
       } else {
+        const method = authStore.getState().loginMethod;
+        const storageCopy = method === 'nsec'
+          ? 'Your NWC connection URI is encrypted with a key derived from your nsec before being stored locally — useless without your key.'
+          : 'Your NWC connection URI is stored in browser storage (encryption requires an nsec login).';
         walletRow.innerHTML = `
           <div style="color:var(--nd-subtext);font-size:10px;line-height:1.5;margin-bottom:6px;opacity:0.7;">
-            Nostr Wallet Connect stores your connection secret in browser storage. Set a spending limit in your wallet first.
+            ${storageCopy} Set a spending limit in your wallet for extra safety.
           </div>
           <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;">
             <input id="sp-nwc-ack" type="checkbox" style="accent-color:var(--nd-accent);cursor:pointer;">
