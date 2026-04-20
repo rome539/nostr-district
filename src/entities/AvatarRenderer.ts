@@ -1205,12 +1205,11 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
       x.fillRect(cx + 1, ey, 2, 2);
       break;
     case 'angry':
-      // pupils at ey+1, brows shifted outward (cols 7-8 / 11-12) for symmetric V
       x.globalAlpha = 0.75;
-      x.fillRect(cx - 2, ey + 1, 1, 1);
-      x.fillRect(cx + 1, ey + 1, 1, 1);
-      x.fillRect(cx - 3, ey,     2, 1);
-      x.fillRect(cx + 1, ey,     2, 1);
+      x.fillRect(cx - 3, ey - 1, 2, 1);  // left brow
+      x.fillRect(cx + 1, ey - 1, 2, 1);  // right brow
+      x.fillRect(cx - 2, ey + 1, 1, 1);  // left pupil
+      x.fillRect(cx + 1, ey + 1, 1, 1);  // right pupil
       break;
     case 'happy':
       x.globalAlpha = 0.75;
@@ -1311,8 +1310,8 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       x.globalAlpha = 0.8;
       x.fillRect(7, oY + 5, 2, 2);
       x.fillRect(14, oY + 5, 2, 2);
-      x.fillRect(7, oY + 4, 3, 1);
-      x.fillRect(13, oY + 4, 3, 1);
+      x.fillRect(7, oY + 3, 3, 1);
+      x.fillRect(13, oY + 3, 3, 1);
       break;
     case 'happy':
       x.globalAlpha = 0.8;
@@ -1326,10 +1325,10 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       break;
     case 'star':
       x.globalAlpha = 0.9;
-      x.fillRect(8, oY + 4, 1, 3);
-      x.fillRect(7, oY + 5, 3, 1);
-      x.fillRect(15, oY + 4, 1, 3);
-      x.fillRect(14, oY + 5, 3, 1);
+      x.fillRect(8, oY + 5, 1, 3);
+      x.fillRect(7, oY + 6, 3, 1);
+      x.fillRect(15, oY + 5, 1, 3);
+      x.fillRect(14, oY + 6, 3, 1);
       break;
     case 'hollow':
       x.globalAlpha = 0.9;
@@ -1353,13 +1352,13 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
     case 'cross':
       x.globalAlpha = 0.85;
       // left X (3x3)
-      x.fillRect(6, oY + 4, 1, 1); x.fillRect(8, oY + 4, 1, 1);
-      x.fillRect(7, oY + 5, 1, 1);
-      x.fillRect(6, oY + 6, 1, 1); x.fillRect(8, oY + 6, 1, 1);
+      x.fillRect(7, oY + 5, 1, 1); x.fillRect(9, oY + 5, 1, 1);
+      x.fillRect(8, oY + 6, 1, 1);
+      x.fillRect(7, oY + 7, 1, 1); x.fillRect(9, oY + 7, 1, 1);
       // right X
-      x.fillRect(14, oY + 4, 1, 1); x.fillRect(16, oY + 4, 1, 1);
-      x.fillRect(15, oY + 5, 1, 1);
-      x.fillRect(14, oY + 6, 1, 1); x.fillRect(16, oY + 6, 1, 1);
+      x.fillRect(14, oY + 5, 1, 1); x.fillRect(16, oY + 5, 1, 1);
+      x.fillRect(15, oY + 6, 1, 1);
+      x.fillRect(14, oY + 7, 1, 1); x.fillRect(16, oY + 7, 1, 1);
       break;
     case 'glow':
       // Default 2x2 pupils with tight cardinal ring
@@ -1375,13 +1374,13 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
     case 'heart':
       x.globalAlpha = 0.9;
       // left heart (3x3): two bumps on top row, full middle row, point at bottom
-      x.fillRect(6, oY + 4, 1, 1); x.fillRect(8, oY + 4, 1, 1);
-      x.fillRect(6, oY + 5, 3, 1);
-      x.fillRect(7, oY + 6, 1, 1);
+      x.fillRect(7, oY + 5, 1, 1); x.fillRect(9, oY + 5, 1, 1);
+      x.fillRect(7, oY + 6, 3, 1);
+      x.fillRect(8, oY + 7, 1, 1);
       // right heart
-      x.fillRect(14, oY + 4, 1, 1); x.fillRect(16, oY + 4, 1, 1);
-      x.fillRect(14, oY + 5, 3, 1);
-      x.fillRect(15, oY + 6, 1, 1);
+      x.fillRect(14, oY + 5, 1, 1); x.fillRect(16, oY + 5, 1, 1);
+      x.fillRect(14, oY + 6, 3, 1);
+      x.fillRect(15, oY + 7, 1, 1);
       break;
     default:
       x.globalAlpha = 0.7;
