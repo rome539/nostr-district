@@ -143,7 +143,7 @@ export async function initEmojiService(pubkey: string): Promise<void> {
 export function extractEmojiTags(text: string): { code: string; url: string }[] {
   const results: { code: string; url: string }[] = [];
   const seen = new Set<string>();
-  for (const [, code] of text.matchAll(/:([a-zA-Z0-9_]+):/g)) {
+  for (const [, code] of text.matchAll(/:([a-zA-Z0-9_-]+):/g)) {
     const key = code.toLowerCase();
     if (seen.has(key)) continue;
     const url = emojiMap.get(key);
@@ -162,7 +162,7 @@ export function renderEmojis(html: string, extra?: { code: string; url: string }
     ? new Map(extra.map(e => [e.code.toLowerCase(), e.url]))
     : null;
   if (emojiMap.size === 0 && !extraMap) return html;
-  return html.replace(/:([a-zA-Z0-9_]+):/g, (match, code) => {
+  return html.replace(/:([a-zA-Z0-9_-]+):/g, (match, code) => {
     const url = emojiMap.get(code.toLowerCase()) ?? extraMap?.get(code.toLowerCase());
     if (!url) return match;
     const safeUrl = url.replace(/"/g, '%22');

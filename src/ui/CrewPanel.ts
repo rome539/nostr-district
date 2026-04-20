@@ -1137,7 +1137,8 @@ export class CrewPanel {
         const v = editEmblemInput.value.trim();
         if (!v) { editStatus.textContent = ''; return; }
         const isUrl = v.startsWith('http://') || v.startsWith('https://');
-        const isShortEmoji = !isUrl && v.length <= 10;
+        const isShortcode = /^:[a-zA-Z0-9_-]+:$/.test(v);
+        const isShortEmoji = !isUrl && (isShortcode || v.length <= 10);
         if (!isUrl && !isShortEmoji) {
           editStatus.style.color = '#e85454';
           editStatus.textContent = 'Emblem must be a single emoji or an image URL (https://…)';
@@ -1544,7 +1545,8 @@ export class CrewPanel {
       const val = customEmblemInput.value.trim();
       if (!val) { emblemStatus.textContent = ''; return; }
       const isUrl = val.startsWith('http://') || val.startsWith('https://');
-      const isShortEmoji = !isUrl && val.length <= 10;
+      const isShortcode = /^:[a-zA-Z0-9_-]+:$/.test(val);
+      const isShortEmoji = !isUrl && (isShortcode || val.length <= 10);
       if (!isUrl && !isShortEmoji) {
         emblemStatus.textContent = 'Emblem must be a single emoji or an image URL (https://…)';
         return;
