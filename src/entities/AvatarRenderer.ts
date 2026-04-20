@@ -203,12 +203,12 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
     x.globalAlpha = 1;
   } else if (a.top === 'turtleneck') {
     x.fillRect(cx - tw, headY + 6 * s, tw * 2, 7 * s);
-    x.fillRect(cx - 1.5 * s, headY + 4 * s, 3 * s, 2 * s);
+    x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 2 * s);
     x.fillStyle = a.skinColor;
     x.fillRect(cx - tw, headY + 9 * s, 1 * s, 4 * s);
     x.fillRect(cx + tw - 1 * s, headY + 9 * s, 1 * s, 4 * s);
     x.fillStyle = topDark;
-    x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 0.5 * s);
+    x.fillRect(cx - 1.5 * s, headY + 6 * s, 3 * s, 0.5 * s);
   } else if (a.top === 'robe') {
     // Full shoulder-width long robe — covers body all the way to floor
     x.fillRect(cx - tw, headY + 6 * s, tw * 2, 14 * s);          // full column to floor
@@ -606,38 +606,44 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: number, s: number): void {
   switch (hair) {
     case 'short':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);
-      x.fillRect(cx - 2.5 * s, hy + 1 * s, 1 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s - 1);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s, 1 * s, 2 * s - 1);
       break;
     case 'mohawk':
       x.fillRect(cx - 0.5 * s, hy - 2 * s, 1 * s, 3 * s);
       x.fillRect(cx - 1 * s, hy - 1 * s, 2 * s, 2 * s);
       break;
     case 'long':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 1, 4 * s, 2 * s - 1);
       x.fillRect(cx - 2.5 * s, hy + 1 * s, 1 * s, 5 * s);
       x.fillRect(cx + 1.5 * s, hy + 1 * s, 1 * s, 5 * s);
       break;
     case 'ponytail':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);
-      x.fillRect(cx + 1.5 * s, hy + 2 * s, 1 * s, 4 * s);
+      x.fillRect(cx - 2 * s + 1, hy + 1, 4 * s - 1, 1);
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 2 * s - 2);
+      x.fillRect(cx + 1.5 * s, hy + 1 * s, 1 * s, 4 * s);
       break;
     case 'spiky':
-      x.fillRect(cx - 2 * s, hy - 1 * s, 1 * s, 2 * s);
-      x.fillRect(cx - 0.5 * s, hy - 2 * s, 1 * s, 2 * s);
-      x.fillRect(cx + 1 * s, hy - 1 * s, 1 * s, 2 * s);
-      x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hy - 1 * s + 2, 1 * s, 2 * s);
+      x.fillRect(cx - 0.5 * s, hy - 2 * s + 2, 1 * s, 2 * s);
+      x.fillRect(cx + 1 * s, hy - 1 * s + 2, 1 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
       break;
     case 'buzz':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 1.5 * s);
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
       break;
     case 'afro':
-      x.fillRect(cx - 3 * s, hy - 1 * s, 6 * s, 4 * s);
-      x.fillRect(cx - 2 * s, hy - 2 * s, 4 * s, 2 * s);
+      x.fillRect(cx - 2.5 * s + 1, hy - 2 * s + 3, 5 * s - 2, 2 * s - 1);
+      x.fillRect(cx - 3 * s + 1, hy - 1 * s + 2, 1.5 * s - 1, 2 * s);
+      x.fillRect(cx + 1.5 * s, hy - 1 * s + 2, 1.5 * s - 1, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
       break;
     case 'bun':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 1.5 * s);
-      x.fillRect(cx - 1 * s, hy - 2 * s, 2 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 1, 4 * s, 1 * s);
+      x.fillRect(cx - 1 * s, hy - 2 * s + 1, 2 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s, hy - 1 * s + 1, 1 * s, 1 * s);
+      x.fillRect(cx + 0.5 * s, hy - 1 * s + 1, 1 * s, 1 * s);
+      x.fillRect(cx - 1 * s, hy + 1, 2 * s, 1 * s);
       break;
     case 'curtains':
       x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);
@@ -645,9 +651,9 @@ function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: 
       x.fillRect(cx + 1 * s, hy + 1 * s, 1.5 * s, 3 * s);
       break;
     case 'mullet':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);         // top
-      x.fillRect(cx + 1.5 * s, hy + 2 * s, 1 * s, 6 * s); // long right hang
-      x.fillRect(cx - 2.5 * s, hy + 2 * s, 1 * s, 6 * s); // long left hang
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
+      x.fillRect(cx + 1.5 * s, hy + 1 * s + 2, 1 * s, 6 * s);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s + 2, 1 * s, 6 * s);
       break;
   }
 }
@@ -705,7 +711,9 @@ function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: number): vo
       x.fillRect(17, oY + 2, 4, 10);
       break;
     case 'ponytail':
-      x.fillRect(5, oY, 14, 4);
+      x.fillRect(6, oY, 12, 1);
+      x.fillRect(5, oY + 1, 14, 3);
+      x.fillRect(19, oY + 3, 1, 1);
       x.fillRect(17, oY + 4, 3, 8);
       break;
     case 'spiky':
@@ -718,10 +726,10 @@ function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: number): vo
       x.fillRect(5, oY, 14, 3);
       break;
     case 'afro':
-      x.fillRect(4, oY - 4, 16, 6);   // top puff - raised higher
-      x.fillRect(2, oY - 2, 4, 5);    // left puff
-      x.fillRect(18, oY - 2, 4, 5);   // right puff
-      x.fillRect(5, oY, 14, 3);       // base band across forehead only
+      x.fillRect(5, oY - 4, 14, 5);
+      x.fillRect(3, oY - 1, 3, 4);
+      x.fillRect(18, oY - 1, 3, 4);
+      x.fillRect(5, oY, 14, 3);
       break;
     case 'bun':
       x.fillRect(5, oY, 14, 3);

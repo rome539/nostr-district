@@ -6,7 +6,7 @@
 export interface AvatarConfig {
   body: 'default' | 'tall' | 'short' | 'broad';
   skinColor: string;
-  hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'bun' | 'curtains' | 'mullet';
+  hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'curtains' | 'mullet';
   hairColor: string;
   top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe';
   topColor: string;
@@ -76,7 +76,7 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
-  hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'bun', 'curtains', 'mullet'] as const,
+  hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet'] as const,
   top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe'] as const,
   bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls', 'leggings', 'jeans', 'miniskirt'] as const,
   hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy'] as const,
