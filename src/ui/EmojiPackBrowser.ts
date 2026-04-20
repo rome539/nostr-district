@@ -254,9 +254,18 @@ export class EmojiPackBrowser {
     inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');
     inp.addEventListener('blur',  () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 44%,transparent)');
 
+    let liveRefresh: (() => void) | null = null;
+
+    inp.addEventListener('input', () => {
+      if (liveRefresh) {
+        this.browsePage = 0;
+        liveRefresh();
+      }
+    });
+
     const doSearch = async () => {
-      const q   = inp.value.trim().toLowerCase();
       const gen = ++this.searchGen;
+      liveRefresh = null;
 
       btn.textContent    = 'Searching…';
       btn.disabled       = true;
@@ -266,9 +275,12 @@ export class EmojiPackBrowser {
       this.browsePage    = 0;
 
       const allPacks: (StoredEmojiPack & { eventId: string })[] = [];
-      const filtered = () => q
-        ? allPacks.filter(p => p.name.toLowerCase().includes(q) || p.dTag.toLowerCase().includes(q))
-        : allPacks;
+      const filtered = () => {
+        const q = inp.value.trim().toLowerCase();
+        return q
+          ? allPacks.filter(p => p.name.toLowerCase().includes(q) || p.dTag.toLowerCase().includes(q))
+          : allPacks;
+      };
 
       let refreshTimer: ReturnType<typeof setTimeout> | null = null;
       const refresh = () => {
@@ -276,6 +288,7 @@ export class EmojiPackBrowser {
         const packs = filtered();
         this.renderPacks(res, packs, this.browsePage);
         this.renderPager(pages, packs.length, this.browsePage, p => { this.browsePage = p; refresh(); });
+        status.textContent = `${packs.length} pack(s) found`;
       };
       const debouncedRefresh = () => {
         if (refreshTimer) clearTimeout(refreshTimer);
@@ -292,6 +305,7 @@ export class EmojiPackBrowser {
       if (!this.el || gen !== this.searchGen) return;
       btn.textContent    = 'Search';
       btn.disabled       = false;
+      liveRefresh        = refresh;
       const total        = filtered().length;
       status.textContent = total ? `${total} pack(s) found` : 'No packs found';
       refresh();
