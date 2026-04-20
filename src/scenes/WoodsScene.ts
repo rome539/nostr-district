@@ -1384,6 +1384,7 @@ export class WoodsScene extends BaseScene {
       this.fishingBobPhase = 0;
       this.fishingCastDist = 30 + Math.random() * 80;  // 30–110px out from dock edge
       ChatUI.showBubble(this, this.player.x, this.player.y - 48, '* casts a line...', WOODS_ACCENT, 3000);
+      this.snd.fishingCast();
     } else if (this.fishingState === 'bite') {
       this.reelIn();
     } else {

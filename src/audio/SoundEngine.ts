@@ -752,6 +752,36 @@ export class SoundEngine {
     this.osc(1319, 'sine', t + 0.155, 0.17, 0.07, d);
   }
 
+  fishingCast(): void {
+    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+
+    // Reel whir — sawtooth descending pitch + square LFO flutter
+    const whir = ctx.createOscillator();
+    whir.type = 'sawtooth';
+    whir.frequency.setValueAtTime(900, t);
+    whir.frequency.exponentialRampToValueAtTime(200, t + 0.30);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(55, t);
+    lfo.frequency.linearRampToValueAtTime(25, t + 0.30);
+    const lfoG = ctx.createGain();
+    lfoG.gain.value = 0.01;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.018, t);
+    g.gain.linearRampToValueAtTime(0.001, t + 0.30);
+
+    lfo.connect(lfoG); lfoG.connect(g.gain);
+    whir.connect(g); g.connect(d);
+    whir.start(t); whir.stop(t + 0.31);
+    lfo.start(t);   lfo.stop(t + 0.31);
+
+    // Water plop
+    this.noiseShot(0.10, 'lowpass', 420, 0.9, 0.018, d, 0.28);
+    this.osc(260, 'sine', t + 0.28, 0.015, 0.06, d);
+  }
+
   // ── Ambient ───────────────────────────────────────────────────────────────────
 
   setRoom(room: RoomId | ''): void {
