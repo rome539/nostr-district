@@ -1395,16 +1395,16 @@ export class WoodsScene extends BaseScene {
 
   private reelIn(): void {
     const table = WoodsScene.FISH_TABLE;
-    // Weighted: 1% legendary, 19.8% junk, 29.7% rare, 49.5% common
+    // Weighted: 0.15% legendary, 15% junk, 25% rare, 59.85% common
     const roll = Math.random();
     let catch_: typeof table[number];
-    if (roll < 0.005) {
+    if (roll < 0.0015) {
       const legendary = table.filter(f => 'legendary' in f && f.legendary);
       catch_ = legendary[Math.floor(Math.random() * legendary.length)];
-    } else if (roll < 0.21) {
+    } else if (roll < 0.1515) {
       const junk = table.filter(f => f.junk);
       catch_ = junk[Math.floor(Math.random() * junk.length)];
-    } else if (roll < 0.51) {
+    } else if (roll < 0.4015) {
       const rare = table.filter(f => f.rare);
       catch_ = rare[Math.floor(Math.random() * rare.length)];
     } else {
