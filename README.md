@@ -240,7 +240,14 @@ DMs use **NIP-17 + NIP-59** (gift wraps with NIP-44 encryption). Messages are se
 
 ### NWC
 
-The wallet connection string is stored in `localStorage` and only transmitted to your own wallet relay over an encrypted NIP-04 channel. It is never sent to any Nostr District server.
+The wallet connection string is never sent to any Nostr District server. Storage security depends on login method:
+
+| Login | Storage |
+|-------|---------|
+| nsec | NWC URI is **AES-GCM encrypted** before hitting `localStorage`. The 256-bit key is derived from the user's private key via HKDF, so the ciphertext is useless without the nsec. |
+| Extension / Bunker | Stored plain under `nd_nwc_uri` — no persistent secret is available in the page's JS context to derive a meaningful key. |
+
+Wallet communication uses **NIP-44 v2** encryption (NIP-04 as fallback, negotiated via the wallet's `kind:13194` info event), transmitted only to your own wallet relay.
 
 ## Running Locally
 
@@ -258,10 +265,14 @@ Open `http://localhost:5173`
 
 ## Deployment
 
-Frontend — [Vercel](https://vercel.com)  
+Frontend — [Cloudflare Pages](https://pages.cloudflare.com)  
 WebSocket server — [Railway](https://railway.app)  
 Build command: `vite build`  
 Output directory: `dist`
+
+### IP Protection
+
+Relay connections are proxied through a Cloudflare Pages Function (`functions/api/relay.js`). Clients connect to `wss://<host>/api/relay?relay=wss://relay.example.com` and the Worker forwards traffic to the upstream relay — so Nostr relays only ever see Cloudflare IP addresses, not end-user IPs.
 
 ## License
 
