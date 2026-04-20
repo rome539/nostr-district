@@ -282,7 +282,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   c.width = 24; c.height = 60;
   const x = c.getContext('2d')!;
   x.imageSmoothingEnabled = false;
-  const oY = 8;
+  const oY = 10;
 
   // Walk animation leg offsets: frame 0 = neutral (standing), frame 1 = left up/right down, frame 2 = opposite
   const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
@@ -903,11 +903,11 @@ function drawRoomHat(x: CanvasRenderingContext2D, hat: string, oY: number): void
       break;
     }
     case 'wizard':
-      // oY=8, canvas top=0, max upward = 8px
-      x.fillRect(10, oY - 7, 4,  3);  // tip
-      x.fillRect(8,  oY - 4, 8,  2);  // narrow mid
-      x.fillRect(6,  oY - 2, 12, 2);  // wider mid
-      x.fillRect(3,  oY,     18, 2);  // brim
+      // oY=10 gives 10px crown headroom (rows 0-9) — long narrow tip matches hub proportions
+      x.fillRect(11, oY - 10, 2,  4);  // tip: 2px wide for 4 rows (pointy!)
+      x.fillRect(8,  oY - 6,  8,  3);  // mid: 8px wide
+      x.fillRect(6,  oY - 3,  12, 3);  // lower: 12px wide
+      x.fillRect(3,  oY,      18, 2);  // brim
       break;
     case 'hardhat': {
       const hhSave = x.fillStyle as string;

@@ -773,6 +773,7 @@ export class CabinScene extends BaseScene {
       { text: "Show me a sane man and I will cure him for you.", author: "Carl Jung" },
       { text: "Loneliness does not come from having no people around, but from being unable to communicate the things that seem important to oneself.", author: "Carl Jung" },
       { text: "The pendulum of the mind alternates between sense and nonsense, not between right and wrong.", author: "Carl Jung" },
+      { text: "Light is just darkness.", author: "???" },
       { text: "I came, I saw, I conquered.", author: "Julius Caesar" },
       { text: "Men willingly believe what they wish.", author: "Julius Caesar" },
       { text: "It is easier to find men who will volunteer to die, than to find those who are willing to endure pain with patience.", author: "Julius Caesar" },
