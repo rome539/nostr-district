@@ -274,6 +274,7 @@ export class NostrThemeBrowser {
   }
 
   private switchTab(tab: Tab): void {
+    if (this.previewIdx !== null) { revertPreview(); }
     this.previewIdx = null;
     this.activeTab = tab;
     this.mineePage = 0;
@@ -374,64 +375,73 @@ export class NostrThemeBrowser {
     inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');
     inp.addEventListener('blur',  () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 44%,transparent)');
 
-    const doSearch = async () => {
-      const q = inp.value.trim();
-      const gen = ++this.searchGen; // claim this generation; stale callbacks will bail out
+    let allCards: ThemeCard[] = [];
 
-      btn.textContent = 'Searching…';
-      btn.disabled    = true;
-      res.innerHTML   = '';
+    const filtered = () => {
+      const q = inp.value.trim().toLowerCase();
+      if (!q || looksLikePubkey(q)) return allCards;
+      return allCards.filter(c =>
+        (c.theme.title || '').toLowerCase().includes(q) ||
+        c.pubkey.toLowerCase().includes(q)
+      );
+    };
+
+    const refresh = () => {
+      if (!this.el) return;
+      const shown = filtered();
+      this.renderCards(res, shown, true, this.globalPage);
+      this.renderPager(pages, shown.length, this.globalPage, p => { this.globalPage = p; refresh(); });
+      const q = inp.value.trim();
+      if (!btn.disabled) {
+        status.textContent = shown.length ? `${shown.length} theme(s) found` : (allCards.length ? 'No matches' : '');
+      }
+    };
+
+    const doFetch = async (filter: object, gen: number) => {
+      allCards = [];
+      res.innerHTML = '';
       pages.innerHTML = '';
       status.textContent = 'Connecting to relays…';
       this.globalPage = 0;
 
-      const cards: ThemeCard[] = [];
+      await fetchEventsRaw(filter, ALL_RELAYS, 10000, (card) => {
+        if (gen !== this.searchGen) return;
+        allCards.push(card);
+        refresh();
+      });
 
-      let filter: object;
+      if (!this.el || gen !== this.searchGen) return;
+      btn.textContent = 'Search';
+      btn.disabled    = false;
+      status.textContent = filtered().length ? `${filtered().length} theme(s) found` : 'No themes found';
+      refresh();
+    };
+
+    const doSearch = async () => {
+      const q = inp.value.trim();
+      const gen = ++this.searchGen;
+
+      btn.textContent = 'Searching…';
+      btn.disabled    = true;
 
       if (looksLikePubkey(q)) {
         const pubkey = await resolveHexPubkey(q);
-        if (gen !== this.searchGen) return; // superseded
+        if (gen !== this.searchGen) return;
         if (!pubkey) {
           status.textContent = 'Invalid npub / pubkey';
           btn.textContent = 'Search';
           btn.disabled = false;
           return;
         }
-        filter = { kinds: [16767, 36767], authors: [pubkey], limit: 50 };
+        await doFetch({ kinds: [16767, 36767], authors: [pubkey], limit: 50 }, gen);
       } else {
-        filter = { kinds: [36767], limit: 100 };
+        await doFetch({ kinds: [36767], limit: 200 }, gen);
       }
-
-      const refresh = () => {
-        if (!this.el || gen !== this.searchGen) return;
-        this.renderCards(res, cards, true, this.globalPage);
-        this.renderPager(pages, cards.length, this.globalPage, p => { this.globalPage = p; refresh(); });
-      };
-
-      await fetchEventsRaw(filter, ALL_RELAYS, 10000, (card) => {
-        if (gen !== this.searchGen) return; // superseded — discard
-        cards.push(card);
-        refresh();
-      });
-
-      if (!this.el || gen !== this.searchGen) return;
-      btn.textContent    = 'Search';
-      btn.disabled       = false;
-      status.textContent = cards.length ? `${cards.length} theme(s) found` : 'No themes found';
-      refresh();
     };
 
-    // Re-enable search button immediately when input is cleared so user isn't stuck
     inp.addEventListener('input', () => {
-      if (btn.disabled && inp.value.trim() === '') {
-        this.searchGen++; // cancel in-flight search
-        btn.textContent = 'Search';
-        btn.disabled    = false;
-        res.innerHTML   = '';
-        pages.innerHTML = '';
-        status.textContent = '';
-      }
+      this.globalPage = 0;
+      refresh();
     });
 
     btn.addEventListener('click', doSearch);

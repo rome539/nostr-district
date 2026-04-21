@@ -359,7 +359,7 @@ export class CrewPanel {
     const card = document.createElement('div');
     card.className = 'cp-crew-card';
     card.innerHTML = `
-      <div class="cp-crew-emblem" style="${crew.emblem.startsWith('http') ? 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);padding:0;overflow:hidden' : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
+      <div class="cp-crew-emblem" style="${crew.emblem.startsWith('http') ? `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;padding:0;overflow:hidden` : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
       <div class="cp-crew-body">
         <div class="cp-crew-name">${esc(crew.name)}</div>
         <div class="cp-crew-about">${esc(crew.about || (crew.isOpen ? 'Open crew' : 'Closed crew'))}</div>
@@ -1761,8 +1761,9 @@ export class CrewPanel {
       .cp-manage-mcontrols { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
       .cp-manage-role-sel {
         background: var(--nd-navy); color: var(--nd-text); border: 1px solid color-mix(in srgb,var(--nd-text) 20%,transparent);
-        border-radius: 4px; font-family: inherit; font-size: 11px; padding: 3px 6px; cursor: pointer;
+        border-radius: 4px; font-family: inherit; font-size: 11px; padding: 3px 6px; cursor: pointer; outline: none;
       }
+      .cp-manage-role-sel:focus { border-color: color-mix(in srgb,var(--nd-accent) 65%,transparent); }
       .cp-manage-title-input {
         background: color-mix(in srgb,var(--nd-text) 5%,transparent); color: var(--nd-text);
         border: 1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);

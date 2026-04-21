@@ -379,7 +379,7 @@ export async function createCrew(
   const defEvent = await signEvent({
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + id], ...emblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + id], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
     content: JSON.stringify({ name, about, emblem, color, isOpen, chatKey: genChatKey() }),
     pubkey,
   });
@@ -443,7 +443,7 @@ export async function fetchMyCrews(): Promise<Crew[]> {
   // This covers both crew definitions (CREW_DEF_PREFIX) and membership cards (MEMBER_PREFIX)
   let allUserEvents: any[] = [];
   try {
-    allUserEvents = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], authors: [pubkey], limit: 150 });
+    allUserEvents = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], authors: [pubkey], limit: 150 }, { maxWait: 6000 });
   } catch (e) {
     console.warn('[Crews] fetchMyCrews query failed:', e);
   }
@@ -484,7 +484,7 @@ export async function fetchMyCrews(): Promise<Crew[]> {
       addJoinedCrew(crewId);
       const crew = await fetchCrew(crewId, true);
       if (crew && !resultMap.has(crewId)) resultMap.set(crewId, crew);
-      else if (!crew) removeJoinedCrew(crewId);
+      // Don't removeJoinedCrew on null — fetchCrew can return null on cold relay connections
     } catch {}
     // Yield to the browser between each crew fetch so the game loop isn't starved
     await new Promise(r => setTimeout(r, 0));
@@ -508,7 +508,7 @@ export async function fetchAllCrews(forceRefresh = false): Promise<Crew[]> {
   try {
     // Must stay high — this fetches ALL users' kind:30078 and filters crew defs client-side.
     // Lower limits cause crew events to get crowded out by avatar/room/membership events.
-    events = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], limit: 500 });
+    events = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], '#t': ['nostr-district'], limit: 200 }, { maxWait: 6000 });
   } catch (e) {
     console.warn('[Crews] fetchAllCrews failed:', e);
     return allCrewsCache; // return stale cache on error rather than empty
@@ -1164,7 +1164,7 @@ export async function kickCrewMember(crewId: string, memberPubkey: string): Prom
     const defEvent = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', CREW_DEF_PREFIX + crewId], ...kickEmblemEmojiTags, ['client', 'Nostr District']],
+      tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...kickEmblemEmojiTags, ['client', 'Nostr District']],
       content: JSON.stringify({
         name: crew.name, about: crew.about, emblem: crew.emblem,
         color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey,
@@ -1202,7 +1202,7 @@ export async function unKickCrewMember(crewId: string, memberPubkey: string): Pr
   const defEvent = await signEvent({
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ...unkickEmblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...unkickEmblemEmojiTags, ['client', 'Nostr District']],
     content: JSON.stringify({
       name: crew.name, about: crew.about, emblem: crew.emblem,
       color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey,
@@ -1263,7 +1263,7 @@ export async function updateCrewMember(
   const defEvent = await signEvent({
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ...roleEmblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...roleEmblemEmojiTags, ['client', 'Nostr District']],
     content: JSON.stringify({
       name: crew.name, about: crew.about, emblem: crew.emblem,
       color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey, memberRoles,
@@ -1305,7 +1305,7 @@ export async function updateCrewDefinition(
   const defEvent = await signEvent({
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ...updatedEmblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...updatedEmblemEmojiTags, ['client', 'Nostr District']],
     content: JSON.stringify({
       name: updated.name, about: updated.about, emblem: updated.emblem,
       color: updated.color, isOpen: updated.isOpen, chatKey: crew.chatKey,
