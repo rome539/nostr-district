@@ -1112,7 +1112,7 @@ export class CrewPanel {
 
       const refreshEditPreview = () => {
         if (editEmblem.startsWith('http')) {
-          editPreview.style.cssText = 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);overflow:hidden;padding:0;';
+          editPreview.style.cssText = `background:${editColor}22;border-color:${editColor}55;overflow:hidden;padding:0;`;
           editPreview.innerHTML = `<img src="${safeUrl(editEmblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
         } else {
           editPreview.style.cssText = `background:${editColor}22;border-color:${editColor}55;color:${editColor};`;
