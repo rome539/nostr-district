@@ -73,6 +73,7 @@ export class SettingsPanel {
     const npub = state.npub || '';
     const displayNpub = npub ? (npub.slice(0, 20) + '...' + npub.slice(-6)) : 'unknown';
     const method = state.loginMethod || 'unknown';
+    const nsec = state.nsec || '';
 
     this.panelEl = document.createElement('div');
     this.panelEl.id = PANEL_ID;
@@ -153,10 +154,11 @@ export class SettingsPanel {
           <span style="color:var(--nd-text);font-size:13px;font-weight:bold;">${esc(state.displayName || 'guest')}</span>
           <span style="color:var(--nd-subtext);font-size:11px;">${esc(method)}</span>
         </div>
-        <div id="settings-npub" title="Click to copy npub" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;opacity:0.35;transition:opacity 0.15s;">
-          <span style="color:var(--nd-subtext);font-size:9px;font-family:'Courier New',monospace;">${esc(displayNpub)}</span>
-          <span id="settings-copy-hint" style="color:var(--nd-subtext);font-size:9px;">⎘</span>
-        </div>
+        <button id="sp-keys-btn" style="
+          margin-top:5px;padding:0;background:none;border:none;cursor:pointer;
+          color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:10px;
+          transition:color 0.15s;
+        ">Keys</button>
       </div>
 
       <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE</div>
@@ -328,25 +330,10 @@ export class SettingsPanel {
     logoutBtn.addEventListener('mouseenter', () => logoutBtn.style.background = `${P.red}15`);
     logoutBtn.addEventListener('mouseleave', () => logoutBtn.style.background = 'transparent');
 
-    const npubEl = this.panelEl.querySelector('#settings-npub') as HTMLElement;
-    npubEl.addEventListener('mouseenter', () => npubEl.style.opacity = '1');
-    npubEl.addEventListener('mouseleave', () => npubEl.style.opacity = '0.4');
-
-    // Copy npub
-    npubEl.addEventListener('click', () => {
-      if (!npub) return;
-      navigator.clipboard.writeText(npub).then(() => {
-        const hint = this.panelEl?.querySelector('#settings-copy-hint') as HTMLElement | null;
-        if (hint) { hint.textContent = '✓'; hint.style.color = 'var(--nd-accent)'; }
-        npubEl.style.opacity = '1';
-        npubEl.style.color = 'var(--nd-accent)';
-        setTimeout(() => {
-          if (hint) { hint.textContent = '⎘'; hint.style.color = 'var(--nd-subtext)'; }
-          npubEl.style.color = '';
-          npubEl.style.opacity = '0.35';
-        }, 2000);
-      }).catch(() => {});
-    });
+    const keysBtn = this.panelEl.querySelector('#sp-keys-btn') as HTMLElement;
+    keysBtn.addEventListener('mouseenter', () => keysBtn.style.color = 'var(--nd-accent)');
+    keysBtn.addEventListener('mouseleave', () => keysBtn.style.color = 'var(--nd-subtext)');
+    keysBtn.addEventListener('click', () => this.showKeysModal(npub, nsec));
 
     // Theme swatches
     this.panelEl.querySelectorAll('.sp-theme-swatch').forEach(el => {
@@ -481,6 +468,122 @@ export class SettingsPanel {
       }
     };
     setTimeout(() => document.addEventListener('pointerdown', this.closeHandler!), 50);
+  }
+
+  private showKeysModal(npub: string, nsec: string): void {
+    const existing = document.getElementById('sp-keys-modal');
+    if (existing) { existing.remove(); return; }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sp-keys-modal';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);
+    `;
+
+    const displayNpub = npub ? (npub.slice(0, 20) + '...' + npub.slice(-6)) : '';
+
+    overlay.innerHTML = `
+      <div style="
+        background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
+        border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);
+        border-radius:10px;padding:22px 24px 20px;
+        font-family:'Courier New',monospace;
+        box-shadow:0 8px 30px rgba(0,0,0,0.7);
+        width:min(340px,94vw);
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+          <span style="color:var(--nd-text);font-size:14px;font-weight:bold;">Keys</span>
+          <button id="sp-keys-close" style="background:none;border:none;color:var(--nd-subtext);font-size:16px;cursor:pointer;padding:2px 6px;opacity:0.6;">✕</button>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;">PUBLIC KEY (npub)</div>
+          <div style="display:flex;align-items:center;gap:8px;
+            background:color-mix(in srgb,black 40%,var(--nd-bg));
+            border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);
+            border-radius:5px;padding:8px 10px;">
+            <span id="sp-keys-npub-text" style="flex:1;font-size:10px;color:var(--nd-subtext);word-break:break-all;line-height:1.5;user-select:all;">${esc(npub)}</span>
+            <button id="sp-keys-npub-copy" style="
+              flex-shrink:0;padding:4px 10px;border-radius:4px;
+              background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
+              border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);
+              color:var(--nd-accent);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+            ">Copy</button>
+          </div>
+        </div>
+
+        ${nsec ? `
+        <div>
+          <div style="color:rgba(240,176,64,0.6);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;">PRIVATE KEY (nsec)</div>
+          <div style="
+            background:rgba(240,176,64,0.05);
+            border:1px solid rgba(240,176,64,0.2);
+            border-radius:5px;padding:8px 10px;margin-bottom:8px;
+          ">
+            <div id="sp-keys-nsec-masked" style="font-size:10px;color:rgba(240,176,64,0.5);letter-spacing:0.15em;">••••••••••••••••••••••••••••••••</div>
+            <div id="sp-keys-nsec-text" style="display:none;font-size:10px;color:#f0b040;word-break:break-all;line-height:1.5;user-select:all;">${esc(nsec)}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="sp-keys-nsec-reveal" style="
+              flex:1;padding:6px;border-radius:4px;
+              background:rgba(240,176,64,0.08);
+              border:1px solid rgba(240,176,64,0.2);
+              color:#f0b040;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+            ">Reveal</button>
+            <button id="sp-keys-nsec-copy" style="
+              flex:1;padding:6px;border-radius:4px;
+              background:rgba(240,176,64,0.08);
+              border:1px solid rgba(240,176,64,0.2);
+              color:#f0b040;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+            ">Copy</button>
+          </div>
+          <div style="font-size:9px;color:#e85454;opacity:0.75;margin-top:8px;line-height:1.5;">Keep this safe. Anyone with your private key controls your account.</div>
+        </div>` : ''}
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const destroy = () => {
+      overlay.remove();
+      document.removeEventListener('keydown', escHandler, { capture: true });
+    };
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); destroy(); }
+    };
+    document.addEventListener('keydown', escHandler, { capture: true });
+
+    overlay.querySelector('#sp-keys-close')?.addEventListener('click', destroy);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) destroy(); });
+
+    overlay.querySelector('#sp-keys-npub-copy')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(npub).then(() => {
+        const btn = overlay.querySelector('#sp-keys-npub-copy') as HTMLButtonElement;
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 2000); }
+      }).catch(() => {});
+    });
+
+    if (nsec) {
+      let revealed = false;
+      overlay.querySelector('#sp-keys-nsec-reveal')?.addEventListener('click', () => {
+        revealed = !revealed;
+        const masked = overlay.querySelector('#sp-keys-nsec-masked') as HTMLElement;
+        const text = overlay.querySelector('#sp-keys-nsec-text') as HTMLElement;
+        const btn = overlay.querySelector('#sp-keys-nsec-reveal') as HTMLButtonElement;
+        masked.style.display = revealed ? 'none' : 'block';
+        text.style.display = revealed ? 'block' : 'none';
+        btn.textContent = revealed ? 'Hide' : 'Reveal';
+      });
+
+      overlay.querySelector('#sp-keys-nsec-copy')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(nsec).then(() => {
+          const btn = overlay.querySelector('#sp-keys-nsec-copy') as HTMLButtonElement;
+          if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 2000); }
+        }).catch(() => {});
+      });
+    }
   }
 
   private closePanel(): void {

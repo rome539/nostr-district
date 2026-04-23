@@ -413,8 +413,8 @@ export class RoomScene extends BaseScene {
     if (!this.introActive) {
       this.updateMovement();
     }
-    this.playerName.setPosition(this.player.x, this.player.y - 150);
-    this.playerStatusText.setPosition(this.player.x, this.player.y - 165);
+    this.playerName.setPosition(this.player.x, this.player.y + 14);
+    this.playerStatusText.setPosition(this.player.x, this.player.y + 26);
     this.pet?.update(delta);
     this.updateBlinkingLEDs(time);
     this.updateCandleFlames(time);
@@ -706,7 +706,7 @@ export class RoomScene extends BaseScene {
 
   // ── Other Players ──
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
-  protected override getBubbleYOffset(): number { return -155; }
+  protected override getBubbleYOffset(): number { return -135; }
   protected override clampPlayerMoveY(y: number): number { return Phaser.Math.Clamp(y, 340, 470); }
   protected override onPresenceCountUpdate(c: number): void { super.onPresenceCountUpdate(c); this.globalPlayerCount = c; }
   protected override afterPlayerJoin(_p: { pubkey: string; [k: string]: unknown }): void {
@@ -738,7 +738,7 @@ export class RoomScene extends BaseScene {
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_room_', scale: 2.5,
-      nameYOffset: -150, statusYOffset: -165,
+      nameYOffset: +14, statusYOffset: +26,
       nameColor: this.roomConfig.neonColor, nameFontSize: '10px', statusFontSize: '9px',
       nameBg: '#0a001488', namePadding: { x: 4, y: 2 },
       czW: 60, czH: 120, czYOffset: -80,
@@ -811,9 +811,9 @@ export class RoomScene extends BaseScene {
   private createPlayer(): void {
     this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(2.5).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY - 120, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
     const myStatus = getStatus();
-    this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY - 165, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
+    this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY + 26, myStatus, { fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
   }
   private createBackButton(): void {
     const nc = this.roomConfig.neonColor;

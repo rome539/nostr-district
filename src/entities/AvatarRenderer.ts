@@ -7,11 +7,161 @@
 
 import { AvatarConfig } from '../stores/avatarStore';
 
+// ── Image-based item cache (hats, accessories, tops, bottoms) ────────────────
+const imgCache = new Map<string, HTMLImageElement>();
+const hubImgCache = new Map<string, HTMLImageElement>();
+
+function loadItemImg(name: string, src: string, cache = imgCache): Promise<void> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => { cache.set(name, img); resolve(); };
+    img.onerror = () => resolve();
+    img.src = src;
+  });
+}
+
+// ── Item definitions ──────────────────────────────────────────────────────────
+// anchor:     which body reference point the item attaches to
+// widthRatio: fraction of that anchor's reference width (headW for head anchors, bodyW for body anchors)
+// above:      true = image extends ABOVE anchor (hats), false = image starts AT/BELOW anchor
+// yGap:       room-scale px. If above: distance from image bottom to anchor. If below: offset from anchor to image top.
+type AnchorType = 'headTop' | 'eyeLine' | 'mouthLine' | 'neckLine' | 'shoulder' | 'waist';
+interface ItemDef { anchor: AnchorType; widthRatio: number; roomWidthRatio?: number; hubSrc?: string; above: boolean; yGap: number; roomYGap?: number; flipH?: boolean; xOffset?: number; tintDark?: boolean; }
+
+const ITEM_DEFS: Record<string, ItemDef> = {
+  // ── Hats ──
+  // ── Hats ──
+  ostrichhat:         { anchor: 'headTop', widthRatio: 1.68, roomWidthRatio: 1.68, above: true, yGap: -6, flipH: true, xOffset: -1, tintDark: true },
+  // ── Accessories (image-based) ──
+  halo:               { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.28, above: true, yGap:  2 },
+  catears:            { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap: -5 },
+  headphones:         { anchor: 'headTop', widthRatio: 1.43, roomWidthRatio: 1.43, hubSrc: 'assets/hats/headphones_hub.png', above: true, yGap: -8 },
+  horns:              { anchor: 'headTop', widthRatio: 1.3,  above: true, yGap: -4 },
+  hornsspiral:        { anchor: 'headTop', widthRatio: 1.0,  above: true, yGap: -3 },
+  // ── Accessories ──  (add image-based accessories here)
+  // ── Tops ──        (add image-based tops here)
+  // ── Bottoms ──     (add image-based bottoms here)
+};
+
+// Reference dimensions (room scale is source of truth for yGap values)
+const ROOM_HEAD_W = 14;
+const ROOM_BODY_W = 16; // used when image-based tops/bottoms are added
+const HUB_HEAD_W  = 8;
+const HUB_BODY_W  = 10; // used when image-based tops/bottoms are added
+
+// Extra transparent pixels added to the top of every sprite canvas so tall
+// hats never clip. All scenes use setOrigin(0.5, 1) so the bottom anchor
+// stays fixed — this headroom is invisible to scene positioning logic.
+export const SPRITE_HAT_HEADROOM = 16;
+// Extra transparent pixels on each side of the room canvas so wide hats never clip.
+// Body drawing uses translated coords (shifted right by this amount) so nothing moves.
+export const ROOM_SPRITE_XPAD = 8;
+
+export const itemImagesReady = Promise.all([
+  loadItemImg('halo',                 'assets/hats/halo.png'),
+  loadItemImg('catears',              'assets/hats/catears.png'),
+  loadItemImg('headphones',           'assets/hats/headphones.png'),
+  loadItemImg('baseballcap',          'assets/hats/baseballcap.png'),
+  loadItemImg('baseballcapbackwards', 'assets/hats/baseballcapbackwards.png'),
+  loadItemImg('ostrichhat',           'assets/hats/ostrichhat.png'),
+  loadItemImg('horns',                'assets/hats/horns.png'),
+  loadItemImg('hornsspiral',          'assets/hats/hornsspiral.png'),
+  // hub-scale variants (designed for the smaller 8px head)
+  loadItemImg('headphones', 'assets/hats/headphones_hub.png', hubImgCache),
+  // accessories → assets/accessories/<name>.png
+  // tops        → assets/tops/<name>.png
+  // bottoms     → assets/bottoms/<name>.png
+]);
+
+// Kept for backward compatibility
+export const hatImagesReady = itemImagesReady;
+
+// ── Auto-placement renderer ───────────────────────────────────────────────────
+// anchorCx/anchorY: anchor position in canvas pixels
+// refW:             reference width for this anchor (headW or bodyW) in canvas pixels
+// roomScale:        refW / ROOM_HEAD_W (or ROOM_BODY_W) — scales yGap to current canvas size
+function drawImgItemAuto(
+  x: CanvasRenderingContext2D, name: string,
+  anchorCx: number, anchorY: number, refW: number, roomScale: number,
+): void {
+  const def = ITEM_DEFS[name];
+  const isHub = roomScale < 1;
+  const img = (isHub && hubImgCache.has(name)) ? hubImgCache.get(name)! : imgCache.get(name);
+  if (!def || !img) return;
+  const ratio = (!isHub && def.roomWidthRatio !== undefined) ? def.roomWidthRatio : def.widthRatio;
+  let W = Math.round(refW * ratio);
+  if (isHub && W % 2 !== 0) W += 1;
+  const H = Math.round(W * img.naturalHeight / img.naturalWidth);
+  const yGapSrc = (!isHub && def.roomYGap !== undefined) ? def.roomYGap : def.yGap;
+  const gap = Math.round(yGapSrc * roomScale);
+  const dy = def.above ? anchorY - H - gap : anchorY + gap;
+  const xOff = Math.round((def.xOffset ?? 0) * roomScale);
+  drawImgItem(x, name, Math.round(anchorCx - W / 2) + xOff, dy, W, H, def.flipH);
+}
+
+function parseRgb(color: string): [number, number, number] {
+  const hex = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+  const rgb = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
+  return [0, 0, 0];
+}
+
+function drawImgItem(x: CanvasRenderingContext2D, name: string, dx: number, dy: number, dw: number, dh: number, flipH = false): void {
+  const img = imgCache.get(name);
+  if (!img) return;
+  const def = ITEM_DEFS[name];
+  // Use the image's natural size for the intermediate canvas — avoids a lossy
+  // non-integer pre-scale step when the source doesn't evenly match dw*4.
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const tmp = document.createElement('canvas');
+  tmp.width = iw; tmp.height = ih;
+  const tc = tmp.getContext('2d')!;
+  tc.imageSmoothingEnabled = false;
+  if (flipH) {
+    tc.save(); tc.scale(-1, 1); tc.drawImage(img, -iw, 0, iw, ih); tc.restore();
+  } else {
+    tc.drawImage(img, 0, 0, iw, ih);
+  }
+  if (def?.tintDark) {
+    // Only replace near-black pixels with the hat color, leaving natural colors intact
+    const [tr, tg, tb] = parseRgb(x.fillStyle as string);
+    const idata = tc.getImageData(0, 0, iw, ih);
+    const d = idata.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 60) {
+        d[i] = tr; d[i + 1] = tg; d[i + 2] = tb;
+      }
+    }
+    tc.putImageData(idata, 0, 0);
+  } else {
+    // Multiply tint: white stays item color, grey becomes darker shade (preserves shading detail)
+    tc.globalCompositeOperation = 'multiply';
+    tc.fillStyle = x.fillStyle as string;
+    tc.fillRect(0, 0, iw, ih);
+    // Restore transparency from original art
+    tc.globalCompositeOperation = 'destination-in';
+    if (flipH) {
+      tc.save(); tc.scale(-1, 1); tc.drawImage(img, -iw, 0, iw, ih); tc.restore();
+    } else {
+      tc.drawImage(img, 0, 0, iw, ih);
+    }
+  }
+  // Nearest-neighbor from 4x intermediate → final pixel canvas (keeps crisp pixel art edges)
+  x.save();
+  x.imageSmoothingEnabled = false;
+  x.drawImage(tmp, dx, dy, dw, dh);
+  x.restore();
+}
+
 export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = 20; c.height = 40;
+  c.width = 20; c.height = 40 + SPRITE_HAT_HEADROOM;
   const x = c.getContext('2d')!;
   x.imageSmoothingEnabled = false;
+  x.translate(0, SPRITE_HAT_HEADROOM);
   const s = 2;
   const cx = 10;
   const headY = 4;
@@ -22,8 +172,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
 
   // ── Skin ──
   x.fillStyle = a.skinColor;
-  x.fillRect(cx - 1.5 * s, headY + 1 * s, 3 * s, 1 * s);
-  x.fillRect(cx - 2 * s, headY + 2 * s, 4 * s, 3 * s);
+  x.fillRect(cx - 1.5 * s, headY + 2 * s, 3 * s, 1 * s);
+  x.fillRect(cx - 2 * s,   headY + 3 * s, 4 * s, 2 * s);
   x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1 * s);
 
   // ── Walk animation leg offsets ──
@@ -246,17 +396,15 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
 
   // ── Hair ──
   const hasHat = a.hat !== 'none';
+  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral'].includes(a.hat);
   const longHairStyle = ['long', 'ponytail', 'mullet'].includes(a.hair);
   if (a.hair !== 'none') {
     x.fillStyle = a.hairColor;
-    if (!hasHat) {
-      // No hat — draw full hair
+    if (!hasHat || hatAllowsFullHair) {
       drawHubHair(x, a.hair, cx, headY, s);
     } else if (longHairStyle) {
-      // Hat on, but long/ponytail/mullet — draw only the hanging side parts
       drawHubHairSidesOnly(x, a.hair, cx, headY, s);
     }
-    // All other hair styles: hidden completely under hat
   }
 
   // ── Hat ──
@@ -279,9 +427,10 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasEleme
 
 export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = 24; c.height = 60;
+  c.width = 24 + ROOM_SPRITE_XPAD * 2; c.height = 60 + SPRITE_HAT_HEADROOM;
   const x = c.getContext('2d')!;
   x.imageSmoothingEnabled = false;
+  x.translate(ROOM_SPRITE_XPAD, SPRITE_HAT_HEADROOM);
   const oY = 10;
 
   // Walk animation leg offsets: frame 0 = neutral (standing), frame 1 = left up/right down, frame 2 = opposite
@@ -572,10 +721,11 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 
   // ── Hair ──
   const hasHat = a.hat !== 'none';
+  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral'].includes(a.hat);
   const longHairStyle = ['long', 'ponytail', 'mullet'].includes(a.hair);
   if (a.hair !== 'none') {
     x.fillStyle = a.hairColor;
-    if (!hasHat) {
+    if (!hasHat || hatAllowsFullHair) {
       drawRoomHair(x, a.hair, oY);
     } else if (longHairStyle) {
       drawRoomHairSidesOnly(x, a.hair, oY);
@@ -606,8 +756,8 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: number, s: number): void {
   switch (hair) {
     case 'short':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s - 1);
-      x.fillRect(cx - 2.5 * s, hy + 1 * s, 1 * s, 2 * s - 1);
+      x.fillRect(cx - 2 * s, hy + 1, 4 * s, 2 * s - 1);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s + 1, 1 * s, 2 * s - 1);
       break;
     case 'mohawk':
       x.fillRect(cx - 0.5 * s, hy - 2 * s, 1 * s, 3 * s);
@@ -755,91 +905,92 @@ function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: number): vo
 // ══════════════════════════════════════
 function drawHubHat(x: CanvasRenderingContext2D, hat: string, cx: number, hy: number, s: number): void {
   const hatY = hy + s + 2;
+  const pY = hatY + s; // pixel-drawn hats shifted 1px down to match new head top
   switch (hat) {
     case 'cap':
-      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
-      x.fillRect(cx - 2 * s, hatY - 1 * s, 2 * s, 0.5 * s);
+      x.fillRect(cx - 2 * s, pY - 2 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, pY - 1 * s, 2 * s, 0.5 * s);
       break;
     case 'beanie':
-      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 2 * s);
-      x.fillRect(cx - 0.5 * s, hatY - 4 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 2 * s, pY - 3 * s, 4 * s, 2 * s);
+      x.fillRect(cx - 0.5 * s, pY - 4 * s, 1 * s, 1 * s);
       break;
     case 'tophat':
-      x.fillRect(cx - 1.5 * s, hatY - 5 * s, 3 * s, 3 * s);
-      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s, pY - 5 * s, 3 * s, 3 * s);
+      x.fillRect(cx - 2 * s, pY - 2 * s, 4 * s, 1 * s);
       break;
     case 'cowboy': {
-      x.fillRect(cx - 1.5 * s, hatY - 4 * s, 3 * s, 2 * s);
-      x.fillRect(cx - 3 * s, hatY - 2 * s, 6 * s, 1 * s);
+      x.fillRect(cx - 1.5 * s, pY - 4 * s, 3 * s, 2 * s);
+      x.fillRect(cx - 3 * s, pY - 2 * s, 6 * s, 1 * s);
       const cSave = x.fillStyle as string;
       x.fillStyle = darken(cSave, 20);
-      x.fillRect(cx - 1.5 * s, hatY - 4 * s, 3 * s, 0.5 * s);
+      x.fillRect(cx - 1.5 * s, pY - 4 * s, 3 * s, 0.5 * s);
       x.fillStyle = cSave;
       break;
     }
     case 'beret':
-      x.fillRect(cx - 2 * s, hatY - 2 * s, 4 * s, 1 * s);
-      x.fillRect(cx - 1 * s, hatY - 3 * s, 3 * s, 1 * s);
-      x.fillRect(cx - 2 * s, hatY - 1 * s, 4 * s, 0.5 * s);
+      x.fillRect(cx - 2 * s, pY - 2 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 1 * s, pY - 3 * s, 3 * s, 1 * s);
+      x.fillRect(cx - 2 * s, pY - 1 * s, 4 * s, 0.5 * s);
       break;
     case 'bucket':
-      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 2 * s);
-      x.fillRect(cx - 2 * s, hatY - 1 * s, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, pY - 3 * s, 4 * s, 2 * s);
+      x.fillRect(cx - 2 * s, pY - 1 * s, 4 * s, 1 * s);
       break;
     case 'crown': {
       const crSave = x.fillStyle as string;
       x.fillStyle = '#f0c040';
-      x.fillRect(cx - 2 * s, hatY - 3 * s, 4 * s, 1.5 * s);
-      x.fillRect(cx - 2 * s, hatY - 4 * s, 1 * s, 1 * s);
-      x.fillRect(cx - 0.5 * s, hatY - 5 * s, 1 * s, 1.5 * s);
-      x.fillRect(cx + 1 * s, hatY - 4 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 2 * s, pY - 3 * s, 4 * s, 1.5 * s);
+      x.fillRect(cx - 2 * s, pY - 4 * s, 1 * s, 1 * s);
+      x.fillRect(cx - 0.5 * s, pY - 5 * s, 1 * s, 1.5 * s);
+      x.fillRect(cx + 1 * s, pY - 4 * s, 1 * s, 1 * s);
       x.fillStyle = '#e87a10'; x.globalAlpha = 0.7;
-      x.fillRect(cx - 1 * s, hatY - 2 * s, 1 * s, 0.5 * s);
+      x.fillRect(cx - 1 * s, pY - 2 * s, 1 * s, 0.5 * s);
       x.globalAlpha = 1;
       x.fillStyle = crSave;
       break;
     }
     case 'visor':
-      // Just a wide brim with a small sweatband nub — no crown
-      x.fillRect(cx - 1.5 * s, hatY - 1.75 * s, 3 * s, 0.75 * s); // sweatband nub
-      x.fillRect(cx - 3 * s,   hatY - 1 * s,     6 * s, 0.75 * s); // wide brim
+      x.fillRect(cx - 1.5 * s, pY - 1.75 * s, 3 * s, 0.75 * s); // sweatband nub
+      x.fillRect(cx - 3 * s,   pY - 1 * s,     6 * s, 0.75 * s); // wide brim
       break;
     case 'fedora': {
       const fedSave = x.fillStyle as string;
-      x.fillRect(cx - 1.5 * s, hatY - 4.5 * s, 3 * s, 3 * s);    // crown
-      x.fillRect(cx - 3 * s,   hatY - 1.5 * s,  6 * s, 1 * s);   // wide brim
+      x.fillRect(cx - 1.5 * s, pY - 4.5 * s, 3 * s, 3 * s);    // crown
+      x.fillRect(cx - 3 * s,   pY - 1.5 * s,  6 * s, 1 * s);   // wide brim
       x.fillStyle = darken(fedSave, 20);
-      x.fillRect(cx - 1.5 * s, hatY - 4.5 * s, 3 * s, 0.5 * s);  // top crease indent
+      x.fillRect(cx - 1.5 * s, pY - 4.5 * s, 3 * s, 0.5 * s);  // top crease indent
       x.fillStyle = fedSave;
       break;
     }
     case 'wizard':
-      // Tall pointed hat — hatY=8, canvas top=0, so max upward is 4*s
-      x.fillRect(cx - 0.5 * s, hatY - 3.5 * s, 1 * s, 1.5 * s); // tip
-      x.fillRect(cx - 1 * s,   hatY - 2 * s,   2 * s, 1 * s);   // narrow mid
-      x.fillRect(cx - 1.5 * s, hatY - 1 * s,   3 * s, 1 * s);   // wider mid
-      x.fillRect(cx - 2.5 * s, hatY,           5 * s, 0.5 * s); // brim
+      x.fillRect(cx - 0.5 * s, pY - 3.5 * s, 1 * s, 1.5 * s); // tip
+      x.fillRect(cx - 1 * s,   pY - 2 * s,   2 * s, 1 * s);   // narrow mid
+      x.fillRect(cx - 1.5 * s, pY - 1 * s,   3 * s, 1 * s);   // wider mid
+      x.fillRect(cx - 2.5 * s, pY,           5 * s, 0.5 * s); // brim
       break;
     case 'hardhat': {
       const hhSave = x.fillStyle as string;
-      x.fillRect(cx - 2 * s,   hatY - 3.5 * s, 4 * s,   3 * s);   // dome
-      x.fillRect(cx - 2.5 * s, hatY - 0.5 * s, 5 * s,   0.75 * s); // brim
+      x.fillRect(cx - 2 * s,   pY - 3.5 * s, 4 * s,   3 * s);   // dome
+      x.fillRect(cx - 2.5 * s, pY - 0.5 * s, 5 * s,   0.75 * s); // brim
       x.fillStyle = lighten(hhSave, 22); x.globalAlpha = 0.45;
-      x.fillRect(cx - 0.5 * s, hatY - 3.5 * s, 1 * s,   2.5 * s); // highlight stripe
+      x.fillRect(cx - 0.5 * s, pY - 3.5 * s, 1 * s,   2.5 * s); // highlight stripe
       x.globalAlpha = 1;
       x.fillStyle = hhSave;
       break;
     }
     case 'newsboy': {
       const nbSave = x.fillStyle as string;
-      x.fillRect(cx - 2 * s,   hatY - 3 * s,   4 * s,   2.5 * s); // puffed crown
-      x.fillRect(cx - 2.5 * s, hatY - 0.5 * s, 5 * s,   0.75 * s); // band
-      x.fillRect(cx - 2.5 * s, hatY - 1.25 * s, 3 * s,  0.75 * s); // asymmetric visor
+      x.fillRect(cx - 2 * s,   pY - 3 * s,   4 * s,   2.5 * s); // puffed crown
+      x.fillRect(cx - 2.5 * s, pY - 0.5 * s, 5 * s,   0.75 * s); // band
+      x.fillRect(cx - 2.5 * s, pY - 1.25 * s, 3 * s,  0.75 * s); // asymmetric visor
       x.fillStyle = darken(nbSave, 18);
-      x.fillRect(cx - 2 * s,   hatY - 0.75 * s, 4 * s,  0.5 * s);  // crease shadow
+      x.fillRect(cx - 2 * s,   pY - 0.75 * s, 4 * s,  0.5 * s);  // crease shadow
       x.fillStyle = nbSave;
       break;
     }
+    default:
+      if (ITEM_DEFS[hat]) drawImgItemAuto(x, hat, cx, hatY, HUB_HEAD_W, HUB_HEAD_W / ROOM_HEAD_W);
   }
 }
 
@@ -937,6 +1088,8 @@ function drawRoomHat(x: CanvasRenderingContext2D, hat: string, oY: number): void
       x.fillStyle = nbSave;
       break;
     }
+    default:
+      if (ITEM_DEFS[hat]) drawImgItemAuto(x, hat, 12, oY, ROOM_HEAD_W, 1);
   }
 }
 
@@ -1014,18 +1167,6 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       x.fillRect(cx + 2 * s,   hy + 4 * s, 0.5 * s, 1 * s);
       x.globalAlpha = 1;
       break;
-    case 'headphones': {
-      x.fillRect(cx - 1.5 * s, hy,           3 * s,   0.5 * s); // thin band
-      x.fillRect(cx - 2 * s,   hy + 0.5 * s, 0.5 * s, 1.5 * s); // left arm
-      x.fillRect(cx + 1.5 * s, hy + 0.5 * s, 0.5 * s, 1.5 * s); // right arm
-      x.fillRect(cx - 2.5 * s, hy + 1.5 * s, s,       2.5 * s); // left cup
-      x.fillRect(cx + 1.5 * s, hy + 1.5 * s, s,       2.5 * s); // right cup
-      x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
-      x.fillRect(cx - 2.25 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
-      x.fillRect(cx + 1.75 * s, hy + 2 * s, 0.5 * s, 1.5 * s);
-      x.fillStyle = savedColor; x.globalAlpha = 1;
-      break;
-    }
     case 'watch': {
       // Left arm: x = cx-2.5*s, w = 1*s. Strap: 1px overhang left only.
       x.fillStyle = darken(savedColor, 18);
@@ -1063,6 +1204,11 @@ function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: number, 
       x.fillStyle = savedColor;
       break;
     }
+    default:
+      if (ITEM_DEFS[acc]) {
+        const hatY = hy + s + 2;
+        drawImgItemAuto(x, acc, cx, hatY, HUB_HEAD_W, HUB_HEAD_W / ROOM_HEAD_W);
+      }
   }
 }
 
@@ -1140,23 +1286,6 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       x.fillRect(18, oY + 7, 2, 3);
       x.globalAlpha = 1;
       break;
-    case 'headphones': {
-      // Head top: x=7-16 at oY. Head widens to x=5-18 at oY+2.
-      // Band follows that exact contour then cups protrude outside.
-      x.fillRect(7, oY,     10, 1); // across head top (x=7-16)
-      x.fillRect(7, oY + 1,  1, 1); // left edge down (still x=7)
-      x.fillRect(16, oY + 1, 1, 1); // right edge down (still x=16)
-      x.fillRect(5, oY + 2,  2, 2); // left steps out to x=5 as head widens
-      x.fillRect(17, oY + 2, 2, 2); // right steps out to x=17
-      // Ear cups protrude just outside the head sides (head left=5, right=18)
-      x.fillRect(2, oY + 3,  3, 4); // left cup
-      x.fillRect(19, oY + 3, 3, 4); // right cup
-      x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
-      x.fillRect(3, oY + 4, 1, 2);
-      x.fillRect(20, oY + 4, 1, 2);
-      x.fillStyle = savedColor; x.globalAlpha = 1;
-      break;
-    }
     case 'watch': {
       // Left arm: x=4, w=2. Strap: 1px overhang left only (no right overflow).
       x.fillStyle = darken(savedColor, 25);
@@ -1195,6 +1324,8 @@ function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: number)
       x.fillStyle = savedColor;
       break;
     }
+    default:
+      if (ITEM_DEFS[acc]) drawImgItemAuto(x, acc, 12, oY, ROOM_HEAD_W, 1);
   }
 }
 

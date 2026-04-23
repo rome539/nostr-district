@@ -7,7 +7,7 @@
 
 import { P } from '../config/game.config';
 import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
-import { renderRoomSprite } from '../entities/AvatarRenderer';
+import { renderRoomSprite, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from '../entities/AvatarRenderer';
 import { authStore } from '../stores/authStore';
 import { publishEvent, signEvent, publishRoomConfig, publishOutfits, publishAvatar } from '../nostr/nostrService';
 import { getStatus, setStatus } from '../stores/statusStore';
@@ -218,7 +218,7 @@ export class ComputerUI {
         " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
       </div>
       <div style="display:flex;gap:16px;margin-bottom:14px;">
-        <div id="ward-preview" style="width:96px;height:180px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-purp) 55%,var(--nd-navy)) 0%,var(--nd-navy) 68%,var(--nd-bg) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04),inset 0 -18px 28px rgba(0,0,0,0.3);position:relative;overflow:hidden;"></div>
+        <div id="ward-preview" style="width:96px;height:216px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-purp) 55%,var(--nd-navy)) 0%,var(--nd-navy) 68%,var(--nd-bg) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04),inset 0 -18px 28px rgba(0,0,0,0.3);position:relative;overflow:hidden;"></div>
         <div style="flex:1;">
           <div id="ward-slots" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;"></div>
           <div id="ward-options"></div>
@@ -258,11 +258,13 @@ export class ComputerUI {
     container.appendChild(backdrop);
     const spriteCanvas = renderRoomSprite(avatar);
     const preview = document.createElement('canvas');
-    preview.width = 72; preview.height = 156;
+    const srcW = spriteCanvas.width;
+    const srcH = spriteCanvas.height;
+    preview.width = srcW * 3; preview.height = srcH * 3;
     const px = preview.getContext('2d')!;
     px.imageSmoothingEnabled = false;
-    px.drawImage(spriteCanvas, 0, 0, 24, 52, 0, 0, 72, 156);
-    preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;filter:drop-shadow(0 1px 0 rgba(255,255,255,0.14)) drop-shadow(0 2px 8px rgba(0,0,0,0.38));';
+    px.drawImage(spriteCanvas, 0, 0, srcW, srcH, 0, 0, srcW * 3, srcH * 3);
+    preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;';
     container.appendChild(preview);
   }
 
@@ -459,7 +461,7 @@ export class ComputerUI {
           color:var(--nd-accent);font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
         ">Save</button>
         <div id="guest-name-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
-        <div style="color:var(--nd-dpurp);font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
+        <div style="color:var(--nd-subtext);font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
       `;
       const statusEl = body.querySelector('#guest-name-status') as HTMLElement;
       body.querySelector('#guest-name-save')?.addEventListener('click', () => {

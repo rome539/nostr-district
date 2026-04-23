@@ -3,6 +3,7 @@ type LoginMethod = 'extension' | 'nsec' | 'bunker' | 'guest' | null;
 interface AuthState {
   pubkey: string | null;
   npub: string | null;
+  nsec: string | null;
   displayName: string | null;
   picture: string | null;
   profile: Record<string, any>;
@@ -13,6 +14,7 @@ interface AuthState {
   login: (data: {
     pubkey: string;
     npub: string;
+    nsec?: string;
     profile?: Record<string, any>;
     loginMethod: LoginMethod;
   }) => void;
@@ -54,6 +56,7 @@ export const authStore = {
 state = {
   pubkey: null,
   npub: null,
+  nsec: null,
   displayName: null,
   picture: null,
   profile: {},
@@ -64,6 +67,7 @@ state = {
   login: (data) => {
     state.pubkey = data.pubkey;
     state.npub = data.npub;
+    state.nsec = data.nsec ?? null;
     state.profile = data.profile || {};
     state.displayName = state.profile.display_name || state.profile.name || (data.npub?.slice(0, 12) + '...') || 'anon';
     state.picture = state.profile.picture || null;
@@ -89,6 +93,7 @@ state = {
   logout: () => {
     state.pubkey = null;
     state.npub = null;
+    state.nsec = null;
     state.displayName = null;
     state.picture = null;
     state.profile = {};

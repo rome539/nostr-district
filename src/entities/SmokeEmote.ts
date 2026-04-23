@@ -48,7 +48,7 @@ export class SmokeEmote {
     const isRoom   = scale === 'room';
     const isCabin  = scale === 'cabin';
     const cigOffX  = isRoom ? 18 : isCabin ? 10 : 5;
-    const cigOffY  = isRoom ? -110 : isCabin ? -54 : -27;
+    const cigOffY  = isRoom ? -104 : isCabin ? -54 : -27;
     const cigW     = isRoom ? 8 : isCabin ? 7 : 4;
     const cigH     = isRoom ? 3 : isCabin ? 2.5 : 1.5;
     const tipW     = isRoom ? 3 : isCabin ? 2.5 : 1.5;

@@ -642,13 +642,13 @@ export class AlleyScene extends BaseScene {
     const name = this.registry.get('playerName') || 'guest';
     const status = getStatus();
 
-    this.playerName = this.add.text(spawnX, this.playerY - 90, name.slice(0, 14), {
+    this.playerName = this.add.text(spawnX, this.playerY + 14, name.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: '9px',
       color: P.lpurp, align: 'center',
       backgroundColor: '#04081088', padding: { x: 3, y: 1 },
     }).setOrigin(0.5).setDepth(11);
 
-    this.playerStatusText = this.add.text(spawnX, this.playerY - 104, status.slice(0, 30), {
+    this.playerStatusText = this.add.text(spawnX, this.playerY + 26, status.slice(0, 30), {
       fontFamily: '"Courier New", monospace', fontSize: '8px',
       color: P.lpurp, align: 'center',
     }).setOrigin(0.5).setDepth(11).setAlpha(status ? 1 : 0);
@@ -658,7 +658,7 @@ export class AlleyScene extends BaseScene {
   // OTHER PLAYERS
   // ══════════════════════════════════════════════════════════════════
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
-  protected override getBubbleYOffset(): number { return -94; }
+  protected override getBubbleYOffset(): number { return -72; }
   protected override onPlayerJoinGuard(_p: { pubkey: string }): boolean { return !this.isLeavingScene; }
   protected override handleSceneEsc(): boolean {
     if (FortuneTellerModal.isOpen()) { FortuneTellerModal.destroy(); return true; }
@@ -669,7 +669,7 @@ export class AlleyScene extends BaseScene {
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 2,
-      nameYOffset: -90, statusYOffset: -102,
+      nameYOffset: +14, statusYOffset: +26,
       nameColor: P.lpurp, nameFontSize: '9px', statusFontSize: '8px',
       nameBg: '#04081088', namePadding: { x: 3, y: 1 },
       czW: 40, czH: 60, czYOffset: -50,
@@ -715,8 +715,8 @@ export class AlleyScene extends BaseScene {
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'cabin', isWalking);
     this.player.setAlpha(this.emoteSet.isActive('ghost') ? 0.3 : 1);
 
-    this.playerName.setPosition(this.player.x, this.player.y - 90);
-    this.playerStatusText.setPosition(this.player.x, this.player.y - 102);
+    this.playerName.setPosition(this.player.x, this.player.y + 14);
+    this.playerStatusText.setPosition(this.player.x, this.player.y + 26);
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);

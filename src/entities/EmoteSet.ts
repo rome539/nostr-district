@@ -18,6 +18,7 @@ import { ConfettiEmote } from './ConfettiEmote';
 import { FireEmote }     from './FireEmote';
 import { GhostEmote }    from './GhostEmote';
 import { RainEmote }     from './RainEmote';
+import { FishingEmote }  from './FishingEmote';
 
 export interface BaseEmote {
   active: boolean;
@@ -42,6 +43,7 @@ export const EMOTE_FLAVORS: Record<string, string> = {
   fire:     '*on fire*',
   ghost:    '*spooky*',
   rain:     '*rain cloud*',
+  fishing:  '*casts a line...*',
 };
 
 /** System message shown when the local player turns an emote off. */
@@ -59,6 +61,7 @@ export const EMOTE_OFF_MSGS: Record<string, string> = {
   fire:     'Fire out',
   ghost:    'Boo done',
   rain:     'Cloud gone',
+  fishing:  'Reeled in',
 };
 
 export class EmoteSet {
@@ -78,6 +81,7 @@ export class EmoteSet {
     this.emotes.set('fire',     new FireEmote());
     this.emotes.set('ghost',    new GhostEmote());
     this.emotes.set('rain',     new RainEmote());
+    this.emotes.set('fishing',  new FishingEmote());
   }
 
   start(name: string): boolean {

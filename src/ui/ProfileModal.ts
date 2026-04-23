@@ -254,7 +254,7 @@ export class ProfileModal {
           border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
         ">
           <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;">
-            <canvas id="profile-pixel-avatar" width="48" height="104" style="image-rendering:pixelated;border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);border-radius:6px;background:color-mix(in srgb,var(--nd-bg) 50%,transparent);"></canvas>
+            <canvas id="profile-pixel-avatar" width="48" height="136" style="image-rendering:pixelated;border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);border-radius:6px;background:color-mix(in srgb,var(--nd-bg) 50%,transparent);"></canvas>
             <div id="profile-copy-npub" style="
               font-size:9px;font-family:'Courier New',monospace;
               color:var(--nd-subtext);cursor:pointer;opacity:0.65;
@@ -307,7 +307,11 @@ export class ProfileModal {
         const spriteCanvas = renderRoomSprite(avatarCfg);
         const pctx = pixelCanvas.getContext('2d')!;
         pctx.imageSmoothingEnabled = false;
-        pctx.drawImage(spriteCanvas, 0, 0, 24, 52, 0, 0, 48, 104);
+        const profSrcW = spriteCanvas.width;
+        const profSrcH = spriteCanvas.height;
+        pixelCanvas.width = profSrcW * 2;
+        pixelCanvas.height = profSrcH * 2;
+        pctx.drawImage(spriteCanvas, 0, 0, profSrcW, profSrcH, 0, 0, profSrcW * 2, profSrcH * 2);
       }
 
       modal.querySelector('#profile-dm')?.addEventListener('click', () => {

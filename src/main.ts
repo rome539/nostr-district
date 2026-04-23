@@ -48,11 +48,14 @@ window.addEventListener('pagehide', (e) => {
 import {
   loginWithExtension,
   loginWithNsec,
+  loginWithNewAccount,
   loginWithBunkerUrl,
   loginAsGuest,
   startBunkerFlow,
   cancelBunkerFlow,
+  loadNostrTools,
 } from './nostr/nostrService';
+import { getStoredPasskeys, loginWithPasskey, isPasskeySupported, saveWithPasskey } from './stores/passkeyStore';
 
 // Auto-fullscreen on landscape rotation (touch devices only)
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -133,6 +136,12 @@ let game: Phaser.Game | null = null;
 let gameStarting = false;
 let loginInProgress = false;
 
+function safeError(e: any): string {
+  const msg: string = e?.message || String(e) || 'Unknown error';
+  // Strip any nsec1 keys from error messages before showing to user
+  return msg.replace(/nsec1[a-z0-9]+/gi, '[private key]');
+}
+
 // Mobile: when the software keyboard appears, iOS scrolls the visual viewport
 // to try to show the focused input — which makes the top of the canvas look
 // clipped. Counter that by translating #game-container by -offsetTop so the
@@ -198,7 +207,34 @@ function startGame(): void {
   }, 100);
 }
 
+const _storedPasskeys = getStoredPasskeys();
+
+const MAX_PASSKEYS = 3;
+
+async function _offerPasskey(nsec: string, displayName: string): Promise<void> {
+  // Re-read storage rather than trusting the startup snapshot — user may have
+  // saved (or deleted) a passkey within this session.
+  if (getStoredPasskeys().length >= MAX_PASSKEYS) return;
+  if (!(await isPasskeySupported())) return;
+  await loginScreen.showSavePasskeyPrompt(nsec, displayName);
+}
+
 const loginScreen = new LoginScreen({
+  storedPasskeys: _storedPasskeys,
+  onPasskeyLogin: async (credentialId: string) => {
+    if (loginInProgress) return;
+    loginInProgress = true;
+    try {
+      const nsec = await loginWithPasskey(credentialId);
+      await loginWithNsec(nsec);
+      w.__nostr_district_started = true;
+      loginScreen.destroy();
+      startGame();
+    } catch (e: any) {
+      loginInProgress = false;
+      loginScreen.setStatus(safeError(e), true);
+    }
+  },
   onExtensionLogin: async () => {
     if (loginInProgress) return;
     loginInProgress = true;
@@ -209,7 +245,7 @@ const loginScreen = new LoginScreen({
       startGame();
     } catch (e: any) {
       loginInProgress = false;
-      loginScreen.setStatus(e.message, true);
+      loginScreen.setStatus(safeError(e), true);
     }
   },
   onNsecLogin: async (nsec: string) => {
@@ -217,12 +253,14 @@ const loginScreen = new LoginScreen({
     loginInProgress = true;
     try {
       await loginWithNsec(nsec);
+      const displayName = authStore.getState().displayName || 'Nostr User';
+      await _offerPasskey(nsec, displayName);
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
       loginInProgress = false;
-      loginScreen.setStatus(e.message, true);
+      loginScreen.setStatus(safeError(e), true);
     }
   },
   onBunkerLogin: async (url: string) => {
@@ -236,7 +274,7 @@ const loginScreen = new LoginScreen({
       startGame();
     } catch (e: any) {
       loginInProgress = false;
-      loginScreen.setStatus(e.message, true);
+      loginScreen.setStatus(safeError(e), true);
     }
   },
   onBunkerClientFlow: async () => {
@@ -304,7 +342,26 @@ const loginScreen = new LoginScreen({
       startGame();
     } catch (e: any) {
       loginInProgress = false;
-      loginScreen.setStatus(e.message, true);
+      loginScreen.setStatus(safeError(e), true);
+    }
+  },
+  onCreateWithPasskey: async (username: string): Promise<string> => {
+    await loadNostrTools();
+    const { generateSecretKey, nip19 } = await import('nostr-tools');
+    return nip19.nsecEncode(generateSecretKey());
+  },
+  onConfirmCreate: async (nsec: string, username: string) => {
+    if (loginInProgress) return;
+    loginInProgress = true;
+    try {
+      await loginWithNewAccount(nsec, username);
+      await _offerPasskey(nsec, username);
+      w.__nostr_district_started = true;
+      loginScreen.destroy();
+      startGame();
+    } catch (e: any) {
+      loginInProgress = false;
+      loginScreen.setStatus(safeError(e), true);
     }
   },
 });

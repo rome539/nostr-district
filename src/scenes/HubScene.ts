@@ -12,7 +12,7 @@ import { startCrewJoinReqSubscription } from '../nostr/crewService';
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
-import { renderHubSprite, renderRoomSprite } from '../entities/AvatarRenderer';
+import { renderHubSprite, renderRoomSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
@@ -316,8 +316,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       }
     }
 
-    this.playerName.setPosition(this.player.x, this.player.y - 44);
-    this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
+    this.playerName.setPosition(this.player.x, this.player.y + 14);
+    this.playerStatusText.setPosition(this.player.x, this.player.y + 26);
     const ghostAlpha = this.emoteSet.isActive('ghost') ? 0.3 : 1;
     this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
     sendPosition(this.player.x, this.player.y, this.facingRight);
@@ -464,7 +464,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 1,
-      nameYOffset: -44, statusYOffset: -59,
+      nameYOffset: +14, statusYOffset: +26,
       nameColor: P.lcream, nameFontSize: '10px', statusFontSize: '9px',
       nameBg: '#0a0014bb', namePadding: { x: 4, y: 2 },
       czW: 44, czH: 56, czYOffset: -20,
@@ -590,17 +590,18 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     const n = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(sx, this.playerY - 44, n.slice(0, 14), {
+    this.playerName = this.add.text(sx, this.playerY + 14, n.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal,
       align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 },
     }).setOrigin(0.5).setDepth(11);
 
     const myStatus = getStatus();
-    this.playerStatusText = this.add.text(sx, this.playerY - 59, myStatus, {
+    this.playerStatusText = this.add.text(sx, this.playerY + 26, myStatus, {
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center',
     }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
 
     this.generateWalkFrames(getAvatar());
+    itemImagesReady.then(() => this.generateWalkFrames(getAvatar()));
   }
 
   private generateWalkFrames(avatar = getAvatar()): void {

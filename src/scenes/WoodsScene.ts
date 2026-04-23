@@ -724,8 +724,8 @@ export class WoodsScene extends BaseScene {
 
     if (this.player.x >= W - 24 && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToDistrict(); }
 
-    this.playerName.setPosition(this.player.x, this.player.y - 44);
-    this.playerStatusText.setPosition(this.player.x, this.player.y - 59);
+    this.playerName.setPosition(this.player.x, this.player.y + 14);
+    this.playerStatusText.setPosition(this.player.x, this.player.y + 26);
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
@@ -957,12 +957,12 @@ export class WoodsScene extends BaseScene {
     this.playerGlow = this.add.graphics().setDepth(9);
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY - 44, name.slice(0, 14), {
+    this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT,
       align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 },
     }).setOrigin(0.5).setDepth(11);
     const ms = getStatus();
-    this.playerStatusText = this.add.text(this.player.x, this.playerY - 59, ms, {
+    this.playerStatusText = this.add.text(this.player.x, this.playerY + 26, ms, {
       fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center',
     }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
@@ -1385,6 +1385,7 @@ export class WoodsScene extends BaseScene {
       this.fishingCastDist = 30 + Math.random() * 80;  // 30–110px out from dock edge
       ChatUI.showBubble(this, this.player.x, this.player.y - 48, '* casts a line...', WOODS_ACCENT, 3000);
       this.snd.fishingCast();
+      sendChat('/emote fishing_on');
     } else if (this.fishingState === 'bite') {
       this.reelIn();
     } else {
@@ -1511,6 +1512,7 @@ export class WoodsScene extends BaseScene {
   }
 
   private resetFishingState(): void {
+    if (this.fishingState !== 'idle') sendChat('/emote fishing_off');
     this.fishingState = 'idle';
     this.fishingTimer = 0;
     this.fishingLineGraphics.clear();
@@ -2036,7 +2038,7 @@ export class WoodsScene extends BaseScene {
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 1,
-      nameYOffset: -44, statusYOffset: -59,
+      nameYOffset: +14, statusYOffset: +26,
       nameColor: WOODS_ACCENT, nameFontSize: '9px', statusFontSize: '8px',
       nameBg: '#04081088', namePadding: { x: 3, y: 1 },
       czW: 40, czH: 50, czYOffset: -20,

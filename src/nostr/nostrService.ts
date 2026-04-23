@@ -263,7 +263,7 @@ export async function loginWithNsec(nsecString: string): Promise<void> {
   setChannelKey(secretKey as Uint8Array);
 
   // Login immediately — don't block on relay fetch
-  authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'nsec' });
+  authStore.getState().login({ pubkey, npub, nsec: nsecString, profile: {}, loginMethod: 'nsec' });
 
   // Load (and if needed migrate) NWC URI into memory now that key is available
   initNWC().catch(() => {});
@@ -378,12 +378,31 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
   syncFromRelays(userPubkey);
 }
 
+export async function loginWithNewAccount(nsecString: string, displayName: string): Promise<void> {
+  await loginWithNsec(nsecString);
+  // Update auth state with nsec and display name so it's available in-session
+  authStore.getState().nsec = nsecString;
+  authStore.updateProfile({ name: displayName, display_name: displayName });
+  // Publish kind:0 profile in background — non-blocking
+  const pubkey = authStore.getState().pubkey;
+  if (pubkey) {
+    signEvent({
+      kind: 0,
+      pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [],
+      content: JSON.stringify({ name: displayName, display_name: displayName }),
+    }).then(ev => publishEvent(ev)).catch(() => {});
+  }
+}
+
 export async function loginAsGuest(): Promise<void> {
   await loadNostrTools();
 
   const secretKey = NostrTools.generateSecretKey();
   const pubkey = NostrTools.getPublicKey(secretKey);
   const npub = NostrTools.nip19.npubEncode(pubkey);
+  const nsec = NostrTools.nip19.nsecEncode(secretKey);
 
   setLocalKey(secretKey);
   setChannelKey(secretKey);
@@ -393,6 +412,7 @@ export async function loginAsGuest(): Promise<void> {
   authStore.getState().login({
     pubkey,
     npub,
+    nsec,
     profile: { name: `guest_${guestId}` },
     loginMethod: 'guest',
   });

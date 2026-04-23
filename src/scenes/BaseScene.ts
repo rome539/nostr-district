@@ -706,7 +706,7 @@ export abstract class BaseScene extends Phaser.Scene {
    * bubbles above the player and other-player sprites.
    * Default: -48. Alley/Cabin: -94. Room: -155.
    */
-  protected getBubbleYOffset(): number { return -48; }
+  protected getBubbleYOffset(): number { return -36; }
 
   /**
    * Whether to show a sprite bubble when another player activates an emote.

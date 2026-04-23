@@ -12,7 +12,7 @@ export interface AvatarConfig {
   topColor: string;
   bottom: 'pants' | 'shorts' | 'skirt' | 'joggers' | 'cargopants' | 'overalls' | 'leggings' | 'jeans' | 'miniskirt';
   bottomColor: string;
-  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy';
+  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral';
   hatColor: string;
   accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring';
   accessoryColor: string;
@@ -79,7 +79,7 @@ export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet'] as const,
   top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe'] as const,
   bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls', 'leggings', 'jeans', 'miniskirt'] as const,
-  hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'crown', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy'] as const,
+  hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
   accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones', 'watch', 'mask', 'monocle', 'ring'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross', 'glow', 'heart'] as const,
 };
