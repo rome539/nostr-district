@@ -129,9 +129,9 @@ export function connectPresence(cb: PresenceCallback): void {
       type: 'join',
       pubkey: state.pubkey || `guest_${Math.random().toString(36).slice(2, 8)}`,
       name: state.displayName || 'guest',
-      x: 400,
-      y: 348,
-      room: 'hub',
+      x: lastSentX || 400,
+      y: lastSentY || 348,
+      room: currentRoom,
       avatar: serializeAvatar(getAvatar()),
       status: getStatus(),
     }));
