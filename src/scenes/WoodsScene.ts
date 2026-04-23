@@ -1422,6 +1422,7 @@ export class WoodsScene extends BaseScene {
           ? `* hooked a ${catch_.name} (${catch_.kg}kg)! ✦`
           : `* caught a ${catch_.name} (${catch_.kg}kg)`;
     const color = isLegendary ? '#ffd700' : catch_.rare ? '#aaff44' : WOODS_ACCENT;
+    if (isLegendary) sendChat(msg);
     this.chatUI.addMessage('system', msg, color);
     if (catch_.rare && !isLegendary && 'lore' in catch_) {
       this.time.delayedCall(600, () => {
