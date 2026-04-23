@@ -43,7 +43,7 @@ export const EMOTE_FLAVORS: Record<string, string> = {
   fire:     '*on fire*',
   ghost:    '*spooky*',
   rain:     '*rain cloud*',
-  fishing:  '*casts a line...*',
+  fishing:  '',
 };
 
 /** System message shown when the local player turns an emote off. */

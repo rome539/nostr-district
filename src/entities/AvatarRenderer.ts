@@ -756,12 +756,12 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: number, s: number): void {
   switch (hair) {
     case 'short':
-      x.fillRect(cx - 2 * s, hy + 1, 4 * s, 2 * s - 1);
-      x.fillRect(cx - 2.5 * s, hy + 1 * s + 1, 1 * s, 2 * s - 1);
+      x.fillRect(cx - 2 * s, hy + 3, 4 * s, 2 * s - 1);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s + 3, 1 * s, 2 * s - 1);
       break;
     case 'mohawk':
-      x.fillRect(cx - 0.5 * s, hy - 2 * s, 1 * s, 3 * s);
-      x.fillRect(cx - 1 * s, hy - 1 * s, 2 * s, 2 * s);
+      x.fillRect(cx - 0.5 * s, hy - 2 * s + 2, 1 * s, 3 * s);
+      x.fillRect(cx - 1 * s, hy - 1 * s + 2, 2 * s, 2 * s);
       break;
     case 'long':
       x.fillRect(cx - 2 * s, hy + 1, 4 * s, 2 * s - 1);
@@ -769,24 +769,24 @@ function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: 
       x.fillRect(cx + 1.5 * s, hy + 1 * s, 1 * s, 5 * s);
       break;
     case 'ponytail':
-      x.fillRect(cx - 2 * s + 1, hy + 1, 4 * s - 1, 1);
-      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 2 * s - 2);
-      x.fillRect(cx + 1.5 * s, hy + 1 * s, 1 * s, 4 * s);
+      x.fillRect(cx - 2 * s + 1, hy + 3, 4 * s - 1, 1);
+      x.fillRect(cx - 2 * s, hy + 4, 4 * s, 2 * s - 2);
+      x.fillRect(cx + 1.5 * s, hy + 1 * s + 2, 1 * s, 4 * s);
       break;
     case 'spiky':
-      x.fillRect(cx - 2 * s, hy - 1 * s + 2, 1 * s, 2 * s);
-      x.fillRect(cx - 0.5 * s, hy - 2 * s + 2, 1 * s, 2 * s);
-      x.fillRect(cx + 1 * s, hy - 1 * s + 2, 1 * s, 2 * s);
-      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hy - 1 * s + 4, 1 * s, 2 * s);
+      x.fillRect(cx - 0.5 * s, hy - 2 * s + 4, 1 * s, 2 * s);
+      x.fillRect(cx + 1 * s, hy - 1 * s + 4, 1 * s, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 4, 4 * s, 1 * s);
       break;
     case 'buzz':
-      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
+      x.fillRect(cx - 2 * s, hy + 4, 4 * s, 1 * s);
       break;
     case 'afro':
-      x.fillRect(cx - 2.5 * s + 1, hy - 2 * s + 3, 5 * s - 2, 2 * s - 1);
-      x.fillRect(cx - 3 * s + 1, hy - 1 * s + 2, 1.5 * s - 1, 2 * s);
-      x.fillRect(cx + 1.5 * s, hy - 1 * s + 2, 1.5 * s - 1, 2 * s);
-      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
+      x.fillRect(cx - 2.5 * s + 1, hy - 2 * s + 5, 5 * s - 2, 2 * s - 1);
+      x.fillRect(cx - 3 * s + 1, hy - 1 * s + 4, 1.5 * s - 1, 2 * s);
+      x.fillRect(cx + 1.5 * s, hy - 1 * s + 4, 1.5 * s - 1, 2 * s);
+      x.fillRect(cx - 2 * s, hy + 4, 4 * s, 1 * s);
       break;
     case 'bun':
       x.fillRect(cx - 2 * s, hy + 1, 4 * s, 1 * s);
@@ -796,14 +796,14 @@ function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: number, hy: 
       x.fillRect(cx - 1 * s, hy + 1, 2 * s, 1 * s);
       break;
     case 'curtains':
-      x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s);
-      x.fillRect(cx - 2.5 * s, hy + 1 * s, 1.5 * s, 3 * s);
-      x.fillRect(cx + 1 * s, hy + 1 * s, 1.5 * s, 3 * s);
+      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 2 * s);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s + 2, 1.5 * s, 3 * s);
+      x.fillRect(cx + 1 * s, hy + 1 * s + 2, 1.5 * s, 3 * s);
       break;
     case 'mullet':
-      x.fillRect(cx - 2 * s, hy + 2, 4 * s, 1 * s);
-      x.fillRect(cx + 1.5 * s, hy + 1 * s + 2, 1 * s, 6 * s);
-      x.fillRect(cx - 2.5 * s, hy + 1 * s + 2, 1 * s, 6 * s);
+      x.fillRect(cx - 2 * s, hy + 4, 4 * s, 1 * s);
+      x.fillRect(cx + 1.5 * s, hy + 1 * s + 4, 1 * s, 6 * s);
+      x.fillRect(cx - 2.5 * s, hy + 1 * s + 4, 1 * s, 6 * s);
       break;
   }
 }
@@ -818,11 +818,11 @@ function drawHubHairSidesOnly(x: CanvasRenderingContext2D, hair: string, cx: num
       x.fillRect(cx + 1.5 * s, hy + 1 * s, 1 * s, 5 * s); // right hang
       break;
     case 'ponytail':
-      x.fillRect(cx + 1.5 * s, hy + 2 * s, 1 * s, 4 * s); // tail
+      x.fillRect(cx + 1.5 * s, hy + 2 * s + 2, 1 * s, 4 * s); // tail
       break;
     case 'mullet':
-      x.fillRect(cx - 2.5 * s, hy + 2 * s, 1 * s, 6 * s); // left hang
-      x.fillRect(cx + 1.5 * s, hy + 2 * s, 1 * s, 6 * s); // right hang
+      x.fillRect(cx - 2.5 * s, hy + 2 * s + 2, 1 * s, 6 * s); // left hang
+      x.fillRect(cx + 1.5 * s, hy + 2 * s + 2, 1 * s, 6 * s); // right hang
       break;
   }
 }
