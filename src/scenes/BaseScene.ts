@@ -756,6 +756,10 @@ export abstract class BaseScene extends Phaser.Scene {
         if (o) { o.targetX = x; o.targetY = this.clampPlayerMoveY(y); if (f !== undefined) o.facingRight = f === 1; }
       },
       onPlayerLeave: (pk) => this.removeOtherPlayer(pk),
+      onDisconnect: () => {
+        const pks = [...this.otherPlayers.keys()];
+        pks.forEach(pk => this.removeOtherPlayer(pk));
+      },
       onCountUpdate: (c) => this.onPresenceCountUpdate(c),
       onChat: (pk, name, text, emojis) => {
         const isMe = pk === myPubkey;

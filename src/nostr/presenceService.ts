@@ -22,6 +22,7 @@ export type PresenceCallback = {
   onNameUpdate?: (pubkey: string, name: string) => void;
   onStatusUpdate?: (pubkey: string, status: string) => void;
   onOnlinePlayers?: (players: { pubkey: string; name: string; room: string }[]) => void;
+  onDisconnect?: () => void;
 };
 
 // Global callbacks for room request system — persist across scene changes
@@ -174,6 +175,7 @@ export function connectPresence(cb: PresenceCallback): void {
   ws.onclose = () => {
     console.log('[Presence] Disconnected');
     if (callbacks) {
+      callbacks.onDisconnect?.();
       setTimeout(() => {
         if (callbacks) connectPresence(callbacks);
       }, 3000);
