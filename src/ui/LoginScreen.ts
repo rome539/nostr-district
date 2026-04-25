@@ -111,6 +111,7 @@ export class LoginScreen {
 
     return `
       <canvas id="login-canvas"></canvas>
+      <div class="login-wrapper">
       <div class="login-box">
         <h1 class="login-title">NOSTR DISTRICT</h1>
         <p class="login-subtitle">a pixel art social world</p>
@@ -211,6 +212,8 @@ export class LoginScreen {
 
         <div id="login-status" class="login-status"></div>
       </div>
+      <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" class="open-source-link">open source ↗</a>
+      </div>
     `;
   }
 
@@ -232,15 +235,38 @@ export class LoginScreen {
         position: fixed; inset: 0; width: 100%; height: 100%;
         pointer-events: none;
       }
+      .login-wrapper {
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        align-self: flex-start; margin: auto 0;
+        z-index: 1;
+      }
       .login-box {
-        position: relative; z-index: 1;
+        position: relative;
         width: min(440px, 96vw); padding: clamp(16px, 5vw, 36px) clamp(16px, 5vw, 36px) clamp(8px, 2vw, 16px); text-align: center;
         background: color-mix(in srgb, var(--nd-bg) 82%, transparent);
         border: 1px solid color-mix(in srgb, var(--nd-dpurp) 40%, transparent);
         border-radius: 12px;
         box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px color-mix(in srgb, var(--nd-accent) 6%, transparent);
         backdrop-filter: blur(6px);
-        align-self: flex-start; margin: auto 0;
+      }
+      .open-source-link {
+        font-size: 11px; color: var(--nd-accent);
+        text-decoration: none; letter-spacing: 0.06em; white-space: nowrap;
+        text-shadow:
+          0 0 4px var(--nd-accent),
+          0 0 10px var(--nd-accent),
+          0 0 24px var(--nd-accent),
+          0 0 48px var(--nd-accent);
+        transition: color 0.2s, text-shadow 0.2s;
+        opacity: 0.65;
+      }
+      .open-source-link:hover {
+        opacity: 1;
+        text-shadow:
+          0 0 4px var(--nd-accent),
+          0 0 12px var(--nd-accent),
+          0 0 30px var(--nd-accent),
+          0 0 60px var(--nd-accent);
       }
       .login-title {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
