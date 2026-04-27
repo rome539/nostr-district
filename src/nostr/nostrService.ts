@@ -198,6 +198,8 @@ export async function fetchOutfits(pubkey: string): Promise<OutfitPreset[] | nul
 
 let _onAvatarSynced: (() => void) | null = null;
 let _avatarSynced = false;
+let _onRoomSynced: (() => void) | null = null;
+let _roomSynced = false;
 
 /**
  * Register a callback to run once the avatar is synced from relays.
@@ -208,11 +210,25 @@ export function onNextAvatarSync(cb: () => void): void {
   _onAvatarSynced = cb;
 }
 
+export function onNextRoomSync(cb: () => void): void {
+  if (_roomSynced) { cb(); return; }
+  _onRoomSynced = cb;
+}
+
 /** After login: fetch keypair data from Nostr and apply */
 function syncFromRelays(pubkey: string): void {
   fetchRoomConfig(pubkey).then(remote => {
     if (remote) applyRemoteRoomConfig(remote);
-  }).catch(() => {});
+    _roomSynced = true;
+    const roomCb = _onRoomSynced;
+    _onRoomSynced = null;
+    roomCb?.();
+  }).catch(() => {
+    _roomSynced = true;
+    const roomCb = _onRoomSynced;
+    _onRoomSynced = null;
+    roomCb?.();
+  });
   fetchOutfits(pubkey).then(remote => {
     if (remote) applyRemoteOutfits(remote);
   }).catch(() => {});
@@ -505,6 +521,8 @@ export async function fetchRoomConfig(pubkey: string): Promise<RoomConfig | null
 export function logout(): void {
   _avatarSynced = false;
   _onAvatarSynced = null;
+  _roomSynced = false;
+  _onRoomSynced = null;
   clearLocalKey();
   clearChannelKey();
   clearNWCCache();

@@ -19,7 +19,7 @@ import {
 
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
-import { renderHubSprite } from '../entities/AvatarRenderer';
+import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
@@ -90,10 +90,7 @@ export class AlleyScene extends BaseScene {
     this.createPlayer();
     onNextAvatarSync(() => {
       const av = getAvatar();
-      if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-      if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-      this.textures.addCanvas('player_walk0', renderHubSprite(av, 0));
-      this.textures.addCanvas('player_walk1', renderHubSprite(av, 1));
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
@@ -630,10 +627,14 @@ export class AlleyScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
     const avatar = getAvatar();
-    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
-    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
+    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
+    itemImagesReady.then(() => {
+      const av = getAvatar();
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(av));
+      this.player?.setTexture('player');
+    });
 
     const spawnX = EXIT_X + 80;
     this.player = this.add.image(spawnX, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
@@ -703,11 +704,11 @@ export class AlleyScene extends BaseScene {
       this.walkTime += delta;
       const bobOffset = Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
       this.player.y = this.playerY + bobOffset;
-      const nf = Math.floor(this.walkTime / 150) % 2;
+      const nf = Math.floor(this.walkTime / 150) % 4;
       if (nf !== this.walkFrame) { this.walkFrame = nf; this.player.setTexture(`player_walk${this.walkFrame}`); }
     } else {
       this.walkTime = 0;
-      if (this.walkFrame !== 0) { this.walkFrame = 0; this.player.setTexture('player'); }
+      if (this.walkFrame >= 0) { this.walkFrame = -1; this.player.setTexture('player'); }
       this.player.y = this.playerY;
     }
 

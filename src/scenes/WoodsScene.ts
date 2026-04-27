@@ -25,7 +25,7 @@ import {
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
-import { renderHubSprite } from '../entities/AvatarRenderer';
+import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 
 const WOODS_ACCENT = '#aaff44';
@@ -129,10 +129,7 @@ export class WoodsScene extends BaseScene {
     this.createPlayer();
     onNextAvatarSync(() => {
       const av = getAvatar();
-      if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-      if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-      this.textures.addCanvas('player_walk0', renderHubSprite(av, 0));
-      this.textures.addCanvas('player_walk1', renderHubSprite(av, 1));
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
@@ -714,9 +711,9 @@ export class WoodsScene extends BaseScene {
       this.footTimer += delta; if (this.footTimer >= 300) { this.footTimer = 0; this.snd.footstep(); }
       this.walkTime += delta;
       this.player.y = this.playerY + Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
-      const nf = Math.floor(this.walkTime / 150) % 2;
+      const nf = Math.floor(this.walkTime / 150) % 4;
       if (nf !== this.walkFrame) { this.walkFrame = nf; this.player.setTexture(`player_walk${this.walkFrame}`); }
-    } else { this.walkTime = 0; if (this.walkFrame !== 0) { this.walkFrame = 0; this.player.setTexture('player'); } this.player.y = this.playerY; }
+    } else { this.walkTime = 0; if (this.walkFrame >= 0) { this.walkFrame = -1; this.player.setTexture('player'); } this.player.y = this.playerY; }
 
     this.emoteGraphics.clear();
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub', isWalking);
@@ -950,10 +947,14 @@ export class WoodsScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
     const avatar = getAvatar();
-    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
-    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
+    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
+    itemImagesReady.then(() => {
+      const av = getAvatar();
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(av));
+      this.player?.setTexture('player');
+    });
     this.playerGlow = this.add.graphics().setDepth(9);
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';

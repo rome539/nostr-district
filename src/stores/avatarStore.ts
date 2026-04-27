@@ -8,9 +8,9 @@ export interface AvatarConfig {
   skinColor: string;
   hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'curtains' | 'mullet';
   hairColor: string;
-  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe';
+  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt';
   topColor: string;
-  bottom: 'pants' | 'shorts' | 'skirt' | 'joggers' | 'cargopants' | 'overalls' | 'leggings' | 'jeans' | 'miniskirt';
+  bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'overalls' | 'miniskirt';
   bottomColor: string;
   hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral';
   hatColor: string;
@@ -77,8 +77,8 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet'] as const,
-  top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe'] as const,
-  bottom: ['pants', 'shorts', 'skirt', 'joggers', 'cargopants', 'overalls', 'leggings', 'jeans', 'miniskirt'] as const,
+  top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe', 'bitcoinshirt', 'ostrichshirt'] as const,
+  bottom: ['pants', 'shorts', 'skirt', 'cargopants', 'overalls', 'miniskirt'] as const,
   hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
   accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones', 'watch', 'mask', 'monocle', 'ring'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross', 'glow', 'heart'] as const,
@@ -110,25 +110,31 @@ export function applyRemoteOutfits(remote: OutfitPreset[]): void {
 }
 
 export const COLOR_PRESETS = [
-  // Neutrals & basics
+  // Neutrals: white → black
   '#f0ece4', '#d4cfc8', '#a89f96', '#7a7270',
-  '#4a4540', '#2e2a28', '#1a1614', '#080604',
+  '#4a4540', '#2e2a28', '#1a1614', '#0e0e0e',
   // Grays & slate
   '#e0e4e8', '#b0b8c4', '#6e7c8a', '#3a4550',
-  // Denim & navy
+  // Navy & denim
   '#1e3a5a', '#2a5280', '#3a6ea0', '#4e8cbe',
-  // Khaki, olive, army
-  '#8a7a50', '#6a6030', '#4a5030', '#2e3820',
+  // Forest & sage
+  '#1e4028', '#2e5c3a', '#4a7850', '#6a9868',
+  // Olive & army
+  '#9a8840', '#6a7228', '#485a20', '#2a3c18',
   // Browns & leather
   '#6e4020', '#8e5a2a', '#a87040', '#c49060',
-  // Burgundy, wine, maroon
-  '#5a1020', '#7a1830', '#a02040', '#c03050',
-  // Forest & sage green
-  '#1e4028', '#2e5c3a', '#4a7850', '#6a9868',
-  // Cream, tan, sand
+  // Cream & tan
   '#f5e8c8', '#e0c898', '#c8a870', '#a88850',
-  // Classic bright row
-  '#e87aab', '#c4568a', '#ff4090', '#e85454',
-  '#f0b040', '#ffe060', '#5dcaa5', '#40e8ff',
-  '#7b68ee', '#9a6eff', '#2a1858', '#0a0014',
+  // Burgundy & reds
+  '#5a1020', '#7a1830', '#a02040', '#c03050',
+  // Pinks
+  '#e87aab', '#ff4090', '#e85454',
+  // Oranges
+  '#a03a10', '#e06028', '#f0a050',
+  // Yellows & gold
+  '#f0b040', '#ffe060',
+  // Teals & cyan
+  '#5dcaa5', '#40e8ff',
+  // Purples
+  '#7b68ee', '#9a6eff', '#5a20d0',
 ];

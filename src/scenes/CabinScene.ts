@@ -18,7 +18,7 @@ import {
 
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
-import { renderHubSprite } from '../entities/AvatarRenderer';
+import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 
 const CABIN_ACCENT = '#f0a030';
@@ -71,10 +71,7 @@ export class CabinScene extends BaseScene {
     this.createPlayer();
     onNextAvatarSync(() => {
       const av = getAvatar();
-      if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-      if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-      this.textures.addCanvas('player_walk0', renderHubSprite(av, 0));
-      this.textures.addCanvas('player_walk1', renderHubSprite(av, 1));
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
@@ -384,9 +381,9 @@ export class CabinScene extends BaseScene {
       this.footTimer += delta; if (this.footTimer >= 300) { this.footTimer = 0; this.snd.footstep(); }
       this.walkTime += delta;
       this.player.y = this.playerY + Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
-      const nf = Math.floor(this.walkTime / 150) % 2;
+      const nf = Math.floor(this.walkTime / 150) % 4;
       if (nf !== this.walkFrame) { this.walkFrame = nf; this.player.setTexture(`player_walk${this.walkFrame}`); }
-    } else { this.walkTime = 0; if (this.walkFrame !== 0) { this.walkFrame = 0; this.player.setTexture('player'); } this.player.y = this.playerY; }
+    } else { this.walkTime = 0; if (this.walkFrame >= 0) { this.walkFrame = -1; this.player.setTexture('player'); } this.player.y = this.playerY; }
 
     this.emoteGraphics.clear();
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'cabin', isWalking);
@@ -928,10 +925,14 @@ export class CabinScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
     const avatar = getAvatar();
-    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
-    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
+    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
+    itemImagesReady.then(() => {
+      const av = getAvatar();
+      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(av));
+      this.player?.setTexture('player');
+    });
     this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);

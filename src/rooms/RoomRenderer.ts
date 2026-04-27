@@ -418,7 +418,7 @@ export class RoomRenderer {
       const canC   = fc('candles');
       const canLight = lighten(canC, 20);
       // If coffee table is present, sit on it; otherwise sit on floor
-      const canY = cfg.furniture.includes('coffee_table') ? FY + 6 : FY - 2;
+      const canY = cfg.furniture.includes('coffee_table') ? FY + 6 : FY + 8;
       // Tray/saucer
       r(76, canY, 34, 4, '#1a1208');
       x.globalAlpha = 0.25; r(77, canY + 1, 32, 2, '#fff'); x.globalAlpha = 1;

@@ -446,6 +446,16 @@ export abstract class BaseScene extends Phaser.Scene {
   protected setupCommonKeyboardHandlers(): void {
     this.rpsGame.setChatUI(this.chatUI);
 
+    // When the canvas is clicked, blur any focused DOM element (e.g. chat input).
+    // ChatUI's keydown handler calls stopPropagation(), which would otherwise
+    // block arrow keys from reaching Phaser's window listener while the input
+    // has focus, causing click-to-walk to "lock" and ignore keyboard input.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if ((p.event.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body) active.blur();
+    });
+
     const ci = () => document.activeElement === this.chatInput;
     const blk = () => this.shouldBlockPanelKeys();
 

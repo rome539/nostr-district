@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync } from '../nostr/nostrService';
+import { onNextAvatarSync, onNextRoomSync } from '../nostr/nostrService';
 import { GAME_WIDTH, GAME_HEIGHT, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
 import {
   setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
@@ -18,7 +18,7 @@ import { showPlayerMenu } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { PetSprite } from '../entities/PetSprite';
 import { RoomRenderer, CandleFlame } from '../rooms/RoomRenderer';
-import { renderRoomSprite, renderHubSprite } from '../entities/AvatarRenderer';
+import { renderRoomSprite, renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
 import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
@@ -268,6 +268,14 @@ export class RoomScene extends BaseScene {
       this.startFirstTimeIntro();
     }
 
+    // ── Room sync: re-render with saved config once Nostr fetch completes ──
+    if (this.isOwner && this.isMyRoom()) {
+      onNextRoomSync(() => {
+        if (!this.scene.isActive()) return;
+        this.refreshRoomBackground();
+      });
+    }
+
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
       BookcaseModal.destroy();
@@ -452,7 +460,7 @@ export class RoomScene extends BaseScene {
       this.walkTimer += delta;
       if (this.walkTimer >= 180) {
         this.walkTimer = 0;
-        this.walkFrame = this.walkFrame === 1 ? 2 : 1;
+        this.walkFrame = (this.walkFrame % 4) + 1;
         if (this.textures.exists('player_room')) this.textures.remove('player_room');
         this.textures.addCanvas('player_room', renderRoomSprite(getAvatar(), this.walkFrame));
         this.player.setTexture('player_room');
@@ -809,6 +817,11 @@ export class RoomScene extends BaseScene {
 
   // ── Player ──
   private createPlayer(): void {
+    itemImagesReady.then(() => {
+      if (this.textures.exists('player_room')) this.textures.remove('player_room');
+      this.textures.addCanvas('player_room', renderRoomSprite(getAvatar(), 0));
+      this.player?.setTexture('player_room');
+    });
     this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(2.5).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
@@ -1022,8 +1035,8 @@ export class RoomScene extends BaseScene {
     if (vx !== 0 || vy !== 0) {
       this.targetX = null;
       this.isMoving = false;
-      this.player.x += vx / 60;
-      this.player.y += vy / 60;
+      this.player.x = Math.round(this.player.x + vx / 60);
+      this.player.y = Math.round(this.player.y + vy / 60);
       if (vx !== 0) this.facingRight = vx > 0;
     } else if (this.isMoving && this.targetX !== null) {
       const dx = this.targetX - this.player.x;
@@ -1031,7 +1044,7 @@ export class RoomScene extends BaseScene {
         this.isMoving = false;
         this.targetX = null;
       } else {
-        this.player.x += Math.sign(dx) * sp / 60;
+        this.player.x = Math.round(this.player.x + Math.sign(dx) * sp / 60);
         this.facingRight = dx > 0;
       }
     }

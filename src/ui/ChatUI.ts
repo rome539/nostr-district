@@ -234,6 +234,7 @@ export class ChatUI {
   /** Create a speech bubble above a position in a Phaser scene */
   static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000, emojis?: { code: string; url: string }[]): void {
     if (isGifUrl(text.trim())) {
+      lifetime = 10000;
       // World coords fixed at moment of posting — bubble stays in place as player walks away
       const worldX = bx;
       const worldY = by - 16;

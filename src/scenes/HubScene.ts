@@ -282,15 +282,15 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       const bobOffset = Math.abs(Math.sin(this.walkTime * Math.PI / 150)) * -2;
       this.player.y = this.playerY + bobOffset;
       // Leg frame: switch every 150ms
-      const newFrame = Math.floor(this.walkTime / 150) % 2;
+      const newFrame = Math.floor(this.walkTime / 150) % 4;
       if (newFrame !== this.walkFrame) {
         this.walkFrame = newFrame;
         this.player.setTexture(`player_walk${this.walkFrame}`);
       }
     } else {
       this.walkTime = 0;
-      if (this.walkFrame !== 0) {
-        this.walkFrame = 0;
+      if (this.walkFrame >= 0) {
+        this.walkFrame = -1;
         this.player.setTexture('player');
       }
       this.player.y = this.playerY;
@@ -601,14 +601,16 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
 
     this.generateWalkFrames(getAvatar());
-    itemImagesReady.then(() => this.generateWalkFrames(getAvatar()));
+    itemImagesReady.then(() => {
+      this.generateWalkFrames(getAvatar());
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(getAvatar()));
+      this.player?.setTexture('player');
+    });
   }
 
   private generateWalkFrames(avatar = getAvatar()): void {
-    if (this.textures.exists('player_walk0')) this.textures.remove('player_walk0');
-    if (this.textures.exists('player_walk1')) this.textures.remove('player_walk1');
-    this.textures.addCanvas('player_walk0', renderHubSprite(avatar, 0));
-    this.textures.addCanvas('player_walk1', renderHubSprite(avatar, 1));
+    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
   }
   private updateMovement(): void {
     if (!isPresenceReady()) return;
