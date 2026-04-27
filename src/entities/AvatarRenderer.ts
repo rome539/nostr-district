@@ -55,7 +55,7 @@ const HUB_BODY_W  = 10; // used when image-based tops/bottoms are added
 export const SPRITE_HAT_HEADROOM = 16;
 // Extra transparent pixels on each side of the room canvas so wide hats never clip.
 // Body drawing uses translated coords (shifted right by this amount) so nothing moves.
-export const ROOM_SPRITE_XPAD = 8;
+export const ROOM_SPRITE_XPAD = 12;
 
 export const itemImagesReady = Promise.all([
   loadItemImg('wizard',               'assets/hats/wizardhat.png'),
@@ -100,6 +100,18 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_robe_room',       'assets/tops/wizardrobe.png'),
   loadItemImg('top_ostrichshirt_room','assets/tops/ostirchshirt.png'),
   loadItemImg('top_bitcoinshirt_room','assets/tops/Bitcoinshirt.png'),
+  // wings (drawn behind player)
+  loadItemImg('acc_wings_hub',  'assets/accessories/wingshub.png'),
+  loadItemImg('acc_wings_room', 'assets/accessories/wings.png'),
+  // camo pants walk frames
+  loadItemImg('bottom_camopants_hub_1', 'assets/bottoms/camopantshub1.png'),
+  loadItemImg('bottom_camopants_hub_2', 'assets/bottoms/camopantshub2.png'),
+  loadItemImg('bottom_camopants_hub_3', 'assets/bottoms/camopantshub3.png'),
+  loadItemImg('bottom_camopants_hub_4', 'assets/bottoms/camopantshub4.png'),
+  loadItemImg('bottom_camopants_room_1', 'assets/bottoms/camopants1.png'),
+  loadItemImg('bottom_camopants_room_2', 'assets/bottoms/camopants2.png'),
+  loadItemImg('bottom_camopants_room_3', 'assets/bottoms/camopants3.png'),
+  loadItemImg('bottom_camopants_room_4', 'assets/bottoms/camopants4.png'),
 ]);
 
 // Kept for backward compatibility
@@ -188,12 +200,12 @@ function drawImgItem(x: CanvasRenderingContext2D, name: string, dx: number, dy: 
 
 export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width = 20; c.height = 40 + SPRITE_HAT_HEADROOM;
+  c.width = 37; c.height = 40 + SPRITE_HAT_HEADROOM;
   const x = c.getContext('2d')!;
   x.imageSmoothingEnabled = false;
   x.translate(0, SPRITE_HAT_HEADROOM);
   const s = 2;
-  const cx = 10;
+  const cx = 18;
   const headY = 4;
   const tw = 3 * s;
 
@@ -207,6 +219,16 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
   const hasPng = imgCache.has(bodyHubKey);
 
   const legY = headY + 12 * s - 3;
+
+  // ── Wings — drawn before body so they appear behind ──
+  if (a.accessory === 'wings') {
+    const wImg = imgCache.get('acc_wings_hub');
+    if (wImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_wings_hub', Math.round(cx - wImg.naturalWidth / 2), headY + 4 * s - 7, wImg.naturalWidth, wImg.naturalHeight);
+      x.fillStyle = a.skinColor; // restore so body PNG gets correct skin tint
+    }
+  }
 
   if (hasPng) {
     const bImg = imgCache.get(bodyHubKey)!;
@@ -245,6 +267,17 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
         x.fillRect(cx - 1, legY - 2, 2, 2);
         x.globalAlpha = 1;
       }
+    }
+  }
+
+  // ── Camo pants PNG overlay — drawn before top so clothing layers correctly ──
+  if (a.bottom === 'camopants' && a.top !== 'dress') {
+    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
+    const cKey = `bottom_camopants_hub_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, Math.round(cx - cImg.naturalWidth / 2), legY, cImg.naturalWidth, cImg.naturalHeight);
     }
   }
 
@@ -434,6 +467,15 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   const topDark  = darken(a.topColor, 18);
   const topLight = lighten(a.topColor, 18);
 
+  // ── Wings — drawn before body so they appear behind ──
+  if (a.accessory === 'wings') {
+    const wImg = imgCache.get('acc_wings_room');
+    if (wImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_wings_room', Math.round(12 - wImg.naturalWidth / 2), oY + 2, wImg.naturalWidth, wImg.naturalHeight);
+    }
+  }
+
   // ── Body PNG ──
   x.fillStyle = a.skinColor;
   const bodyRoomKey = walkFrame >= 1 && walkFrame <= 4 ? `body_room_${walkFrame}` : 'body_room';
@@ -519,6 +561,17 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
     x.fillRect(10, oY + 28, 4, 2);
     x.globalAlpha = 1;
+  }
+
+  // ── Camo pants PNG overlay — drawn before top so clothing layers correctly ──
+  if (a.bottom === 'camopants' && a.top !== 'dress') {
+    const cFrame = walkFrame >= 1 && walkFrame <= 4 ? walkFrame : 1;
+    const cKey = `bottom_camopants_room_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, Math.round(12 - cImg.naturalWidth / 2), oY + 28, cImg.naturalWidth, cImg.naturalHeight);
+    }
   }
 
   // ── Top ──
