@@ -90,6 +90,8 @@ export const itemImagesReady = Promise.all([
   loadItemImg('body_room_3', 'assets/body/body3.png'),
   loadItemImg('body_room_4', 'assets/body/body4.png'),
   // top detail overlays
+  loadItemImg('top_jacket_hub',      'assets/tops/jackethub.png'),
+  loadItemImg('top_jacket_room',     'assets/tops/jacket.png'),
   loadItemImg('top_bomber_hub',      'assets/tops/bomberhub.png'),
   loadItemImg('top_flannel_hub',     'assets/tops/flanelhub.png'),
   loadItemImg('top_robe_hub',        'assets/tops/wizardrobehub.png'),
@@ -114,6 +116,14 @@ export const itemImagesReady = Promise.all([
   loadItemImg('bottom_camopants_room_2', 'assets/bottoms/camopants2.png'),
   loadItemImg('bottom_camopants_room_3', 'assets/bottoms/camopants3.png'),
   loadItemImg('bottom_camopants_room_4', 'assets/bottoms/camopants4.png'),
+  loadItemImg('bottom_jeans_hub_1', 'assets/bottoms/jeanshub1.png'),
+  loadItemImg('bottom_jeans_hub_2', 'assets/bottoms/jeanshub2.png'),
+  loadItemImg('bottom_jeans_hub_3', 'assets/bottoms/jeanshub3.png'),
+  loadItemImg('bottom_jeans_hub_4', 'assets/bottoms/jeanshub4.png'),
+  loadItemImg('bottom_jeans_room_1', 'assets/bottoms/jeans1.png'),
+  loadItemImg('bottom_jeans_room_2', 'assets/bottoms/jeans2.png'),
+  loadItemImg('bottom_jeans_room_3', 'assets/bottoms/jeans3.png'),
+  loadItemImg('bottom_jeans_room_4', 'assets/bottoms/jeans4.png'),
 ]);
 
 // Kept for backward compatibility
@@ -292,16 +302,6 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx, headY + 5 * s + 3, 0.5 * s, 2 * s);
     x.globalAlpha = 1;
   } else if (a.top === 'jacket') {
-    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
-    x.fillRect(cx - tw, headY + 5 * s + 4, tw * 2, 7);
-    x.fillStyle = topDark;
-    x.fillRect(cx - tw, headY + 5 * s + 4, 1 * s, 7);
-    x.fillRect(cx + tw - 1 * s, headY + 5 * s + 4, 1 * s, 7);
-    x.fillStyle = '#0e0a18';
-    x.fillRect(cx - 0.5 * s, headY + 5 * s + 3, 1 * s, 8);
-    x.fillStyle = '#c8c8c8'; x.globalAlpha = 0.5;
-    x.fillRect(cx, headY + 5 * s + 3, 0.5 * s, 8);
-    x.globalAlpha = 1;
   } else if (a.top === 'dress') {
     x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
     x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 6);
@@ -366,10 +366,11 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1);
   }
 
-  // ── Camo pants PNG — drawn after body/bottom but before top ──
-  if (a.bottom === 'camopants' && a.top !== 'dress') {
+  // ── Camo pants / jeans PNG — drawn after body/bottom but before top ──
+  if ((a.bottom === 'camopants' || a.bottom === 'jeans') && a.top !== 'dress') {
     const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
-    const cKey = `bottom_camopants_hub_${cFrame}`;
+    const prefix = a.bottom === 'jeans' ? 'bottom_jeans_hub' : 'bottom_camopants_hub';
+    const cKey = `${prefix}_${cFrame}`;
     const cImg = imgCache.get(cKey);
     if (cImg) {
       x.fillStyle = a.bottomColor;
@@ -379,6 +380,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
 
   // ── PNG top detail overlay ──
   const hubTopPngKey = ({
+    jacket:      'top_jacket_hub',
     bomber:      'top_bomber_hub',
     flannel:     'top_flannel_hub',
     robe:        'top_robe_hub',
@@ -395,7 +397,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
   }
 
   // ── Belt — drawn after top so it sits on top of clothing ──
-  if (!['skirt', 'miniskirt', 'overalls', 'camopants'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
+  if (!['skirt', 'miniskirt', 'overalls', 'camopants', 'jeans'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
     x.fillStyle = darken(a.bottomColor, 30);
     x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
     x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
@@ -561,7 +563,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   }
 
   // ── Belt ──
-  if (!['dress', 'overalls', 'camopants'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
+  if (!['dress', 'overalls', 'camopants', 'jeans'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
     x.fillStyle = darken(a.bottomColor, 30);
     x.fillRect(6, oY + 28, 12, 2);
     x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
@@ -569,10 +571,11 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.globalAlpha = 1;
   }
 
-  // ── Camo pants PNG overlay — drawn before top so clothing layers correctly ──
-  if (a.bottom === 'camopants' && a.top !== 'dress') {
+  // ── Camo pants / jeans PNG — drawn before top so clothing layers correctly ──
+  if ((a.bottom === 'camopants' || a.bottom === 'jeans') && a.top !== 'dress') {
     const cFrame = walkFrame >= 1 && walkFrame <= 4 ? walkFrame : 1;
-    const cKey = `bottom_camopants_room_${cFrame}`;
+    const prefix = a.bottom === 'jeans' ? 'bottom_jeans_room' : 'bottom_camopants_room';
+    const cKey = `${prefix}_${cFrame}`;
     const cImg = imgCache.get(cKey);
     if (cImg) {
       x.fillStyle = a.bottomColor;
@@ -611,21 +614,6 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(13, oY + 14, 1, 4);    // drawstring R
     x.globalAlpha = 1;
   } else if (a.top === 'jacket') {
-    x.fillRect(3, oY + 14, 18, 4);    // shoulders
-    x.fillRect(6, oY + 18, 12, 10);   // body
-    x.fillStyle = topDark;
-    x.fillRect(3, oY + 18, 3, 12);    // left sleeve (full, darker)
-    x.fillRect(18, oY + 18, 3, 12);   // right sleeve (full, darker)
-    x.fillStyle = '#0e0a18';
-    x.fillRect(11, oY + 17, 2, 11);   // narrow center gap
-    x.fillStyle = topLight;
-    x.fillRect(7, oY + 15, 4, 5);     // left lapel
-    x.fillRect(13, oY + 15, 4, 5);    // right lapel
-    x.fillStyle = '#c8c8c8'; x.globalAlpha = 0.5;
-    x.fillRect(12, oY + 18, 1, 10);   // zipper
-    x.globalAlpha = 1;
-    x.fillStyle = topDark;
-    x.fillRect(4, oY + 27, 16, 1);    // bottom hem line
   } else if (a.top === 'dress') {
     x.fillRect(3, oY + 14, 18, 4);
     x.fillRect(6, oY + 18, 12, 10);
@@ -725,6 +713,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 
   // ── PNG top detail overlay ──
   const roomTopPngKey = ({
+    jacket:       'top_jacket_room',
     bomber:       'top_bomber_room',
     flannel:      'top_flannel_room',
     robe:         'top_robe_room',
@@ -735,7 +724,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;
     const tx = Math.round(12 - tImg.naturalWidth / 2);
-    const roomTopYOffset = a.top === 'bomber' ? -1 : 0;
+    const roomTopYOffset = a.top === 'bomber' ? -1 : a.top === 'jacket' ? -1 : 0;
     x.fillStyle = a.topColor;
     drawHairImg(x, roomTopPngKey, tx, oY + 14 + roomTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }

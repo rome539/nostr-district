@@ -10,7 +10,7 @@ export interface AvatarConfig {
   hairColor: string;
   top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt' | 'camoshirt';
   topColor: string;
-  bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'camopants' | 'overalls' | 'miniskirt';
+  bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'camopants' | 'overalls' | 'miniskirt' | 'jeans';
   bottomColor: string;
   hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral';
   hatColor: string;
@@ -77,10 +77,10 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet'] as const,
-  top: ['tshirt', 'hoodie', 'jacket', 'tank', 'dress', 'vest', 'trenchcoat', 'croptop', 'jersey', 'longsleeve', 'polo', 'flannel', 'bomber', 'turtleneck', 'robe', 'bitcoinshirt', 'ostrichshirt', 'camoshirt'] as const,
-  bottom: ['pants', 'shorts', 'skirt', 'cargopants', 'camopants', 'overalls', 'miniskirt'] as const,
-  hat: ['none', 'cap', 'beanie', 'tophat', 'cowboy', 'beret', 'bucket', 'visor', 'fedora', 'wizard', 'hardhat', 'newsboy', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
-  accessory: ['none', 'glasses', 'bandana', 'scarf', 'eyepatch', 'chain', 'earrings', 'sunglasses', 'headphones', 'watch', 'mask', 'monocle', 'ring', 'wings'] as const,
+  top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe'] as const,
+  bottom: ['pants', 'jeans', 'shorts', 'skirt', 'miniskirt', 'cargopants', 'camopants', 'overalls'] as const,
+  hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'wizard', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
+  accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross', 'glow', 'heart'] as const,
 };
 

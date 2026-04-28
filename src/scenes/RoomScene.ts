@@ -822,7 +822,7 @@ export class RoomScene extends BaseScene {
       this.textures.addCanvas('player_room', renderRoomSprite(getAvatar(), 0));
       this.player?.setTexture('player_room');
     });
-    this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(2.5).setDepth(10);
+    this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(3).setDepth(10);
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
     const myStatus = getStatus();

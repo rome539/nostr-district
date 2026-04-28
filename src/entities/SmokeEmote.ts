@@ -47,11 +47,11 @@ export class SmokeEmote {
     // Scale-dependent offsets
     const isRoom   = scale === 'room';
     const isCabin  = scale === 'cabin';
-    const cigOffX  = isRoom ? 18 : isCabin ? 10 : 5;
-    const cigOffY  = isRoom ? -102 : isCabin ? -58 : -30;
-    const cigW     = isRoom ? 8 : isCabin ? 7 : 4;
-    const cigH     = isRoom ? 3 : isCabin ? 2.5 : 1.5;
-    const tipW     = isRoom ? 3 : isCabin ? 2.5 : 1.5;
+    const cigOffX  = isRoom ? 22 : isCabin ? 10 : 5;
+    const cigOffY  = isRoom ? -122 : isCabin ? -58 : -30;
+    const cigW     = isRoom ? 10 : isCabin ? 7 : 4;
+    const cigH     = isRoom ? 4 : isCabin ? 2.5 : 1.5;
+    const tipW     = isRoom ? 4 : isCabin ? 2.5 : 1.5;
 
     const cigX = facingRight ? px + cigOffX - cigW : px - cigOffX;
     const cigY = py + cigOffY;
@@ -67,7 +67,7 @@ export class SmokeEmote {
 
     // Tip glow
     graphics.fillStyle(0xf0b040, tipFlicker * 0.15);
-    const glowSize = isRoom ? 7 : isCabin ? 6 : 4;
+    const glowSize = isRoom ? 9 : isCabin ? 6 : 4;
     graphics.fillRect(
       facingRight ? cigX + cigW - 2 : cigX - tipW - 1,
       cigY - 2, glowSize, glowSize
@@ -76,12 +76,12 @@ export class SmokeEmote {
     // Spawn particles
     if (Math.random() > 0.6) {
       const tipX = facingRight ? cigX + cigW + 2 : cigX - 2;
-      const pSize = isRoom ? (2 + Math.random() * 2) : isCabin ? (1.5 + Math.random() * 1.5) : (1 + Math.random());
+      const pSize = isRoom ? (2.4 + Math.random() * 2.4) : isCabin ? (1.5 + Math.random() * 1.5) : (1 + Math.random());
       this.particles.push({
-        x: tipX + (Math.random() - 0.5) * (isRoom ? 4 : isCabin ? 3 : 2),
+        x: tipX + (Math.random() - 0.5) * (isRoom ? 5 : isCabin ? 3 : 2),
         y: cigY - 2,
-        vx: (Math.random() - 0.5) * (isRoom ? 0.5 : isCabin ? 0.4 : 0.3),
-        vy: -(isRoom ? 0.5 : isCabin ? 0.4 : 0.3) - Math.random() * (isRoom ? 0.6 : isCabin ? 0.5 : 0.4),
+        vx: (Math.random() - 0.5) * (isRoom ? 0.6 : isCabin ? 0.4 : 0.3),
+        vy: -(isRoom ? 0.6 : isCabin ? 0.4 : 0.3) - Math.random() * (isRoom ? 0.7 : isCabin ? 0.5 : 0.4),
         life: 0,
         maxLife: (isRoom ? 1000 : isCabin ? 900 : 800) + Math.random() * (isRoom ? 800 : isCabin ? 700 : 600),
         size: pSize,
