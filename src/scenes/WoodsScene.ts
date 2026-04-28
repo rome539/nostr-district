@@ -29,6 +29,75 @@ import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 
 const WOODS_ACCENT = '#aaff44';
+
+// ── Legendary fish image map ──
+const LEGENDARY_FISH_IMAGES: Record<string, string> = {
+  'ostrich':               '/assets/fish/fish_ostrich.png',
+  'golden satoshi coin':   '/assets/fish/fish_coin.png',
+  'enchanted trident':     '/assets/fish/fish_trident.png',
+  'leviathan coelacanth':  '/assets/fish/fish_coelacanth.png',
+  'meteor from Andromeda': '/assets/fish/fish_meteor.png',
+};
+
+const NIP96_HOSTS = [
+  'https://nostr.build/api/v2/upload/files',
+  'https://nostrcheck.me/api/v2/media',
+];
+
+async function tryNip96Upload(uploadUrl: string, blob: Blob): Promise<string | null> {
+  try {
+    const authEvent = await signEvent({
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['u', uploadUrl], ['method', 'POST']],
+      content: '',
+    });
+    const form = new FormData();
+    form.append('file', blob, 'fish.png');
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { Authorization: `Nostr ${btoa(JSON.stringify(authEvent))}` },
+      body: form,
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (
+      json?.data?.[0]?.url ??
+      json?.data?.url ??
+      json?.nip94_event?.tags?.find((t: string[]) => t[0] === 'url')?.[1] ??
+      null
+    );
+  } catch { return null; }
+}
+
+async function uploadFishImage(fishName: string): Promise<string | null> {
+  const src = LEGENDARY_FISH_IMAGES[fishName];
+  if (!src) return null;
+  const fallback = `${window.location.origin}${src}`;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = async () => {
+      const scale = 4;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth * scale;
+      canvas.height = img.naturalHeight * scale;
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(async blob => {
+        if (!blob) { resolve(fallback); return; }
+        for (const host of NIP96_HOSTS) {
+          const url = await tryNip96Upload(host, blob);
+          if (url) { resolve(url); return; }
+        }
+        resolve(fallback);
+      }, 'image/png');
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
 const W = WORLD_WIDTH; // 1600
 
 // ── Layout constants ──
@@ -1442,7 +1511,7 @@ export class WoodsScene extends BaseScene {
     const { pubkey, loginMethod } = authStore.getState();
     if (!pubkey || loginMethod === 'guest') return;
 
-    const noteContent = `${flavor}\n\n🎣 Just pulled a ${name} (${kg}kg) out of the lake in Nostr District! ✦✦✦\n\n"${lore}"\n\nhttps://thedistrict.online/\n\n#nostrdistrict #fishing`;
+    const baseContent = `${flavor}\n\n🎣 Just pulled a ${name} (${kg}kg) out of the lake in Nostr District! ✦✦✦\n\n"${lore}"\n\nhttps://thedistrict.online/\n\n#nostrdistrict #fishing`;
 
     const overlay = document.createElement('div');
     overlay.style.cssText = `position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);font-family:'Courier New',monospace;`;
@@ -1462,9 +1531,24 @@ export class WoodsScene extends BaseScene {
     loreEl.style.cssText = `color:#c0a860;font-size:12px;font-style:italic;margin-bottom:16px;line-height:1.6;padding:0 8px;`;
     loreEl.textContent = `"${lore}"`;
 
+    // Fish image preview — shown only if PNG exists for this legendary
+    const fishImgSrc = LEGENDARY_FISH_IMAGES[name];
+    if (fishImgSrc) {
+      const imgEl = document.createElement('img');
+      imgEl.src = fishImgSrc;
+      imgEl.style.cssText = `image-rendering:pixelated;width:96px;height:96px;object-fit:contain;margin-bottom:14px;display:block;margin-left:auto;margin-right:auto;`;
+      imgEl.onerror = () => imgEl.remove();
+      modal.appendChild(title);
+      modal.appendChild(imgEl);
+      modal.appendChild(desc);
+    } else {
+      modal.appendChild(title);
+      modal.appendChild(desc);
+    }
+
     const notePreview = document.createElement('div');
     notePreview.style.cssText = `color:#777;font-size:11px;margin-bottom:16px;background:#111;border-radius:6px;padding:10px 12px;text-align:left;line-height:1.6;white-space:pre-wrap;border:1px solid #222;`;
-    notePreview.textContent = noteContent;
+    notePreview.textContent = baseContent;
 
     const btnRow = document.createElement('div');
     btnRow.style.cssText = `display:flex;gap:10px;justify-content:center;`;
@@ -1473,13 +1557,21 @@ export class WoodsScene extends BaseScene {
     postBtn.textContent = 'Post to Nostr';
     postBtn.style.cssText = `background:#ffd700;color:#0a0a1a;border:none;border-radius:6px;padding:10px 20px;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;cursor:pointer;`;
     postBtn.addEventListener('click', async () => {
-      postBtn.textContent = 'Posting...';
+      postBtn.textContent = 'Uploading...';
       postBtn.style.opacity = '0.6';
       try {
+        const imageUrl = await uploadFishImage(name);
+        const tags: string[][] = [['client', 'Nostr District'], ['t', 'nostrdistrict'], ['t', 'fishing']];
+        let noteContent = baseContent;
+        if (imageUrl) {
+          noteContent += `\n\n${imageUrl}`;
+          tags.push(['imeta', `url ${imageUrl}`, 'm image/png']);
+        }
+        postBtn.textContent = 'Posting...';
         const event = await signEvent({
           kind: 1,
           created_at: Math.floor(Date.now() / 1000),
-          tags: [['client', 'Nostr District'], ['t', 'nostrdistrict'], ['t', 'fishing']],
+          tags,
           content: noteContent,
         });
         const ok = await publishEvent(event);
@@ -1498,8 +1590,6 @@ export class WoodsScene extends BaseScene {
 
     btnRow.appendChild(postBtn);
     btnRow.appendChild(skipBtn);
-    modal.appendChild(title);
-    modal.appendChild(desc);
     modal.appendChild(loreEl);
     modal.appendChild(notePreview);
     modal.appendChild(btnRow);

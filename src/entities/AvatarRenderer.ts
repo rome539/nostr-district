@@ -93,13 +93,15 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_bomber_hub',      'assets/tops/bomberhub.png'),
   loadItemImg('top_flannel_hub',     'assets/tops/flanelhub.png'),
   loadItemImg('top_robe_hub',        'assets/tops/wizardrobehub.png'),
-  loadItemImg('top_ostrichshirt_hub','assets/tops/ostirchshirthub.png'),
-  loadItemImg('top_bitcoinshirt_hub','assets/tops/Bitcoinshirthub.png'),
-  loadItemImg('top_bomber_room',     'assets/tops/bomber.png'),
-  loadItemImg('top_flannel_room',    'assets/tops/flanel.png'),
-  loadItemImg('top_robe_room',       'assets/tops/wizardrobe.png'),
+  loadItemImg('top_ostrichshirt_hub', 'assets/tops/ostirchshirthub.png'),
+  loadItemImg('top_bitcoinshirt_hub', 'assets/tops/Bitcoinshirthub.png'),
+  loadItemImg('top_camoshirt_hub',    'assets/tops/camoshirthub.png'),
+  loadItemImg('top_bomber_room',      'assets/tops/bomber.png'),
+  loadItemImg('top_flannel_room',     'assets/tops/flanel.png'),
+  loadItemImg('top_robe_room',        'assets/tops/wizardrobe.png'),
   loadItemImg('top_ostrichshirt_room','assets/tops/ostirchshirt.png'),
   loadItemImg('top_bitcoinshirt_room','assets/tops/Bitcoinshirt.png'),
+  loadItemImg('top_camoshirt_room',   'assets/tops/camoshirt.png'),
   // wings (drawn behind player)
   loadItemImg('acc_wings_hub',  'assets/accessories/wingshub.png'),
   loadItemImg('acc_wings_room', 'assets/accessories/wings.png'),
@@ -247,6 +249,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     } else if (a.bottom === 'miniskirt') {
       x.fillRect(cx - 2.5 * s, legY, 5 * s, 1.5 * s);
     } else {
+      // waistband fill covers the inter-leg gap in walking frames
+      x.fillRect(cx - 2 * s, legY, 4 * s, 3);
       // split into left/right legs so walk animation offsets work
       x.fillRect(cx - 2 * s, legY + legLY, 2 * s - 1, 7 * s);
       x.fillRect(cx + 1,     legY + legRY, 2 * s - 1, 7 * s);
@@ -259,25 +263,6 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
         x.fillRect(cx - 2 * s, legY + 3 * s + legLY, 1.5 * s, 2 * s);
         x.fillRect(cx + 1,     legY + 3 * s + legRY, 1.5 * s, 2 * s);
       }
-      // belt: dark band + gold buckle (matches room scale)
-      if (!['overalls'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
-        x.fillStyle = darken(a.bottomColor, 30);
-        x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
-        x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-        x.fillRect(cx - 1, legY - 2, 2, 2);
-        x.globalAlpha = 1;
-      }
-    }
-  }
-
-  // ── Camo pants PNG overlay — drawn before top so clothing layers correctly ──
-  if (a.bottom === 'camopants' && a.top !== 'dress') {
-    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
-    const cKey = `bottom_camopants_hub_${cFrame}`;
-    const cImg = imgCache.get(cKey);
-    if (cImg) {
-      x.fillStyle = a.bottomColor;
-      drawHairImg(x, cKey, Math.round(cx - cImg.naturalWidth / 2), legY, cImg.naturalWidth, cImg.naturalHeight);
     }
   }
 
@@ -381,6 +366,17 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1);
   }
 
+  // ── Camo pants PNG — drawn after body/bottom but before top ──
+  if (a.bottom === 'camopants' && a.top !== 'dress') {
+    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
+    const cKey = `bottom_camopants_hub_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, Math.round(cx - cImg.naturalWidth / 2), legY - 2, cImg.naturalWidth, cImg.naturalHeight);
+    }
+  }
+
   // ── PNG top detail overlay ──
   const hubTopPngKey = ({
     bomber:      'top_bomber_hub',
@@ -388,6 +384,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     robe:        'top_robe_hub',
     bitcoinshirt:'top_bitcoinshirt_hub',
     ostrichshirt:'top_ostrichshirt_hub',
+    camoshirt:   'top_camoshirt_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
@@ -395,6 +392,15 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     const hubTopYOffset = a.top === 'bomber' ? -1 : 0;
     x.fillStyle = a.topColor;
     drawHairImg(x, hubTopPngKey, tx, headY + 5 * s + hubTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
+  }
+
+  // ── Belt — drawn after top so it sits on top of clothing ──
+  if (!['skirt', 'miniskirt', 'overalls', 'camopants'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
+    x.fillStyle = darken(a.bottomColor, 30);
+    x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
+    x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+    x.fillRect(cx - 1, legY - 2, 2, 2);
+    x.globalAlpha = 1;
   }
 
   // ── Overalls straps — only visible over open tops (not coats/hoodie/vest) ──
@@ -555,7 +561,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   }
 
   // ── Belt ──
-  if (!['dress', 'overalls'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
+  if (!['dress', 'overalls', 'camopants'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
     x.fillStyle = darken(a.bottomColor, 30);
     x.fillRect(6, oY + 28, 12, 2);
     x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
@@ -714,7 +720,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt') {
   }
 
   // ── PNG top detail overlay ──
@@ -724,6 +730,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     robe:         'top_robe_room',
     bitcoinshirt: 'top_bitcoinshirt_room',
     ostrichshirt: 'top_ostrichshirt_room',
+    camoshirt:    'top_camoshirt_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;
