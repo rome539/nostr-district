@@ -376,7 +376,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
   } else if (a.top === 'turtleneck') {
     x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
     x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 7);
-    x.fillRect(cx - 1.5 * s, headY + 3 * s, 3 * s, 2 * s);
+    x.fillRect(cx - 1.5 * s, headY + 4 * s, 3 * s, 2);
     x.fillStyle = topDark;
     x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1);
   }
@@ -708,7 +708,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(3, oY + 14, 18, 4);
     x.fillRect(4, oY + 18, 16, 10);
     x.fillRect(6, oY + 28, 12, 2);
-    x.fillRect(7, oY + 10, 10, 4);
+    x.fillRect(7, oY + 12, 10, 2);
     x.fillStyle = a.skinColor;
     x.fillRect(4, oY + 18, 2, 10);
     x.fillRect(18, oY + 18, 2, 10);

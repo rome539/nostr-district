@@ -1628,119 +1628,51 @@ export class WoodsScene extends BaseScene {
     let nebulaCol1 = 'rgba(20,15,50,0.7)'; let nc1x='35%'; let nc1y='40%';
     let nebulaCol2 = 'rgba(10,30,40,0.5)'; let nc2x='65%'; let nc2y='55%';
 
-    // ── planet helper ──
-    const makePlanet = (px:number,py:number,pr:number,gradId:string,gradStops:string,clipId:string,innerSvg:string) => `
-      <defs>
-        <radialGradient id="${uid}${gradId}" cx="38%" cy="35%" r="65%">${gradStops}</radialGradient>
-        <clipPath id="${uid}${clipId}"><circle cx="${px}%" cy="${py}%" r="${pr}%"/></clipPath>
-      </defs>
-      <circle cx="${px}%" cy="${py}%" r="${pr}%" fill="url(#${uid}${gradId})"/>
-      <g clip-path="url(#${uid}${clipId})">${innerSvg}</g>
-      <circle cx="${px}%" cy="${py}%" r="${pr}%" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>`;
 
     if (sceneType === 'mercury') {
       label = 'Mercury';
       nebulaCol1 = 'rgba(30,20,10,0.3)';
-      const mx=50, my=46, mr=6;
-      subject = makePlanet(mx,my,mr,'mercg',
-        `<stop offset="0%" stop-color="#c8b898"/><stop offset="100%" stop-color="#706050"/>`,
-        'mercc',
-        `<circle cx="48%" cy="42%" r="1.5%" fill="rgba(80,65,50,0.6)"/>
-         <circle cx="56%" cy="52%" r="1%" fill="rgba(70,55,40,0.5)"/>
-         <circle cx="44%" cy="54%" r="0.8%" fill="rgba(75,60,45,0.5)"/>
-         <circle cx="52%" cy="44%" r="0.6%" fill="rgba(85,70,55,0.4)"/>
-         <circle cx="46%" cy="48%" r="0.5%" fill="rgba(65,50,35,0.45)"/>`);
-      subject += `<text x="50%" y="63%" font-family="Courier New" font-size="8" fill="rgba(200,180,140,0.6)" text-anchor="middle">MERCURY</text>
-        <text x="50%" y="69%" font-family="Courier New" font-size="6" fill="rgba(160,140,100,0.4)" text-anchor="middle">no atmosphere</text>`;
+      subject = `
+        <image href="/assets/planets/mercury.png" x="35%" y="30%" width="30%" height="30%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="67%" font-family="Courier New" font-size="8" fill="rgba(200,180,140,0.6)" text-anchor="middle">MERCURY</text>
+        <text x="50%" y="73%" font-family="Courier New" font-size="6" fill="rgba(160,140,100,0.4)" text-anchor="middle">no atmosphere</text>`;
     } else if (sceneType === 'venus') {
       label = 'Venus';
       nebulaCol1 = 'rgba(50,40,10,0.4)'; nc1x='50%'; nc1y='45%';
-      const vx=50, vy=46, vr=10;
       subject = `
-        <defs>
-          <radialGradient id="${uid}vg" cx="42%" cy="38%" r="65%">
-            <stop offset="0%" stop-color="#fffae0"/><stop offset="50%" stop-color="#e8d080"/><stop offset="100%" stop-color="#c0a040"/>
-          </radialGradient>
-          <clipPath id="${uid}vc"><circle cx="${vx}%" cy="${vy}%" r="${vr}%"/></clipPath>
-        </defs>
-        <circle cx="${vx}%" cy="${vy}%" r="${vr}%" fill="url(#${uid}vg)"/>
-        <g clip-path="url(#${uid}vc)">
-          <ellipse cx="50%" cy="40%" rx="8%" ry="2%" fill="rgba(230,200,80,0.3)"/>
-          <ellipse cx="50%" cy="46%" rx="9%" ry="2.5%" fill="rgba(220,190,60,0.25)"/>
-          <ellipse cx="50%" cy="52%" rx="7%" ry="2%" fill="rgba(210,175,50,0.3)"/>
-        </g>
-        <circle cx="${vx}%" cy="${vy}%" r="${vr}%" fill="none" stroke="rgba(240,210,100,0.2)" stroke-width="0.5"/>
-        <text x="50%" y="66%" font-family="Courier New" font-size="8" fill="rgba(240,210,120,0.6)" text-anchor="middle">VENUS</text>
-        <text x="50%" y="72%" font-family="Courier New" font-size="6" fill="rgba(200,170,80,0.4)" text-anchor="middle">thick cloud cover</text>`;
+        <image href="/assets/planets/venus.png" x="24%" y="22%" width="52%" height="52%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="80%" font-family="Courier New" font-size="8" fill="rgba(240,210,120,0.6)" text-anchor="middle">VENUS</text>
+        <text x="50%" y="86%" font-family="Courier New" font-size="6" fill="rgba(200,170,80,0.4)" text-anchor="middle">thick cloud cover</text>`;
     } else if (sceneType === 'mars') {
       label = 'Mars';
       nebulaCol1 = 'rgba(50,15,5,0.4)'; nc1x='50%'; nc1y='46%';
-      const mx=50, my=46, mr=8;
       subject = `
-        <defs>
-          <radialGradient id="${uid}mgrad" cx="38%" cy="35%" r="65%">
-            <stop offset="0%" stop-color="#e07040"/><stop offset="100%" stop-color="#901808"/>
-          </radialGradient>
-          <clipPath id="${uid}mclip"><circle cx="${mx}%" cy="${my}%" r="${mr}%"/></clipPath>
-        </defs>
-        <circle cx="${mx}%" cy="${my}%" r="${mr}%" fill="url(#${uid}mgrad)"/>
-        <g clip-path="url(#${uid}mclip)">
-          <ellipse cx="${mx-2}%" cy="${my-6}%" rx="3%" ry="1.5%" fill="rgba(230,230,240,0.7)"/>
-          <ellipse cx="${mx+1}%" cy="${my+6}%" rx="1.5%" ry="1%" fill="rgba(200,210,230,0.4)"/>
-          <circle cx="${mx+2}%" cy="${my+1}%" r="2%" fill="rgba(80,20,10,0.5)"/>
-          <circle cx="${mx-3}%" cy="${my-1}%" r="1.2%" fill="rgba(70,15,5,0.4)"/>
-          <circle cx="${mx+3}%" cy="${my+3}%" r="0.8%" fill="rgba(60,10,5,0.35)"/>
-        </g>
-        <circle cx="${mx}%" cy="${my}%" r="${mr}%" fill="none" stroke="rgba(200,80,30,0.2)" stroke-width="1"/>
-        <text x="50%" y="64%" font-family="Courier New" font-size="8" fill="rgba(220,100,60,0.6)" text-anchor="middle">MARS</text>
-        <text x="50%" y="70%" font-family="Courier New" font-size="6" fill="rgba(180,80,40,0.4)" text-anchor="middle">polar ice caps visible</text>`;
+        <image href="/assets/planets/mars.png" x="27%" y="24%" width="46%" height="46%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="76%" font-family="Courier New" font-size="8" fill="rgba(220,100,60,0.6)" text-anchor="middle">MARS</text>
+        <text x="50%" y="82%" font-family="Courier New" font-size="6" fill="rgba(180,80,40,0.4)" text-anchor="middle">polar ice caps visible</text>`;
     } else if (sceneType === 'jupiter') {
       label = 'Jupiter';
       nebulaCol1 = 'rgba(30,20,10,0.4)';
-      const jx=50, jy=46, jr=13;
       subject = `
-        <defs>
-          <clipPath id="${uid}jclip"><circle cx="${jx}%" cy="${jy}%" r="${jr}%"/></clipPath>
-          <radialGradient id="${uid}jgrad" cx="45%" cy="40%" r="60%">
-            <stop offset="0%" stop-color="#f0d8a0"/><stop offset="100%" stop-color="#c8a060"/>
-          </radialGradient>
-        </defs>
-        <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="url(#${uid}jgrad)"/>
-        <g clip-path="url(#${uid}jclip)">
-          <rect x="${jx-jr}%" y="${jy-9}%" width="${jr*2}%" height="4%" fill="rgba(160,100,50,0.55)" rx="2"/>
-          <rect x="${jx-jr}%" y="${jy-4}%" width="${jr*2}%" height="6%" fill="rgba(200,130,60,0.4)" rx="2"/>
-          <rect x="${jx-jr}%" y="${jy+3}%" width="${jr*2}%" height="3%" fill="rgba(150,90,40,0.5)" rx="2"/>
-          <rect x="${jx-jr}%" y="${jy+7}%" width="${jr*2}%" height="5%" fill="rgba(180,110,50,0.45)" rx="2"/>
-          <ellipse cx="${jx-4}%" cy="${jy+1}%" rx="3%" ry="2%" fill="rgba(180,80,40,0.6)"/>
-        </g>
-        <circle cx="${jx}%" cy="${jy}%" r="${jr}%" fill="none" stroke="rgba(200,150,80,0.3)" stroke-width="1"/>
-        <circle cx="${jx-18}%" cy="${jy-1}%" r="1%" fill="rgba(220,210,190,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.1s" repeatCount="indefinite"/></circle>
-        <circle cx="${jx-22}%" cy="${jy+3}%" r="0.8%" fill="rgba(210,200,180,0.85)"><animate attributeName="opacity" values="0.85;0.45;0.85" dur="2.4s" repeatCount="indefinite"/></circle>
-        <circle cx="${jx+19}%" cy="${jy-2}%" r="0.9%" fill="rgba(220,215,195,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.8s" repeatCount="indefinite"/></circle>
-        <circle cx="${jx+24}%" cy="${jy+1}%" r="0.7%" fill="rgba(210,205,185,0.8)"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2.9s" repeatCount="indefinite"/></circle>
-        <text x="50%" y="68%" font-family="Courier New" font-size="8" fill="rgba(200,170,100,0.6)" text-anchor="middle">JUPITER</text>
-        <text x="50%" y="74%" font-family="Courier New" font-size="6" fill="rgba(180,150,80,0.4)" text-anchor="middle">4 Galilean moons visible</text>`;
+        <image href="/assets/planets/jupiter.png" x="19%" y="18%" width="62%" height="58%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <circle cx="32%" cy="45%" r="1%" fill="rgba(220,210,190,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.1s" repeatCount="indefinite"/></circle>
+        <circle cx="28%" cy="49%" r="0.8%" fill="rgba(210,200,180,0.85)"><animate attributeName="opacity" values="0.85;0.45;0.85" dur="2.4s" repeatCount="indefinite"/></circle>
+        <circle cx="69%" cy="44%" r="0.9%" fill="rgba(220,215,195,0.9)"><animate attributeName="opacity" values="0.9;0.5;0.9" dur="3.8s" repeatCount="indefinite"/></circle>
+        <circle cx="74%" cy="47%" r="0.7%" fill="rgba(210,205,185,0.8)"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2.9s" repeatCount="indefinite"/></circle>
+        <text x="50%" y="82%" font-family="Courier New" font-size="8" fill="rgba(200,170,100,0.6)" text-anchor="middle">JUPITER</text>
+        <text x="50%" y="88%" font-family="Courier New" font-size="6" fill="rgba(180,150,80,0.4)" text-anchor="middle">4 Galilean moons visible</text>`;
     } else if (sceneType === 'saturn') {
       label = 'Saturn';
       nebulaCol1 = 'rgba(30,25,15,0.4)';
-      const sx=50, sy=47, sr=10;
+      const sx=50, sy=50;
       subject = `
-        <defs>
-          <clipPath id="${uid}sclip"><circle cx="${sx}%" cy="${sy}%" r="${sr}%"/></clipPath>
-          <radialGradient id="${uid}sgrad" cx="40%" cy="38%" r="65%">
-            <stop offset="0%" stop-color="#e8d898"/><stop offset="100%" stop-color="#b89848"/>
-          </radialGradient>
-        </defs>
-        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+14}%" ry="3.5%" fill="none" stroke="rgba(200,170,90,0.35)" stroke-width="6"/>
-        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+10}%" ry="2.5%" fill="none" stroke="rgba(190,155,75,0.28)" stroke-width="4"/>
-        <circle cx="${sx}%" cy="${sy}%" r="${sr}%" fill="url(#${uid}sgrad)"/>
-        <g clip-path="url(#${uid}sclip)">
-          <rect x="${sx-sr}%" y="${sy-5}%" width="${sr*2}%" height="3%" fill="rgba(160,120,50,0.4)" rx="1"/>
-          <rect x="${sx-sr}%" y="${sy-1}%" width="${sr*2}%" height="4%" fill="rgba(180,140,60,0.3)" rx="1"/>
-          <rect x="${sx-sr}%" y="${sy+4}%" width="${sr*2}%" height="3%" fill="rgba(155,115,45,0.35)" rx="1"/>
-        </g>
-        <ellipse cx="${sx}%" cy="${sy+1}%" rx="${sr+14}%" ry="3.5%" fill="none" stroke="rgba(200,170,90,0.2)" stroke-width="1"/>
-        <text x="50%" y="70%" font-family="Courier New" font-size="8" fill="rgba(200,180,100,0.6)" text-anchor="middle">SATURN</text>
+        <image href="/assets/planets/saturn.png" x="14%" y="38%" width="72%" height="23%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="68%" font-family="Courier New" font-size="8" fill="rgba(200,180,100,0.6)" text-anchor="middle">SATURN</text>
         ${(() => {
           const mr = mkRng(viewSeed ^ 0xca551a);
           // [orbitRadius%, size%, color]
@@ -1763,55 +1695,27 @@ export class WoodsScene extends BaseScene {
     } else if (sceneType === 'uranus') {
       label = 'Uranus';
       nebulaCol1 = 'rgba(10,40,50,0.4)'; nc1x='50%'; nc1y='45%';
-      const ux=50, uy=46, ur=9;
       subject = `
-        <defs>
-          <radialGradient id="${uid}ug" cx="40%" cy="36%" r="65%">
-            <stop offset="0%" stop-color="#c0f0f0"/><stop offset="60%" stop-color="#60c0c8"/><stop offset="100%" stop-color="#308090"/>
-          </radialGradient>
-          <clipPath id="${uid}uc"><circle cx="${ux}%" cy="${uy}%" r="${ur}%"/></clipPath>
-        </defs>
-        <circle cx="${ux}%" cy="${uy}%" r="${ur}%" fill="url(#${uid}ug)"/>
-        <g clip-path="url(#${uid}uc)">
-          <ellipse cx="50%" cy="44%" rx="8%" ry="1.5%" fill="rgba(160,230,235,0.2)"/>
-          <ellipse cx="50%" cy="48%" rx="8%" ry="1.5%" fill="rgba(140,215,220,0.15)"/>
-        </g>
-        <ellipse cx="${ux}%" cy="${uy}%" rx="${ur+10}%" ry="2%" fill="none" stroke="rgba(140,220,230,0.3)" stroke-width="2"/>
-        <ellipse cx="${ux}%" cy="${uy}%" rx="${ur+7}%" ry="1.4%" fill="none" stroke="rgba(120,200,210,0.2)" stroke-width="1.5"/>
-        <circle cx="${ux}%" cy="${uy}%" r="${ur}%" fill="none" stroke="rgba(140,210,220,0.15)" stroke-width="0.5"/>
-        <text x="50%" y="66%" font-family="Courier New" font-size="8" fill="rgba(140,220,230,0.6)" text-anchor="middle">URANUS</text>
-        <text x="50%" y="72%" font-family="Courier New" font-size="6" fill="rgba(100,180,190,0.4)" text-anchor="middle">rotates on its side</text>`;
+        <image href="/assets/planets/uranus.png" x="24%" y="23%" width="52%" height="53%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="82%" font-family="Courier New" font-size="8" fill="rgba(140,220,230,0.6)" text-anchor="middle">URANUS</text>
+        <text x="50%" y="88%" font-family="Courier New" font-size="6" fill="rgba(100,180,190,0.4)" text-anchor="middle">rotates on its side</text>`;
     } else if (sceneType === 'neptune') {
       label = 'Neptune';
       nebulaCol1 = 'rgba(5,10,50,0.6)'; nc1x='50%'; nc1y='45%';
-      const nx=50, ny=46, nr=8;
       subject = `
-        <defs>
-          <radialGradient id="${uid}ng" cx="38%" cy="33%" r="65%">
-            <stop offset="0%" stop-color="#8090f8"/><stop offset="60%" stop-color="#2030d0"/><stop offset="100%" stop-color="#101080"/>
-          </radialGradient>
-          <clipPath id="${uid}nc"><circle cx="${nx}%" cy="${ny}%" r="${nr}%"/></clipPath>
-        </defs>
-        <circle cx="${nx}%" cy="${ny}%" r="${nr}%" fill="url(#${uid}ng)"/>
-        <g clip-path="url(#${uid}nc)">
-          <ellipse cx="48%" cy="46%" rx="4%" ry="2%" fill="rgba(10,10,80,0.6)"/>
-          <ellipse cx="50%" cy="42%" rx="7%" ry="1.5%" fill="rgba(100,120,240,0.3)"/>
-          <ellipse cx="50%" cy="50%" rx="6%" ry="1.5%" fill="rgba(80,100,220,0.25)"/>
-        </g>
-        <circle cx="${nx}%" cy="${ny}%" r="${nr}%" fill="none" stroke="rgba(80,100,220,0.2)" stroke-width="0.5"/>
-        <text x="50%" y="64%" font-family="Courier New" font-size="8" fill="rgba(100,130,255,0.6)" text-anchor="middle">NEPTUNE</text>
-        <text x="50%" y="70%" font-family="Courier New" font-size="6" fill="rgba(80,110,220,0.4)" text-anchor="middle">Great Dark Spot</text>`;
+        <image href="/assets/planets/neptune.png" x="24%" y="24%" width="53%" height="52%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="82%" font-family="Courier New" font-size="8" fill="rgba(100,130,255,0.6)" text-anchor="middle">NEPTUNE</text>
+        <text x="50%" y="88%" font-family="Courier New" font-size="6" fill="rgba(80,110,220,0.4)" text-anchor="middle">Great Dark Spot</text>`;
     } else if (sceneType === 'pluto') {
       label = 'Pluto';
       nebulaCol1 = 'rgba(20,15,10,0.3)';
-      const px=50, py=46, pr=4;
-      subject = makePlanet(px,py,pr,'plutg',
-        `<stop offset="0%" stop-color="#d8c8a8"/><stop offset="60%" stop-color="#a09070"/><stop offset="100%" stop-color="#706050"/>`,
-        'plutc',
-        `<ellipse cx="51%" cy="45%" rx="3%" ry="2.5%" fill="rgba(240,230,210,0.55)"/>
-         <ellipse cx="48%" cy="50%" rx="2%" ry="1.2%" fill="rgba(180,140,100,0.4)"/>`);
-      subject += `<text x="50%" y="61%" font-family="Courier New" font-size="8" fill="rgba(200,185,150,0.6)" text-anchor="middle">PLUTO</text>
-        <text x="50%" y="67%" font-family="Courier New" font-size="6" fill="rgba(160,145,110,0.4)" text-anchor="middle">Tombaugh Regio</text>`;
+      subject = `
+        <image href="/assets/planets/pluto.png" x="34%" y="30%" width="32%" height="30%"
+          style="image-rendering:pixelated;image-rendering:crisp-edges"/>
+        <text x="50%" y="68%" font-family="Courier New" font-size="8" fill="rgba(200,185,150,0.6)" text-anchor="middle">PLUTO</text>
+        <text x="50%" y="74%" font-family="Courier New" font-size="6" fill="rgba(160,145,110,0.4)" text-anchor="middle">Tombaugh Regio</text>`;
     } else if (sceneType === 'orion') {
       label = 'Orion';
       nebulaCol1 = 'rgba(40,20,60,0.7)'; nc1x='50%'; nc1y='45%';
