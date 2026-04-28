@@ -33,7 +33,7 @@ const ITEM_DEFS: Record<string, ItemDef> = {
   wizard:             { anchor: 'headTop', widthRatio: 1.8, roomWidthRatio: 1.5, above: true, yGap: -5, hubYGap: 2, hubFlipH: true },
   ostrichhat:         { anchor: 'headTop', widthRatio: 1.875, roomWidthRatio: 1.68, above: true, yGap: -6, hubYGap: 2, flipH: true, xOffset: -1, tintDark: true },
   // ── Accessories (image-based) ──
-  halo:               { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.28, above: true, yGap:  2, hubYGap: 11 },
+  halo:               { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap:  2, hubYGap: 11 },
   catears:            { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap: -5, hubYGap:  4 },
   headphones:         { anchor: 'headTop', widthRatio: 2.0,  roomWidthRatio: 1.43, hubSrc: 'assets/hats/headphoneshub.png', above: true, yGap: -8, hubYGap: -4 },
   horns:              { anchor: 'headTop', widthRatio: 1.43,   roomWidthRatio: 1.3, above: true, yGap: -4, hubYGap:  4 },
@@ -60,7 +60,8 @@ export const ROOM_SPRITE_XPAD = 12;
 export const itemImagesReady = Promise.all([
   loadItemImg('wizard',               'assets/hats/wizardhat.png'),
   loadItemImg('wizard',               'assets/hats/wizardhathub.png', hubImgCache),
-  loadItemImg('halo',                 'assets/hats/halo.png'),
+  loadItemImg('halo',                 'assets/hats/haloroom.png'),
+  loadItemImg('halo',                 'assets/hats/halo.png', hubImgCache),
   loadItemImg('catears',              'assets/hats/catears.png'),
   loadItemImg('headphones',           'assets/hats/headphones.png'),
   loadItemImg('baseballcap',          'assets/hats/baseballcap.png'),
@@ -107,6 +108,8 @@ export const itemImagesReady = Promise.all([
   // wings (drawn behind player)
   loadItemImg('acc_wings_hub',  'assets/accessories/wingshub.png'),
   loadItemImg('acc_wings_room', 'assets/accessories/wings.png'),
+  loadItemImg('acc_cape_hub',   'assets/accessories/capehub.png'),
+  loadItemImg('acc_cape_room',  'assets/accessories/cape.png'),
   // camo pants walk frames
   loadItemImg('bottom_camopants_hub_1', 'assets/bottoms/camopantshub1.png'),
   loadItemImg('bottom_camopants_hub_2', 'assets/bottoms/camopantshub2.png'),
@@ -238,7 +241,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     if (wImg) {
       x.fillStyle = a.accessoryColor;
       drawHairImg(x, 'acc_wings_hub', Math.round(cx - wImg.naturalWidth / 2), headY + 4 * s - 7, wImg.naturalWidth, wImg.naturalHeight);
-      x.fillStyle = a.skinColor; // restore so body PNG gets correct skin tint
+      x.fillStyle = a.skinColor;
     }
   }
 
@@ -416,6 +419,15 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx + 0.5 * s, headY + 8 * s - 1, 0.5 * s + 1, 1 * s);
     x.globalAlpha = 1;
   }
+  // ── Cape — drawn over clothes but under hair/hat ──
+  if (a.accessory === 'cape') {
+    const cImg = imgCache.get('acc_cape_hub');
+    if (cImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_cape_hub', Math.round(cx - cImg.naturalWidth / 2), headY + 4 * s, cImg.naturalWidth, cImg.naturalHeight);
+    }
+  }
+
   // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
   const hubWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
   if ((a.accessory === 'ring' || a.accessory === 'watch') && hubWristExposed) {
@@ -741,6 +753,15 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.globalAlpha = 1;
   }
   x.restore();
+
+  // ── Cape — drawn over clothes but under hair/hat ──
+  if (a.accessory === 'cape') {
+    const cImg = imgCache.get('acc_cape_room');
+    if (cImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_cape_room', Math.round(12 - cImg.naturalWidth / 2), oY + 13, cImg.naturalWidth, cImg.naturalHeight);
+    }
+  }
 
   // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
   const roomWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
