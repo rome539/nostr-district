@@ -76,7 +76,8 @@ import {
 import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords, shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
 import { authStore } from '../stores/authStore';
-import { AvatarConfig, deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
+import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
+import { getRainbowColor } from '../stores/marketStore';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { GROUND_Y, P } from '../config/game.config';
@@ -394,8 +395,26 @@ export abstract class BaseScene extends Phaser.Scene {
       o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, cfg.emoteContext);
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
 
+      // Rainbow name tag animation for other players
+      if (o.avatar) {
+        const oa = deserializeAvatar(o.avatar);
+        if (oa?.nameColor === 'rainbow') o.nameText.setColor(getRainbowColor(time));
+      }
+
       this.updateOtherPlayerExtras(pk, o, dx, delta);
     });
+  }
+
+  /** Call once per frame in each scene's update() to animate the local player's rainbow name tag. */
+  protected updateLocalNameColor(time: number): void {
+    const av = getAvatar();
+    if (!av.nameColor) return;
+    if (av.nameColor === 'rainbow') {
+      this.playerName?.setColor(getRainbowColor(time));
+    } else {
+      const current = this.playerName?.style.color;
+      if (current !== av.nameColor) this.playerName?.setColor(av.nameColor);
+    }
   }
 
   /**
@@ -802,15 +821,25 @@ export abstract class BaseScene extends Phaser.Scene {
         }
         if (!isMe && shouldFilter(text)) return;
         const accent = this.getSceneAccent();
-        this.chatUI.addMessage(name, text, isMe ? accent : P.lpurp, pk, emojis);
+        const myAvatar = getAvatar();
+        const myChatColor = myAvatar.chatColor && myAvatar.chatColor !== 'rainbow' ? myAvatar.chatColor : myAvatar.chatColor === 'rainbow' ? getRainbowColor(Date.now()) : accent;
+        let senderChatColor = P.lpurp;
+        if (!isMe) {
+          const o = this.otherPlayers.get(pk);
+          if (o?.avatar) {
+            const oa = deserializeAvatar(o.avatar);
+            if (oa?.chatColor) senderChatColor = oa.chatColor === 'rainbow' ? getRainbowColor(Date.now()) : oa.chatColor;
+          }
+        }
+        this.chatUI.addMessage(name, text, isMe ? myChatColor : senderChatColor, pk, emojis);
         if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
         const by = this.getBubbleYOffset();
         if (isMe) {
           const sp = this.getPlayerSprite();
-          ChatUI.showBubble(this, sp.x, sp.y + by, text, accent, 4000, emojis);
+          ChatUI.showBubble(this, sp.x, sp.y + by, text, myChatColor, 4000, emojis);
         } else {
           const o = this.otherPlayers.get(pk);
-          if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + by, text, P.lpurp, 4000, emojis);
+          if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + by, text, senderChatColor, 4000, emojis);
         }
       },
       onAvatarUpdate: (pk, avatarStr) => {
@@ -822,6 +851,9 @@ export abstract class BaseScene extends Phaser.Scene {
         if (this.textures.exists(texKey)) this.textures.remove(texKey);
         this.textures.addCanvas(texKey, this.renderOtherAvatar(avatarConfig));
         o.sprite.setTexture(texKey).setTint(0xffffff);
+        if (avatarConfig.nameColor && avatarConfig.nameColor !== 'rainbow') {
+          o.nameText.setColor(avatarConfig.nameColor);
+        }
       },
       onNameUpdate: (pk, name) => {
         const o = this.otherPlayers.get(pk); if (!o) return;

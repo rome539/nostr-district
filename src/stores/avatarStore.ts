@@ -18,6 +18,9 @@ export interface AvatarConfig {
   accessoryColor: string;
   eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart';
   eyeColor: string;
+  nameColor: string;
+  chatColor: string;
+  rodSkin: string;
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -35,6 +38,9 @@ const DEFAULT_AVATAR: AvatarConfig = {
   accessoryColor: '#5dcaa5',
   eyes: 'default',
   eyeColor: '#ffffff',
+  nameColor: '',
+  chatColor: '',
+  rodSkin: '',
 };
 
 let currentAvatar: AvatarConfig = { ...DEFAULT_AVATAR };

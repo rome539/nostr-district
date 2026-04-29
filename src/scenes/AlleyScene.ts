@@ -721,6 +721,7 @@ export class AlleyScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
+    this.updateLocalNameColor(time);
   }
 
   private updateMovement(): void {

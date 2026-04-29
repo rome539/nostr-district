@@ -24,6 +24,7 @@ import { isFirstVisit, markSetupComplete, getRoomConfig, RoomConfig } from '../s
 import { SoundEngine } from '../audio/SoundEngine';
 import { getPet, setPet, getPetPaths, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../stores/petStore';
 import { BookcaseModal } from '../ui/BookcaseModal';
+import { MarketPanel } from '../ui/MarketPanel';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
 interface FeedNote { npub: string; text: string; color: string; y: number; targetY: number; alpha: number; age: number; npubText?: Phaser.GameObjects.Text; msgText?: Phaser.GameObjects.Text; }
@@ -42,6 +43,9 @@ export class RoomScene extends BaseScene {
   private bookcasePrompt!: Phaser.GameObjects.Text;
   private bookcasePromptBg!: Phaser.GameObjects.Graphics;
   private nearBookcase = false;
+  private shopPrompt!: Phaser.GameObjects.Text;
+  private shopPromptBg!: Phaser.GameObjects.Graphics;
+  private nearShop = false;
   private hasBookcase = false;
   private parsedRoomConfig: any = null;
   private roomBgImage!: Phaser.GameObjects.Image;
@@ -229,6 +233,18 @@ export class RoomScene extends BaseScene {
       if (!this.introActive && this.nearBookcase) this.openBookcase();
     });
 
+    // Shop prompt (market room)
+    this.shopPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.shopPromptBg.fillStyle(hexToNum(P.bg), 0.9);
+    this.shopPromptBg.fillRoundedRect(0, 0, 128, 28, 5);
+    this.shopPromptBg.lineStyle(1, hexToNum(P.amber), 0.3);
+    this.shopPromptBg.strokeRoundedRect(0, 0, 128, 28, 5);
+    this.shopPrompt = this.add.text(0, 0, '[E] Browse Shop', {
+      fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.amber, fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.shopPrompt.setInteractive();
+    this.shopPrompt.on('pointerdown', () => { if (this.nearShop) MarketPanel.open(); });
+
     this.input.keyboard?.on('keydown-E', () => {
       if (this.introActive) return;
       if (BookcaseModal.isOpen()) return;
@@ -237,6 +253,8 @@ export class RoomScene extends BaseScene {
         this.openComputer();
       } else if (this.nearBookcase) {
         this.openBookcase();
+      } else if (this.nearShop) {
+        MarketPanel.open();
       }
     });
 
@@ -417,6 +435,15 @@ export class RoomScene extends BaseScene {
     }
   }
 
+  private _setShopPromptVisible(visible: boolean): void {
+    this.shopPrompt.setVisible(visible);
+    this.shopPromptBg.setVisible(visible);
+    if (visible) {
+      this.shopPromptBg.setPosition(GAME_WIDTH / 2 - 64, 258);
+      this.shopPrompt.setPosition(GAME_WIDTH / 2, 272);
+    }
+  }
+
   update(time: number, delta: number): void {
     if (!this.introActive) {
       this.updateMovement();
@@ -449,6 +476,13 @@ export class RoomScene extends BaseScene {
       this.setBookcasePromptVisible(nearShelf && !BookcaseModal.isOpen());
     }
 
+    // Market shop proximity check
+    if (this.roomConfig.id === 'market' && !this.introActive) {
+      const nearShop = this.player.x > 80 && this.player.x < GAME_WIDTH - 80;
+      if (nearShop !== this.nearShop) this.nearShop = nearShop;
+      this._setShopPromptVisible(nearShop && !MarketPanel.isOpen());
+    }
+
     // Room-specific updates
     const rc = this.roomConfig.id.startsWith('myroom:') ? 'myroom' : this.roomConfig.id;
     if (rc === 'feed') this.updateFeedRoom(time, delta);
@@ -475,6 +509,7 @@ export class RoomScene extends BaseScene {
 
     // Other players
     this.updateOtherPlayers(time, delta);
+    this.updateLocalNameColor(time);
   }
 
   // ── Feed Room ──
@@ -734,10 +769,10 @@ export class RoomScene extends BaseScene {
   }
   protected override handleSceneEsc(): boolean {
     if (BookcaseModal.isOpen()) {
-      // If a profile is open inside the bookcase, let ESC close just the profile first
       if (document.getElementById('profile-modal')) return true;
       BookcaseModal.destroy(); return true;
     }
+    if (MarketPanel.isOpen()) { MarketPanel.destroy(); this._setShopPromptVisible(this.nearShop); return true; }
     if (this.computerUI.isOpen()) { this.computerUI.close(); this.setComputerPromptVisible(this.nearComputer); return true; }
     return false;
   }

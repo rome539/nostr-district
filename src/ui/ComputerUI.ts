@@ -6,6 +6,7 @@
  */
 
 import { P } from '../config/game.config';
+import { isOwned } from '../stores/marketStore';
 import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
 import { renderRoomSprite, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from '../entities/AvatarRenderer';
 import { authStore } from '../stores/authStore';
@@ -311,17 +312,22 @@ export class ComputerUI {
     const current = valMap[this.currentSlot] || '';
 
     container.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;">
-      ${options.map(opt => `
-        <button class="wo" data-v="${opt}" style="
+      ${options.map(opt => {
+        const owned = isOwned(this.currentSlot, opt);
+        const active = current === opt;
+        return `<button class="wo" data-v="${opt}" ${owned ? '' : 'data-locked="1"'} style="
           padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;
-          cursor:pointer;border:1px solid ${current === opt ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-          background:${current === opt ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
-          color:${current === opt ? 'var(--nd-accent)' : 'var(--nd-text)'};
-        ">${esc(opt)}</button>
-      `).join('')}
+          cursor:${owned ? 'pointer' : 'not-allowed'};
+          border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : owned ? 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 10%,transparent)'};
+          background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
+          color:${active ? 'var(--nd-accent)' : owned ? 'var(--nd-text)' : 'color-mix(in srgb,var(--nd-subtext) 40%,transparent)'};
+          opacity:${owned ? '1' : '0.45'};
+        " title="${owned ? '' : '🔒 Buy in Market'}">${esc(opt)}${owned ? '' : ' 🔒'}</button>`;
+      }).join('')}
     </div>`;
     container.querySelectorAll('.wo').forEach(el => {
       el.addEventListener('click', () => {
+        if ((el as HTMLElement).dataset.locked) return;
         this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), [this.currentSlot]: (el as HTMLElement).dataset.v };
         this.renderPreview(this.draftAvatar); this.renderOptions(body);
       });

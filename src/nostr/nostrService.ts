@@ -7,6 +7,7 @@ import type { RoomConfig } from '../stores/roomStore';
 import { applyRemoteRoomConfig } from '../stores/roomStore';
 import type { AvatarConfig, OutfitPreset } from '../stores/avatarStore';
 import { applyRemoteAvatar, applyRemoteOutfits } from '../stores/avatarStore';
+import { applyRemoteInventory } from '../stores/marketStore';
 // @ts-ignore — JS module, no types
 import { BunkerClient, renderQR } from '../../nip46-bunker.js';
 
@@ -196,6 +197,41 @@ export async function fetchOutfits(pubkey: string): Promise<OutfitPreset[] | nul
   }
 }
 
+const INVENTORY_D_TAG = 'nostr-district-inventory';
+
+export async function publishInventory(items: string[]): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', INVENTORY_D_TAG], ['client', 'Nostr District']],
+      content: JSON.stringify(items),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishInventory failed:', e);
+    return false;
+  }
+}
+
+export async function fetchInventory(pubkey: string): Promise<string[] | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [INVENTORY_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content) as string[];
+  } catch (e) {
+    console.warn('[Nostr] fetchInventory failed:', e);
+    return null;
+  }
+}
+
 let _onAvatarSynced: (() => void) | null = null;
 let _avatarSynced = false;
 let _onRoomSynced: (() => void) | null = null;
@@ -231,6 +267,9 @@ function syncFromRelays(pubkey: string): void {
   });
   fetchOutfits(pubkey).then(remote => {
     if (remote) applyRemoteOutfits(remote);
+  }).catch(() => {});
+  fetchInventory(pubkey).then(remote => {
+    if (remote) applyRemoteInventory(remote);
   }).catch(() => {});
 
   fetchAvatar(pubkey).then(remote => {

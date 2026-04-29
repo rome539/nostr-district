@@ -93,6 +93,11 @@ export class EmoteSet {
 
   stop(name: string): void { this.emotes.get(name)?.stop(); }
 
+  setFishingSkin(skin: string): void {
+    const e = this.emotes.get('fishing') as import('./FishingEmote').FishingEmote | undefined;
+    if (e) e.rodSkin = skin;
+  }
+
   stopAll(): void { this.emotes.forEach(e => e.stop()); }
 
   isActive(name: string): boolean { return this.emotes.get(name)?.active ?? false; }

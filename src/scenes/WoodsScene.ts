@@ -27,6 +27,7 @@ import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
+import { ROD_SKINS } from '../stores/marketStore';
 
 const WOODS_ACCENT = '#aaff44';
 
@@ -785,6 +786,7 @@ export class WoodsScene extends BaseScene {
     } else { this.walkTime = 0; if (this.walkFrame >= 0) { this.walkFrame = -1; this.player.setTexture('player'); } this.player.y = this.playerY; }
 
     this.emoteGraphics.clear();
+    this.emoteSet.setFishingSkin(getAvatar().rodSkin);
     this.emoteSet.updateAll(this.emoteGraphics, delta, this.player.x, this.player.y, this.facingRight, 'hub', isWalking);
     this.player.setAlpha(this.emoteSet.isActive('ghost') ? 0.3 : 1);
 
@@ -795,6 +797,7 @@ export class WoodsScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
+    this.updateLocalNameColor(time);
   }
 
   private updateMovement(): void {
@@ -1382,26 +1385,35 @@ export class WoodsScene extends BaseScene {
     const bobberY = FLOOR_Y + 10 + bobAmt;
 
     // Fishing rod — thick base tapering to tip
-    this.fishingLineGraphics.lineStyle(3, 0x3a2810, 1);
+    const _rodSkinKey = getAvatar().rodSkin;
+    const _skin = ROD_SKINS[_rodSkinKey] ?? ROD_SKINS[''];
+    const _isLegendary = _rodSkinKey === 'legendary';
+    const _hue = (Date.now() / 20) % 360;
+    const _gripColor   = _isLegendary ? Phaser.Display.Color.HSLToColor(_hue / 360, 0.9, 0.55).color : _skin.grip;
+    const _tipColor    = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 40) % 360) / 360, 0.9, 0.65).color : _skin.tip;
+    const _lineColor   = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 80) % 360) / 360, 0.7, 0.75).color : _skin.line;
+    const _bobberColor = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 120) % 360) / 360, 0.9, 0.6).color : _skin.bobber;
+
+    this.fishingLineGraphics.lineStyle(3, _gripColor, 1);
     this.fishingLineGraphics.beginPath();
     this.fishingLineGraphics.moveTo(gripX, gripY);
     this.fishingLineGraphics.lineTo(gripX - 8, gripY - 20);
     this.fishingLineGraphics.strokePath();
-    this.fishingLineGraphics.lineStyle(2, 0x4a3418, 1);
+    this.fishingLineGraphics.lineStyle(2, _tipColor, 1);
     this.fishingLineGraphics.beginPath();
     this.fishingLineGraphics.moveTo(gripX - 8, gripY - 20);
     this.fishingLineGraphics.lineTo(rodTipX, rodTipY);
     this.fishingLineGraphics.strokePath();
 
     // Fishing line from rod tip to bobber
-    this.fishingLineGraphics.lineStyle(1, 0xc8b89a, 0.7);
+    this.fishingLineGraphics.lineStyle(1, _lineColor, 0.7);
     this.fishingLineGraphics.beginPath();
     this.fishingLineGraphics.moveTo(rodTipX, rodTipY);
     this.fishingLineGraphics.lineTo(bobberX, bobberY);
     this.fishingLineGraphics.strokePath();
 
     // Bobber float
-    const bobColor = isBite ? 0xff4444 : 0xe05028;
+    const bobColor = isBite ? 0xff4444 : _bobberColor;
     this.fishingLineGraphics.fillStyle(bobColor, 0.9);
     this.fishingLineGraphics.fillRect(bobberX - 2, bobberY - 4, 5, 4); // top (red/orange)
     this.fishingLineGraphics.fillStyle(0xf0f0f0, 0.85);

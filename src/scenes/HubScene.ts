@@ -322,6 +322,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
     sendPosition(this.player.x, this.player.y, this.facingRight);
     this.updateOtherPlayers(time, delta);
+    this.updateLocalNameColor(time);
   }
 
   // ── Room Requests ──

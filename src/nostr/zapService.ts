@@ -115,6 +115,54 @@ async function fetchInvoice(
   } catch { return null; }
 }
 
+// ── Direct lightning address pay (no zap request) ────────────────────────────
+
+/**
+ * Pay a lightning address directly without building a NIP-57 zap request.
+ * Used for market purchases where there is no recipient Nostr pubkey.
+ */
+export async function payLightningAddress(
+  lud16: string,
+  amountSats: number,
+  onStatus?: (msg: string) => void,
+): Promise<ZapResult> {
+  const amountMsats = amountSats * 1000;
+  const url = lud16ToUrl(lud16);
+  if (!url) return { status: 'error', error: 'Invalid lightning address' };
+
+  onStatus?.('Connecting…');
+  let lnurlData: any;
+  try { lnurlData = await fetchLNURLPData(url); }
+  catch { return { status: 'error', error: 'Could not reach lightning server' }; }
+
+  if (!lnurlData?.callback) return { status: 'error', error: 'Invalid LNURL response' };
+
+  const minSendable = lnurlData.minSendable || 1000;
+  const maxSendable = lnurlData.maxSendable || 100000000000;
+  if (amountMsats < minSendable || amountMsats > maxSendable) {
+    return { status: 'error', error: `Amount out of range (${Math.ceil(minSendable / 1000)}–${Math.floor(maxSendable / 1000)} sats)` };
+  }
+
+  onStatus?.('Requesting invoice…');
+  const invoice = await fetchInvoice(lnurlData.callback, amountMsats, '{}');
+  if (!invoice) return { status: 'error', error: 'Failed to get invoice' };
+
+  if (hasWebLN()) {
+    onStatus?.('Paying via WebLN…');
+    const result = await weblnPayInvoice(invoice);
+    if (result.preimage) return { status: 'paid' };
+  }
+
+  if (hasNWC()) {
+    onStatus?.('Paying via wallet…');
+    const result = await nwcPayInvoice(invoice);
+    if (result.preimage) return { status: 'paid' };
+    if (result.error) return { status: 'error', error: result.error };
+  }
+
+  return { status: 'invoice', invoice };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface ZapTarget {
