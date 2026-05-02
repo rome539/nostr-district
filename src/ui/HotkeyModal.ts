@@ -44,6 +44,7 @@ export class HotkeyModal {
 
     const navCmds: [string, string][] = [
       ['/map',          'World map'],
+      ['/shop',         'Open the item shop'],
       ['/tp <room>',    'Teleport to a room'],
       ['/dm <name>',    'Open direct message'],
       ['/crew',         'Open crews panel'],
@@ -53,6 +54,7 @@ export class HotkeyModal {
       ['/follows',      'Open follows list'],
       ['/polls',        'Open polls board'],
 
+      ['/tutorial',     'Reopen the tutorial'],
       ['/status',       'Show your status'],
       ['/mute',         'Mute all chat'],
       ['/mutelist',     'View muted players'],

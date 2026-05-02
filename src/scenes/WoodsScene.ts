@@ -28,6 +28,8 @@ import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
+import { incrementAuraProgress } from '../stores/auraUnlockStore';
+import { incrementLegendaryCatch } from '../stores/fishingUnlockStore';
 
 const WOODS_ACCENT = '#aaff44';
 
@@ -797,7 +799,7 @@ export class WoodsScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
-    this.updateLocalNameColor(time);
+    this.updateLocalNameColor(time, delta);
   }
 
   private updateMovement(): void {
@@ -1029,6 +1031,7 @@ export class WoodsScene extends BaseScene {
     });
     this.playerGlow = this.add.graphics().setDepth(9);
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
+    this.playerSprite = this.player;
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT,
@@ -1484,10 +1487,10 @@ export class WoodsScene extends BaseScene {
     if (roll < 0.0015) {
       const legendary = table.filter(f => 'legendary' in f && f.legendary);
       catch_ = legendary[Math.floor(Math.random() * legendary.length)];
-    } else if (roll < 0.1515) {
+    } else if (roll < 0.25) {
       const junk = table.filter(f => f.junk);
       catch_ = junk[Math.floor(Math.random() * junk.length)];
-    } else if (roll < 0.4015) {
+    } else if (roll < 0.50) {
       const rare = table.filter(f => f.rare);
       catch_ = rare[Math.floor(Math.random() * rare.length)];
     } else {
@@ -1512,6 +1515,7 @@ export class WoodsScene extends BaseScene {
       });
     }
     if (isLegendary) {
+      incrementLegendaryCatch();
       const flavor = 'flavor' in catch_ ? catch_.flavor : '';
       const lore = 'lore' in catch_ ? catch_.lore : '';
       this.showLegendaryPostPrompt(catch_.name, catch_.kg, flavor, lore);
@@ -1678,6 +1682,7 @@ export class WoodsScene extends BaseScene {
 
   private openTelescopeView(): void {
     if (this.telescopeOverlay) return;
+    incrementAuraProgress('sparkle');
 
     // ── seeded RNG ──
     const mkRng = (seed: number) => { let s = seed >>> 0; return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 0x100000000; }; };

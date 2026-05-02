@@ -6,19 +6,31 @@
  */
 
 import { authStore } from './authStore';
+import { isAuraUnlocked, checkGoldUnlock } from './auraUnlockStore';
+import { isFishingItemUnlocked } from './fishingUnlockStore';
 
 const OWNER_PUBKEYS = new Set([
   '5069ea44d8977e77c6aea605d0c5386b24504a3abd0fe8a3d1cf5f4cedca40a7',
   '0edcc015b167377154fa40ff1c59b2bbb18aca20b5b9c714980cfef60994a27a',
+  '40a0a47768141eddabcf3b25f2947c783f2c8a150781abb9c1b9ba4cefb385f4',
 ]);
+
+// If someone paid and didn't receive an item, add their hex pubkey + the item(s) here.
+// 'slot:value' matches the catalog — e.g. 'hat:crown', 'top:jacket', 'accessory:wings'
+const MANUAL_GRANTS: Record<string, string[]> = {
+  // 'abc123pubkey': ['hat:crown'],
+};
+
 
 export interface MarketItem {
   id:    string;
   name:  string;
-  slot:  'hair' | 'top' | 'bottom' | 'hat' | 'accessory' | 'nameColor' | 'chatColor' | 'rodSkin';
+  slot:  'hair' | 'top' | 'bottom' | 'hat' | 'accessory' | 'nameColor' | 'chatColor' | 'rodSkin' | 'nameAnim' | 'aura' | 'eyes';
   value: string;
   price: number;
   tier:  'basic' | 'accessories' | 'rare';
+  earn?: boolean;   // earned in-world, never purchased
+  hidden?: boolean; // exists for ownership gating but never shown in the shop
 }
 
 export interface RodSkinColors {
@@ -45,6 +57,46 @@ export function getRainbowColor(time: number): string {
   return `hsl(${hue},90%,68%)`;
 }
 
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', '#f0b040', '#c0c8d0']);
+
+export function isAnimatedColor(color: string): boolean {
+  return ANIMATED_COLORS.has(color);
+}
+
+export function getAnimatedColor(color: string, time: number): string {
+  switch (color) {
+    case 'rainbow': return getRainbowColor(time);
+    case 'fire': {
+      const hue = 15 + (Math.sin(time / 180) * 0.5 + 0.5) * 45;
+      const lit = 52 + Math.sin(time / 250) * 12;
+      return `hsl(${hue},100%,${lit}%)`;
+    }
+    case 'ice': {
+      const sat = 60 + Math.sin(time / 300) * 25;
+      const lit = 72 + Math.sin(time / 400) * 12;
+      return `hsl(200,${sat}%,${lit}%)`;
+    }
+    case 'electric': {
+      const hues = [55, 180, 200];
+      const idx = Math.floor((time / 350) % hues.length);
+      return `hsl(${hues[idx]},100%,72%)`;
+    }
+    case '#f0b040': { // gold shine
+      const t = Math.sin(time / 600) * 0.5 + 0.5;
+      const lit = 38 + t * 28;
+      const sat = 88 + t * 12;
+      return `hsl(42,${sat}%,${lit}%)`;
+    }
+    case '#c0c8d0': { // silver shimmer
+      const t = Math.sin(time / 700) * 0.5 + 0.5;
+      const lit = 62 + t * 22;
+      const sat = 8 + t * 10;
+      return `hsl(210,${sat}%,${lit}%)`;
+    }
+    default: return color;
+  }
+}
+
 export const TIER_LABEL: Record<MarketItem['tier'], string> = {
   basic:       'BASIC',
   accessories: 'ACC',
@@ -58,70 +110,140 @@ export const TIER_COLOR: Record<MarketItem['tier'], string> = {
 };
 
 export const CATALOG: MarketItem[] = [
-  // ── Basic — 1,000 sats ───────────────────────────────────────────────────────
-  { id: 'top_camoshirt',   name: 'Camo Shirt',    slot: 'top',       value: 'camoshirt',   price: 1000, tier: 'basic' },
-  { id: 'top_flannel',     name: 'Flannel',        slot: 'top',       value: 'flannel',     price: 1000, tier: 'basic' },
-  { id: 'top_bomber',      name: 'Bomber Jacket',  slot: 'top',       value: 'bomber',      price: 1000, tier: 'basic' },
-  { id: 'top_jacket',      name: 'Jacket',         slot: 'top',       value: 'jacket',      price: 1000, tier: 'basic' },
-  { id: 'bot_camopants',   name: 'Camo Pants',     slot: 'bottom',    value: 'camopants',   price: 1000, tier: 'basic' },
-  // ── Accessories — 2,500 sats ─────────────────────────────────────────────────
-  { id: 'hat_headphones',  name: 'Headphones',     slot: 'hat',       value: 'headphones',  price: 2500, tier: 'accessories' },
-  { id: 'hat_catears',     name: 'Cat Ears',       slot: 'hat',       value: 'catears',     price: 2500, tier: 'accessories' },
-  { id: 'hat_halo',        name: 'Halo',           slot: 'hat',       value: 'halo',        price: 2500, tier: 'accessories' },
-  { id: 'hat_horns',       name: 'Horns',          slot: 'hat',       value: 'horns',       price: 2500, tier: 'accessories' },
-  { id: 'hat_hornsspiral', name: 'Spiral Horns',   slot: 'hat',       value: 'hornsspiral', price: 2500, tier: 'accessories' },
-  // ── Rare — 5,000 sats ───────────────────────────────────────────────────────
-  { id: 'acc_wings',       name: 'Wings',              slot: 'accessory', value: 'wings',       price: 5000, tier: 'rare' },
-  { id: 'acc_cape',        name: 'Cape',               slot: 'accessory', value: 'cape',        price: 5000, tier: 'rare' },
-  { id: 'hair_afro',       name: 'Afro',               slot: 'hair',      value: 'afro',        price: 5000, tier: 'rare' },
-  { id: 'hair_ponytail',   name: 'Ponytail',           slot: 'hair',      value: 'ponytail',    price: 5000, tier: 'rare' },
-  // ── Name tag colors ──────────────────────────────────────────────────────────
-  { id: 'name_orange',     name: 'Orange Name Tag',    slot: 'nameColor', value: '#f0a050',     price: 1000, tier: 'basic' },
-  { id: 'name_pink',       name: 'Pink Name Tag',      slot: 'nameColor', value: '#e87aab',     price: 1000, tier: 'basic' },
-  { id: 'name_cyan',       name: 'Cyan Name Tag',      slot: 'nameColor', value: '#40e8ff',     price: 1000, tier: 'basic' },
-  { id: 'name_purple',     name: 'Purple Name Tag',    slot: 'nameColor', value: '#9a6eff',     price: 1000, tier: 'basic' },
-  { id: 'name_teal',       name: 'Teal Name Tag',      slot: 'nameColor', value: '#5dcaa5',     price: 1000, tier: 'basic' },
-  { id: 'name_red',        name: 'Red Name Tag',       slot: 'nameColor', value: '#e85454',     price: 1000, tier: 'basic' },
-  { id: 'name_gold',       name: 'Gold Name Tag',      slot: 'nameColor', value: '#f0b040',     price: 5000, tier: 'rare'  },
-  { id: 'name_silver',     name: 'Silver Name Tag',    slot: 'nameColor', value: '#c0c8d0',     price: 5000, tier: 'rare'  },
-  { id: 'name_rainbow',    name: '🌈 Rainbow Name Tag',slot: 'nameColor', value: 'rainbow',     price: 5000, tier: 'rare'  },
-  // ── Chat bubble colors ───────────────────────────────────────────────────────
-  { id: 'chat_orange',     name: 'Orange Chat',        slot: 'chatColor', value: '#f0a050',     price: 1000, tier: 'basic' },
-  { id: 'chat_pink',       name: 'Pink Chat',          slot: 'chatColor', value: '#e87aab',     price: 1000, tier: 'basic' },
-  { id: 'chat_cyan',       name: 'Cyan Chat',          slot: 'chatColor', value: '#40e8ff',     price: 1000, tier: 'basic' },
-  { id: 'chat_purple',     name: 'Purple Chat',        slot: 'chatColor', value: '#9a6eff',     price: 1000, tier: 'basic' },
-  { id: 'chat_teal',       name: 'Teal Chat',          slot: 'chatColor', value: '#5dcaa5',     price: 1000, tier: 'basic' },
-  { id: 'chat_red',        name: 'Red Chat',           slot: 'chatColor', value: '#e85454',     price: 1000, tier: 'basic' },
-  { id: 'chat_gold',       name: 'Gold Chat',          slot: 'chatColor', value: '#f0b040',     price: 5000, tier: 'rare'  },
-  { id: 'chat_silver',     name: 'Silver Chat',        slot: 'chatColor', value: '#c0c8d0',     price: 5000, tier: 'rare'  },
-  { id: 'chat_rainbow',    name: '🌈 Rainbow Chat',    slot: 'chatColor', value: 'rainbow',     price: 5000, tier: 'rare'  },
+  // ── Tops ─────────────────────────────────────────────────────────────────────
+  { id: 'top_camoshirt',   name: 'Camo Shirt',      slot: 'top',       value: 'camoshirt',      price: 0.50, tier: 'basic' },
+  { id: 'top_flannel',     name: 'Flannel',          slot: 'top',       value: 'flannel',        price: 0.50, tier: 'basic' },
+  { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 0.50, tier: 'basic' },
+  { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },
+  { id: 'top_tunic',       name: 'Tunic',            slot: 'top',       value: 'tunic',          price: 0.50, tier: 'basic' },
+  { id: 'top_skindress',   name: 'Skin Dress',       slot: 'top',       value: 'skindress',      price: 0.50, tier: 'basic' },
+  // { id: 'top_knightchest', name: 'Knight Chest',     slot: 'top',       value: 'knightchest',    price: 1.50, tier: 'accessories' },
+  // ── Bottoms ───────────────────────────────────────────────────────────────────
+  { id: 'bot_camopants',   name: 'Camo Pants',       slot: 'bottom',    value: 'camopants',      price: 0.50, tier: 'basic' },
+  { id: 'bot_baggyjeans',  name: 'Baggy Jeans',      slot: 'bottom',    value: 'baggyjeans',     price: 0.50, tier: 'basic' },
+  { id: 'bot_trousers',    name: 'Trousers',         slot: 'bottom',    value: 'trousers',       price: 0.50, tier: 'basic' },
+  { id: 'bot_utilitypants',name: 'Utility Pants',    slot: 'bottom',    value: 'utilitypants',   price: 0.50, tier: 'basic' },
+  { id: 'bot_cargopants',  name: 'Cargo Pants',      slot: 'bottom',    value: 'cargopants',     price: 0.50, tier: 'basic' },
+  // { id: 'bot_knightpants', name: 'Knight Pants',     slot: 'bottom',    value: 'knightpants',    price: 1.50, tier: 'accessories' },
+  // ── Hats ─────────────────────────────────────────────────────────────────────
+  // { id: 'hat_knightsheadband', name: 'Knight Headband', slot: 'hat',      value: 'knightsheadband', price: 1.50, tier: 'accessories' },
+  { id: 'hat_catears',     name: 'Cat Ears',         slot: 'hat',       value: 'catears',        price: 1.50, tier: 'accessories' },
+  { id: 'hat_halo',        name: 'Halo',             slot: 'hat',       value: 'halo',           price: 1.50, tier: 'accessories' },
+  { id: 'hat_horns',       name: 'Horns',            slot: 'hat',       value: 'horns',          price: 1.50, tier: 'accessories' },
+  { id: 'hat_hornsspiral', name: 'Spiral Horns',     slot: 'hat',       value: 'hornsspiral',    price: 1.50, tier: 'accessories' },
+  { id: 'hat_crown',       name: 'Crown',            slot: 'hat',       value: 'crown',          price: 8.00, tier: 'rare' },
+  { id: 'hat_crown_purple',name: 'Purple Crown',     slot: 'hat',       value: 'crown_purple',   price: 8.00, tier: 'rare' },
+  { id: 'hat_crown_silver',name: 'Silver Crown',     slot: 'hat',       value: 'crown_silver',   price: 8.00, tier: 'rare' },
+  { id: 'hat_crown_bronze',name: 'Bronze Crown',     slot: 'hat',       value: 'crown_bronze',   price: 8.00, tier: 'rare' },
+  // ── Accessories ───────────────────────────────────────────────────────────────
+  // { id: 'acc_sword',       name: 'Sword',            slot: 'accessory', value: 'sword',          price: 1.50, tier: 'accessories' },
+  { id: 'acc_floatie',     name: 'Ostrich Floatie',  slot: 'accessory', value: 'ostirchfloatie', price: 1.50, tier: 'accessories' },
+  { id: 'acc_wings',       name: 'Wings',            slot: 'accessory', value: 'wings',          price: 3.00, tier: 'rare' },
+  { id: 'acc_cape',        name: 'Cape',             slot: 'accessory', value: 'cape',           price: 3.00, tier: 'rare' },
+  // ── Hair ─────────────────────────────────────────────────────────────────────
+  { id: 'hair_afro',       name: 'Afro',             slot: 'hair',      value: 'afro',           price: 0.50, tier: 'basic' },
+  { id: 'hair_ponytail',   name: 'Ponytail',         slot: 'hair',      value: 'ponytail',       price: 0.50, tier: 'basic' },
+  // ── Eyes ─────────────────────────────────────────────────────────────────────
+  { id: 'eye_heart',  name: '♥ Heart Eyes',  slot: 'eyes', value: 'heart',  price: 0.50, tier: 'basic' },
+  { id: 'eye_glow',   name: '✦ Glow Eyes',   slot: 'eyes', value: 'glow',   price: 2.00, tier: 'accessories' },
+  { id: 'eye_blaze',  name: '🔥 Blaze Eyes',  slot: 'eyes', value: 'blaze',  price: 3.00, tier: 'rare' },
+  { id: 'eye_frost',  name: '❄️ Frost Eyes',  slot: 'eyes', value: 'frost',  price: 3.00, tier: 'rare' },
+  { id: 'eye_cosmic', name: '✨ Cosmic Eyes', slot: 'eyes', value: 'cosmic', price: 3.00, tier: 'rare' },
+  // { id: 'eye_cry', name: '💧 Cry Eyes', slot: 'eyes', value: 'cry', price: 3.00, tier: 'rare' }, // TODO: convert to emote
+  // ── Name colors ───────────────────────────────────────────────────────────────
+  { id: 'color_orange',    name: 'Orange',           slot: 'nameColor', value: '#f07020',  price: 0.50, tier: 'basic' },
+  { id: 'color_pink',      name: 'Pink',             slot: 'nameColor', value: '#e87aab',  price: 0.50, tier: 'basic' },
+  { id: 'color_cyan',      name: 'Cyan',             slot: 'nameColor', value: '#40e8ff',  price: 0.50, tier: 'basic' },
+  { id: 'color_purple',    name: 'Purple',           slot: 'nameColor', value: '#9a6eff',  price: 0.50, tier: 'basic' },
+  { id: 'color_teal',      name: 'Teal',             slot: 'nameColor', value: '#5dcaa5',  price: 0.50, tier: 'basic' },
+  { id: 'color_red',       name: 'Red',              slot: 'nameColor', value: '#e85454',  price: 0.50, tier: 'basic' },
+  { id: 'color_yellow',    name: 'Yellow',           slot: 'nameColor', value: '#f0e040',  price: 0.50, tier: 'basic' },
+  { id: 'color_neongreen', name: 'Neon Green',       slot: 'nameColor', value: '#39ff14',  price: 0.50, tier: 'basic' },
+  { id: 'color_gold',      name: 'Gold',             slot: 'nameColor', value: '#f0b040',  price: 3.00, tier: 'rare'  },
+  { id: 'color_silver',    name: 'Silver',           slot: 'nameColor', value: '#c0c8d0',  price: 3.00, tier: 'rare'  },
+  { id: 'color_fire',      name: '🔥 Fire',          slot: 'nameColor', value: 'fire',     price: 3.00, tier: 'rare'  },
+  { id: 'color_ice',       name: '❄️ Ice',           slot: 'nameColor', value: 'ice',      price: 3.00, tier: 'rare'  },
+  { id: 'color_electric',  name: '⚡ Electric',      slot: 'nameColor', value: 'electric', price: 3.00, tier: 'rare'  },
+  { id: 'color_rainbow',   name: '🌈 Rainbow',       slot: 'nameColor', value: 'rainbow',  price: 5.00, tier: 'rare'  },
+  // ── Name tag animations ───────────────────────────────────────────────────────
+  { id: 'anim_bob',        name: 'Bob',              slot: 'nameAnim',  value: 'bob',      price: 2.00, tier: 'basic' },
+  { id: 'anim_pulse',      name: 'Pulse',            slot: 'nameAnim',  value: 'pulse',    price: 2.00, tier: 'basic' },
+  { id: 'anim_zoom',       name: 'Zoom',             slot: 'nameAnim',  value: 'zoom',     price: 2.00, tier: 'basic' },
+  { id: 'anim_jitter',     name: 'Jitter',           slot: 'nameAnim',  value: 'jitter',   price: 3.00, tier: 'accessories' },
+  { id: 'anim_swing',      name: 'Swing',            slot: 'nameAnim',  value: 'swing',    price: 3.00, tier: 'accessories' },
+  { id: 'anim_wave',       name: 'Wave',             slot: 'nameAnim',  value: 'wave',     price: 3.00, tier: 'accessories' },
+  { id: 'anim_glow',       name: 'Glow',             slot: 'nameAnim',  value: 'glow',     price: 3.00, tier: 'accessories' },
   // ── Fishing rod skins ────────────────────────────────────────────────────────
-  { id: 'rod_silver',     name: 'Silver Rod',         slot: 'rodSkin',   value: 'silver',      price: 1000, tier: 'basic' },
-  { id: 'rod_bamboo',     name: 'Bamboo Rod',         slot: 'rodSkin',   value: 'bamboo',      price: 1000, tier: 'basic' },
-  { id: 'rod_carbon',     name: 'Carbon Rod',         slot: 'rodSkin',   value: 'carbon',      price: 1000, tier: 'basic' },
-  { id: 'rod_coral',      name: 'Coral Rod',          slot: 'rodSkin',   value: 'coral',       price: 2500, tier: 'accessories' },
-  { id: 'rod_gold',       name: 'Gold Rod',           slot: 'rodSkin',   value: 'gold',        price: 2500, tier: 'accessories' },
-  { id: 'rod_legendary',  name: '🌈 Legendary Rod',   slot: 'rodSkin',   value: 'legendary',   price: 5000, tier: 'rare'  },
+  { id: 'rod_silver',      name: 'Silver Rod',       slot: 'rodSkin',   value: 'silver',   price: 1.50, tier: 'accessories' },
+  { id: 'rod_bamboo',      name: 'Bamboo Rod',       slot: 'rodSkin',   value: 'bamboo',   price: 0.50, tier: 'basic' },
+  { id: 'rod_carbon',      name: 'Carbon Rod',       slot: 'rodSkin',   value: 'carbon',   price: 0.50, tier: 'basic' },
+  { id: 'rod_coral',       name: 'Coral Rod',        slot: 'rodSkin',   value: 'coral',    price: 0.50, tier: 'basic' },
+  { id: 'rod_gold',        name: 'Gold Rod',         slot: 'rodSkin',   value: 'gold',     price: 1.50, tier: 'accessories' },
+  { id: 'rod_legendary',   name: '🌈 Legendary Rod', slot: 'rodSkin',   value: 'legendary',price: 5.00, tier: 'rare'  },
+  // ── Fishing unlocks (earned by catching legendary fish) ─────────────────────
+  { id: 'hat_fishhat',   name: 'Fish Hat',          slot: 'hat',    value: 'fishhat', price: 0, tier: 'rare', earn: true, hidden: true },
+  { id: 'bot_fishnet',   name: 'Fish Net Bottoms',  slot: 'bottom', value: 'fishnet', price: 0, tier: 'rare', earn: true, hidden: true },
+  // ── Player auras (earned in-world, not purchased) ────────────────────────────
+  { id: 'aura_smoke',    name: 'Smoke Aura',    slot: 'aura', value: 'smoke',    price: 0, tier: 'rare', earn: true },
+  { id: 'aura_fire',     name: 'Fire Aura',     slot: 'aura', value: 'fire',     price: 0, tier: 'rare', earn: true },
+  { id: 'aura_sparkle',  name: 'Sparkle Aura',  slot: 'aura', value: 'sparkle',  price: 0, tier: 'rare', earn: true },
+  { id: 'aura_ice',      name: 'Ice Aura',      slot: 'aura', value: 'ice',      price: 0, tier: 'rare', earn: true },
+  { id: 'aura_electric', name: 'Electric Aura', slot: 'aura', value: 'electric', price: 0, tier: 'rare', earn: true },
+  { id: 'aura_void',     name: 'Void Aura',     slot: 'aura', value: 'void',     price: 0, tier: 'rare', earn: true },
+  { id: 'aura_gold',     name: 'Gold Aura',     slot: 'aura', value: 'gold',     price: 0, tier: 'rare', earn: true },
+  { id: 'aura_rainbow',  name: 'Rainbow Aura',  slot: 'aura', value: 'rainbow',  price: 0, tier: 'rare', earn: true },
 ];
+
+// ── Weekly sale ───────────────────────────────────────────────────────────────
+
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+/** Returns the item on sale this week (deterministic, same for all players). */
+export function getWeeklySaleItem(): MarketItem {
+  const week     = Math.floor(Date.now() / MS_PER_WEEK);
+  const eligible = CATALOG.filter(i => !i.earn && i.price > 0);
+  return eligible[week % eligible.length];
+}
+
+/** Returns the discounted price for the weekly sale item. */
+export function getSalePrice(item: MarketItem): number {
+  return Math.round(item.price * 0.75 * 100) / 100;
+}
+
+/** Returns how many days remain in the current sale week. */
+export function getSaleDaysLeft(): number {
+  const weekStart = Math.floor(Date.now() / MS_PER_WEEK) * MS_PER_WEEK;
+  return Math.max(1, Math.ceil((weekStart + MS_PER_WEEK - Date.now()) / (24 * 60 * 60 * 1000)));
+}
 
 // Lookup by slot:value for fast membership test
 const PAID_KEYS = new Set(CATALOG.map(i => `${i.slot}:${i.value}`));
+const EARN_KEYS = new Set(CATALOG.filter(i => i.earn).map(i => `${i.slot}:${i.value}`));
 
 // ── Inventory state ───────────────────────────────────────────────────────────
 
 let _inventory: Set<string> = new Set();
 
-/** Returns true if the player can equip this item (free or purchased). */
+/** Returns true if the player can equip this item (free, purchased, or earned). */
 export function isOwned(slot: string, value: string): boolean {
+  // Chat colors are bundled with name colors — owning one grants the other
+  if (slot === 'chatColor') return isOwned('nameColor', value);
   const key = `${slot}:${value}`;
   if (!PAID_KEYS.has(key)) return true; // free (procedural or free PNG)
-  if (OWNER_PUBKEYS.has(authStore.getState().pubkey ?? '')) return true; // dev accounts own everything
+  const pubkey = authStore.getState().pubkey ?? '';
+  if (OWNER_PUBKEYS.has(pubkey)) return true;
+  if (MANUAL_GRANTS[pubkey]?.includes(key)) return true;
+  if (EARN_KEYS.has(key)) {
+    if (slot === 'hat' || slot === 'bottom') return isFishingItemUnlocked(value);
+    return isAuraUnlocked(value);
+  }
   return _inventory.has(key);
 }
 
 /** Mark an item as purchased in memory. */
 export function addToInventory(slot: string, value: string): void {
   _inventory.add(`${slot}:${value}`);
+  checkGoldUnlock(_inventory.size);
 }
 
 /** Returns the inventory as a string array for Nostr persistence. */

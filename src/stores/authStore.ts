@@ -1,3 +1,6 @@
+import { initAuraProgress } from './auraUnlockStore';
+import { initFishingProgress } from './fishingUnlockStore';
+
 type LoginMethod = 'extension' | 'nsec' | 'bunker' | 'guest' | null;
 
 interface AuthState {
@@ -74,6 +77,7 @@ state = {
     state.loginMethod = data.loginMethod;
     state.isLoggedIn = true;
     state.isGuest = data.loginMethod === 'guest';
+    if (!state.isGuest && data.pubkey) { initAuraProgress(data.pubkey); initFishingProgress(data.pubkey); }
     notify();
   },
 

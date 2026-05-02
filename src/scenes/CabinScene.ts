@@ -20,6 +20,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
+import { incrementAuraProgress } from '../stores/auraUnlockStore';
 
 const CABIN_ACCENT = '#f0a030';
 const W = 1000;             // cabin world width
@@ -130,7 +131,7 @@ export class CabinScene extends BaseScene {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); return; }
-      if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); return; }
+      if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); incrementAuraProgress('fire'); return; }
       if (this.nearBookshelf) { this.showBookQuote(); return; }
     });
     this.setupEscHandler();
@@ -394,7 +395,7 @@ export class CabinScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
-    this.updateLocalNameColor(time);
+    this.updateLocalNameColor(time, delta);
   }
 
   private updateMovement(): void {
@@ -935,6 +936,7 @@ export class CabinScene extends BaseScene {
       this.player?.setTexture('player');
     });
     this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
+    this.playerSprite = this.player;
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
     const ms = getStatus();

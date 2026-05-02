@@ -102,24 +102,25 @@ async function buildZapRequest(
 async function fetchInvoice(
   callbackUrl: string,
   amountMsats: number,
-  zapRequestJson: string,
-): Promise<string | null> {
-  const params = new URLSearchParams({
-    amount: String(amountMsats),
-    nostr: zapRequestJson,
-  });
+  zapRequestJson: string | null, // null = plain payment, no nostr param
+): Promise<{ pr: string; verify?: string } | null> {
+  const params = new URLSearchParams({ amount: String(amountMsats) });
+  if (zapRequestJson) params.set('nostr', zapRequestJson);
   try {
     const r = await fetch(`${callbackUrl}?${params}`);
     const data = await r.json();
-    return data.pr || null;
+    console.log('[market] LNURL callback response:', JSON.stringify(data));
+    if (!data.pr) return null;
+    return { pr: data.pr, verify: data.verify || undefined };
   } catch { return null; }
 }
 
 // ── Direct lightning address pay (no zap request) ────────────────────────────
 
 /**
- * Pay a lightning address directly without building a NIP-57 zap request.
- * Used for market purchases where there is no recipient Nostr pubkey.
+ * Pay a lightning address for a market purchase.
+ * Uses NIP-57 zap request when the store supports it so we can detect
+ * payment via kind:9735 zap receipts on Nostr relays.
  */
 export async function payLightningAddress(
   lud16: string,
@@ -143,24 +144,59 @@ export async function payLightningAddress(
     return { status: 'error', error: `Amount out of range (${Math.ceil(minSendable / 1000)}–${Math.floor(maxSendable / 1000)} sats)` };
   }
 
+  // Build a NIP-57 zap request if the store supports it so we can verify
+  // payment by listening for the kind:9735 zap receipt on relays.
+  const storeNostrPubkey: string | undefined = lnurlData.allowsNostr ? lnurlData.nostrPubkey : undefined;
+  let zapRequestJson: string | null = null;
+  let zapEventId: string | undefined;
+
+  if (storeNostrPubkey) {
+    onStatus?.('Building payment request…');
+    const auth = authStore.getState();
+    if (auth.pubkey && !auth.isGuest) {
+      const zapReq = {
+        kind: 9734,
+        created_at: Math.floor(Date.now() / 1000),
+        content: 'market-purchase',
+        tags: [
+          ['p', storeNostrPubkey],
+          ['amount', String(amountMsats)],
+          ['lnurl', lnurlData.callback],
+          ['relays', ...RELAYS],
+        ],
+      };
+      try {
+        const signed = await signEvent(zapReq);
+        zapRequestJson = JSON.stringify(signed);
+        zapEventId = (signed as any).id;
+      } catch { /* fall through to plain pay */ }
+    }
+  }
+
   onStatus?.('Requesting invoice…');
-  const invoice = await fetchInvoice(lnurlData.callback, amountMsats, '{}');
-  if (!invoice) return { status: 'error', error: 'Failed to get invoice' };
+  const inv = await fetchInvoice(lnurlData.callback, amountMsats, zapRequestJson);
+  if (!inv) return { status: 'error', error: 'Failed to get invoice' };
 
   if (hasWebLN()) {
     onStatus?.('Paying via WebLN…');
-    const result = await weblnPayInvoice(invoice);
+    const result = await weblnPayInvoice(inv.pr);
     if (result.preimage) return { status: 'paid' };
   }
 
   if (hasNWC()) {
     onStatus?.('Paying via wallet…');
-    const result = await nwcPayInvoice(invoice);
+    const result = await nwcPayInvoice(inv.pr);
     if (result.preimage) return { status: 'paid' };
     if (result.error) return { status: 'error', error: result.error };
   }
 
-  return { status: 'invoice', invoice };
+  return {
+    status:       'invoice',
+    invoice:      inv.pr,
+    verifyUrl:    inv.verify,
+    nostrPubkey:  storeNostrPubkey,
+    zapEventId,
+  };
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -171,9 +207,12 @@ export interface ZapTarget {
 }
 
 export interface ZapResult {
-  status:   'paid' | 'invoice' | 'error';
-  invoice?: string; // for QR fallback
-  error?:   string;
+  status:        'paid' | 'invoice' | 'error';
+  invoice?:      string; // for QR fallback
+  verifyUrl?:    string; // LNURL-pay verify endpoint for polling
+  nostrPubkey?:  string; // store's nostr pubkey (for zap receipt polling)
+  zapEventId?:   string; // signed zap request event ID (to match receipt)
+  error?:        string;
 }
 
 /**
@@ -242,17 +281,17 @@ export async function zapUser(
   }
 
   onStatus?.('Requesting invoice…');
-  const invoice = await fetchInvoice(
+  const inv = await fetchInvoice(
     lnurlData.callback,
     amountMsats,
     zapRequestJson || '{}',
   );
-  if (!invoice) return { status: 'error', error: 'Failed to get invoice' };
+  if (!inv) return { status: 'error', error: 'Failed to get invoice' };
 
   // Try WebLN first
   if (hasWebLN()) {
     onStatus?.('Paying via WebLN…');
-    const result = await weblnPayInvoice(invoice);
+    const result = await weblnPayInvoice(inv.pr);
     if (result.preimage) return { status: 'paid' };
     if (result.error && result.error !== 'No WebLN') {
       // User cancelled — fall through to QR
@@ -262,13 +301,72 @@ export async function zapUser(
   // Try NWC
   if (hasNWC()) {
     onStatus?.('Paying via wallet…');
-    const result = await nwcPayInvoice(invoice);
+    const result = await nwcPayInvoice(inv.pr);
     if (result.preimage) return { status: 'paid' };
     if (result.error) return { status: 'error', error: result.error };
   }
 
   // QR fallback
-  return { status: 'invoice', invoice };
+  return { status: 'invoice', invoice: inv.pr, verifyUrl: inv.verify };
+}
+
+// ── Market purchase receipt watcher ──────────────────────────────────────────
+
+/**
+ * Opens relay connections and calls onPaid() when a kind:9735 zap receipt
+ * arrives that matches our zapEventId. Returns a cleanup function.
+ */
+export function watchForPurchaseReceipt(
+  storeNostrPubkey: string,
+  zapEventId: string,
+  onPaid: () => void,
+): () => void {
+  const sockets: WebSocket[] = [];
+  const seen = new Set<string>();
+  const since = Math.floor(Date.now() / 1000) - 10;
+
+  const check = (ev: any) => {
+    if (seen.has(ev.id)) return;
+    seen.add(ev.id);
+    // Match by the description tag (contains original zap request JSON)
+    const descTag = ev.tags?.find((t: string[]) => t[0] === 'description');
+    if (!descTag?.[1]) return;
+    try {
+      const zapReq = JSON.parse(descTag[1]);
+      if (zapReq.id === zapEventId) {
+        cleanup();
+        onPaid();
+      }
+    } catch { /* */ }
+  };
+
+  const cleanup = () => {
+    sockets.forEach(s => { try { s.close(); } catch { /* */ } });
+    sockets.length = 0;
+  };
+
+  RELAYS.forEach(relayUrl => {
+    try {
+      const ws = new WebSocket(relayUrl);
+      sockets.push(ws);
+      const sub = 'mkt_' + Math.random().toString(36).slice(2, 8);
+      ws.onopen = () => {
+        ws.send(JSON.stringify(['REQ', sub, {
+          kinds: [9735],
+          '#p': [storeNostrPubkey],
+          since,
+        }]));
+      };
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data as string);
+          if (msg[0] === 'EVENT' && msg[2]?.kind === 9735) check(msg[2]);
+        } catch { /* */ }
+      };
+    } catch { /* */ }
+  });
+
+  return cleanup;
 }
 
 // ── Zap receipt subscription (kind 9735) ─────────────────────────────────────

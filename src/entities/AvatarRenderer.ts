@@ -26,18 +26,24 @@ function loadItemImg(name: string, src: string, cache = imgCache): Promise<void>
 // above:      true = image extends ABOVE anchor (hats), false = image starts AT/BELOW anchor
 // yGap:       room-scale px. If above: distance from image bottom to anchor. If below: offset from anchor to image top.
 type AnchorType = 'headTop' | 'eyeLine' | 'mouthLine' | 'neckLine' | 'shoulder' | 'waist';
-interface ItemDef { anchor: AnchorType; widthRatio: number; roomWidthRatio?: number; hubSrc?: string; above: boolean; yGap: number; roomYGap?: number; hubYGap?: number; flipH?: boolean; hubFlipH?: boolean; xOffset?: number; tintDark?: boolean; }
+interface ItemDef { anchor: AnchorType; widthRatio: number; roomWidthRatio?: number; hubSrc?: string; above: boolean; yGap: number; roomYGap?: number; hubYGap?: number; flipH?: boolean; hubFlipH?: boolean; xOffset?: number; tintDark?: boolean; noTint?: boolean; naturalSize?: boolean; srcName?: string; cssFilter?: string; }
 
 const ITEM_DEFS: Record<string, ItemDef> = {
   // ── Hats ──
   wizard:             { anchor: 'headTop', widthRatio: 1.8, roomWidthRatio: 1.5, above: true, yGap: -5, hubYGap: 2, hubFlipH: true },
   ostrichhat:         { anchor: 'headTop', widthRatio: 1.875, roomWidthRatio: 1.68, above: true, yGap: -6, hubYGap: 2, flipH: true, xOffset: -1, tintDark: true },
+  crown:              { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
+  crown_purple:       { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
+  crown_silver:       { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
+  crown_bronze:       { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
+  fishhat:            { anchor: 'headTop', widthRatio: 1.4, roomWidthRatio: 1.2, above: true, yGap: -6, hubYGap: 1, noTint: true, naturalSize: true },
   // ── Accessories (image-based) ──
   halo:               { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap:  2, hubYGap: 11 },
   catears:            { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap: -5, hubYGap:  4 },
   headphones:         { anchor: 'headTop', widthRatio: 2.0,  roomWidthRatio: 1.43, hubSrc: 'assets/hats/headphoneshub.png', above: true, yGap: -8, hubYGap: -4 },
   horns:              { anchor: 'headTop', widthRatio: 1.43,   roomWidthRatio: 1.3, above: true, yGap: -4, hubYGap:  4 },
   hornsspiral:        { anchor: 'headTop', widthRatio: 1.0,  above: true, yGap: -3, roomYGap: -4, hubYGap: 4 },
+  knightsheadband:    { anchor: 'headTop', widthRatio: 1.0,  above: false, yGap: 2, roomYGap: 2, hubYGap: -2, naturalSize: true },
   // ── Accessories ──  (add image-based accessories here)
   // ── Tops ──        (add image-based tops here)
   // ── Bottoms ──     (add image-based bottoms here)
@@ -69,9 +75,19 @@ export const itemImagesReady = Promise.all([
   loadItemImg('ostrichhat',           'assets/hats/ostrichhat.png'),
   loadItemImg('horns',                'assets/hats/horns.png'),
   loadItemImg('hornsspiral',          'assets/hats/hornsspiral.png'),
+  loadItemImg('crown',                'assets/hats/crown.png'),
+  loadItemImg('crown_purple',         'assets/hats/crown_purple.png'),
+  loadItemImg('crown_silver',         'assets/hats/crown_silver.png'),
+  loadItemImg('crown_bronze',         'assets/hats/crown_bronze.png'),
   // hub-scale variants (designed for the smaller 8px head)
-  loadItemImg('headphones', 'assets/hats/headphoneshub.png', hubImgCache),
-  loadItemImg('ostrichhat', 'assets/hats/ostrichhathub.png', hubImgCache),
+  loadItemImg('headphones',   'assets/hats/headphoneshub.png',   hubImgCache),
+  loadItemImg('ostrichhat',   'assets/hats/ostrichhathub.png',   hubImgCache),
+  loadItemImg('horns',        'assets/hats/hornshub.png',        hubImgCache),
+  loadItemImg('hornsspiral',  'assets/hats/hornsspiralhub.png',  hubImgCache),
+  loadItemImg('crown',        'assets/hats/crownhub.png',        hubImgCache),
+  loadItemImg('crown_purple', 'assets/hats/crownhub_purple.png', hubImgCache),
+  loadItemImg('crown_silver', 'assets/hats/crownhub_silver.png', hubImgCache),
+  loadItemImg('crown_bronze', 'assets/hats/crownhub_bronze.png', hubImgCache),
   // hair image overrides
   loadItemImg('hair_short', 'assets/hair/short.png'),
   loadItemImg('hair_short_hub', 'assets/hair/shorthub.png'),
@@ -99,17 +115,48 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_ostrichshirt_hub', 'assets/tops/ostirchshirthub.png'),
   loadItemImg('top_bitcoinshirt_hub', 'assets/tops/Bitcoinshirthub.png'),
   loadItemImg('top_camoshirt_hub',    'assets/tops/camoshirthub.png'),
+  loadItemImg('top_tunic_hub',        'assets/tops/tunichub.png'),
+  loadItemImg('top_skindress_hub',    'assets/tops/skindresshub.png'),
+  loadItemImg('top_knightchest_hub',  'assets/bottoms/knightchesthub.png'),
   loadItemImg('top_bomber_room',      'assets/tops/bomber.png'),
   loadItemImg('top_flannel_room',     'assets/tops/flanel.png'),
   loadItemImg('top_robe_room',        'assets/tops/wizardrobe.png'),
   loadItemImg('top_ostrichshirt_room','assets/tops/ostirchshirt.png'),
   loadItemImg('top_bitcoinshirt_room','assets/tops/Bitcoinshirt.png'),
   loadItemImg('top_camoshirt_room',   'assets/tops/camoshirt.png'),
+  loadItemImg('top_tunic_room',       'assets/tops/tunic.png'),
+  loadItemImg('top_skindress_room',   'assets/tops/skindress.png'),
+  loadItemImg('top_knightchest_room', 'assets/bottoms/knightchest.png'),
   // wings (drawn behind player)
   loadItemImg('acc_wings_hub',  'assets/accessories/wingshub.png'),
   loadItemImg('acc_wings_room', 'assets/accessories/wings.png'),
-  loadItemImg('acc_cape_hub',   'assets/accessories/capehub.png'),
-  loadItemImg('acc_cape_room',  'assets/accessories/cape.png'),
+  loadItemImg('acc_cape_hub',             'assets/accessories/capehub.png'),
+  loadItemImg('acc_cape_room',            'assets/accessories/cape.png'),
+  loadItemImg('acc_sword_hub',            'assets/accessories/swordhub.png'),
+  loadItemImg('acc_sword_room',           'assets/accessories/sword.png'),
+  loadItemImg('acc_ostirchfloatie_hub',   'assets/accessories/ostirchfloatiehub.png'),
+  loadItemImg('acc_ostirchfloatie_room',  'assets/accessories/ostirchfloatie.png'),
+  // fish hat
+  loadItemImg('fishhat', 'assets/hats/fishhat.png'),
+  loadItemImg('fishhat', 'assets/hats/fishhathub.png', hubImgCache),
+  // fish net bottoms (single static PNG per scale — all walk frames use same image)
+  loadItemImg('bottom_fishnet_hub_1', 'assets/bottoms/fishnethub.png'),
+  loadItemImg('bottom_fishnet_hub_2', 'assets/bottoms/fishnethub.png'),
+  loadItemImg('bottom_fishnet_hub_3', 'assets/bottoms/fishnethub.png'),
+  loadItemImg('bottom_fishnet_hub_4', 'assets/bottoms/fishnethub.png'),
+  loadItemImg('bottom_fishnet_room_1', 'assets/bottoms/fishnet.png'),
+  loadItemImg('bottom_fishnet_room_2', 'assets/bottoms/fishnet.png'),
+  loadItemImg('bottom_fishnet_room_3', 'assets/bottoms/fishnet.png'),
+  loadItemImg('bottom_fishnet_room_4', 'assets/bottoms/fishnet.png'),
+  // cargo pants walk frames
+  loadItemImg('bottom_cargopants_hub_1', 'assets/bottoms/cargopantshub1.png'),
+  loadItemImg('bottom_cargopants_hub_2', 'assets/bottoms/cargopantshub2.png'),
+  loadItemImg('bottom_cargopants_hub_3', 'assets/bottoms/cargopantshub3.png'),
+  loadItemImg('bottom_cargopants_hub_4', 'assets/bottoms/cargopantshub4.png'),
+  loadItemImg('bottom_cargopants_room_1', 'assets/bottoms/cargopants1.png'),
+  loadItemImg('bottom_cargopants_room_2', 'assets/bottoms/cargopants2.png'),
+  loadItemImg('bottom_cargopants_room_3', 'assets/bottoms/cargopants3.png'),
+  loadItemImg('bottom_cargopants_room_4', 'assets/bottoms/cargopants4.png'),
   // camo pants walk frames
   loadItemImg('bottom_camopants_hub_1', 'assets/bottoms/camopantshub1.png'),
   loadItemImg('bottom_camopants_hub_2', 'assets/bottoms/camopantshub2.png'),
@@ -127,6 +174,45 @@ export const itemImagesReady = Promise.all([
   loadItemImg('bottom_jeans_room_2', 'assets/bottoms/jeans2.png'),
   loadItemImg('bottom_jeans_room_3', 'assets/bottoms/jeans3.png'),
   loadItemImg('bottom_jeans_room_4', 'assets/bottoms/jeans4.png'),
+  // baggy jeans walk frames
+  loadItemImg('bottom_baggyjeans_hub_1', 'assets/bottoms/baggyjeanshub1.png'),
+  loadItemImg('bottom_baggyjeans_hub_2', 'assets/bottoms/baggyjeanshub2.png'),
+  loadItemImg('bottom_baggyjeans_hub_3', 'assets/bottoms/baggyjeanshub3.png'),
+  loadItemImg('bottom_baggyjeans_hub_4', 'assets/bottoms/baggyjeanshub4.png'),
+  loadItemImg('bottom_baggyjeans_room_1', 'assets/bottoms/baggyjeans1.png'),
+  loadItemImg('bottom_baggyjeans_room_2', 'assets/bottoms/baggyjeans2.png'),
+  loadItemImg('bottom_baggyjeans_room_3', 'assets/bottoms/baggyjeans3.png'),
+  loadItemImg('bottom_baggyjeans_room_4', 'assets/bottoms/baggyjeans4.png'),
+  // trousers walk frames
+  loadItemImg('bottom_trousers_hub_1', 'assets/bottoms/trousershub1.png'),
+  loadItemImg('bottom_trousers_hub_2', 'assets/bottoms/trousershub2.png'),
+  loadItemImg('bottom_trousers_hub_3', 'assets/bottoms/trousershub3.png'),
+  loadItemImg('bottom_trousers_hub_4', 'assets/bottoms/trousershub4.png'),
+  loadItemImg('bottom_trousers_room_1', 'assets/bottoms/trousers1.png'),
+  loadItemImg('bottom_trousers_room_2', 'assets/bottoms/trousers2.png'),
+  loadItemImg('bottom_trousers_room_3', 'assets/bottoms/trousers3.png'),
+  loadItemImg('bottom_trousers_room_4', 'assets/bottoms/trousers4.png'),
+  // utility pants walk frames
+  loadItemImg('bottom_utilitypants_hub_1', 'assets/bottoms/utilitypantshub1.png'),
+  loadItemImg('bottom_utilitypants_hub_2', 'assets/bottoms/utilitypantshub2.png'),
+  loadItemImg('bottom_utilitypants_hub_3', 'assets/bottoms/utilitypantshub3.png'),
+  loadItemImg('bottom_utilitypants_hub_4', 'assets/bottoms/utilitypantshub4.png'),
+  loadItemImg('bottom_utilitypants_room_1', 'assets/bottoms/utilitypants1.png'),
+  loadItemImg('bottom_utilitypants_room_2', 'assets/bottoms/utilitypants2.png'),
+  loadItemImg('bottom_utilitypants_room_3', 'assets/bottoms/utilitypants3.png'),
+  loadItemImg('bottom_utilitypants_room_4', 'assets/bottoms/utilitypants4.png'),
+  // knight headband
+  loadItemImg('knightsheadband',         'assets/hats/knightsheadband.png'),
+  loadItemImg('knightsheadband',         'assets/hats/knightsheadbandhub.png', hubImgCache),
+  // knight pants walk frames
+  loadItemImg('bottom_knightpants_hub_1', 'assets/bottoms/knightpantshub1.png'),
+  loadItemImg('bottom_knightpants_hub_2', 'assets/bottoms/knightpantshub2.png'),
+  loadItemImg('bottom_knightpants_hub_3', 'assets/bottoms/knightpantshub3.png'),
+  loadItemImg('bottom_knightpants_hub_4', 'assets/bottoms/knightpantshub4.png'),
+  loadItemImg('bottom_knightpants_room_1', 'assets/bottoms/knightpants1.png'),
+  loadItemImg('bottom_knightpants_room_2', 'assets/bottoms/knightpants2.png'),
+  loadItemImg('bottom_knightpants_room_3', 'assets/bottoms/knightpants3.png'),
+  loadItemImg('bottom_knightpants_room_4', 'assets/bottoms/knightpants4.png'),
 ]);
 
 // Kept for backward compatibility
@@ -142,13 +228,25 @@ function drawImgItemAuto(
 ): void {
   const def = ITEM_DEFS[name];
   const isHub = roomScale < 1;
-  const img = (isHub && hubImgCache.has(name)) ? hubImgCache.get(name)! : imgCache.get(name);
+  const imgKey = def?.srcName ?? name;
+  const img = (isHub && hubImgCache.has(imgKey)) ? hubImgCache.get(imgKey)! : imgCache.get(imgKey);
   if (!def || !img) return;
+  const yGapSrc = isHub && def.hubYGap !== undefined ? def.hubYGap : (!isHub && def.roomYGap !== undefined ? def.roomYGap : def.yGap);
+  if (def.naturalSize) {
+    // Draw at exact PNG pixel dimensions — no ratio scaling, no roomScale on gap
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    const gap = Math.round(yGapSrc);
+    const dy = def.above ? anchorY - H - gap : anchorY + gap;
+    const xOff = def.xOffset ?? 0;
+    const flip = isHub && def.hubFlipH !== undefined ? def.hubFlipH : (def.flipH ?? false);
+    drawImgItem(x, name, Math.round(anchorCx - W / 2) + xOff, dy, W, H, flip, img);
+    return;
+  }
   const ratio = (!isHub && def.roomWidthRatio !== undefined) ? def.roomWidthRatio : def.widthRatio;
   let W = Math.round(refW * ratio);
   if (W % 2 !== 0) W += 1;
   const H = Math.round(W * img.naturalHeight / img.naturalWidth);
-  const yGapSrc = isHub && def.hubYGap !== undefined ? def.hubYGap : (!isHub && def.roomYGap !== undefined ? def.roomYGap : def.yGap);
   const gap = Math.round(yGapSrc * roomScale);
   const dy = def.above ? anchorY - H - gap : anchorY + gap;
   const xOff = Math.round((def.xOffset ?? 0) * roomScale);
@@ -193,7 +291,7 @@ function drawImgItem(x: CanvasRenderingContext2D, name: string, dx: number, dy: 
       }
     }
     tc.putImageData(idata, 0, 0);
-  } else {
+  } else if (!def?.noTint) {
     // Multiply tint: white stays item color, grey becomes darker shade (preserves shading detail)
     tc.globalCompositeOperation = 'multiply';
     tc.fillStyle = x.fillStyle as string;
@@ -209,6 +307,7 @@ function drawImgItem(x: CanvasRenderingContext2D, name: string, dx: number, dy: 
   // Nearest-neighbor from 4x intermediate → final pixel canvas (keeps crisp pixel art edges)
   x.save();
   x.imageSmoothingEnabled = false;
+  if (def?.cssFilter) x.filter = def.cssFilter;
   x.drawImage(tmp, dx, dy, dw, dh);
   x.restore();
 }
@@ -235,12 +334,20 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
 
   const legY = headY + 12 * s - 3;
 
-  // ── Wings — drawn before body so they appear behind ──
+  // ── Wings / sword — drawn before body so they appear behind ──
   if (a.accessory === 'wings') {
     const wImg = imgCache.get('acc_wings_hub');
     if (wImg) {
       x.fillStyle = a.accessoryColor;
       drawHairImg(x, 'acc_wings_hub', Math.round(cx - wImg.naturalWidth / 2), headY + 4 * s - 7, wImg.naturalWidth, wImg.naturalHeight);
+      x.fillStyle = a.skinColor;
+    }
+  }
+  if (a.accessory === 'sword') {
+    const sImg = imgCache.get('acc_sword_hub');
+    if (sImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_sword_hub', Math.round(cx - sImg.naturalWidth / 2), headY + 4 * s - 4, sImg.naturalWidth, sImg.naturalHeight);
       x.fillStyle = a.skinColor;
     }
   }
@@ -254,16 +361,36 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
   const legLY = walkFrame < 0 ? 0 : (walkFrame === 1 ? -1 : walkFrame === 3 ? 1 : 0);
   const legRY = walkFrame < 0 ? 0 : (walkFrame === 1 ? 1 : walkFrame === 3 ? -1 : 0);
 
-  // ── Bottom — color over PNG leg pixels ──
-  if (a.top !== 'dress') {
+  // ── Bottom — color over PNG leg pixels (skipped for pure-PNG bottoms) ──
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+  if (a.top !== 'dress' && !isPngBottom) {
     x.fillStyle = a.bottomColor;
     if (a.bottom === 'skirt') {
-      x.fillRect(cx - 2.5 * s, legY + 1 * s, 5 * s, 2 * s);
+      x.fillRect(cx - 2 * s, legY + 1, 4 * s, 2 * s);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 1, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
     } else if (a.bottom === 'miniskirt') {
-      x.fillRect(cx - 2.5 * s, legY, 5 * s, 1.5 * s);
+      x.fillRect(cx - 2 * s, legY + 1, 4 * s, 1 * s);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 1, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
     } else {
       // waistband fill covers the inter-leg gap in walking frames
       x.fillRect(cx - 2 * s, legY, 4 * s, 3);
+      // belt buckle
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 2, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
       // split into left/right legs so walk animation offsets work
       x.fillRect(cx - 2 * s, legY + legLY, 2 * s - 1, 7 * s);
       x.fillRect(cx + 1,     legY + legRY, 2 * s - 1, 7 * s);
@@ -271,11 +398,35 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
         x.fillStyle = a.skinColor;
         x.fillRect(cx - 2 * s, legY + 4 * s + legLY, 2 * s - 1, 3 * s);
         x.fillRect(cx + 1,     legY + 4 * s + legRY, 2 * s - 1, 3 * s);
-      } else if (a.bottom === 'cargopants') {
-        x.fillStyle = darken(a.bottomColor, 15);
-        x.fillRect(cx - 2 * s, legY + 3 * s + legLY, 1.5 * s, 2 * s);
-        x.fillRect(cx + 1,     legY + 3 * s + legRY, 1.5 * s, 2 * s);
       }
+    }
+  }
+
+  // ── PNG bottoms — drawn before top so shirt layers over waistband ──
+  const hubPngBottomPrefix: Record<string, string> = {
+    jeans: 'bottom_jeans_hub', camopants: 'bottom_camopants_hub',
+    baggyjeans: 'bottom_baggyjeans_hub', trousers: 'bottom_trousers_hub',
+    utilitypants: 'bottom_utilitypants_hub', knightpants: 'bottom_knightpants_hub',
+    cargopants: 'bottom_cargopants_hub', fishnet: 'bottom_fishnet_hub',
+  };
+  let pantsSnap: ImageData | null = null;
+  let pantsCX = 0, pantsCY = 0, pantsCW = 0, pantsCH = 0;
+  if (hubPngBottomPrefix[a.bottom] && a.top !== 'dress') {
+    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
+    const cKey = `${hubPngBottomPrefix[a.bottom]}_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      // Bottom-anchored at legY + 14 so taller PNGs extend upward over the torso.
+      const bx = Math.round(cx - cImg.naturalWidth / 2);
+      const by = legY + 14 - cImg.naturalHeight;
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, bx, by, cImg.naturalWidth, cImg.naturalHeight);
+      // Snapshot pants region in canvas coords (account for translate(0, SPRITE_HAT_HEADROOM)).
+      pantsCX = bx;
+      pantsCY = by + SPRITE_HAT_HEADROOM;
+      pantsCW = cImg.naturalWidth;
+      pantsCH = cImg.naturalHeight;
+      pantsSnap = x.getImageData(pantsCX, pantsCY, pantsCW, pantsCH);
     }
   }
 
@@ -369,18 +520,6 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1);
   }
 
-  // ── Camo pants / jeans PNG — drawn after body/bottom but before top ──
-  if ((a.bottom === 'camopants' || a.bottom === 'jeans') && a.top !== 'dress') {
-    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
-    const prefix = a.bottom === 'jeans' ? 'bottom_jeans_hub' : 'bottom_camopants_hub';
-    const cKey = `${prefix}_${cFrame}`;
-    const cImg = imgCache.get(cKey);
-    if (cImg) {
-      x.fillStyle = a.bottomColor;
-      drawHairImg(x, cKey, Math.round(cx - cImg.naturalWidth / 2), legY - 2, cImg.naturalWidth, cImg.naturalHeight);
-    }
-  }
-
   // ── PNG top detail overlay ──
   const hubTopPngKey = ({
     jacket:      'top_jacket_hub',
@@ -390,6 +529,9 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     bitcoinshirt:'top_bitcoinshirt_hub',
     ostrichshirt:'top_ostrichshirt_hub',
     camoshirt:   'top_camoshirt_hub',
+    tunic:       'top_tunic_hub',
+    skindress:   'top_skindress_hub',
+    knightchest: 'top_knightchest_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
@@ -399,17 +541,11 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     drawHairImg(x, hubTopPngKey, tx, headY + 5 * s + hubTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }
 
-  // ── Belt — drawn after top so it sits on top of clothing ──
-  if (!['skirt', 'miniskirt', 'overalls', 'camopants', 'jeans'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
-    x.fillStyle = darken(a.bottomColor, 30);
-    x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
-    x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-    x.fillRect(cx - 1, legY - 2, 2, 2);
-    x.globalAlpha = 1;
-  }
+  // Show pants through any shirt skin-reveal areas (croptop midriff, tank, etc.).
+  if (pantsSnap) restorePantsThroughSkinReveals(x, pantsCX, pantsCY, pantsCW, pantsCH, pantsSnap, a.skinColor);
 
   // ── Overalls straps — only visible over open tops (not coats/hoodie/vest) ──
-  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe'].includes(a.top);
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe', 'skindress', 'knightchest', 'bomber', 'flannel', 'tunic'].includes(a.top);
   if (a.bottom === 'overalls' && strapOverTop) {
     x.fillStyle = a.bottomColor;
     x.fillRect(cx - 1 * s,   headY + 5 * s, 0.5 * s + 1, 7 * s - 1);
@@ -419,7 +555,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     x.fillRect(cx + 0.5 * s, headY + 8 * s - 1, 0.5 * s + 1, 1 * s);
     x.globalAlpha = 1;
   }
-  // ── Cape — drawn over clothes but under hair/hat ──
+  // ── Cape / floatie — drawn over clothes but under hair/hat ──
   if (a.accessory === 'cape') {
     const cImg = imgCache.get('acc_cape_hub');
     if (cImg) {
@@ -427,9 +563,16 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
       drawHairImg(x, 'acc_cape_hub', Math.round(cx - cImg.naturalWidth / 2), headY + 4 * s, cImg.naturalWidth, cImg.naturalHeight);
     }
   }
+  if (a.accessory === 'ostirchfloatie') {
+    const fImg = imgCache.get('acc_ostirchfloatie_hub');
+    if (fImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_ostirchfloatie_hub', Math.round(cx - fImg.naturalWidth / 2), headY + 5 * s, fImg.naturalWidth, fImg.naturalHeight);
+    }
+  }
 
   // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
-  const hubWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
+  const hubWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress', 'camoshirt', 'bitcoinshirt', 'ostrichshirt', 'tunic', 'polo', 'turtleneck', 'skindress'].includes(a.top);
   if ((a.accessory === 'ring' || a.accessory === 'watch') && hubWristExposed) {
     x.fillStyle = a.accessoryColor;
     drawHubAccessory(x, a.accessory, cx, headY, s);
@@ -443,7 +586,7 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
 
   // ── Hair ──
   const hasHat = a.hat !== 'none';
-  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral'].includes(a.hat);
+  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
   const longHairStyle = ['long', 'mullet'].includes(a.hair);
   if (a.hair !== 'none') {
     x.fillStyle = a.hairColor;
@@ -487,12 +630,19 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   const topDark  = darken(a.topColor, 18);
   const topLight = lighten(a.topColor, 18);
 
-  // ── Wings — drawn before body so they appear behind ──
+  // ── Wings / sword — drawn before body so they appear behind ──
   if (a.accessory === 'wings') {
     const wImg = imgCache.get('acc_wings_room');
     if (wImg) {
       x.fillStyle = a.accessoryColor;
       drawHairImg(x, 'acc_wings_room', Math.round(12 - wImg.naturalWidth / 2), oY + 2, wImg.naturalWidth, wImg.naturalHeight);
+    }
+  }
+  if (a.accessory === 'sword') {
+    const sImg = imgCache.get('acc_sword_room');
+    if (sImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_sword_room', Math.round(12 - sImg.naturalWidth / 2), oY + 5, sImg.naturalWidth, sImg.naturalHeight);
     }
   }
 
@@ -515,6 +665,12 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillStyle = a.bottomColor;
     if (!['skirt', 'miniskirt', 'dress'].includes(a.bottom) && a.top !== 'dress') {
       x.fillRect(7, oY + 28, 10, 2);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
     }
     if (a.top === 'dress') {
       x.fillRect(7, oY + 29 + lY, 4, 15);
@@ -523,24 +679,26 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
       x.fillRect(7, oY + 29 + lY, 4, 7);
       x.fillRect(13, oY + 29 + rY, 4, 7);
     } else if (a.bottom === 'skirt') {
-      x.fillRect(5, oY + 28, 14, 6);
-    } else if (a.bottom === 'cargopants') {
-      x.fillRect(7, oY + 29 + lY, 4, 15);
-      x.fillRect(13, oY + 29 + rY, 4, 15);
-      x.fillStyle = darken(a.bottomColor, 15);
-      x.fillRect(7, oY + 33 + lY, 4, 4);
-      x.fillRect(13, oY + 33 + rY, 4, 4);
-      x.fillStyle = darken(a.bottomColor, 25);
-      x.fillRect(7, oY + 37 + lY, 4, 1);
-      x.fillRect(13, oY + 37 + rY, 4, 1);
+      x.fillRect(6, oY + 28, 12, 6);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
     } else if (a.bottom === 'overalls') {
       x.fillRect(7, oY + 29 + lY, 4, 15);
       x.fillRect(13, oY + 29 + rY, 4, 15);
       x.fillStyle = darken(a.bottomColor, 10);
       x.fillRect(5, oY + 28, 14, 3);
     } else if (a.bottom === 'miniskirt') {
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
-      x.fillRect(5, oY + 29, 14, 3);
+      x.fillRect(6, oY + 29, 12, 3);
     } else {
       x.fillRect(7, oY + 29 + lY, 4, 15);
       x.fillRect(13, oY + 29 + rY, 4, 15);
@@ -549,49 +707,59 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(5, oY + 44 + lY, 6, 3);
     x.fillRect(13, oY + 44 + rY, 6, 3);
   } else if (a.top !== 'dress') {
-    x.save();
-    x.beginPath();
-    x.rect(6, oY + 28, 12, 19);
-    x.clip();
-    x.globalCompositeOperation = 'source-atop';
-    x.fillStyle = a.bottomColor;
-    if (a.bottom === 'skirt') {
-      x.globalCompositeOperation = 'source-over';
-      x.fillRect(6, oY + 28, 12, 6);
-    } else if (a.bottom === 'miniskirt') {
-      x.globalCompositeOperation = 'source-over';
-      x.fillRect(6, oY + 29, 12, 3);
-    } else if (a.bottom === 'shorts') {
-      x.fillRect(6, oY + 28, 12, 8);
-    } else {
-      x.fillRect(6, oY + 28, 12, 19);
-      if (a.bottom === 'cargopants') {
-        x.fillStyle = darken(a.bottomColor, 15);
-        x.fillRect(7, oY + 33, 4, 4);
-        x.fillRect(13, oY + 33, 4, 4);
+    const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+    if (!isPngBottom) {
+      x.save();
+      x.beginPath();
+      x.rect(6, oY + 28, 12, 19);
+      x.clip();
+      x.globalCompositeOperation = 'source-atop';
+      x.fillStyle = a.bottomColor;
+      if (a.bottom === 'skirt') {
+        x.globalCompositeOperation = 'source-over';
+        x.fillRect(6, oY + 28, 12, 6);
+      } else if (a.bottom === 'miniskirt') {
+        x.globalCompositeOperation = 'source-over';
+        x.fillRect(6, oY + 29, 12, 3);
+      } else if (a.bottom === 'shorts') {
+        x.fillRect(6, oY + 28, 12, 8);
+      } else {
+        x.fillRect(6, oY + 28, 12, 19);
       }
+      x.restore();
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
     }
-    x.restore();
   }
 
-  // ── Belt ──
-  if (!['dress', 'overalls', 'camopants', 'jeans'].includes(a.bottom) && !['dress', 'trenchcoat', 'robe'].includes(a.top)) {
-    x.fillStyle = darken(a.bottomColor, 30);
-    x.fillRect(6, oY + 28, 12, 2);
-    x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-    x.fillRect(10, oY + 28, 4, 2);
-    x.globalAlpha = 1;
-  }
-
-  // ── Camo pants / jeans PNG — drawn before top so clothing layers correctly ──
-  if ((a.bottom === 'camopants' || a.bottom === 'jeans') && a.top !== 'dress') {
+  // ── PNG bottoms — drawn before top so shirt layers over waistband ──
+  const roomPngBottomPrefix: Record<string, string> = {
+    jeans: 'bottom_jeans_room', camopants: 'bottom_camopants_room',
+    baggyjeans: 'bottom_baggyjeans_room', trousers: 'bottom_trousers_room',
+    utilitypants: 'bottom_utilitypants_room', knightpants: 'bottom_knightpants_room',
+    cargopants: 'bottom_cargopants_room', fishnet: 'bottom_fishnet_room',
+  };
+  let pantsSnap: ImageData | null = null;
+  let pantsCX = 0, pantsCY = 0, pantsCW = 0, pantsCH = 0;
+  if (roomPngBottomPrefix[a.bottom] && a.top !== 'dress') {
     const cFrame = walkFrame >= 1 && walkFrame <= 4 ? walkFrame : 1;
-    const prefix = a.bottom === 'jeans' ? 'bottom_jeans_room' : 'bottom_camopants_room';
-    const cKey = `${prefix}_${cFrame}`;
+    const cKey = `${roomPngBottomPrefix[a.bottom]}_${cFrame}`;
     const cImg = imgCache.get(cKey);
     if (cImg) {
+      // Bottom-anchored at oY + 48 so taller PNGs extend upward over the torso.
+      const bx = Math.round(12 - cImg.naturalWidth / 2);
+      const by = oY + 48 - cImg.naturalHeight;
       x.fillStyle = a.bottomColor;
-      drawHairImg(x, cKey, Math.round(12 - cImg.naturalWidth / 2), oY + 28, cImg.naturalWidth, cImg.naturalHeight);
+      drawHairImg(x, cKey, bx, by, cImg.naturalWidth, cImg.naturalHeight);
+      // Snapshot pants region in canvas coords (account for translate(ROOM_SPRITE_XPAD, SPRITE_HAT_HEADROOM)).
+      pantsCX = bx + ROOM_SPRITE_XPAD;
+      pantsCY = by + SPRITE_HAT_HEADROOM;
+      pantsCW = cImg.naturalWidth;
+      pantsCH = cImg.naturalHeight;
+      pantsSnap = x.getImageData(pantsCX, pantsCY, pantsCW, pantsCH);
     }
   }
 
@@ -720,7 +888,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest') {
   }
 
   // ── PNG top detail overlay ──
@@ -732,6 +900,9 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     bitcoinshirt: 'top_bitcoinshirt_room',
     ostrichshirt: 'top_ostrichshirt_room',
     camoshirt:    'top_camoshirt_room',
+    tunic:        'top_tunic_room',
+    skindress:    'top_skindress_room',
+    knightchest:  'top_knightchest_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;
@@ -741,8 +912,11 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     drawHairImg(x, roomTopPngKey, tx, oY + 14 + roomTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }
 
+  // Show pants through any shirt skin-reveal areas (croptop midriff, tank, etc.).
+  if (pantsSnap) restorePantsThroughSkinReveals(x, pantsCX, pantsCY, pantsCW, pantsCH, pantsSnap, a.skinColor);
+
   // ── Overalls straps — only visible over open tops (not coats/hoodie/vest) ──
-  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe'].includes(a.top);
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe', 'skindress', 'knightchest', 'bomber', 'flannel', 'tunic'].includes(a.top);
   if (a.bottom === 'overalls' && strapOverTop) {
     x.fillStyle = a.bottomColor;
     x.fillRect(8,  oY + 14, 3, 16);
@@ -754,7 +928,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   }
   x.restore();
 
-  // ── Cape — drawn over clothes but under hair/hat ──
+  // ── Cape / floatie — drawn over clothes but under hair/hat ──
   if (a.accessory === 'cape') {
     const cImg = imgCache.get('acc_cape_room');
     if (cImg) {
@@ -762,9 +936,16 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
       drawHairImg(x, 'acc_cape_room', Math.round(12 - cImg.naturalWidth / 2), oY + 13, cImg.naturalWidth, cImg.naturalHeight);
     }
   }
+  if (a.accessory === 'ostirchfloatie') {
+    const fImg = imgCache.get('acc_ostirchfloatie_room');
+    if (fImg) {
+      x.fillStyle = a.accessoryColor;
+      drawHairImg(x, 'acc_ostirchfloatie_room', Math.round(12 - fImg.naturalWidth / 2), oY + 14, fImg.naturalWidth, fImg.naturalHeight);
+    }
+  }
 
   // ── Ring & watch — only visible when wrist is exposed (short/no sleeve) ──
-  const roomWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress'].includes(a.top);
+  const roomWristExposed = ['none', 'tank', 'tshirt', 'croptop', 'jersey', 'vest', 'dress', 'camoshirt', 'bitcoinshirt', 'ostrichshirt', 'tunic', 'polo', 'turtleneck', 'skindress'].includes(a.top);
   if ((a.accessory === 'ring' || a.accessory === 'watch') && roomWristExposed) {
     x.fillStyle = a.accessoryColor;
     drawRoomAccessory(x, a.accessory, oY);
@@ -778,7 +959,7 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 
   // ── Hair ──
   const hasHat = a.hat !== 'none';
-  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral'].includes(a.hat);
+  const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
   const longHairStyle = ['long', 'mullet'].includes(a.hair);
   if (a.hair !== 'none') {
     x.fillStyle = a.hairColor;
@@ -941,6 +1122,28 @@ function drawHairImg(x: CanvasRenderingContext2D, key: string, dx: number, dy: n
   x.restore();
 }
 
+// Restores pants pixels that the shirt overdrew with skin color, so shirt skin-reveals
+// (croptop midriff, tank exposed torso, etc.) show pants instead of skin where pants extend up.
+function restorePantsThroughSkinReveals(
+  x: CanvasRenderingContext2D,
+  cx: number, cy: number, w: number, h: number,
+  snapshot: ImageData,
+  skinColor: string,
+): void {
+  const r = parseInt(skinColor.slice(1, 3), 16);
+  const g = parseInt(skinColor.slice(3, 5), 16);
+  const b = parseInt(skinColor.slice(5, 7), 16);
+  const cur = x.getImageData(cx, cy, w, h);
+  const cd = cur.data, sd = snapshot.data;
+  for (let i = 0; i < cd.length; i += 4) {
+    if (cd[i] === r && cd[i+1] === g && cd[i+2] === b && sd[i+3] > 0 &&
+        (sd[i] !== r || sd[i+1] !== g || sd[i+2] !== b)) {
+      cd[i] = sd[i]; cd[i+1] = sd[i+1]; cd[i+2] = sd[i+2]; cd[i+3] = sd[i+3];
+    }
+  }
+  x.putImageData(cur, cx, cy);
+}
+
 function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: number): void {
   switch (hair) {
     case 'short': {
@@ -1035,19 +1238,6 @@ function drawHubHat(x: CanvasRenderingContext2D, hat: string, cx: number, hy: nu
       x.fillRect(cx - 2 * s, pY - 3 * s, 4 * s, 2 * s);
       x.fillRect(cx - 2 * s, pY - 1 * s, 4 * s, 1 * s);
       break;
-    case 'crown': {
-      const crSave = x.fillStyle as string;
-      x.fillStyle = '#f0c040';
-      x.fillRect(cx - 2 * s, pY - 3 * s, 4 * s, 1.5 * s);
-      x.fillRect(cx - 2 * s, pY - 4 * s, 1 * s, 1 * s);
-      x.fillRect(cx - 0.5 * s, pY - 5 * s, 1 * s, 1.5 * s);
-      x.fillRect(cx + 1 * s, pY - 4 * s, 1 * s, 1 * s);
-      x.fillStyle = '#e87a10'; x.globalAlpha = 0.7;
-      x.fillRect(cx - 1 * s, pY - 2 * s, 1 * s, 0.5 * s);
-      x.globalAlpha = 1;
-      x.fillStyle = crSave;
-      break;
-    }
     case 'visor':
       x.fillRect(cx - 1.5 * s, pY - 1.75 * s, 3 * s, 0.75 * s); // sweatband nub
       x.fillRect(cx - 3 * s,   pY - 1 * s,     6 * s, 0.75 * s); // wide brim
@@ -1125,20 +1315,6 @@ function drawRoomHat(x: CanvasRenderingContext2D, hat: string, oY: number): void
       x.fillRect(6, oY - 4, 12, 5);
       x.fillRect(4, oY + 1, 16, 2);
       break;
-    case 'crown': {
-      const crSave = x.fillStyle as string;
-      x.fillStyle = '#f0c040';
-      x.fillRect(5, oY - 4, 14, 5);
-      x.fillRect(5,  oY - 7, 3, 3);
-      x.fillRect(11, oY - 8, 2, 4);
-      x.fillRect(16, oY - 7, 3, 3);
-      x.fillStyle = '#e05020'; x.globalAlpha = 0.8;
-      x.fillRect(9,  oY - 3, 2, 2);
-      x.fillRect(13, oY - 3, 2, 2);
-      x.globalAlpha = 1;
-      x.fillStyle = crSave;
-      break;
-    }
     case 'visor':
       x.fillRect(5, oY - 2, 14, 3);  // sweatband
       x.fillRect(2, oY + 1, 20, 2);  // wide brim
@@ -1474,21 +1650,12 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
       x.fillRect(cx + 1, ey + 2, 1, 1); x.fillRect(cx + 3, ey + 2, 1, 1);
       break;
     case 'glow':
-      // 1px bright pupil + faint halo around each pupil
+      x.shadowColor = col;
+      x.shadowBlur = 1.5;
       x.globalAlpha = 1;
-      x.fillRect(cx - 2, ey + 1, 1, 1);
-      x.fillRect(cx + 1, ey + 1, 1, 1);
-      x.globalAlpha = 0.3;
-      // left halo
       x.fillRect(cx - 3, ey + 1, 1, 1);
-      x.fillRect(cx - 1, ey + 1, 1, 1);
-      x.fillRect(cx - 2, ey,     1, 1);
-      x.fillRect(cx - 2, ey + 2, 1, 1);
-      // right halo
-      x.fillRect(cx,     ey + 1, 1, 1);
       x.fillRect(cx + 2, ey + 1, 1, 1);
-      x.fillRect(cx + 1, ey,     1, 1);
-      x.fillRect(cx + 1, ey + 2, 1, 1);
+      x.shadowBlur = 0;
       break;
     case 'heart':
       // Heart centered at col 7 and col 12 — body at cols 6-8 and 11-13 (no merge)
@@ -1499,6 +1666,42 @@ function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: number, h
       x.fillRect(cx + 1, ey,     1, 1); x.fillRect(cx + 3, ey,     1, 1);
       x.fillRect(cx + 1, ey + 1, 3, 1);
       x.fillRect(cx + 2, ey + 2, 1, 1);
+      break;
+    case 'blaze':
+      // Flame tip above pupil — both at cry positions (cx-3, cx+2)
+      x.globalAlpha = 0.65;
+      x.fillRect(cx - 3, ey,     1, 1); // left flame tip
+      x.fillRect(cx + 2, ey,     1, 1); // right flame tip
+      x.globalAlpha = 1.0;
+      x.fillRect(cx - 3, ey + 1, 1, 1); // left pupil
+      x.fillRect(cx + 2, ey + 1, 1, 1); // right pupil
+      break;
+    case 'frost':
+      // Vertical ice shard — bright center, dim tips; cry positions (cx-3, cx+2)
+      x.globalAlpha = 0.55;
+      x.fillRect(cx - 3, ey,     1, 1); // left tip
+      x.fillRect(cx + 2, ey,     1, 1); // right tip
+      x.globalAlpha = 1.0;
+      x.fillRect(cx - 3, ey + 1, 1, 1); // left main
+      x.fillRect(cx + 2, ey + 1, 1, 1); // right main
+      x.globalAlpha = 0.55;
+      x.fillRect(cx - 3, ey + 2, 1, 1); // left base
+      x.fillRect(cx + 2, ey + 2, 1, 1); // right base
+      break;
+    case 'cosmic':
+      x.globalAlpha = 1.0;
+      x.fillRect(cx - 3, ey,     2, 2); // left iris
+      x.fillRect(cx + 2, ey,     2, 2); // right iris
+      x.globalAlpha = 0.35;
+      x.fillRect(cx - 4, ey - 1, 1, 1); x.fillRect(cx - 1, ey - 1, 1, 1);
+      x.fillRect(cx - 4, ey + 2, 1, 1); x.fillRect(cx - 1, ey + 2, 1, 1);
+      x.fillRect(cx + 1, ey - 1, 1, 1); x.fillRect(cx + 4, ey - 1, 1, 1);
+      x.fillRect(cx + 1, ey + 2, 1, 1); x.fillRect(cx + 4, ey + 2, 1, 1);
+      break;
+    case 'cry':
+      x.globalAlpha = 0.9;
+      x.fillRect(cx - 3, ey,     1, 2); // left pupil
+      x.fillRect(cx + 2, ey,     1, 2); // right pupil
       break;
     default:
       x.globalAlpha = 1;
@@ -1575,15 +1778,12 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       x.fillRect(14, oY + 7, 1, 1); x.fillRect(16, oY + 7, 1, 1);
       break;
     case 'glow':
-      // Default 2x2 pupils with tight cardinal ring
+      x.shadowColor = col;
+      x.shadowBlur = 2.5;
       x.globalAlpha = 1;
-      x.fillRect(7,  oY + 5, 2, 2);
+      x.fillRect(8,  oY + 5, 2, 2);
       x.fillRect(14, oY + 5, 2, 2);
-      x.globalAlpha = 0.3;
-      x.fillRect(7,  oY + 4, 2, 1); x.fillRect(7,  oY + 7, 2, 1);
-      x.fillRect(6,  oY + 5, 1, 2); x.fillRect(9,  oY + 5, 1, 2);
-      x.fillRect(14, oY + 4, 2, 1); x.fillRect(14, oY + 7, 2, 1);
-      x.fillRect(13, oY + 5, 1, 2); x.fillRect(16, oY + 5, 1, 2);
+      x.shadowBlur = 0;
       break;
     case 'heart':
       x.globalAlpha = 0.9;
@@ -1595,6 +1795,45 @@ function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: number):
       x.fillRect(14, oY + 5, 1, 1); x.fillRect(16, oY + 5, 1, 1);
       x.fillRect(14, oY + 6, 3, 1);
       x.fillRect(15, oY + 7, 1, 1);
+      break;
+    case 'blaze':
+      // Bright 2x2 pupils with flame tip row above
+      x.globalAlpha = 0.65;
+      x.fillRect(8,  oY + 4, 2, 1); // left flame tip
+      x.fillRect(15, oY + 4, 2, 1); // right flame tip
+      x.globalAlpha = 1.0;
+      x.fillRect(8,  oY + 5, 2, 2); // left pupil
+      x.fillRect(15, oY + 5, 2, 2); // right pupil
+      break;
+    case 'frost':
+      // Vertical ice shard — bright center 2x2, dim 2x1 tips; cry positions (x=8, x=15)
+      x.globalAlpha = 0.5;
+      x.fillRect(8,  oY + 4, 2, 1); // left tip
+      x.fillRect(15, oY + 4, 2, 1); // right tip
+      x.globalAlpha = 1.0;
+      x.fillRect(8,  oY + 5, 2, 2); // left main
+      x.fillRect(15, oY + 5, 2, 2); // right main
+      x.globalAlpha = 0.5;
+      x.fillRect(8,  oY + 7, 2, 1); // left base
+      x.fillRect(15, oY + 7, 2, 1); // right base
+      break;
+    case 'cosmic':
+      x.globalAlpha = 1.0;
+      x.fillRect(8,  oY + 5, 2, 2); // left iris
+      x.fillRect(15, oY + 5, 2, 2); // right iris
+      x.globalAlpha = 0.3;
+      x.fillRect(7,  oY + 4, 1, 1); x.fillRect(10, oY + 4, 1, 1);
+      x.fillRect(7,  oY + 7, 1, 1); x.fillRect(10, oY + 7, 1, 1);
+      x.fillRect(14, oY + 4, 1, 1); x.fillRect(17, oY + 4, 1, 1);
+      x.fillRect(14, oY + 7, 1, 1); x.fillRect(17, oY + 7, 1, 1);
+      break;
+    case 'cry':
+      x.globalAlpha = 0.9;
+      x.fillRect(8,  oY + 4, 2, 3); // left pupil
+      x.fillRect(15, oY + 4, 2, 3); // right pupil
+      x.globalAlpha = 0.55;
+      x.fillRect(8,  oY + 7, 2, 1); // left tear
+      x.fillRect(15, oY + 7, 2, 1); // right tear
       break;
     default:
       x.globalAlpha = 0.7;

@@ -5,6 +5,7 @@
 
 import Phaser from 'phaser';
 import { sendChat } from '../nostr/presenceService';
+import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 
@@ -35,6 +36,7 @@ export class ChatUI {
   private onNameClick: ((pubkey: string, name: string) => void) | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
   private commandMode = false;
+  private _inputFocused = false;
   private gifPicker: GifPicker | null = null;
 
   /** Create and attach the chat UI */
@@ -42,10 +44,11 @@ export class ChatUI {
     this.onCommand = onCommand;
 
     this.container = document.createElement('div');
-    this.container.style.cssText = `position:fixed;bottom:8px;left:50%;transform:translateX(-50%);width:520px;max-width:92vw;z-index:1000;font-family:'Courier New',monospace;pointer-events:none;`;
+    this.container.style.cssText = `position:fixed;bottom:8px;left:50%;transform:translateX(-50%);width:520px;max-width:92vw;z-index:1000;font-family:'Courier New',monospace;pointer-events:none;user-select:none;-webkit-user-select:none;`;
 
     this.log = document.createElement('div');
-    this.log.style.cssText = `max-height:min(160px,30dvh);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;touch-action:pan-y;`;
+    this.log.className = 'nd-chat-log';
+    this.log.style.cssText = `max-height:min(160px,30dvh);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px;margin-bottom:6px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-bg) 82%,transparent) 0%,color-mix(in srgb,var(--nd-bg) 90%,transparent) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);border-radius:8px;font-size:13px;display:block;opacity:0;pointer-events:none;user-select:text;-webkit-user-select:text;transition:opacity 0.5s ease;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 44%,transparent) transparent;touch-action:pan-y;`;
     // Prevent touch/click on the log from propagating to the game canvas
     this.log.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     this.log.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
@@ -65,11 +68,14 @@ export class ChatUI {
     this.input.style.cssText = `flex:1;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:${inputFontSize};padding:10px 14px;outline:none;transition:border-color 0.2s ease,box-shadow 0.2s ease;`;
 
     this.input.addEventListener('focus', () => {
+      this._inputFocused = true;
       this.input.style.borderColor = `color-mix(in srgb,var(--nd-accent) 75%,transparent)`;
       this.input.style.boxShadow = `0 0 10px color-mix(in srgb,var(--nd-accent) 18%,transparent)`;
+      this.log.classList.add('nd-chat-focused');
       this.showLog();
     });
     this.input.addEventListener('blur', () => {
+      this._inputFocused = false;
       this.input.style.borderColor = `color-mix(in srgb,var(--nd-text) 22%,transparent)`;
       this.input.style.boxShadow = 'none';
       this.scheduleHide(this.commandMode ? 25000 : 8000);
@@ -87,7 +93,7 @@ export class ChatUI {
           this.input.blur();
           return;
         }
-        sendChat(text); this.input.value = ''; this.input.blur();
+        sendChat(text); incrementAuraProgress('electric'); this.input.value = ''; this.input.blur();
       }
       if (e.key === 'Escape') { this.gifPicker?.close(); this.input.blur(); }
     });
@@ -198,6 +204,7 @@ export class ChatUI {
       if (document.activeElement !== this.input) {
         this.log.style.opacity = '0';
         this.log.style.pointerEvents = 'none';
+        this.log.classList.remove('nd-chat-focused');
       }
       this.hideTimer = null;
     }, delay);

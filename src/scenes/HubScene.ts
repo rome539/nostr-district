@@ -322,7 +322,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.playerName.setAlpha(ghostAlpha); this.playerStatusText.setAlpha(ghostAlpha);
     sendPosition(this.player.x, this.player.y, this.facingRight);
     this.updateOtherPlayers(time, delta);
-    this.updateLocalNameColor(time);
+    this.updateLocalNameColor(time, delta);
   }
 
   // ── Room Requests ──
@@ -590,6 +590,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     }
 
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
+    this.playerSprite = this.player;
     const n = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(sx, this.playerY + 14, n.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal,

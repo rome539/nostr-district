@@ -209,6 +209,18 @@ export class SettingsPanel {
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
+      <a href="https://njump.me/npub12p5753xcjal8034w5czap3fcdvj9qj36h5873g73ea05emw2gznszr0ann" target="_blank" rel="noopener noreferrer" style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:7px 10px;border-radius:5px;text-decoration:none;
+        color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;
+        transition:color 0.15s;
+      " onmouseover="this.style.color='var(--nd-text)'" onmouseout="this.style.color='var(--nd-subtext)'">
+        <span>Dev <span style="opacity:0.5;font-size:9px;">on Nostr</span></span>
+        <span style="opacity:0.4;font-size:10px;">npub12p57…r0ann ↗</span>
+      </a>
+
+      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+
       <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" style="
         display:flex;align-items:center;justify-content:space-between;
         padding:7px 10px;border-radius:5px;text-decoration:none;

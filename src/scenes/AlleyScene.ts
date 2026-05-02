@@ -638,6 +638,7 @@ export class AlleyScene extends BaseScene {
 
     const spawnX = EXIT_X + 80;
     this.player = this.add.image(spawnX, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
+    this.playerSprite = this.player;
     this.player.setFlipX(true);
 
     const name = this.registry.get('playerName') || 'guest';
@@ -721,7 +722,7 @@ export class AlleyScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     this.updateOtherPlayers(time, delta);
-    this.updateLocalNameColor(time);
+    this.updateLocalNameColor(time, delta);
   }
 
   private updateMovement(): void {

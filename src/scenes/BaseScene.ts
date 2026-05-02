@@ -77,12 +77,172 @@ import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords, shou
 import { canUseDMs } from '../nostr/dmService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
-import { getRainbowColor } from '../stores/marketStore';
+import { getRainbowColor, isAnimatedColor, getAnimatedColor } from '../stores/marketStore';
+import { incrementAuraProgress } from '../stores/auraUnlockStore';
+import { MarketPanel } from '../ui/MarketPanel';
+import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { GROUND_Y, P } from '../config/game.config';
 
+// ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
+
+// s = spriteHeight / 96  (room at scale 3 is the reference; hub/woods=0.33, alley/cabin=0.67)
+const EYE_VFX_TYPES   = new Set(['cry']); // particle emitter eyes
+const EYE_COLOR_TYPES = new Set(['blaze', 'frost', 'cosmic']); // color-cycling eyes (no particles)
+
+const EYE_CYCLE_HEX: Record<string, string[]> = {
+  blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
+  frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
+  cosmic: ['#ffffff', '#aa88ff', '#ff88ff', '#88ffff', '#ffff88'],
+};
+const EYE_CYCLE_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 360 };
+
+function makeEyeVfxConfig(type: string, s: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
+  const r = (n: number) => Math.round(n * s);
+  // No emitZone — each emitter is placed at an exact eye pixel position.
+  switch (type) {
+    case 'blaze': return {
+      speed: { min: r(10), max: r(22) }, angle: { min: 255, max: 285 },
+      lifespan: { min: 200, max: 450 }, scale: { start: 0.8, end: 0 },
+      alpha: { start: 1, end: 0 }, tint: [0xff6600, 0xff3300, 0xffaa00, 0xffdd00],
+      frequency: 90, quantity: 1, gravityY: r(-8), blendMode: 'ADD',
+    };
+    case 'frost': return {
+      speed: { min: r(5), max: r(14) }, angle: { min: 0, max: 360 },
+      lifespan: { min: 600, max: 1400 }, scale: { start: 1.0, end: 0 },
+      alpha: { start: 0.85, end: 0 }, tint: [0xaaddff, 0xffffff, 0x88ccff, 0xcceeff],
+      frequency: 200, quantity: 1, gravityY: r(3), blendMode: 'ADD',
+    };
+    case 'cosmic': return {
+      speed: { min: r(3), max: r(10) }, angle: { min: 0, max: 360 },
+      lifespan: { min: 900, max: 1800 }, scale: { start: 1.2, end: 0 },
+      alpha: { start: 0.9, end: 0 }, tint: [0xffffff, 0xaaaaff, 0xffaaff, 0xaaffff, 0xffffaa],
+      frequency: 220, quantity: 1, gravityY: r(-2), blendMode: 'ADD',
+    };
+    case 'cry': return {
+      speed: { min: r(1), max: r(4) }, angle: { min: 88, max: 92 },
+      lifespan: { min: 600, max: 1100 }, scale: { start: 1.0, end: 0 },
+      alpha: { start: 0.9, end: 0 }, tint: [0x4488ff, 0x88aaff, 0x2266dd, 0x66aaff],
+      frequency: 650, quantity: 1, gravityY: r(10), blendMode: 'ADD',
+    };
+    default: return { frequency: 99999, quantity: 0 };
+  }
+}
+
+function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
+  const r = (n: number) => Math.round(n * s);
+  switch (type) {
+    case 'sparkle': return {
+      speed:    { min: r(5), max: r(16) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 900, max: 1600 },
+      scale:    { start: 0.8, end: 0 },
+      alpha:    { start: 0.9, end: 0 },
+      tint:     [0xffffff, 0xf0d060, 0x9a6eff, 0x40e8ff],
+      frequency: 140,
+      quantity:  1,
+      gravityY:  r(-8),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(16)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'fire': return {
+      speed:    { min: r(28), max: r(58) },
+      angle:    { min: 250, max: 290 },
+      lifespan: { min: 300, max: 700 },
+      scale:    { start: 1.1, end: 0 },
+      alpha:    { start: 1, end: 0 },
+      tint:     [0xe05028, 0xf08020, 0xf0e020],
+      frequency: 140,
+      quantity:  1,
+      gravityY:  r(-12),
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(r(-8), r(-4), r(16), r(8)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'ice': return {
+      speed:    { min: r(3), max: r(12) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 1200, max: 2400 },
+      scale:    { start: 0.6, end: 0 },
+      alpha:    { start: 0.8, end: 0 },
+      tint:     [0xa8d8ff, 0xffffff, 0x40e8ff],
+      frequency: 160,
+      quantity:  1,
+      gravityY:  r(6),
+      emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, 0, r(16)), quantity: 8 } as any,
+      blendMode: 'ADD',
+    };
+    case 'electric': return {
+      speed:    { min: r(40), max: r(80) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 80, max: 240 },
+      scale:    { start: 0.7, end: 0 },
+      alpha:    { start: 1, end: 0 },
+      tint:     [0xffffff, 0x88aaff, 0x4488ff, 0xccddff],
+      frequency: 55,
+      quantity:  1,
+      gravityY:  0,
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(14)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'void': return {
+      speed:    { min: r(3), max: r(10) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 1800, max: 3200 },
+      scale:    { start: 1.2, end: 3 },
+      alpha:    { start: 0.55, end: 0 },
+      tint:     [0x5a0898, 0x3a0660, 0x7a10c0, 0x200040],
+      frequency: 150,
+      quantity:  1,
+      gravityY:  r(-2),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(18)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'gold': return {
+      speed:    { min: r(6), max: r(18) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 800, max: 1800 },
+      scale:    { start: 1.0, end: 0 },
+      alpha:    { start: 1, end: 0 },
+      tint:     [0xffd700, 0xffaa00, 0xffe566, 0xffc200],
+      frequency: 110,
+      quantity:  1,
+      gravityY:  r(-6),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(18)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'rainbow': return {
+      speed:    { min: r(8), max: r(20) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 700, max: 1400 },
+      scale:    { start: 0.8, end: 0 },
+      alpha:    { start: 0.95, end: 0 },
+      tint:     [0xff4444, 0xff8844, 0xffff44, 0x44ff44, 0x44ffff, 0x4488ff, 0xaa44ff],
+      frequency: 90,
+      quantity:  1,
+      gravityY:  r(-6),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(20)) } as any,
+      blendMode: 'ADD',
+    };
+    default: return { // smoke
+      speed:    { min: r(8), max: r(20) },
+      angle:    { min: 255, max: 285 },
+      lifespan: { min: 1000, max: 2200 },
+      scale:    { start: 1.0, end: 3.5 },
+      alpha:    { start: 0.58, end: 0 },
+      tint:     [0x3a2850, 0x4a3860, 0x5a4870],
+      frequency: 140,
+      quantity:  1,
+      gravityY:  r(-5),
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(r(-6), r(-4), r(12), r(8)) } as any,
+      blendMode: 'NORMAL',
+    };
+  }
+}
+
 // ── Other-player types ────────────────────────────────────────────────────────
+
+interface WaveCharSet { chars: Phaser.GameObjects.Text[]; charW: number; text: string; bg: Phaser.GameObjects.Text; }
 
 /** Minimal fields required by BaseScene's remove/shutdown helpers. */
 export interface BaseOtherPlayer {
@@ -167,6 +327,28 @@ export abstract class BaseScene extends Phaser.Scene {
   // ── Emote graphics (assigned in each scene's create) ─────────────────────
   protected emoteGraphics!: Phaser.GameObjects.Graphics;
 
+  // ── Aura particle state (Phaser ParticleEmitter per player) ─────────────
+  private _localAuraEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private _localAuraType    = '';
+  private _auraLastX        = NaN;
+  private _auraStillTime    = 0;
+  private _otherAuraMap     = new Map<string, { emitter: Phaser.GameObjects.Particles.ParticleEmitter; type: string }>();
+  private _otherStillMap    = new Map<string, { lastTargetX: number; stillSince: number }>();
+  private _localEyeL: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private _localEyeR: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private _localEyeType = '';
+  private _localEyeColorStep = -1;
+  private _otherEyeMap  = new Map<string, { left: Phaser.GameObjects.Particles.ParticleEmitter; right: Phaser.GameObjects.Particles.ParticleEmitter; type: string }>();
+  private _otherEyeColorStepMap = new Map<string, number>();
+  private _waveCharsMap = new Map<string, WaveCharSet>();
+  private _playerWaveSet: WaveCharSet | null = null;
+  protected _localPlayerTexKey = 'player';
+  private static readonly EYE_ADJUST: Record<string, { dx: number; dy: number; dleft?: number }> = {
+    blaze: { dx: 0, dy: 1, dleft: 2 },
+    frost: { dx: 1,   dy: 1 },
+    cry:   { dx: 0,   dy: 3 },
+  };
+
   // ── Emotes / Audio ────────────────────────────────────────────────────────
   protected emoteSet = new EmoteSet();
   protected snd      = SoundEngine.get();
@@ -177,6 +359,7 @@ export abstract class BaseScene extends Phaser.Scene {
   protected isKeyboardMoving = false;
   protected facingRight    = true;
   protected playerY        = GROUND_Y + 8;
+  protected playerSprite:  Phaser.GameObjects.Image | null = null;
   protected walkTime       = 0;
   protected walkFrame      = 0;
   protected footTimer      = 0;
@@ -241,6 +424,13 @@ export abstract class BaseScene extends Phaser.Scene {
   protected removeOtherPlayer(pk: string): void {
     const o = this.otherPlayers.get(pk); if (!o) return;
     this.otherPlayers.delete(pk);
+    const ae = this._otherAuraMap.get(pk);
+    if (ae) { ae.emitter.destroy(); this._otherAuraMap.delete(pk); }
+    this._otherStillMap.delete(pk);
+    const ee = this._otherEyeMap.get(pk);
+    if (ee) { ee.left.destroy(); ee.right.destroy(); this._otherEyeMap.delete(pk); }
+    const ws = this._waveCharsMap.get(pk);
+    if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); }
     this.onBeforeRemoveOtherPlayer(pk);
     this.dyingSprites.set(pk, o);
     this.tweens.add({ targets: [o.sprite, o.nameText, o.statusText], alpha: 0, duration: 300, onComplete: () => {
@@ -283,6 +473,8 @@ export abstract class BaseScene extends Phaser.Scene {
       dying.sprite.destroy(); dying.nameText.destroy(); dying.statusText.destroy();
       if (dying.clickZone) dying.clickZone.destroy();
       this.dyingSprites.delete(pk);
+      const dws = this._waveCharsMap.get(pk);
+      if (dws) { this._clearWaveSet(dws); this._waveCharsMap.delete(pk); }
     }
 
     const texKey = `${cfg.texKeyPrefix}${pk}`;
@@ -297,9 +489,11 @@ export abstract class BaseScene extends Phaser.Scene {
     }
 
     const isMuted = mutedPlayers.has(pk);
+    const spawnNameColor = isMuted ? '#3d3d55'
+      : (avatarConfig.nameColor && !isAnimatedColor(avatarConfig.nameColor) ? avatarConfig.nameColor : cfg.nameColor);
     const nt = this.add.text(px, py + cfg.nameYOffset, name.slice(0, 14), {
       fontFamily: '"Courier New", monospace', fontSize: cfg.nameFontSize,
-      color: isMuted ? '#3d3d55' : cfg.nameColor, align: 'center', backgroundColor: cfg.nameBg,
+      color: spawnNameColor, align: 'center', backgroundColor: cfg.nameBg,
       padding: cfg.namePadding,
     }).setOrigin(0.5).setDepth(9);
 
@@ -363,6 +557,78 @@ export abstract class BaseScene extends Phaser.Scene {
    * Update all other-player sprites: interpolation, walk-bob, label positioning,
    * emote rendering, fade-in gate. Call once per frame from update().
    */
+  private _ensureAuraDotTexture(): void {
+    if (this.textures.exists('aura_dot')) return;
+    const g = this.make.graphics(undefined, false);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(0, 0, 2, 2);
+    g.generateTexture('aura_dot', 2, 2);
+    g.destroy();
+  }
+
+  private _buildWaveSet(text: string, ref: Phaser.GameObjects.Text, color: string): WaveCharSet {
+    const fontSize = ref.style.fontSize as string;
+    const tmp = this.add.text(0, -9999, 'W', { fontFamily: '"Courier New", monospace', fontSize }).setVisible(false);
+    const charW = tmp.width;
+    tmp.destroy();
+
+    // Background: same style as nameText but filled with spaces — renders the
+    // exact same box (color, padding, corners) without showing any text.
+    const pad = (ref.style as any).padding ?? { x: 4, y: 2 };
+    const bg = this.add.text(0, 0, text.replace(/\S/g, ' '), {
+      fontFamily: '"Courier New", monospace', fontSize,
+      backgroundColor: ref.style.backgroundColor as string,
+      padding: pad,
+    }).setOrigin(0.5, 0.5).setDepth(8);
+
+    const chars = Array.from(text).map(ch =>
+      this.add.text(0, 0, ch, { fontFamily: '"Courier New", monospace', fontSize, color })
+        .setOrigin(0.5, 0.5).setDepth(9)
+    );
+    return { chars, charW, text, bg };
+  }
+
+  private _applyWaveSet(ws: WaveCharSet, cx: number, cy: number, time: number, color: string): void {
+    const { chars, charW, bg } = ws;
+    const totalW = charW * chars.length;
+    bg.setPosition(cx, cy);
+    chars.forEach((c, i) => {
+      c.setColor(color);
+      c.x = cx - totalW / 2 + i * charW + charW / 2;
+      c.y = cy + Math.sin(time / 280 + i * 0.7) * 4;
+    });
+  }
+
+  private _clearWaveSet(ws: WaveCharSet): void {
+    ws.bg.destroy();
+    ws.chars.forEach(c => c.destroy());
+  }
+
+  private _makeAuraEmitter(type: string, x: number, y: number, spriteHeight: number): Phaser.GameObjects.Particles.ParticleEmitter {
+    this._ensureAuraDotTexture();
+    const s = Math.max(0.2, spriteHeight / 96); // 96 = room reference (32px texture × scale 3)
+    return this.add.particles(x, y, 'aura_dot', makeAuraConfig(type, s)).setDepth(13);
+  }
+
+  /** Eye pixel offsets as fractions of displayHeight.
+   *  lx/rx = X offset from sprite.x; yFrac = distance above sprite.y (bottom anchor).
+   *  Override in scenes that use the room canvas (48×76) instead of the hub canvas (37×56). */
+  protected getEyePixelOffsets(): { lx: number; rx: number; yFrac: number } {
+    // Hub canvas 37×56: cry eyes at canvas x=15.5/20.5 → offsets -3/+2 from center 18.5; y=23 top → 33px from bottom
+    return { lx: -3 / 56, rx: 2 / 56, yFrac: 33 / 56 };
+  }
+
+  private _makeEyePair(type: string, lx: number, rx: number, ey: number, spriteHeight: number) {
+    this._ensureAuraDotTexture();
+    const s = Math.max(0.2, spriteHeight / 96);
+    const cfg = makeEyeVfxConfig(type, s);
+    return {
+      left:  this.add.particles(lx, ey, 'aura_dot', cfg).setDepth(14),
+      right: this.add.particles(rx, ey, 'aura_dot', cfg).setDepth(14),
+      type,
+    };
+  }
+
   protected updateOtherPlayers(time: number, delta: number): void {
     const cfg = this.getOtherPlayerConfig();
     this.otherPlayers.forEach((o, pk) => {
@@ -395,25 +661,266 @@ export abstract class BaseScene extends Phaser.Scene {
       o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, cfg.emoteContext);
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
 
-      // Rainbow name tag animation for other players
       if (o.avatar) {
         const oa = deserializeAvatar(o.avatar);
-        if (oa?.nameColor === 'rainbow') o.nameText.setColor(getRainbowColor(time));
+        if (oa) {
+          // Color animation
+          if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
+
+          // Name tag motion
+          if (oa.nameAnim) {
+            if (oa.nameAnim !== 'wave') {
+              const ws = this._waveCharsMap.get(pk);
+              if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
+            }
+            o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+            switch (oa.nameAnim) {
+              case 'bob':   o.nameText.y += Math.sin(time / 400) * 3; break;
+              case 'pulse': o.nameText.setScale(1 + Math.sin(time / 350) * 0.08); break;
+              case 'jitter':
+                o.nameText.x += (Math.random() - 0.5) * 1.5;
+                o.nameText.y += (Math.random() - 0.5) * 0.8;
+                break;
+              case 'zoom': {
+                const p = (time % 900) / 900;
+                const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
+                const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
+                o.nameText.setScale(1 + b1 * 0.2 + b2 * 0.12);
+                break;
+              }
+              case 'swing':
+                o.nameText.setAngle(Math.sin(time / 550) * 10);
+                break;
+              case 'wave': {
+                const currentColor = o.nameText.style.color as string;
+                let ws = this._waveCharsMap.get(pk);
+                if (!ws || ws.text !== o.nameText.text) {
+                  if (ws) this._clearWaveSet(ws);
+                  o.nameText.setVisible(false);
+                  ws = this._buildWaveSet(o.nameText.text, o.nameText, currentColor);
+                  this._waveCharsMap.set(pk, ws);
+                }
+                this._applyWaveSet(ws, o.nameText.x, o.nameText.y, time, currentColor);
+                break;
+              }
+              case 'glow': {
+                const glowColor = o.nameText.style.color as string;
+                const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
+                const blur = 10 + Math.sin(time / 600) * 4;
+                o.nameText.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
+                break;
+              }
+            }
+          } else {
+            const ws = this._waveCharsMap.get(pk);
+            if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
+            o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+          }
+
+          // Stillness tracking
+          let still = this._otherStillMap.get(pk);
+          if (!still) { still = { lastTargetX: o.targetX, stillSince: Date.now() }; this._otherStillMap.set(pk, still); }
+          if (o.targetX !== still.lastTargetX) { still.stillSince = Date.now(); still.lastTargetX = o.targetX; }
+          const otherStill = Date.now() - still.stillSince >= 1500;
+
+          // Aura — only within 300px of local player
+          const nearEnough = !this.playerSprite ||
+            Math.abs(o.sprite.x - this.playerSprite.x) < 300;
+          if (oa.aura && otherStill && nearEnough) {
+            const nx = o.sprite.x;
+            const grounded = oa.aura === 'fire' || oa.aura === 'smoke';
+            const ny = o.sprite.y - o.sprite.displayHeight * (grounded ? 0.08 : 0.34);
+            let entry = this._otherAuraMap.get(pk);
+            if (!entry || entry.type !== oa.aura) {
+              entry?.emitter.destroy();
+              entry = { emitter: this._makeAuraEmitter(oa.aura, nx, ny, o.sprite.displayHeight), type: oa.aura };
+              this._otherAuraMap.set(pk, entry);
+            } else {
+              entry.emitter.setPosition(nx, ny);
+            }
+          } else if (!otherStill || !oa.aura || !nearEnough) {
+            const entry = this._otherAuraMap.get(pk);
+            if (entry) { entry.emitter.destroy(); this._otherAuraMap.delete(pk); }
+          }
+
+          // Eye VFX — cry uses particles; blaze/frost/cosmic cycle eyeColor on the avatar texture
+          const otherEyeType = (EYE_VFX_TYPES.has(oa.eyes) || EYE_COLOR_TYPES.has(oa.eyes)) ? oa.eyes : '';
+          if (otherEyeType && nearEnough) {
+            if (EYE_COLOR_TYPES.has(otherEyeType)) {
+              const pal  = EYE_CYCLE_HEX[otherEyeType];
+              const step = Math.floor(time / EYE_CYCLE_MS[otherEyeType]) % pal.length;
+              const prev = this._otherEyeColorStepMap.get(pk) ?? -1;
+              if (step !== prev) {
+                this._otherEyeColorStepMap.set(pk, step);
+                const cfg2 = this.getOtherPlayerConfig();
+                const texKey = `${cfg2.texKeyPrefix}${pk}`;
+                if (this.textures.exists(texKey)) this.textures.remove(texKey);
+                this.textures.addCanvas(texKey, this.renderOtherAvatar({ ...oa, eyeColor: pal[step] }));
+                o.sprite.setTexture(texKey);
+              }
+            } else {
+              // cry — particle emitters at eye positions
+              const { lx, rx, yFrac } = this.getEyePixelOffsets();
+              const { dx, dy, dleft } = BaseScene.EYE_ADJUST[otherEyeType] ?? { dx: 0, dy: 0 };
+              const fdx = dx + (o.sprite.flipX ? (dleft ?? 0) : 0);
+              const dH  = o.sprite.displayHeight;
+              const lEx = o.sprite.x + lx * dH + fdx;
+              const rEx = o.sprite.x + rx * dH + fdx;
+              const eyY = o.sprite.y - yFrac * dH + dy;
+              let eyeEntry = this._otherEyeMap.get(pk);
+              if (!eyeEntry || eyeEntry.type !== otherEyeType) {
+                eyeEntry?.left.destroy();
+                eyeEntry?.right.destroy();
+                const pair = this._makeEyePair(otherEyeType, lEx, rEx, eyY, dH);
+                this._otherEyeMap.set(pk, pair);
+              } else {
+                eyeEntry.left.setPosition(lEx, eyY);
+                eyeEntry.right.setPosition(rEx, eyY);
+              }
+            }
+          } else {
+            const eyeEntry = this._otherEyeMap.get(pk);
+            if (eyeEntry) { eyeEntry.left.destroy(); eyeEntry.right.destroy(); this._otherEyeMap.delete(pk); }
+            this._otherEyeColorStepMap.delete(pk);
+          }
+        }
       }
 
       this.updateOtherPlayerExtras(pk, o, dx, delta);
     });
   }
 
-  /** Call once per frame in each scene's update() to animate the local player's rainbow name tag. */
-  protected updateLocalNameColor(time: number): void {
+  /** Call once per frame in each scene's update() to animate name tag + aura. */
+  protected updateLocalNameColor(time: number, delta = 16): void {
     const av = getAvatar();
-    if (!av.nameColor) return;
-    if (av.nameColor === 'rainbow') {
-      this.playerName?.setColor(getRainbowColor(time));
+
+    // Color animation
+    if (av.nameColor) {
+      if (isAnimatedColor(av.nameColor)) {
+        this.playerName?.setColor(getAnimatedColor(av.nameColor, time));
+      } else {
+        const current = this.playerName?.style.color;
+        if (current !== av.nameColor) this.playerName?.setColor(av.nameColor);
+      }
+    }
+
+    // Name tag motion
+    if (this.playerName && av.nameAnim) {
+      if (av.nameAnim !== 'wave') {
+        if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName.setVisible(true); }
+      }
+      this.playerName.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+      switch (av.nameAnim) {
+        case 'bob':   this.playerName.y += Math.sin(time / 400) * 3; break;
+        case 'pulse': this.playerName.setScale(1 + Math.sin(time / 350) * 0.08); break;
+        case 'jitter':
+          this.playerName.x += (Math.random() - 0.5) * 1.5;
+          this.playerName.y += (Math.random() - 0.5) * 0.8;
+          break;
+        case 'zoom': {
+          const p = (time % 900) / 900;
+          const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
+          const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
+          this.playerName.setScale(1 + b1 * 0.2 + b2 * 0.12);
+          break;
+        }
+        case 'swing':
+          this.playerName.setAngle(Math.sin(time / 550) * 10);
+          break;
+        case 'wave': {
+          const color = this.playerName.style.color as string;
+          if (!this._playerWaveSet || this._playerWaveSet.text !== this.playerName.text) {
+            if (this._playerWaveSet) this._clearWaveSet(this._playerWaveSet);
+            this.playerName.setVisible(false);
+            this._playerWaveSet = this._buildWaveSet(this.playerName.text, this.playerName, color);
+          }
+          this._applyWaveSet(this._playerWaveSet, this.playerName.x, this.playerName.y, time, color);
+          break;
+        }
+        case 'glow': {
+          const glowColor = this.playerName.style.color as string;
+          const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
+          const blur = 10 + Math.sin(time / 600) * 4;
+          this.playerName.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
+          break;
+        }
+      }
     } else {
-      const current = this.playerName?.style.color;
-      if (current !== av.nameColor) this.playerName?.setColor(av.nameColor);
+      if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName?.setVisible(true); }
+      this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+    }
+
+    // Aura — only show after standing still for 1.5s
+    if (av.aura && this.playerSprite) {
+      const cx = this.playerSprite.x;
+      if (isNaN(this._auraLastX)) { this._auraLastX = cx; this._auraStillTime = Date.now(); }
+      if (Math.abs(cx - this._auraLastX) > 0.5) { this._auraStillTime = Date.now(); this._auraLastX = cx; }
+      const localStill = Date.now() - this._auraStillTime >= 1500;
+
+      if (localStill && this.playerName) {
+        const px = this.playerName.x;
+        const grounded = av.aura === 'fire' || av.aura === 'smoke';
+        const py = this.playerSprite.y - this.playerSprite.displayHeight * (grounded ? 0.08 : 0.34);
+        if (!this._localAuraEmitter || this._localAuraType !== av.aura) {
+          this._localAuraEmitter?.destroy();
+          this._localAuraEmitter = this._makeAuraEmitter(av.aura, px, py, this.playerSprite.displayHeight);
+          this._localAuraType = av.aura;
+        } else {
+          this._localAuraEmitter.setPosition(px, py);
+        }
+      } else if (!localStill && this._localAuraEmitter) {
+        this._localAuraEmitter.destroy();
+        this._localAuraEmitter = null;
+        this._localAuraType = '';
+      }
+    } else if (this._localAuraEmitter) {
+      this._localAuraEmitter.destroy();
+      this._localAuraEmitter = null;
+      this._localAuraType = '';
+      this._auraLastX = NaN;
+    }
+
+    // Eye VFX — cry uses particles; blaze/frost/cosmic cycle eyeColor on the avatar texture
+    const eyeType = (EYE_VFX_TYPES.has(av.eyes) || EYE_COLOR_TYPES.has(av.eyes)) ? av.eyes : '';
+    if (EYE_COLOR_TYPES.has(eyeType) && this.playerSprite) {
+      const pal  = EYE_CYCLE_HEX[eyeType];
+      const step = Math.floor(time / EYE_CYCLE_MS[eyeType]) % pal.length;
+      if (step !== this._localEyeColorStep) {
+        this._localEyeColorStep = step;
+        const canvas = this.renderOtherAvatar({ ...av, eyeColor: pal[step] });
+        if (this.textures.exists(this._localPlayerTexKey)) this.textures.remove(this._localPlayerTexKey);
+        this.textures.addCanvas(this._localPlayerTexKey, canvas);
+        this.playerSprite.setTexture(this._localPlayerTexKey);
+      }
+    } else if (eyeType && this.playerSprite) {
+      // cry — particle emitters at eye positions
+      const { lx, rx, yFrac } = this.getEyePixelOffsets();
+      const { dx, dy, dleft } = BaseScene.EYE_ADJUST[eyeType] ?? { dx: 0, dy: 0 };
+      const fdx = dx + (this.playerSprite.flipX ? (dleft ?? 0) : 0);
+      const dH  = this.playerSprite.displayHeight;
+      const lEx = this.playerSprite.x + lx * dH + fdx;
+      const rEx = this.playerSprite.x + rx * dH + fdx;
+      const eyY = this.playerSprite.y - yFrac * dH + dy;
+      if (!this._localEyeL || this._localEyeType !== eyeType) {
+        this._localEyeL?.destroy();
+        this._localEyeR?.destroy();
+        const pair = this._makeEyePair(eyeType, lEx, rEx, eyY, dH);
+        this._localEyeL = pair.left;
+        this._localEyeR = pair.right;
+        this._localEyeType = eyeType;
+      } else {
+        this._localEyeL.setPosition(lEx, eyY);
+        this._localEyeR?.setPosition(rEx, eyY);
+      }
+    } else {
+      if (this._localEyeL) {
+        this._localEyeL.destroy();
+        this._localEyeR?.destroy();
+        this._localEyeL = null;
+        this._localEyeR = null;
+        this._localEyeType = '';
+      }
+      this._localEyeColorStep = -1;
     }
   }
 
@@ -628,6 +1135,7 @@ export abstract class BaseScene extends Phaser.Scene {
   //   playerPicker → muteList → profile-modal (DOM) → zap-modal (DOM)
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonEsc(): boolean {
+    if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
     if (this.worldMap.isOpen())         { this.worldMap.close();        return true; }
     if (this.crewPanel?.isVisible())    { this.crewPanel.pressEsc();    return true; }
     if (this.dmPanel?.isVisible())      { this.dmPanel.close();         return true; }
@@ -673,7 +1181,7 @@ export abstract class BaseScene extends Phaser.Scene {
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
-      if (name === 'smoke') this.snd.lighterFlick();
+      if (name === 'smoke') { this.snd.lighterFlick(); incrementAuraProgress('smoke'); }
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
       this.chatUI.addMessage('system', flavor, ac);
       sendChat(`/emote ${name}_on`);
@@ -804,6 +1312,11 @@ export abstract class BaseScene extends Phaser.Scene {
               if (!o.emotes) o.emotes = new EmoteSet();
               if (action === 'on') {
                 o.emotes.start(emoteName);
+                // Apply rod skin from their avatar whenever fishing starts
+                if (emoteName === 'fishing' && o.avatar) {
+                  const oa = deserializeAvatar(o.avatar);
+                  if (oa?.rodSkin !== undefined) o.emotes.setFishingSkin(oa.rodSkin);
+                }
                 const flavor = EMOTE_FLAVORS[emoteName];
                 if (flavor) {
                   if (this.showEmoteAsBubble()) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + this.getBubbleYOffset(), flavor, P.lpurp);
@@ -822,13 +1335,15 @@ export abstract class BaseScene extends Phaser.Scene {
         if (!isMe && shouldFilter(text)) return;
         const accent = this.getSceneAccent();
         const myAvatar = getAvatar();
-        const myChatColor = myAvatar.chatColor && myAvatar.chatColor !== 'rainbow' ? myAvatar.chatColor : myAvatar.chatColor === 'rainbow' ? getRainbowColor(Date.now()) : accent;
+        const myChatColor = myAvatar.chatColor
+          ? (isAnimatedColor(myAvatar.chatColor) ? getAnimatedColor(myAvatar.chatColor, Date.now()) : myAvatar.chatColor)
+          : accent;
         let senderChatColor = P.lpurp;
         if (!isMe) {
           const o = this.otherPlayers.get(pk);
           if (o?.avatar) {
             const oa = deserializeAvatar(o.avatar);
-            if (oa?.chatColor) senderChatColor = oa.chatColor === 'rainbow' ? getRainbowColor(Date.now()) : oa.chatColor;
+            if (oa?.chatColor) senderChatColor = isAnimatedColor(oa.chatColor) ? getAnimatedColor(oa.chatColor, Date.now()) : oa.chatColor;
           }
         }
         this.chatUI.addMessage(name, text, isMe ? myChatColor : senderChatColor, pk, emojis);
@@ -851,8 +1366,11 @@ export abstract class BaseScene extends Phaser.Scene {
         if (this.textures.exists(texKey)) this.textures.remove(texKey);
         this.textures.addCanvas(texKey, this.renderOtherAvatar(avatarConfig));
         o.sprite.setTexture(texKey).setTint(0xffffff);
-        if (avatarConfig.nameColor && avatarConfig.nameColor !== 'rainbow') {
+        if (avatarConfig.nameColor && !isAnimatedColor(avatarConfig.nameColor)) {
           o.nameText.setColor(avatarConfig.nameColor);
+        }
+        if (avatarConfig.rodSkin !== undefined) {
+          o.emotes?.setFishingSkin(avatarConfig.rodSkin);
         }
       },
       onNameUpdate: (pk, name) => {
@@ -1218,6 +1736,15 @@ export abstract class BaseScene extends Phaser.Scene {
         return true;
       }
 
+      // ── Shop ─────────────────────────────────────────────────────────────
+      case 'shop': case 'store': case 'market':
+        MarketPanel.isOpen() ? MarketPanel.destroy() : MarketPanel.open();
+        return true;
+
+      // ── Tutorial ─────────────────────────────────────────────────────────
+      case 'tutorial':
+        new TutorialOverlay(() => {}); return true;
+
       // ── Help ──────────────────────────────────────────────────────────────
       case 'help': case '?':
         this.hotkeyModal.toggle(); return true;
@@ -1341,6 +1868,9 @@ export abstract class BaseScene extends Phaser.Scene {
       o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
     });
     this.otherPlayers.clear();
+    this._waveCharsMap.forEach(ws => this._clearWaveSet(ws));
+    this._waveCharsMap.clear();
+    if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; }
     this.chatUI?.destroy();
     this.settingsPanel?.destroy();
     this.computerUI?.close();
@@ -1362,5 +1892,21 @@ export abstract class BaseScene extends Phaser.Scene {
     this.mobileControlsEl = null;
     document.getElementById('nd-mobile-controls-r')?.remove();
     document.documentElement.style.removeProperty('--nd-ctrl-offset');
+    this._localAuraEmitter?.destroy();
+    this._localAuraEmitter = null;
+    this._localAuraType = '';
+    this._auraLastX = NaN;
+    this._otherAuraMap.forEach(e => e.emitter.destroy());
+    this._otherAuraMap.clear();
+    this._otherStillMap.clear();
+    this._localEyeL?.destroy();
+    this._localEyeR?.destroy();
+    this._localEyeL = null;
+    this._localEyeR = null;
+    this._localEyeType = '';
+    this._otherEyeMap.forEach(e => { e.left.destroy(); e.right.destroy(); });
+    this._otherEyeMap.clear();
+    this._otherEyeColorStepMap.clear();
+    this._localEyeColorStep = -1;
   }
 }

@@ -439,8 +439,8 @@ export class RoomScene extends BaseScene {
     this.shopPrompt.setVisible(visible);
     this.shopPromptBg.setVisible(visible);
     if (visible) {
-      this.shopPromptBg.setPosition(GAME_WIDTH / 2 - 64, 258);
-      this.shopPrompt.setPosition(GAME_WIDTH / 2, 272);
+      this.shopPromptBg.setPosition(GAME_WIDTH / 2 - 64, 200);
+      this.shopPrompt.setPosition(GAME_WIDTH / 2, 214);
     }
   }
 
@@ -509,7 +509,7 @@ export class RoomScene extends BaseScene {
 
     // Other players
     this.updateOtherPlayers(time, delta);
-    this.updateLocalNameColor(time);
+    this.updateLocalNameColor(time, delta);
   }
 
   // ── Feed Room ──
@@ -778,9 +778,14 @@ export class RoomScene extends BaseScene {
   }
   protected override onEscFallthrough(): void { this.leaveRoom(); }
 
+  protected override getEyePixelOffsets(): { lx: number; rx: number; yFrac: number } {
+    // Room canvas 48×76: cry eyes at canvas 20.5/27.5 → offsets -3.5/+3.5 from center 24; y=30 top (oY+4) → 45px from bottom
+    return { lx: -3.5 / 76, rx: 3.5 / 76, yFrac: 45 / 76 };
+  }
+
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
-      texKeyPrefix: 'avatar_room_', scale: 2.5,
+      texKeyPrefix: 'avatar_room_', scale: 3,
       nameYOffset: +14, statusYOffset: +26,
       nameColor: this.roomConfig.neonColor, nameFontSize: '10px', statusFontSize: '9px',
       nameBg: '#0a001488', namePadding: { x: 4, y: 2 },
@@ -858,6 +863,8 @@ export class RoomScene extends BaseScene {
       this.player?.setTexture('player_room');
     });
     this.player = this.add.image(GAME_WIDTH / 2, this.playerY, 'player_room').setOrigin(0.5, 1).setScale(3).setDepth(10);
+    this.playerSprite = this.player;
+    this._localPlayerTexKey = 'player_room';
     const name = this.registry.get('playerName') || 'guest';
     this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor, align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(11);
     const myStatus = getStatus();
@@ -875,7 +882,16 @@ export class RoomScene extends BaseScene {
     // Oversized relative to the visual so finger imprecision near the edges still registers.
     const el = document.createElement('button');
     this.backBtnEl = el;
-    el.style.cssText = 'position:fixed;top:0;left:0;width:220px;height:60px;background:transparent;border:none;outline:none;cursor:pointer;z-index:500;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;';
+    // Position relative to the actual canvas rect so the hitbox matches the
+    // visual button regardless of Phaser.Scale.FIT zoom level.
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const scaleX = canvasRect.width  / this.scale.gameSize.width;
+    const scaleY = canvasRect.height / this.scale.gameSize.height;
+    const btnL = canvasRect.left   + 12  * scaleX;
+    const btnT = canvasRect.top    +  5  * scaleY;
+    const btnW = 180 * scaleX;
+    const btnH =  38 * scaleY;
+    el.style.cssText = `position:fixed;left:${btnL}px;top:${btnT}px;width:${btnW}px;height:${btnH}px;background:transparent;border:none;outline:none;cursor:pointer;z-index:500;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;`;
     el.addEventListener('pointerover', () => { btn.setColor(P.lcream); btn.setScale(1.05); });
     el.addEventListener('pointerout',  () => { btn.setColor(nc); btn.setScale(1); });
     el.addEventListener('pointerdown', (e) => { e.preventDefault(); this.leaveRoom(); });

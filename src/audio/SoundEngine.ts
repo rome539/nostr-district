@@ -782,6 +782,38 @@ export class SoundEngine {
     this.osc(260, 'sine', t + 0.28, 0.015, 0.06, d);
   }
 
+  auraUnlock(): void {
+    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+
+    // Rising sweep whoosh
+    const swp = ctx.createBufferSource();
+    swp.buffer = this.noiseBuf(0.3);
+    const swpF = ctx.createBiquadFilter();
+    swpF.type = 'bandpass';
+    swpF.frequency.setValueAtTime(250, t);
+    swpF.frequency.exponentialRampToValueAtTime(3500, t + 0.26);
+    swpF.Q.value = 1.8;
+    const swpG = ctx.createGain();
+    swpG.gain.setValueAtTime(0.04, t);
+    swpG.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    swp.connect(swpF); swpF.connect(swpG); swpG.connect(d);
+    swp.start(t); swp.stop(t + 0.3);
+
+    // Rising arpeggio — triangle + detuned sine layer for shimmer
+    [523, 659, 784, 1047, 1319].forEach((freq, i) => {
+      this.osc(freq,         'triangle', t + i * 0.08, 0.28 + i * 0.06, 0.05, d);
+      this.osc(freq * 1.004, 'sine',     t + i * 0.08, 0.24 + i * 0.06, 0.022, d);
+    });
+
+    // Sparkling peak notes
+    this.osc(1568, 'sine', t + 0.44, 0.55, 0.04, d);
+    this.osc(2093, 'sine', t + 0.52, 0.48, 0.03, d);
+    this.osc(2637, 'sine', t + 0.58, 0.38, 0.022, d);
+
+    // Glittery noise shimmer tail
+    this.noiseShot(0.40, 'highpass', 6000, 1.0, 0.012, d, 0.46);
+  }
+
   // ── Ambient ───────────────────────────────────────────────────────────────────
 
   setRoom(room: RoomId | ''): void {

@@ -8,19 +8,21 @@ export interface AvatarConfig {
   skinColor: string;
   hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'curtains' | 'mullet';
   hairColor: string;
-  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt' | 'camoshirt';
+  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt' | 'camoshirt' | 'tunic' | 'skindress' | 'knightchest';
   topColor: string;
-  bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'camopants' | 'overalls' | 'miniskirt' | 'jeans';
+  bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'camopants' | 'overalls' | 'miniskirt' | 'jeans' | 'baggyjeans' | 'trousers' | 'utilitypants' | 'knightpants';
   bottomColor: string;
-  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral';
+  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'crown_purple' | 'crown_silver' | 'crown_bronze' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral' | 'knightsheadband';
   hatColor: string;
-  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape';
+  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie';
   accessoryColor: string;
-  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart';
+  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'blaze' | 'frost' | 'cosmic' | 'cry';
   eyeColor: string;
   nameColor: string;
   chatColor: string;
   rodSkin: string;
+  nameAnim: '' | 'bob' | 'pulse' | 'jitter' | 'zoom' | 'swing' | 'wave' | 'glow';
+  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow';
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -41,6 +43,8 @@ const DEFAULT_AVATAR: AvatarConfig = {
   nameColor: '',
   chatColor: '',
   rodSkin: '',
+  nameAnim: '',
+  aura: '',
 };
 
 let currentAvatar: AvatarConfig = { ...DEFAULT_AVATAR };
@@ -83,11 +87,11 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet'] as const,
-  top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe'] as const,
-  bottom: ['pants', 'jeans', 'shorts', 'skirt', 'miniskirt', 'cargopants', 'camopants', 'overalls'] as const,
-  hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'wizard', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
-  accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape'] as const,
-  eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross', 'glow', 'heart'] as const,
+  top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'tunic', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe', 'skindress'] as const,
+  bottom: ['pants', 'jeans', 'shorts', 'skirt', 'miniskirt', 'cargopants', 'camopants', 'overalls', 'baggyjeans', 'trousers', 'utilitypants'] as const,
+  hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'crown', 'crown_purple', 'crown_silver', 'crown_bronze', 'wizard', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
+  accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape', 'ostirchfloatie'] as const,
+  eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross'] as const,
 };
 
 // ── Outfit presets ────────────────────────────────────────────────────────────
