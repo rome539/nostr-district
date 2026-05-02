@@ -231,6 +231,7 @@ export class MarketPanel {
         min-height:16px;color:var(--nd-subtext);flex-shrink:0;
       "></div>
       ${!canBuy ? `<div style="font-size:9px;text-align:center;color:var(--nd-subtext);opacity:0.45;flex-shrink:0;">Log in with a key to purchase</div>` : ''}
+      <div style="font-size:8px;text-align:center;color:var(--nd-subtext);opacity:0.3;flex-shrink:0;margin-top:4px;">All sales final. No refunds.</div>
     `;
 
     document.body.appendChild(panel);
