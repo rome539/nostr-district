@@ -251,6 +251,15 @@ export class TutorialOverlay {
         background: color-mix(in srgb, var(--nd-accent, #5dcaa5) 30%, transparent);
         box-shadow: 0 0 12px color-mix(in srgb, var(--nd-accent, #5dcaa5) 25%, transparent);
       }
+      .nd-tut-card::-webkit-scrollbar { width: 6px; }
+      .nd-tut-card::-webkit-scrollbar-track { background: transparent; }
+      .nd-tut-card::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--nd-accent, #5dcaa5) 30%, transparent);
+        border-radius: 3px;
+      }
+      .nd-tut-card::-webkit-scrollbar-thumb:hover {
+        background: color-mix(in srgb, var(--nd-accent, #5dcaa5) 55%, transparent);
+      }
     </style>`;
   }
 }
