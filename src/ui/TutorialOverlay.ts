@@ -23,7 +23,7 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    title: 'Welcome to Nostr District',
+    title: 'Welcome to The District',
     body: 'A pixel city living on the Nostr protocol. Everything here — chat, rooms, crews — is decentralized and owned by you.',
   },
   {

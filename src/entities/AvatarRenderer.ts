@@ -2,7 +2,7 @@
  * AvatarRenderer.ts — Layered pixel sprite generator
  *
  * Hub scale: 20x40, Room scale: 24x60
- * Draw order: skin → bottom → top → hair → hat → eyes → accessory
+ * Draw order: skin → bottom → top → hair → eyes → hat → accessory
  */
 
 import { AvatarConfig } from '../stores/avatarStore';
@@ -597,14 +597,14 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     }
   }
 
+  // ── Eyes (before hat so hat always covers eyes) ──
+  drawHubEyes(x, a, cx, headY, s);
+
   // ── Hat ──
   if (hasHat) {
     x.fillStyle = a.hatColor;
     drawHubHat(x, a.hat, cx, headY, s);
   }
-
-  // ── Eyes (before accessories so acc draws on top) ──
-  drawHubEyes(x, a, cx, headY, s);
 
   // ── Accessory (ring/watch/headphones already drawn above) ──
   if (a.accessory !== 'none' && !['headphones', 'ring', 'watch'].includes(a.accessory)) {
@@ -970,14 +970,14 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     }
   }
 
+  // ── Eyes (before hat so hat always covers eyes) ──
+  drawRoomEyes(x, a, oY);
+
   // ── Hat ──
   if (hasHat) {
     x.fillStyle = a.hatColor;
     drawRoomHat(x, a.hat, oY);
   }
-
-  // ── Eyes (before accessories so acc draws on top) ──
-  drawRoomEyes(x, a, oY);
 
   // ── Accessory (ring/watch/headphones already drawn above) ──
   if (a.accessory !== 'none' && !['headphones', 'ring', 'watch'].includes(a.accessory)) {
