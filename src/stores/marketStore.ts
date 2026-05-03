@@ -113,7 +113,7 @@ export const CATALOG: MarketItem[] = [
   // ── Tops ─────────────────────────────────────────────────────────────────────
   { id: 'top_camoshirt',   name: 'Camo Shirt',      slot: 'top',       value: 'camoshirt',      price: 0.50, tier: 'basic' },
   { id: 'top_flannel',     name: 'Flannel',          slot: 'top',       value: 'flannel',        price: 0.50, tier: 'basic' },
-  { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 0.50, tier: 'basic' },
+  { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 1.50, tier: 'premium' },
   { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },
   { id: 'top_tunic',       name: 'Tunic',            slot: 'top',       value: 'tunic',          price: 0.50, tier: 'basic' },
   { id: 'top_skindress',   name: 'Skin Dress',       slot: 'top',       value: 'skindress',      price: 0.50, tier: 'basic' },
@@ -137,7 +137,10 @@ export const CATALOG: MarketItem[] = [
   { id: 'hat_crown_bronze',name: 'Bronze Crown',     slot: 'hat',       value: 'crown_bronze',   price: 8.00, tier: 'rare' },
   // ── Accessories ───────────────────────────────────────────────────────────────
   // { id: 'acc_sword',       name: 'Sword',            slot: 'accessory', value: 'sword',          price: 1.50, tier: 'premium' },
-  { id: 'acc_floatie',     name: 'Ostrich Floatie',  slot: 'accessory', value: 'ostirchfloatie', price: 1.50, tier: 'premium' },
+  { id: 'acc_floatie',        name: 'Ostrich Floatie',    slot: 'accessory', value: 'ostirchfloatie',  price: 1.50, tier: 'premium' },
+  { id: 'acc_ballon',         name: 'Balloon',            slot: 'accessory', value: 'ballon',          price: 0.50, tier: 'basic' },
+  { id: 'acc_ballonbitcoin',  name: 'Bitcoin Balloon',    slot: 'accessory', value: 'ballonbitcoin',   price: 1.50, tier: 'premium' },
+  { id: 'acc_ballonostrich',  name: 'Ostrich Balloon',    slot: 'accessory', value: 'ballonostrich',   price: 1.50, tier: 'premium' },
   { id: 'acc_wings',       name: 'Wings',            slot: 'accessory', value: 'wings',          price: 3.00, tier: 'rare' },
   { id: 'acc_cape',        name: 'Cape',             slot: 'accessory', value: 'cape',           price: 3.00, tier: 'rare' },
   // ── Hair ─────────────────────────────────────────────────────────────────────

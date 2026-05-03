@@ -1,6 +1,6 @@
 import type { AvatarConfig } from '../../stores/avatarStore';
-import { imgCache, ITEM_DEFS, HAIR_DEFS, ROOM_HEAD_W } from './assets';
-import { drawHairImg, drawImgItemAuto } from './drawCore';
+import { imgCache, ITEM_DEFS, HAIR_DEFS, ROOM_HEAD_W, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from './assets';
+import { drawHairImg, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
 import { lighten, darken } from './helpers';
 
 // ══════════════════════════════════════
@@ -468,5 +468,333 @@ export function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: 
     }
     default:
       if (ITEM_DEFS[acc]) drawImgItemAuto(x, acc, 12, oY, ROOM_HEAD_W, 1);
+  }
+}
+
+// ══════════════════════════════════════
+// BOTTOM — room scale
+// ══════════════════════════════════════
+export function drawRoomBottom(
+  x: CanvasRenderingContext2D,
+  a: AvatarConfig,
+  oY: number,
+  walkFrame: number,
+  hasPng: boolean
+): { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null {
+  const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
+  const rY = walkFrame === 1 ? 1 : walkFrame === 2 ? -1 : 0;
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+
+  if (!hasPng) {
+    x.fillStyle = a.bottomColor;
+    if (!['skirt', 'miniskirt', 'dress'].includes(a.bottom) && a.top !== 'dress') {
+      x.fillRect(7, oY + 28, 10, 2);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+    }
+    if (a.top === 'dress') {
+      x.fillRect(7, oY + 29 + lY, 4, 15);
+      x.fillRect(13, oY + 29 + rY, 4, 15);
+    } else if (a.bottom === 'shorts') {
+      x.fillRect(7, oY + 29 + lY, 4, 7);
+      x.fillRect(13, oY + 29 + rY, 4, 7);
+    } else if (a.bottom === 'skirt') {
+      x.fillRect(6, oY + 28, 12, 6);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+    } else if (a.bottom === 'overalls') {
+      x.fillRect(7, oY + 29 + lY, 4, 15);
+      x.fillRect(13, oY + 29 + rY, 4, 15);
+      x.fillStyle = darken(a.bottomColor, 10);
+      x.fillRect(5, oY + 28, 14, 3);
+    } else if (a.bottom === 'miniskirt') {
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+      x.fillRect(6, oY + 29, 12, 3);
+    } else {
+      x.fillRect(7, oY + 29 + lY, 4, 15);
+      x.fillRect(13, oY + 29 + rY, 4, 15);
+    }
+    x.fillStyle = darken(a.bottomColor, 20);
+    x.fillRect(5, oY + 44 + lY, 6, 3);
+    x.fillRect(13, oY + 44 + rY, 6, 3);
+  } else if (a.top !== 'dress') {
+    if (!isPngBottom) {
+      x.save();
+      x.beginPath();
+      x.rect(6, oY + 28, 12, 19);
+      x.clip();
+      x.globalCompositeOperation = 'source-atop';
+      x.fillStyle = a.bottomColor;
+      if (a.bottom === 'skirt') {
+        x.globalCompositeOperation = 'source-over';
+        x.fillRect(6, oY + 28, 12, 6);
+      } else if (a.bottom === 'miniskirt') {
+        x.globalCompositeOperation = 'source-over';
+        x.fillRect(6, oY + 29, 12, 3);
+      } else if (a.bottom === 'shorts') {
+        x.fillRect(6, oY + 28, 12, 8);
+      } else {
+        x.fillRect(6, oY + 28, 12, 19);
+      }
+      x.restore();
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(6, oY + 28, 12, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(10, oY + 28, 4, 2);
+      x.globalAlpha = 1;
+    }
+  }
+
+  // ── PNG bottoms ──
+  const roomPngBottomPrefix: Record<string, string> = {
+    jeans: 'bottom_jeans_room', camopants: 'bottom_camopants_room',
+    baggyjeans: 'bottom_baggyjeans_room', trousers: 'bottom_trousers_room',
+    utilitypants: 'bottom_utilitypants_room', knightpants: 'bottom_knightpants_room',
+    cargopants: 'bottom_cargopants_room', fishnet: 'bottom_fishnet_room',
+  };
+  if (roomPngBottomPrefix[a.bottom] && a.top !== 'dress') {
+    const cFrame = walkFrame >= 1 && walkFrame <= 4 ? walkFrame : 1;
+    const cKey = `${roomPngBottomPrefix[a.bottom]}_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      const bx = Math.round(12 - cImg.naturalWidth / 2);
+      const by = oY + 48 - cImg.naturalHeight;
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, bx, by, cImg.naturalWidth, cImg.naturalHeight);
+      const snap = x.getImageData(bx + ROOM_SPRITE_XPAD, by + SPRITE_HAT_HEADROOM, cImg.naturalWidth, cImg.naturalHeight);
+      return { data: snap, cx: bx + ROOM_SPRITE_XPAD, cy: by + SPRITE_HAT_HEADROOM, cw: cImg.naturalWidth, ch: cImg.naturalHeight };
+    }
+  }
+  return null;
+}
+
+// ══════════════════════════════════════
+// TOP — room scale
+// ══════════════════════════════════════
+export function drawRoomTop(
+  x: CanvasRenderingContext2D,
+  a: AvatarConfig,
+  oY: number,
+  pantsSnap: { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null
+): void {
+  const topDark  = darken(a.topColor, 18);
+  const topLight = lighten(a.topColor, 18);
+  x.fillStyle = a.topColor;
+  if (a.top === 'tank') {
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 14, 16, 14);
+    x.fillStyle = a.topColor;
+    x.fillRect(7, oY + 14, 2, 2);
+    x.fillRect(15, oY + 14, 2, 2);
+    x.fillRect(7, oY + 16, 10, 12);
+  } else if (a.top === 'tshirt') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(6, oY + 18, 12, 10);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(9, oY + 14, 6, 1);
+  } else if (a.top === 'hoodie') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(6, oY + 18, 12, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(3, oY + 18, 3, 12);
+    x.fillRect(18, oY + 18, 3, 12);
+    x.fillRect(9, oY + 14, 6, 1);
+    x.fillRect(9, oY + 22, 6, 4);
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(11, oY + 14, 1, 4);
+    x.fillRect(13, oY + 14, 1, 4);
+    x.globalAlpha = 1;
+  } else if (a.top === 'jacket') {
+  } else if (a.top === 'dress') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(6, oY + 18, 12, 10);
+    x.fillRect(4, oY + 28, 16, 16);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 27, 16, 2);
+    x.fillStyle = darken(a.topColor, 35);
+    x.fillRect(6, oY + 32, 12, 2);
+    x.fillRect(11, oY + 31, 2, 4);
+  } else if (a.top === 'vest') {
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 14, 16, 14);
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = a.topColor;
+    x.fillRect(6, oY + 14, 5, 14);
+    x.fillRect(13, oY + 14, 5, 14);
+    x.fillStyle = topDark;
+    x.fillRect(11, oY + 15, 2, 12);
+    x.fillRect(6, oY + 14, 12, 2);
+  } else if (a.top === 'trenchcoat') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(3, oY + 18, 18, 10);
+    x.fillRect(3, oY + 18, 2, 10);
+    x.fillRect(19, oY + 18, 2, 10);
+    x.fillRect(3, oY + 27, 18, 16);
+    x.fillStyle = topDark;
+    x.fillRect(11, oY + 15, 2, 29);
+    x.fillStyle = topLight;
+    x.fillRect(4, oY + 14, 4, 5);
+    x.fillRect(16, oY + 14, 4, 5);
+    x.fillStyle = topDark;
+    x.fillRect(4, oY + 27, 16, 1);
+    x.fillStyle = darken(a.topColor, 35);
+    x.fillRect(4, oY + 32, 16, 2);
+    x.fillRect(11, oY + 31, 2, 4);
+  } else if (a.top === 'croptop') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(6, oY + 18, 12, 6);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillRect(6, oY + 24, 12, 4);
+    x.fillStyle = topDark;
+    x.fillRect(9, oY + 14, 6, 1);
+  } else if (a.top === 'jersey') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(3, oY + 18, 3, 12);
+    x.fillRect(18, oY + 18, 3, 12);
+    x.fillRect(11, oY + 15, 2, 13);
+    x.fillRect(4, oY + 17, 2, 2);
+    x.fillRect(18, oY + 17, 2, 2);
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(4, oY + 22, 16, 2);
+    x.globalAlpha = 1;
+    x.fillStyle = topDark;
+    x.fillRect(8, oY + 14, 8, 1);
+  } else if (a.top === 'longsleeve') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = topDark;
+    x.fillRect(3, oY + 18, 3, 12);
+    x.fillRect(18, oY + 18, 3, 12);
+    x.fillRect(8, oY + 14, 8, 1);
+  } else if (a.top === 'polo') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(11, oY + 15, 2, 6);
+    x.fillStyle = topLight; x.globalAlpha = 0.6;
+    x.fillRect(8, oY + 14, 8, 1);
+    x.globalAlpha = 1;
+  } else if (a.top === 'flannel' || a.top === 'bomber') {
+  } else if (a.top === 'turtleneck') {
+    x.fillRect(3, oY + 14, 18, 4);
+    x.fillRect(4, oY + 18, 16, 10);
+    x.fillRect(6, oY + 28, 12, 2);
+    x.fillRect(7, oY + 12, 10, 2);
+    x.fillStyle = a.skinColor;
+    x.fillRect(4, oY + 18, 2, 10);
+    x.fillRect(18, oY + 18, 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(8, oY + 13, 8, 1);
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest') {
+  }
+
+  // ── PNG top detail overlay ──
+  const roomTopPngKey = ({
+    jacket:       'top_jacket_room',
+    bomber:       'top_bomber_room',
+    flannel:      'top_flannel_room',
+    robe:         'top_robe_room',
+    bitcoinshirt: 'top_bitcoinshirt_room',
+    ostrichshirt: 'top_ostrichshirt_room',
+    camoshirt:    'top_camoshirt_room',
+    tunic:        'top_tunic_room',
+    skindress:    'top_skindress_room',
+    knightchest:  'top_knightchest_room',
+  } as Record<string, string>)[a.top];
+  if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
+    const tImg = imgCache.get(roomTopPngKey)!;
+    const tx = Math.round(12 - tImg.naturalWidth / 2);
+    const roomTopYOffset = a.top === 'bomber' ? -1 : a.top === 'jacket' ? -1 : 0;
+    x.fillStyle = a.topColor;
+    drawHairImg(x, roomTopPngKey, tx, oY + 14 + roomTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
+  }
+
+  if (pantsSnap) restorePantsThroughSkinReveals(x, pantsSnap.cx, pantsSnap.cy, pantsSnap.cw, pantsSnap.ch, pantsSnap.data, a.skinColor);
+
+  // ── Overalls straps ──
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe', 'skindress', 'knightchest', 'bomber', 'flannel', 'tunic'].includes(a.top);
+  if (a.bottom === 'overalls' && strapOverTop) {
+    x.fillStyle = a.bottomColor;
+    x.fillRect(8,  oY + 14, 3, 16);
+    x.fillRect(13, oY + 14, 3, 16);
+    x.fillStyle = '#d4af37'; x.globalAlpha = 0.7;
+    x.fillRect(8,  oY + 19, 3, 2);
+    x.fillRect(13, oY + 19, 3, 2);
+    x.globalAlpha = 1;
+  }
+}
+
+// ══════════════════════════════════════
+// PNG ACCESSORIES — room scale
+// ══════════════════════════════════════
+
+/** Wings / sword — drawn before body so they appear behind */
+export function drawRoomPngAccBehind(x: CanvasRenderingContext2D, acc: string, color: string, oY: number): void {
+  if (acc === 'wings') {
+    const img = imgCache.get('acc_wings_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_wings_room', Math.round(12 - img.naturalWidth / 2), oY + 2, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'sword') {
+    const img = imgCache.get('acc_sword_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_sword_room', Math.round(12 - img.naturalWidth / 2), oY + 5, img.naturalWidth, img.naturalHeight); }
+  }
+}
+
+/** Cape / floatie — drawn over clothes but under hair/hat */
+export function drawRoomPngAccOver(x: CanvasRenderingContext2D, acc: string, color: string, oY: number): void {
+  if (acc === 'cape') {
+    const img = imgCache.get('acc_cape_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_room', Math.round(12 - img.naturalWidth / 2), oY + 13, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ostirchfloatie') {
+    const img = imgCache.get('acc_ostirchfloatie_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ostirchfloatie_room', Math.round(12 - img.naturalWidth / 2), oY + 14, img.naturalWidth, img.naturalHeight); }
+  }
+}
+
+/** Balloon — floats above everything, string anchored at wrist */
+export function drawRoomPngAccAbove(x: CanvasRenderingContext2D, acc: string, color: string, oY: number): void {
+  if (acc === 'ballon') {
+    const img = imgCache.get('acc_ballon_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballon_room', -6, oY - 16, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ballonbitcoin') {
+    const img = imgCache.get('acc_ballonbitcoin_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballonbitcoin_room', -6, oY - 16, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ballonostrich') {
+    const img = imgCache.get('acc_ballonostrich_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballonostrich_room', -6, oY - 16, img.naturalWidth, img.naturalHeight); }
   }
 }

@@ -1,6 +1,6 @@
 import type { AvatarConfig } from '../../stores/avatarStore';
-import { imgCache, ITEM_DEFS, HAIR_DEFS, HUB_HEAD_W, ROOM_HEAD_W } from './assets';
-import { drawHairImg, drawImgItemAuto } from './drawCore';
+import { imgCache, ITEM_DEFS, HAIR_DEFS, HUB_HEAD_W, ROOM_HEAD_W, SPRITE_HAT_HEADROOM } from './assets';
+import { drawHairImg, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
 import { lighten, darken } from './helpers';
 
 // ══════════════════════════════════════
@@ -461,5 +461,258 @@ export function drawHubAccessory(x: CanvasRenderingContext2D, acc: string, cx: n
         const hatY = hy + s + 2;
         drawImgItemAuto(x, acc, cx, hatY, HUB_HEAD_W, HUB_HEAD_W / ROOM_HEAD_W);
       }
+  }
+}
+
+// ══════════════════════════════════════
+// BOTTOM — hub scale
+// ══════════════════════════════════════
+export function drawHubBottom(
+  x: CanvasRenderingContext2D,
+  a: AvatarConfig,
+  cx: number, headY: number, s: number,
+  walkFrame: number
+): { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null {
+  const legY = headY + 12 * s - 3;
+  const legLY = walkFrame < 0 ? 0 : (walkFrame === 1 ? -1 : walkFrame === 3 ? 1 : 0);
+  const legRY = walkFrame < 0 ? 0 : (walkFrame === 1 ? 1 : walkFrame === 3 ? -1 : 0);
+
+  // ── Procedural bottoms ──
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+  if (a.top !== 'dress' && !isPngBottom) {
+    x.fillStyle = a.bottomColor;
+    if (a.bottom === 'skirt') {
+      x.fillRect(cx - 2 * s, legY + 1, 4 * s, 2 * s);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 1, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+    } else if (a.bottom === 'miniskirt') {
+      x.fillRect(cx - 2 * s, legY + 1, 4 * s, 1 * s);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 1, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+    } else {
+      x.fillRect(cx - 2 * s, legY, 4 * s, 3);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 2, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+      x.fillRect(cx - 2 * s, legY + legLY, 2 * s - 1, 7 * s);
+      x.fillRect(cx + 1,     legY + legRY, 2 * s - 1, 7 * s);
+      if (a.bottom === 'shorts') {
+        x.fillStyle = a.skinColor;
+        x.fillRect(cx - 2 * s, legY + 4 * s + legLY, 2 * s - 1, 3 * s);
+        x.fillRect(cx + 1,     legY + 4 * s + legRY, 2 * s - 1, 3 * s);
+      }
+    }
+  }
+
+  // ── PNG bottoms ──
+  const hubPngBottomPrefix: Record<string, string> = {
+    jeans: 'bottom_jeans_hub', camopants: 'bottom_camopants_hub',
+    baggyjeans: 'bottom_baggyjeans_hub', trousers: 'bottom_trousers_hub',
+    utilitypants: 'bottom_utilitypants_hub', knightpants: 'bottom_knightpants_hub',
+    cargopants: 'bottom_cargopants_hub', fishnet: 'bottom_fishnet_hub',
+  };
+  if (hubPngBottomPrefix[a.bottom] && a.top !== 'dress') {
+    const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
+    const cKey = `${hubPngBottomPrefix[a.bottom]}_${cFrame}`;
+    const cImg = imgCache.get(cKey);
+    if (cImg) {
+      const bx = Math.round(cx - cImg.naturalWidth / 2);
+      const by = legY + 14 - cImg.naturalHeight;
+      x.fillStyle = a.bottomColor;
+      drawHairImg(x, cKey, bx, by, cImg.naturalWidth, cImg.naturalHeight);
+      const snap = x.getImageData(bx, by + SPRITE_HAT_HEADROOM, cImg.naturalWidth, cImg.naturalHeight);
+      return { data: snap, cx: bx, cy: by + SPRITE_HAT_HEADROOM, cw: cImg.naturalWidth, ch: cImg.naturalHeight };
+    }
+  }
+  return null;
+}
+
+// ══════════════════════════════════════
+// TOP — hub scale
+// ══════════════════════════════════════
+export function drawHubTop(
+  x: CanvasRenderingContext2D,
+  a: AvatarConfig,
+  cx: number, headY: number, s: number,
+  pantsSnap: { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null
+): void {
+  const topDark  = darken(a.topColor, 18);
+  const topLight = lighten(a.topColor, 18);
+  const tw = 3 * s;
+  x.fillStyle = a.topColor;
+  if (a.top === 'tank') {
+    x.fillStyle = a.skinColor;
+    x.fillRect(cx - 4, headY + 5 * s, 8, 2);
+    x.fillStyle = a.topColor;
+    x.fillRect(cx - 4, headY + 5 * s, 2, 2);
+    x.fillRect(cx + 2,  headY + 5 * s, 2, 2);
+    x.fillRect(cx - 4, headY + 5 * s + 2, 8, 8);
+  } else if (a.top === 'tshirt') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 7);
+  } else if (a.top === 'hoodie') {
+    x.fillRect(cx - tw + 1, headY + 5 * s, 4, 1);
+    x.fillRect(cx + 1, headY + 5 * s, 4, 1);
+    x.fillRect(cx - tw, headY + 5 * s + 1, tw * 2, 10);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 1 * s, headY + 5 * s, 2 * s, 1 * s);
+    x.fillRect(cx - 1.5 * s, headY + 5 * s + 5, 3 * s, 2 * s);
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(cx - 0.5 * s, headY + 5 * s + 3, 0.5 * s, 2 * s);
+    x.fillRect(cx, headY + 5 * s + 3, 0.5 * s, 2 * s);
+    x.globalAlpha = 1;
+  } else if (a.top === 'jacket') {
+  } else if (a.top === 'dress') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 6);
+    x.fillRect(cx - tw, headY + 5 * s + 10, tw * 2, 16);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 5 * s + 9, tw * 2, 1);
+    x.fillStyle = darken(a.topColor, 35);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 13, 4 * s, 1);
+    x.fillRect(cx - 0.5 * s, headY + 5 * s + 12, 1 * s, 3);
+  } else if (a.top === 'vest') {
+    x.fillStyle = a.topColor;
+    x.fillRect(cx - 1 * s - 1, headY + 5 * s, 2 * s + 2, 11);
+    x.fillStyle = topDark; x.globalAlpha = 0.8;
+    x.fillRect(cx - 1, headY + 5 * s, 2, 11);
+    x.globalAlpha = 1;
+  } else if (a.top === 'trenchcoat') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 7 * s - 2);
+    x.fillRect(cx - tw, headY + 12 * s - 2, tw * 2, 5 * s + 3);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 0.5 * s, headY + 5 * s, 1 * s, 12 * s - 1);
+    x.fillStyle = topLight;
+    x.fillRect(cx - tw, headY + 5 * s, 2 * s, 4 * s - 1);
+    x.fillRect(cx + tw - 2 * s, headY + 5 * s, 2 * s, 4 * s - 1);
+    x.fillStyle = darken(a.topColor, 35);
+    x.fillRect(cx - tw, headY + 11 * s, tw * 2, 1 * s);
+    x.fillRect(cx - 0.5 * s, headY + 10 * s, 1 * s, 3 * s);
+    x.globalAlpha = 1;
+  } else if (a.top === 'croptop') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 3);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 1);
+  } else if (a.top === 'jersey') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - tw, headY + 5 * s + 4, tw * 2, 7);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 5 * s + 4, 1 * s, 7);
+    x.fillRect(cx + tw - 1 * s, headY + 5 * s + 4, 1 * s, 7);
+    x.fillRect(cx - 0.5 * s, headY + 5 * s + 1, 1 * s, 10);
+    x.fillStyle = topLight; x.globalAlpha = 0.45;
+    x.fillRect(cx - tw, headY + 5 * s + 6, tw * 2, 1);
+    x.globalAlpha = 1;
+  } else if (a.top === 'longsleeve') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - tw, headY + 5 * s + 4, tw * 2, 7);
+    x.fillStyle = topDark;
+    x.fillRect(cx - tw, headY + 5 * s + 1, 1 * s, 10);
+    x.fillRect(cx + tw - 1 * s, headY + 5 * s + 1, 1 * s, 10);
+  } else if (a.top === 'polo') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 7);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 0.5 * s, headY + 5 * s, 1 * s, 4);
+    x.fillStyle = topLight; x.globalAlpha = 0.6;
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 1);
+    x.globalAlpha = 1;
+  } else if (a.top === 'turtleneck') {
+    x.fillRect(cx - tw, headY + 5 * s, tw * 2, 4);
+    x.fillRect(cx - 2 * s, headY + 5 * s + 4, 4 * s, 7);
+    x.fillRect(cx - 1.5 * s, headY + 4 * s, 3 * s, 2);
+    x.fillStyle = topDark;
+    x.fillRect(cx - 1.5 * s, headY + 5 * s, 3 * s, 1);
+  }
+
+  // ── PNG top detail overlay ──
+  const hubTopPngKey = ({
+    jacket:      'top_jacket_hub',
+    bomber:      'top_bomber_hub',
+    flannel:     'top_flannel_hub',
+    robe:        'top_robe_hub',
+    bitcoinshirt:'top_bitcoinshirt_hub',
+    ostrichshirt:'top_ostrichshirt_hub',
+    camoshirt:   'top_camoshirt_hub',
+    tunic:       'top_tunic_hub',
+    skindress:   'top_skindress_hub',
+    knightchest: 'top_knightchest_hub',
+  } as Record<string, string>)[a.top];
+  if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
+    const tImg = imgCache.get(hubTopPngKey)!;
+    const tx = Math.round(cx - tImg.naturalWidth / 2);
+    const hubTopYOffset = a.top === 'bomber' ? -1 : 0;
+    x.fillStyle = a.topColor;
+    drawHairImg(x, hubTopPngKey, tx, headY + 5 * s + hubTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
+  }
+
+  if (pantsSnap) restorePantsThroughSkinReveals(x, pantsSnap.cx, pantsSnap.cy, pantsSnap.cw, pantsSnap.ch, pantsSnap.data, a.skinColor);
+
+  // ── Overalls straps ──
+  const strapOverTop = !['hoodie', 'jacket', 'trenchcoat', 'vest', 'robe', 'skindress', 'knightchest', 'bomber', 'flannel', 'tunic'].includes(a.top);
+  if (a.bottom === 'overalls' && strapOverTop) {
+    x.fillStyle = a.bottomColor;
+    x.fillRect(cx - 1 * s,   headY + 5 * s, 0.5 * s + 1, 7 * s - 1);
+    x.fillRect(cx + 0.5 * s, headY + 5 * s, 0.5 * s + 1, 7 * s - 1);
+    x.fillStyle = '#d4af37'; x.globalAlpha = 0.7;
+    x.fillRect(cx - 1 * s,   headY + 8 * s - 1, 0.5 * s + 1, 1 * s);
+    x.fillRect(cx + 0.5 * s, headY + 8 * s - 1, 0.5 * s + 1, 1 * s);
+    x.globalAlpha = 1;
+  }
+}
+
+// ══════════════════════════════════════
+// PNG ACCESSORIES — hub scale
+// ══════════════════════════════════════
+
+/** Wings / sword — drawn before body so they appear behind */
+export function drawHubPngAccBehind(x: CanvasRenderingContext2D, acc: string, color: string, skinColor: string, cx: number, hy: number, s: number): void {
+  if (acc === 'wings') {
+    const img = imgCache.get('acc_wings_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_wings_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 7, img.naturalWidth, img.naturalHeight); x.fillStyle = skinColor; }
+  }
+  if (acc === 'sword') {
+    const img = imgCache.get('acc_sword_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_sword_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 4, img.naturalWidth, img.naturalHeight); x.fillStyle = skinColor; }
+  }
+}
+
+/** Cape / floatie — drawn over clothes but under hair/hat */
+export function drawHubPngAccOver(x: CanvasRenderingContext2D, acc: string, color: string, cx: number, hy: number, s: number): void {
+  if (acc === 'cape') {
+    const img = imgCache.get('acc_cape_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ostirchfloatie') {
+    const img = imgCache.get('acc_ostirchfloatie_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ostirchfloatie_hub', Math.round(cx - img.naturalWidth / 2), hy + 5 * s, img.naturalWidth, img.naturalHeight); }
+  }
+}
+
+/** Balloon — floats above everything, string anchored at wrist */
+export function drawHubPngAccAbove(x: CanvasRenderingContext2D, acc: string, color: string, cx: number, hy: number, _s: number): void {
+  if (acc === 'ballon') {
+    const img = imgCache.get('acc_ballon_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballon_hub', Math.round(cx - 14), hy - 10, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ballonbitcoin') {
+    const img = imgCache.get('acc_ballonbitcoin_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballonbitcoin_hub', Math.round(cx - 14), hy - 10, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'ballonostrich') {
+    const img = imgCache.get('acc_ballonostrich_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_ballonostrich_hub', Math.round(cx - 14), hy - 10, img.naturalWidth, img.naturalHeight); }
   }
 }
