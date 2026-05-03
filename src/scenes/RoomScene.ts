@@ -10,7 +10,7 @@ import {
   clearRoomRequestHandler, clearRoomKickHandler, clearRoomGrantedHandler, clearRoomDeniedHandler,
   sendAvatarUpdate, sendNameUpdate, isPresenceReady,
 } from '../nostr/presenceService';
-import { popFeedNote, FeedEvent, getEventRate } from '../nostr/feedService';
+import { popFeedNote, FeedEvent, getEventRate, pauseFeedService, resumeFeedService } from '../nostr/feedService';
 import { getRelayManager } from '../nostr/dmService';
 import { DEFAULT_RELAYS } from '../nostr/relayManager';
 import { ChatUI } from '../ui/ChatUI';
@@ -133,6 +133,7 @@ export class RoomScene extends BaseScene {
   }
 
   create(): void {
+    if (this.roomConfig.id === 'feed') resumeFeedService();
     const myPubkey = this.registry.get('playerPubkey');
     this.isOwner = this.roomConfig.id.startsWith('myroom:') && this.roomConfig.ownerPubkey === myPubkey;
 
@@ -295,6 +296,7 @@ export class RoomScene extends BaseScene {
     }
 
     this.events.on('shutdown', () => {
+      if (this.roomConfig.id === 'feed') pauseFeedService();
       this.shutdownCommonPanels();
       BookcaseModal.destroy();
       this.pet?.destroy(); this.pet = null;

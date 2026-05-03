@@ -30,7 +30,6 @@ const INITIAL_FETCH_LIMIT = 60;
 const REFILL_FETCH_LIMIT = 30;
 const REFILL_INTERVAL_MS = 15000;
 const FEED_RELAYS = [
-  'wss://relay.nostr.band',
   'wss://nos.lol',
   'wss://relay.damus.io',
   'wss://relay.primal.net',
@@ -65,6 +64,17 @@ export function stopFeedService(): void {
   if (liveSubClose) { try { liveSubClose(); } catch (_) {} liveSubClose = null; }
   if (refillTimer) { clearInterval(refillTimer); refillTimer = null; }
   processedIds.clear();
+}
+
+export function pauseFeedService(): void {
+  if (liveSubClose) { try { liveSubClose(); } catch (_) {} liveSubClose = null; }
+  if (refillTimer) { clearInterval(refillTimer); refillTimer = null; }
+}
+
+export function resumeFeedService(): void {
+  if (!started) return;
+  startLiveSubscription();
+  startRefillPolling();
 }
 
 export function popFeedNote(): FeedEvent | null {
@@ -137,11 +147,10 @@ async function startLiveSubscription(): Promise<void> {
   try {
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
-    const relays = FEED_RELAYS;
     const since = Math.floor(Date.now() / 1000) - 300; // last 5 min
 
     const sub = pool.subscribeMany(
-      relays,
+      ['wss://relay.damus.io'],
       // @ts-ignore
       [{ kinds: [1], since }],
       {
