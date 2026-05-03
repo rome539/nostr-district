@@ -57,7 +57,7 @@ export const DEFAULT_RELAYS = [
   'wss://relay.nostr.net',
   'wss://nostr.mom',
   'wss://relay.coinos.io',
-  'wss://relay.snort.social',
+  'wss://relay.mostr.pub',
   'wss://relay1.nostrchat.io',
   'wss://nostr-01.yakihonne.com',
   'wss://nostr-02.yakihonne.com',

@@ -31,7 +31,7 @@ const RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://relay.snort.social',
+  'wss://relay.mostr.pub',
 ];
 
 export async function fetchKind0(pubkey: string): Promise<Record<string, any> | null> {

@@ -175,7 +175,7 @@ export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
     'wss://relay.ditto.pub',
     ...FALLBACK_RELAYS,
     'wss://relay.damus.io',
-    'wss://relay.snort.social',
+    'wss://relay.mostr.pub',
     'wss://nostr-pub.wellorder.net',
   ].filter((r, i, a) => a.indexOf(r) === i);
 

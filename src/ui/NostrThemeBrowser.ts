@@ -16,7 +16,7 @@ const ALL_RELAYS = [
   DITTO_RELAY,
   'wss://relay.damus.io',
   'wss://nos.lol',
-  'wss://relay.snort.social',
+  'wss://relay.mostr.pub',
   'wss://nostr.wine',
   'wss://relay.primal.net',
   'wss://nostr-pub.wellorder.net',
