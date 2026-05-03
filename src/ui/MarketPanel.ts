@@ -229,7 +229,7 @@ export class MarketPanel {
 
       <!-- Pagination -->
       <div id="mp-pagination" style="
-        display:flex;align-items:center;justify-content:${MarketPanel._isMobile() ? 'flex-end' : 'center'};gap:6px;
+        display:flex;align-items:center;justify-content:flex-end;gap:6px;
         padding:5px 0 2px;flex-shrink:0;min-height:24px;
       "></div>
 
