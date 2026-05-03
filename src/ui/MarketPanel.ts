@@ -73,8 +73,9 @@ function esc(s: string): string {
 
 export class MarketPanel {
   // ─── STATE ──────────────────────────────────────────────────
-  private static el:           HTMLElement | null = null;
-  private static escHandler:   ((e: KeyboardEvent) => void) | null = null;
+  private static el:              HTMLElement | null = null;
+  private static escHandler:      ((e: KeyboardEvent) => void) | null = null;
+  private static outsideHandler:  ((e: MouseEvent | TouchEvent) => void) | null = null;
   private static _group:       Group    = 'all';
   private static _category:    Category = 'all';
   private static buying:       string | null = null;
@@ -95,7 +96,7 @@ export class MarketPanel {
     }
   }
 
-  private static _isMobile(): boolean { return window.innerWidth < 600; }
+  private static _isMobile(): boolean { return window.innerWidth < 380; }
 
   // ─── LIFECYCLE — open / destroy ─────────────────────────────
   static isOpen(): boolean { return !!document.getElementById(PANEL_ID); }
@@ -112,6 +113,17 @@ export class MarketPanel {
     MarketPanel._render();
     MarketPanel.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') MarketPanel.destroy(); };
     window.addEventListener('keydown', MarketPanel.escHandler);
+    // Close on click/touch outside the panel — use setTimeout so this tick's open-click doesn't fire immediately
+    setTimeout(() => {
+      MarketPanel.outsideHandler = (e: MouseEvent | TouchEvent) => {
+        const target = e.type === 'touchend' ? (e as TouchEvent).changedTouches[0]?.target : (e as MouseEvent).target;
+        if (MarketPanel.el && target instanceof Node && !MarketPanel.el.contains(target)) {
+          MarketPanel.destroy();
+        }
+      };
+      document.addEventListener('mousedown', MarketPanel.outsideHandler as (e: MouseEvent) => void);
+      document.addEventListener('touchend',  MarketPanel.outsideHandler as (e: TouchEvent) => void, { passive: true });
+    }, 0);
   }
 
   static destroy(): void {
@@ -122,6 +134,11 @@ export class MarketPanel {
     if (MarketPanel.escHandler) {
       window.removeEventListener('keydown', MarketPanel.escHandler);
       MarketPanel.escHandler = null;
+    }
+    if (MarketPanel.outsideHandler) {
+      document.removeEventListener('mousedown', MarketPanel.outsideHandler as (e: MouseEvent) => void);
+      document.removeEventListener('touchend',  MarketPanel.outsideHandler as (e: TouchEvent) => void);
+      MarketPanel.outsideHandler = null;
     }
   }
 
@@ -941,7 +958,7 @@ export class MarketPanel {
   }
 
   // ─── ITEMS LIST — filter, sort, paginate, render rows ───────
-  private static readonly ITEMS_PER_PAGE = 16;
+  private static readonly ITEMS_PER_PAGE = 20;
 
   private static _renderItems(canBuy: boolean): void {
     const container  = MarketPanel.el?.querySelector('#mp-items') as HTMLElement | null;
@@ -1014,6 +1031,7 @@ export class MarketPanel {
 
     const saleItem = getWeeklySaleItem();
 
+    const rowPad = mobile ? '8px 10px' : '6px 8px';
     items.forEach(item => {
       const owned      = isOwned(item.slot, item.value);
       const isCosmetic = COSMETIC_SLOTS.has(item.slot);
@@ -1030,7 +1048,7 @@ export class MarketPanel {
       row.className = 'mp-row';
       row.dataset.id = item.id;
       row.style.cssText = `
-        display:flex;align-items:center;gap:8px;padding:8px 10px;
+        display:flex;align-items:center;gap:6px;padding:${rowPad};
         border-radius:5px;cursor:default;
         background:${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 7%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 7%,transparent)'};
         border:1px solid ${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 28%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 15%,transparent)'};
@@ -1051,7 +1069,7 @@ export class MarketPanel {
           </div>`;
       })();
 
-      const btnPad = mobile ? '8px 14px' : '4px 10px';
+      const btnPad = mobile ? '8px 14px' : '6px 10px';
       row.innerHTML = `
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="color:var(--nd-text);font-size:12px;font-weight:bold;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${colorSwatch}${esc(item.name)}</div>

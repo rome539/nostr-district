@@ -398,7 +398,7 @@ export class ComputerUI {
     const allOptions = (optMap[this.currentSlot] || []).filter(opt => isOwned(this.currentSlot, opt));
     const current = valMap[this.currentSlot] || '';
 
-    const PAGE_SIZE = 12;
+    const PAGE_SIZE = 21;
     const totalPages = Math.ceil(allOptions.length / PAGE_SIZE);
     this.wardrobePage = Math.min(this.wardrobePage, Math.max(0, totalPages - 1));
     const pageOpts = allOptions.slice(this.wardrobePage * PAGE_SIZE, (this.wardrobePage + 1) * PAGE_SIZE);
