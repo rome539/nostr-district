@@ -229,8 +229,8 @@ export class MarketPanel {
 
       <!-- Pagination -->
       <div id="mp-pagination" style="
-        display:flex;align-items:center;justify-content:flex-end;gap:6px;
-        padding:5px 0 2px;flex-shrink:0;min-height:24px;
+        display:flex;align-items:center;justify-content:flex-end;gap:4px;
+        padding:2px 0 0;flex-shrink:0;
       "></div>
 
       <!-- Status -->
@@ -987,8 +987,8 @@ export class MarketPanel {
         pagination.innerHTML = '';
       } else {
         const btnStyle = (disabled: boolean) => `
-          padding:6px 14px;border-radius:4px;cursor:${disabled ? 'default' : 'pointer'};
-          font-family:'Courier New',monospace;font-size:11px;font-weight:bold;
+          padding:4px 10px;border-radius:4px;cursor:${disabled ? 'default' : 'pointer'};
+          font-family:'Courier New',monospace;font-size:10px;font-weight:bold;
           background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
           border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
           color:${disabled ? 'color-mix(in srgb,var(--nd-subtext) 30%,transparent)' : 'var(--nd-subtext)'};
