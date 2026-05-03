@@ -75,7 +75,6 @@ export class MarketPanel {
   // ─── STATE ──────────────────────────────────────────────────
   private static el:              HTMLElement | null = null;
   private static escHandler:      ((e: KeyboardEvent) => void) | null = null;
-  private static outsideHandler:  ((e: MouseEvent | TouchEvent) => void) | null = null;
   private static _group:       Group    = 'all';
   private static _category:    Category = 'all';
   private static buying:       string | null = null;
@@ -113,32 +112,24 @@ export class MarketPanel {
     MarketPanel._render();
     MarketPanel.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') MarketPanel.destroy(); };
     window.addEventListener('keydown', MarketPanel.escHandler);
-    // Close on click/touch outside the panel — use setTimeout so this tick's open-click doesn't fire immediately
-    setTimeout(() => {
-      MarketPanel.outsideHandler = (e: MouseEvent | TouchEvent) => {
-        const target = e.type === 'touchend' ? (e as TouchEvent).changedTouches[0]?.target : (e as MouseEvent).target;
-        if (MarketPanel.el && target instanceof Node && !MarketPanel.el.contains(target)) {
-          MarketPanel.destroy();
-        }
-      };
-      document.addEventListener('mousedown', MarketPanel.outsideHandler as (e: MouseEvent) => void);
-      document.addEventListener('touchend',  MarketPanel.outsideHandler as (e: TouchEvent) => void, { passive: true });
-    }, 0);
+    // Backdrop — sits behind the panel, closes on click/tap
+    const backdrop = document.createElement('div');
+    backdrop.id = 'mp-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:3999;';
+    backdrop.addEventListener('click', () => MarketPanel.destroy());
+    backdrop.addEventListener('touchend', () => MarketPanel.destroy(), { passive: true });
+    document.body.appendChild(backdrop);
   }
 
   static destroy(): void {
     MarketPanel._cancelPreviewAnim();
     document.getElementById(PANEL_ID)?.remove();
     document.getElementById('mp-preview')?.remove();
+    document.getElementById('mp-backdrop')?.remove();
     MarketPanel.el = null;
     if (MarketPanel.escHandler) {
       window.removeEventListener('keydown', MarketPanel.escHandler);
       MarketPanel.escHandler = null;
-    }
-    if (MarketPanel.outsideHandler) {
-      document.removeEventListener('mousedown', MarketPanel.outsideHandler as (e: MouseEvent) => void);
-      document.removeEventListener('touchend',  MarketPanel.outsideHandler as (e: TouchEvent) => void);
-      MarketPanel.outsideHandler = null;
     }
   }
 
@@ -238,7 +229,7 @@ export class MarketPanel {
 
       <!-- Pagination -->
       <div id="mp-pagination" style="
-        display:flex;align-items:center;justify-content:center;gap:6px;
+        display:flex;align-items:center;justify-content:${MarketPanel._isMobile() ? 'flex-end' : 'center'};gap:6px;
         padding:5px 0 2px;flex-shrink:0;min-height:24px;
       "></div>
 
