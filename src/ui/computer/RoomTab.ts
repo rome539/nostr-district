@@ -623,9 +623,9 @@ export class RoomTab {
       walltapestry3:{ label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
       sworddec:       { label: 'Metal',        colors: ['#c8c8c8','#a8a8a8','#888888','#c8a060','#a07840','#805830','#6060a0','#404040'] },
       persianrugwall1:{ label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
-      persianrug:     { label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
+      persianrug:     { label: 'Fabric',       colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
       bearskin:       { label: 'Fur Color',    colors: ['#c8b89a','#a89070','#887050','#d4c4a8','#6b4c2a','#e8d8b8','#4a3020','#f0e8d0'] },
-      striperug:      { label: 'Stripe Color', colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
+      striperug:      { label: 'Stripe Color', colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
       armchair:       { label: 'Fabric',       colors: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'] },
       plant1:         { label: 'Pot Color',    colors: ['#ffffff','#c87840','#3d2860','#8b0000','#1e3a1a','#2a1a08','#1a1a2e','#b08060'] },
       plant2:         { label: 'Pot Color',    colors: ['#ffffff','#c87840','#3d2860','#8b0000','#1e3a1a','#2a1a08','#1a1a2e','#b08060'] },
@@ -645,7 +645,7 @@ export class RoomTab {
       safe:              { label: 'Safe',         colors: ['#ffffff'] },
       neongfy:           { label: 'Sign Color',   colors: ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'] },
       neon58k:           { label: 'Sign Color',   colors: ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'] },
-      bitcoincircularrug: { label: 'Rug Tint',    colors: ['#ffffff','#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#5c4033'] },
+      bitcoincircularrug: { label: 'Rug Tint',    colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
       endtable:           { label: 'Wood Tones',  colors: ['#2a1a08','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#4a3020','#0e0c08'] },
     };
 
