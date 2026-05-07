@@ -89,6 +89,7 @@ import { GROUND_Y, P } from '../config/game.config';
 
 // s = spriteHeight / 96  (room at scale 3 is the reference; hub/woods=0.33, alley/cabin=0.67)
 const EYE_VFX_TYPES   = new Set(['cry']); // particle emitter eyes
+const NEON_COLORS     = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 const EYE_COLOR_TYPES = new Set(['blaze', 'frost', 'cosmic']); // color-cycling eyes (no particles)
 
 const EYE_CYCLE_HEX: Record<string, string[]> = {
@@ -711,10 +712,17 @@ export abstract class BaseScene extends Phaser.Scene {
                 break;
               }
             }
+            if (NEON_COLORS.has(oa.nameColor) && oa.nameAnim !== 'glow') {
+              o.nameText.setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+            }
           } else {
             const ws = this._waveCharsMap.get(pk);
             if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
-            o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+            if (NEON_COLORS.has(oa.nameColor)) {
+              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+            } else {
+              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+            }
           }
 
           // Stillness tracking
@@ -845,9 +853,16 @@ export abstract class BaseScene extends Phaser.Scene {
           break;
         }
       }
+      if (NEON_COLORS.has(av.nameColor) && av.nameAnim !== 'glow') {
+        this.playerName.setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+      }
     } else {
       if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName?.setVisible(true); }
-      this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+      if (NEON_COLORS.has(av.nameColor)) {
+        this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+      } else {
+        this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+      }
     }
 
     // Aura — only show after standing still for 1.5s

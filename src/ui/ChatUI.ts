@@ -9,6 +9,8 @@ import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 
+const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
+
 function escapeHtml(text: string): string {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
 }
@@ -142,9 +144,10 @@ export class ChatUI {
   addMessage(name: string, text: string, color: string, pubkey?: string, emojis?: { code: string; url: string }[]): void {
     const msg = document.createElement('div');
     msg.style.cssText = `margin-bottom:5px;line-height:1.4;padding:2px 0;`;
+    const neonGlow = NEON_COLORS.has(color) ? `;text-shadow:0 0 6px ${color},0 0 12px ${color}88` : '';
     const nameHtml = (pubkey && this.onNameClick)
-      ? `<span style="color:${color};font-weight:bold;cursor:pointer;" data-pk="${pubkey}">${escapeHtml(name)}</span>`
-      : `<span style="color:${color};font-weight:bold;">${escapeHtml(name)}</span>`;
+      ? `<span style="color:${color};font-weight:bold;cursor:pointer;${neonGlow}" data-pk="${pubkey}">${escapeHtml(name)}</span>`
+      : `<span style="color:${color};font-weight:bold;${neonGlow}">${escapeHtml(name)}</span>`;
     msg.innerHTML = `${nameHtml}: ${renderContent(text, emojis)}`;
     if (pubkey && this.onNameClick) {
       msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));
@@ -301,6 +304,7 @@ export class ChatUI {
         font-family:'Courier New',monospace;font-size:12px;color:${tint};
         max-width:200px;text-align:center;line-height:1.5;
         border:1px solid ${tint}33;
+        ${NEON_COLORS.has(tint) ? `text-shadow:0 0 6px ${tint},0 0 12px ${tint}88;` : ''}
       `;
       wrap.innerHTML = rendered;
       document.body.appendChild(wrap);
@@ -342,6 +346,7 @@ export class ChatUI {
       fontFamily: '"Courier New", monospace', fontSize: '12px', color: tint, align: 'center',
       backgroundColor: '#0a0014cc', padding: { x: 6, y: 4 },
       wordWrap: { width: 220, useAdvancedWrap: true },
+      ...(NEON_COLORS.has(tint) ? { shadow: { offsetX: 0, offsetY: 0, color: tint, blur: 10, fill: true } } : {}),
     });
     bubbleText.setOrigin(0.5); bubbleText.setDepth(91);
     bubbleText.setAlpha(0);

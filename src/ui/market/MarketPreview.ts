@@ -11,6 +11,7 @@ import { renderHubSprite } from '../../entities/AvatarRenderer';
 import { MarketItem, isAnimatedColor, getAnimatedColor, ROD_SKINS } from '../../stores/marketStore';
 
 const SLOT_BADGE = `color:var(--nd-subtext);background:color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);`;
+const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 
 const SLOT_LABEL: Record<string, string> = {
   hair: 'HAIR', top: 'TOP', bottom: 'BOT',
@@ -543,11 +544,14 @@ export class MarketPreview {
     };
 
     const fill = isRainbow ? rainbowGrad(nx, nx + pw) : color;
+    const isNeon = NEON_COLORS.has(color);
     ctx.fillStyle = '#0a0014ee';
     ctx.beginPath(); ctx.roundRect(nx, ny, pw, ph, 4); ctx.fill();
     ctx.fillStyle = fill; ctx.font = `bold ${fSize}px monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (isNeon) { ctx.shadowColor = color; ctx.shadowBlur = 8; }
     ctx.fillText(name, W / 2, ny + ph / 2 + 0.5, pw - pad);
+    ctx.shadowBlur = 0;
 
     const msg    = 'Hello!';
     const cfSize = 12;
@@ -562,7 +566,9 @@ export class MarketPreview {
     ctx.beginPath(); ctx.roundRect(bx, by, cpw, cph, 4); ctx.fill();
     ctx.fillStyle = bfill;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (isNeon) { ctx.shadowColor = color; ctx.shadowBlur = 8; }
     ctx.fillText(msg, W / 2, by + cph / 2 + 0.5);
+    ctx.shadowBlur = 0;
     const mid = W / 2;
     ctx.fillStyle = isRainbow ? rainbowGrad(mid - 4, mid + 4) : color + 'cc';
     ctx.beginPath();
