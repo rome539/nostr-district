@@ -48,8 +48,24 @@ function showFishUnlockToast(label: string): void {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3600);
 }
 
+const COELACANTH_ITEMS: Record<string, string> = {
+  coelacanthmount: 'Coelacanth Wall Mount',
+};
+
 export function initFishingProgress(pubkey: string): void {
   _pubkey = pubkey;
+}
+
+export function incrementCoelacanth(): void {
+  if (!_pubkey) return;
+  const data = load();
+  for (const [item, label] of Object.entries(COELACANTH_ITEMS)) {
+    if (!data.unlockedItems.includes(item)) {
+      data.unlockedItems.push(item);
+      showFishUnlockToast(label);
+    }
+  }
+  persist(data);
 }
 
 export function incrementLegendaryCatch(): void {

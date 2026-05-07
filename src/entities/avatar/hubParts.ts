@@ -1,6 +1,6 @@
 import type { AvatarConfig } from '../../stores/avatarStore';
 import { imgCache, ITEM_DEFS, HAIR_DEFS, HUB_HEAD_W, ROOM_HEAD_W, SPRITE_HAT_HEADROOM } from './assets';
-import { drawHairImg, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
+import { drawHairImg, drawHairNative, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
 import { lighten, darken } from './helpers';
 
 // ══════════════════════════════════════
@@ -10,7 +10,7 @@ export function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: numbe
   switch (hair) {
     case 'short': {
       const d = HAIR_DEFS.short;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy + 3, 4 * s, 2 * s - 1); x.fillRect(cx - 2.5 * s, hy + 1 * s + 3, 1 * s, 2 * s - 1); }
       break;
     }
@@ -20,19 +20,19 @@ export function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: numbe
       break;
     case 'long': {
       const d = HAIR_DEFS.long;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 2 * s - 1); x.fillRect(cx - 2.5 * s, hy + 1 * s - 1, 1 * s, 5 * s); x.fillRect(cx + 1.5 * s, hy + 1 * s - 1, 1 * s, 5 * s); }
       break;
     }
     case 'ponytail': {
       const d = HAIR_DEFS.ponytail;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s + 1, hy + 3, 4 * s - 1, 1); x.fillRect(cx - 2 * s, hy + 4, 4 * s, 2 * s - 2); x.fillRect(cx + 1.5 * s, hy + 1 * s + 2, 1 * s, 4 * s); }
       break;
     }
     case 'spiky': {
       const d = HAIR_DEFS.spiky;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy - 1 * s, 1 * s, 2 * s); x.fillRect(cx - 0.5 * s, hy - 2 * s, 1 * s, 2 * s); x.fillRect(cx + 1 * s, hy - 1 * s, 1 * s, 2 * s); x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); }
       break;
     }
@@ -41,55 +41,55 @@ export function drawHubHair(x: CanvasRenderingContext2D, hair: string, cx: numbe
       break;
     case 'afro': {
       const d = HAIR_DEFS.afro;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2.5 * s + 1, hy - 2 * s + 5, 5 * s - 2, 2 * s - 1); x.fillRect(cx - 3 * s + 1, hy - 1 * s + 4, 1.5 * s - 1, 2 * s); x.fillRect(cx + 1.5 * s, hy - 1 * s + 4, 1.5 * s - 1, 2 * s); x.fillRect(cx - 2 * s, hy + 4, 4 * s, 1 * s); }
       break;
     }
     case 'bun': {
       const d = HAIR_DEFS.bun;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx - 1 * s, hy - 2 * s, 2 * s, 1 * s); x.fillRect(cx - 1.5 * s, hy - 1 * s, 1 * s, 1 * s); x.fillRect(cx + 0.5 * s, hy - 1 * s, 1 * s, 1 * s); }
       break;
     }
     case 'grease': {
       const d = HAIR_DEFS.grease;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx - 2 * s, hy - 1 * s, 2 * s, 1 * s); }
       break;
     }
     case 'swept': {
       const d = HAIR_DEFS.swept;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx - 2 * s, hy - 2 * s, 3 * s, 2 * s); }
       break;
     }
     case 'pigtails': {
       const d = HAIR_DEFS.pigtails;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx - 3.5 * s, hy + 1 * s, 1 * s, 4 * s); x.fillRect(cx + 2.5 * s, hy + 1 * s, 1 * s, 4 * s); }
       break;
     }
     case 'horseshoe': {
       const d = HAIR_DEFS.horseshoe;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2.5 * s, hy, 1 * s, 3); x.fillRect(cx + 1.5 * s, hy, 1 * s, 3); }
       break;
     }
     case 'part': {
       const d = HAIR_DEFS.part;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); }
       break;
     }
     case 'partbeard': {
       const d = HAIR_DEFS.partbeard;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx - 2 * s, hy + 3 * s, 4 * s, 4 * s); }
       break;
     }
     case 'braid': {
       const d = HAIR_DEFS.braid;
-      if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy, 4 * s, 1 * s); x.fillRect(cx, hy + 1 * s, 1 * s, 6 * s); }
       break;
     }
@@ -113,15 +113,15 @@ export function drawHubHairSidesOnly(x: CanvasRenderingContext2D, hair: string, 
   switch (hair) {
     case 'long': {
       const d = HAIR_DEFS.long;
-      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairImg(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.hatHubW!, d.hatHubH!, d.flipH); }
-      else if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairNative(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.flipH); }
+      else if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2.5 * s, hy + 1 * s - 1, 1 * s, 5 * s); x.fillRect(cx + 1.5 * s, hy + 1 * s - 1, 1 * s, 5 * s); }
       break;
     }
     case 'braid': {
       const d = HAIR_DEFS.braid;
-      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairImg(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.hatHubW!, d.hatHubH!, d.flipH); }
-      else if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairNative(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.flipH); }
+      else if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx, hy + 1 * s, 1 * s, 6 * s); }
       break;
     }
@@ -138,8 +138,8 @@ export function drawHubHairSidesOnly(x: CanvasRenderingContext2D, hair: string, 
       break;
     case 'partbeard': {
       const d = HAIR_DEFS.partbeard;
-      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairImg(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.hatHubW!, d.hatHubH!, d.flipH); }
-      else if (imgCache.has(d.hubKey)) { drawHairImg(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.hubW, d.hubH, d.flipH); }
+      if (d.hatHubKey && imgCache.has(d.hatHubKey)) { drawHairNative(x, d.hatHubKey, cx + d.hatHubOffX!, hy + d.hatHubOffY!, d.flipH); }
+      else if (imgCache.has(d.hubKey)) { drawHairNative(x, d.hubKey, cx + d.hubOffX, hy + d.hubOffY, d.flipH); }
       else { x.fillRect(cx - 2 * s, hy + 3 * s, 4 * s, 4 * s); }
       break;
     }

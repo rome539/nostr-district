@@ -1,6 +1,6 @@
 import type { AvatarConfig } from '../../stores/avatarStore';
 import { imgCache, ITEM_DEFS, HAIR_DEFS, ROOM_HEAD_W, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from './assets';
-import { drawHairImg, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
+import { drawHairImg, drawHairNative, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
 import { lighten, darken } from './helpers';
 
 // ══════════════════════════════════════
@@ -10,7 +10,7 @@ export function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: numb
   switch (hair) {
     case 'short': {
       const d = HAIR_DEFS.short;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); x.fillRect(3, oY + 2, 4, 4); }
       break;
     }
@@ -20,19 +20,19 @@ export function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: numb
       break;
     case 'long': {
       const d = HAIR_DEFS.long;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); x.fillRect(3, oY + 2, 4, 10); x.fillRect(17, oY + 2, 4, 10); }
       break;
     }
     case 'ponytail': {
       const d = HAIR_DEFS.ponytail;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(6, oY, 12, 1); x.fillRect(5, oY + 1, 14, 3); x.fillRect(19, oY + 3, 1, 1); x.fillRect(17, oY + 4, 3, 8); }
       break;
     }
     case 'spiky': {
       const d = HAIR_DEFS.spiky;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY - 2, 4, 4); x.fillRect(10, oY - 4, 4, 4); x.fillRect(15, oY - 2, 4, 4); x.fillRect(5, oY, 14, 3); }
       break;
     }
@@ -41,55 +41,55 @@ export function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: numb
       break;
     case 'afro': {
       const d = HAIR_DEFS.afro;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY - 4, 14, 5); x.fillRect(3, oY - 1, 3, 4); x.fillRect(18, oY - 1, 3, 4); x.fillRect(5, oY, 14, 3); }
       break;
     }
     case 'bun': {
       const d = HAIR_DEFS.bun;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 3); x.fillRect(9, oY - 4, 6, 5); x.fillRect(11, oY - 5, 2, 2); }
       break;
     }
     case 'grease': {
       const d = HAIR_DEFS.grease;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(4, oY, 16, 4); x.fillRect(3, oY - 2, 6, 4); }
       break;
     }
     case 'swept': {
       const d = HAIR_DEFS.swept;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(4, oY, 16, 4); x.fillRect(3, oY - 4, 8, 6); }
       break;
     }
     case 'pigtails': {
       const d = HAIR_DEFS.pigtails;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); x.fillRect(1, oY + 2, 4, 10); x.fillRect(19, oY + 2, 4, 10); }
       break;
     }
     case 'horseshoe': {
       const d = HAIR_DEFS.horseshoe;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(3, oY, 3, 4); x.fillRect(18, oY, 3, 4); }
       break;
     }
     case 'part': {
       const d = HAIR_DEFS.part;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); }
       break;
     }
     case 'partbeard': {
       const d = HAIR_DEFS.partbeard;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); x.fillRect(5, oY + 8, 14, 8); }
       break;
     }
     case 'braid': {
       const d = HAIR_DEFS.braid;
-      if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY, 14, 4); x.fillRect(9, oY + 4, 6, 10); }
       break;
     }
@@ -114,15 +114,15 @@ export function drawRoomHairSidesOnly(x: CanvasRenderingContext2D, hair: string,
   switch (hair) {
     case 'long': {
       const d = HAIR_DEFS.long;
-      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairImg(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.hatRoomW!, d.hatRoomH!, d.flipH); }
-      else if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairNative(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.flipH); }
+      else if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(3, oY + 2, 4, 10); x.fillRect(17, oY + 2, 4, 10); }
       break;
     }
     case 'braid': {
       const d = HAIR_DEFS.braid;
-      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairImg(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.hatRoomW!, d.hatRoomH!, d.flipH); }
-      else if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairNative(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.flipH); }
+      else if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(9, oY + 4, 6, 10); }
       break;
     }
@@ -139,8 +139,8 @@ export function drawRoomHairSidesOnly(x: CanvasRenderingContext2D, hair: string,
       break;
     case 'partbeard': {
       const d = HAIR_DEFS.partbeard;
-      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairImg(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.hatRoomW!, d.hatRoomH!, d.flipH); }
-      else if (imgCache.has(d.roomKey)) { drawHairImg(x, d.roomKey, d.roomX, oY + d.roomY, d.roomW, d.roomH, d.flipH); }
+      if (d.hatRoomKey && imgCache.has(d.hatRoomKey)) { drawHairNative(x, d.hatRoomKey, d.hatRoomX!, oY + d.hatRoomY!, d.flipH); }
+      else if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
       else { x.fillRect(5, oY + 6, 14, 8); }
       break;
     }

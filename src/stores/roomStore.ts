@@ -16,7 +16,12 @@ export type WallTheme =
   | 'void'       // near-black minimal
   | 'rose'       // deep dusty rose / mauve
   | 'ocean'      // deep teal-blue
-  | 'rust';      // industrial rust orange
+  | 'rust'       // industrial rust orange
+  | 'cityview'   // floor-to-ceiling windows with night city skyline
+  | 'cabin'       // log cabin wall with stone fireplace
+  | 'dungeon'     // dungeon stone PNG wall
+  | 'brickwall'   // brick wall PNG
+  | 'oldpaperwall'; // old paper/worn wall PNG
 
 export type FloorStyle =
   | 'hardwood'   // original purple wood planks
@@ -27,18 +32,21 @@ export type FloorStyle =
   | 'marble'     // white with gray veins
   | 'tatami'     // japanese woven mat
   | 'hex'        // hexagonal tile pattern
-  | 'bamboo';    // vertical bamboo stalks
+  | 'bamboo'          // vertical bamboo stalks
+  | 'dungeon'         // dungeon stone PNG floor
+  | 'dirtfloor'       // dirt floor PNG
+  | 'oldwoodenfloor'; // old wooden floor PNG
 
 export type LightingMood =
-  | 'teal'       // original teal accent
-  | 'pink'       // neon pink
-  | 'purple'     // deep purple
-  | 'amber'      // warm gold
-  | 'red'        // moody red
-  | 'white'      // neutral bright
-  | 'cyan'       // electric cyan
-  | 'lime'       // acid green
-  | 'orange';    // warm neon orange
+  | 'teal'
+  | 'pink'
+  | 'purple'
+  | 'amber'
+  | 'red'
+  | 'white'
+  | 'cyan'
+  | 'lime'
+  | 'orange';
 
 export type FurnitureId =
   | 'desk'       // computer desk (always present — it has the terminal)
@@ -64,7 +72,36 @@ export type FurnitureId =
   | 'record_crates' // milk crates full of vinyl records
   | 'trunk'         // vintage wooden storage trunk
   | 'bookstack'     // messy pile of books on the floor
-  | 'bar_cart';     // rolling bar cart with bottles
+  | 'bar_cart'      // rolling bar cart with bottles
+  | 'walltapestry1' // square wall tapestry
+  | 'walltapestry2' // tall wall tapestry
+  | 'walltapestry3' // large wall tapestry
+  | 'sworddec'       // decorative sword wall mount
+  | 'persianrugwall1' // persian rug wall hanging
+  | 'persianrug'      // persian rug floor item
+  | 'bearskin'        // bearskin rug
+  | 'striperug'       // striped area rug
+  | 'armchair'        // arm chair
+  | 'plant1'          // potted plant variant 1
+  | 'plant2'          // potted plant variant 2
+  | 'plant3'          // potted plant variant 3
+  | 'plant4'          // potted plant variant 4
+  | 'plant5'          // potted plant variant 5
+  | 'nostrsign'       // NOSTR neon sign (wall)
+  | 'plant6'          // potted plant variant 6
+  | 'cactus'          // cactus in a pot
+  | 'daffodils'       // daffodil flower pot
+  | 'neonskull'       // skull neon sign (wall)
+  | 'neoncoffee'      // coffee neon sign (wall)
+  | 'decoratedcouch'    // decorated variant couch
+  | 'decoratedarmchair' // decorated variant arm chair
+  | 'tigerskin'         // tiger skin rug (floor)
+  | 'coelacanthmount'   // coelacanth wall trophy mount (earned by catching the legendary fish)
+  | 'safe'             // heavy floor safe
+  | 'neongfy'          // GFY neon sign (wall)
+  | 'neon58k'          // 58k neon sign (wall)
+  | 'bitcoincircularrug' // bitcoin circular floor rug
+  | 'endtable';          // small end table (lounge)
 
 export type PosterId =
   | 'none'
@@ -80,6 +117,111 @@ export type PosterId =
   | 'matrix'     // falling green code
   | 'space';     // deep space nebula
 
+export type FurniturePos = { x: number; y: number };
+
+const FURNITURE_DEFAULT_POS_FALLBACK: FurniturePos = { x: 300, y: 310 };
+
+/** Default anchor positions (top-left of visual bounding box) at FY=300, W=800 */
+export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> = {
+  desk:          { x: 558, y: 160 },
+  bookshelf:     { x: 755, y: 115 },
+  couch:         { x: 30,  y: 230 },
+  plant:         { x: 566, y: 219 },
+  rug:           { x: 250, y: 318 },
+  lamp:          { x: 190, y: 145 },
+  speaker:       { x: 8,   y: 252 },
+  minifridge:    { x: 192, y: 252 },
+  beanbag:       { x: 321, y: 260 },
+  armchair:      { x: 210, y: 230 },
+  arcade:        { x: 480, y: 190 },
+  tv:            { x: 305, y: 46  },
+  pet_bed:       { x: 668, y: 424 },
+  cat_tree:      { x: 757, y: 340 },
+  pet_bowl:      { x: 598, y: 428 },
+  coffee_table:  { x: 30,  y: 308 },
+  record_player: { x: 420, y: 262 },
+  lava_lamp:     { x: 229, y: 230 },
+  whiteboard:    { x: 596, y: 14  },
+  server_rack:   { x: 524, y: 192 },
+  candles:       { x: 76,  y: 278 },
+  record_crates: { x: 10,  y: 411 },
+  trunk:         { x: 100, y: 424 },
+  bookstack:     { x: 182, y: 416 },
+  bar_cart:      { x: 240, y: 388 },
+  walltapestry1: { x: 50,  y: 30  },
+  walltapestry2: { x: 450, y: 20  },
+  walltapestry3: { x: 655, y: 15  },
+  sworddec:        { x: 200, y: 20  },
+  persianrugwall1: { x: 350, y: 20  },
+  persianrug:      { x: 260, y: 318 },
+  bearskin:        { x: 200, y: 320 },
+  striperug:       { x: 250, y: 318 },
+  plant1:          { x: 566, y: 221 },
+  plant2:          { x: 20,  y: 220 },
+  plant3:          { x: 120, y: 220 },
+  plant4:          { x: 430, y: 220 },
+  plant5:          { x: 460, y: 220 },
+  nostrsign:       { x: 200, y: 50  },
+  plant6:           { x: 350, y: 220 },
+  cactus:           { x: 185, y: 200 },
+  daffodils:        { x: 530, y: 220 },
+  neonskull:        { x: 580, y: 50  },
+  neoncoffee:       { x: 420, y: 50  },
+  decoratedcouch:    { x: 30,  y: 230 },
+  decoratedarmchair: { x: 210, y: 230 },
+  tigerskin:         { x: 150, y: 320 },
+  coelacanthmount:   { x: 300, y: 30  },
+  safe:              { x: 750, y: 380 },
+  neongfy:           { x: 100, y: 50  },
+  neon58k:           { x: 180, y: 50  },
+  bitcoincircularrug: { x: 310, y: 310 },
+};
+
+export function getDefaultPos(id: FurnitureId): FurniturePos {
+  return FURNITURE_DEFAULT_POS[id] ?? FURNITURE_DEFAULT_POS_FALLBACK;
+}
+
+/**
+ * Visual bounding box size for canvas-drawn furniture items (pixels).
+ * PNG items are NOT listed here — use getFurnitureBounds() from RoomRenderer
+ * to read native PNG dimensions at runtime.
+ */
+export const FURNITURE_BOUNDS: Partial<Record<FurnitureId, { w: number; h: number }>> = {
+  desk:          { w: 196, h: 140 },
+  bookshelf:     { w: 35,  h: 185 },
+  plant:         { w: 20,  h: 40  },
+  rug:           { w: 280, h: 104 },
+  lamp:          { w: 32,  h: 160 },
+  speaker:       { w: 22,  h: 50  },
+  minifridge:    { w: 30,  h: 50  },
+  arcade:        { w: 42,  h: 112 },
+  tv:            { w: 130, h: 101 },
+  pet_bed:       { w: 56,  h: 44  },
+  cat_tree:      { w: 40,  h: 133 },
+  pet_bowl:      { w: 48,  h: 16  },
+  coffee_table:  { w: 130, h: 26  },
+  record_player: { w: 28,  h: 40  },
+  lava_lamp:     { w: 18,  h: 72  },
+  whiteboard:    { w: 56,  h: 81  },
+  server_rack:   { w: 32,  h: 110 },
+  candles:       { w: 34,  h: 36  },
+  record_crates: { w: 70,  h: 61  },
+  trunk:         { w: 70,  h: 44  },
+  bookstack:     { w: 54,  h: 60  },
+  bar_cart:      { w: 56,  h: 85  },
+};
+
+export const POSTER_DEFAULT_POS: [FurniturePos, FurniturePos, FurniturePos] = [
+  { x: 50,  y: 40 },
+  { x: 160, y: 30 },
+  { x: 470, y: 35 },
+];
+export const POSTER_SIZE: [{ w: number; h: number }, { w: number; h: number }, { w: number; h: number }] = [
+  { w: 80, h: 100 },
+  { w: 70, h: 90  },
+  { w: 90, h: 70  },
+];
+
 export interface RoomConfig {
   wallTheme: WallTheme;
   floorStyle: FloorStyle;
@@ -89,6 +231,10 @@ export interface RoomConfig {
   posters: [PosterId, PosterId, PosterId];
   /** Per-furniture color overrides (hex string). If not set, uses default. */
   furnitureColors: Partial<Record<FurnitureId, string>>;
+  /** Per-furniture position overrides. Missing keys use FURNITURE_DEFAULT_POS. */
+  furniturePositions: Partial<Record<FurnitureId, FurniturePos>>;
+  /** Per-poster position overrides. Null entries use POSTER_DEFAULT_POS. */
+  posterPositions: [FurniturePos | null, FurniturePos | null, FurniturePos | null];
   /** Whether the player has completed first-time setup */
   hasSetup: boolean;
   /** Ceiling light string color override (uses lighting by default) */
@@ -106,13 +252,15 @@ const DEFAULT_ROOM: RoomConfig = {
   furniture: ['desk', 'bookshelf', 'lamp'],
   posters: ['bitcoin', 'nostr', 'pixel_art'],
   furnitureColors: {},
+  furniturePositions: {},
+  posterPositions: [null, null, null],
   hasSetup: false,
   ceilingLightColor: null,
   pinnedNote: null,
   pet: { species: 'none', breed: 1 },
 };
 
-let currentRoom: RoomConfig = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {} };
+let currentRoom: RoomConfig = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {}, furniturePositions: {}, posterPositions: [null, null, null] };
 
 function save(): void {
   // in-memory only — persisted via kind:30078 on demand
@@ -123,9 +271,13 @@ export function applyRemoteRoomConfig(remote: RoomConfig): void {
   currentRoom = {
     ...DEFAULT_ROOM,
     ...remote,
+    wallTheme:  remote.wallTheme  in WALL_THEMES  ? remote.wallTheme  : DEFAULT_ROOM.wallTheme,
+    floorStyle: remote.floorStyle in FLOOR_STYLES ? remote.floorStyle : DEFAULT_ROOM.floorStyle,
     furniture: remote.furniture ? [...remote.furniture] : [...DEFAULT_ROOM.furniture],
     posters: remote.posters ? [remote.posters[0] || 'none', remote.posters[1] || 'none', remote.posters[2] || 'none'] as [PosterId, PosterId, PosterId] : [...DEFAULT_ROOM.posters] as [PosterId, PosterId, PosterId],
     furnitureColors: remote.furnitureColors ? { ...remote.furnitureColors } : {},
+    furniturePositions: remote.furniturePositions ? { ...remote.furniturePositions } : {},
+    posterPositions: remote.posterPositions ? [...remote.posterPositions] as [FurniturePos | null, FurniturePos | null, FurniturePos | null] : [null, null, null],
     pet: remote.pet ?? DEFAULT_ROOM.pet,
   };
 }
@@ -136,20 +288,36 @@ export function getRoomConfig(): RoomConfig {
     furniture: [...currentRoom.furniture],
     posters: [...currentRoom.posters] as [PosterId, PosterId, PosterId],
     furnitureColors: { ...currentRoom.furnitureColors },
+    furniturePositions: { ...currentRoom.furniturePositions },
+    posterPositions: [...currentRoom.posterPositions] as [FurniturePos | null, FurniturePos | null, FurniturePos | null],
   };
 }
 
 export function setRoomConfig(config: Partial<RoomConfig>): RoomConfig {
   if (config.furniture) currentRoom.furniture = [...config.furniture];
   if (config.posters) currentRoom.posters = [...config.posters] as [PosterId, PosterId, PosterId];
-  if (config.wallTheme !== undefined) currentRoom.wallTheme = config.wallTheme;
-  if (config.floorStyle !== undefined) currentRoom.floorStyle = config.floorStyle;
+  if (config.wallTheme !== undefined) currentRoom.wallTheme = config.wallTheme in WALL_THEMES ? config.wallTheme : 'default';
+  if (config.floorStyle !== undefined) currentRoom.floorStyle = config.floorStyle in FLOOR_STYLES ? config.floorStyle : 'hardwood';
   if (config.lighting !== undefined) currentRoom.lighting = config.lighting;
   if (config.hasSetup !== undefined) currentRoom.hasSetup = config.hasSetup;
   if (config.ceilingLightColor !== undefined) currentRoom.ceilingLightColor = config.ceilingLightColor;
   if (config.pinnedNote !== undefined) currentRoom.pinnedNote = config.pinnedNote;
   if (config.furnitureColors !== undefined) currentRoom.furnitureColors = { ...config.furnitureColors };
+  if (config.furniturePositions !== undefined) currentRoom.furniturePositions = { ...config.furniturePositions };
+  if (config.posterPositions !== undefined) currentRoom.posterPositions = [...config.posterPositions] as [FurniturePos | null, FurniturePos | null, FurniturePos | null];
   if (config.pet !== undefined) currentRoom.pet = { ...config.pet };
+  save();
+  return getRoomConfig();
+}
+
+export function setPosterPosition(slot: 0 | 1 | 2, pos: FurniturePos): RoomConfig {
+  currentRoom.posterPositions[slot] = pos;
+  save();
+  return getRoomConfig();
+}
+
+export function setFurniturePosition(id: FurnitureId, pos: FurniturePos): RoomConfig {
+  currentRoom.furniturePositions = { ...currentRoom.furniturePositions, [id]: pos };
   save();
   return getRoomConfig();
 }
@@ -180,6 +348,35 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   trunk:         '#3a2410',  // dark walnut wood
   bookstack:     '#2a1858',  // deep purple (spine color)
   bar_cart:      '#2a2a2a',  // brushed dark metal
+  walltapestry1: '#d4c4a8',  // warm ivory
+  walltapestry2: '#d4c4a8',  // warm ivory
+  walltapestry3: '#d4c4a8',  // warm ivory
+  sworddec:        '#c8c8c8',  // steel grey
+  persianrugwall1: '#d4c4a8',  // warm ivory
+  persianrug:      '#d4c4a8',  // warm ivory
+  bearskin:        '#c8b89a',  // natural tan
+  striperug:       '#d4c4a8',  // warm ivory
+  armchair:        '#3d2860',  // deep purple
+  plant1:          '#ffffff',  // white = no tint by default; color picker tints the white pot
+  plant2:          '#ffffff',  // no tint
+  plant3:          '#ffffff',
+  plant4:          '#ffffff',
+  plant5:          '#ffffff',
+  plant6:            '#ffffff',
+  cactus:            '#ffffff',
+  daffodils:         '#ffffff',
+  neonskull:         '#ff3355',
+  neoncoffee:        '#ff9020',
+  decoratedcouch:    '#3d2860',
+  decoratedarmchair: '#3d2860',
+  nostrsign:       '#7b2ff7',  // nostr purple
+  tigerskin:       '#ffffff',  // preserve natural PNG colors
+  coelacanthmount: '#ffffff',
+  safe:            '#ffffff',
+  neongfy:           '#ff3355',
+  neon58k:           '#ff3355',
+  bitcoincircularrug: '#ffffff',
+  endtable:           '#2a1a08',
 };
 
 export function setFurnitureColor(id: FurnitureId, color: string): RoomConfig {
@@ -219,7 +416,7 @@ export function isFirstVisit(): boolean {
 }
 
 export function resetRoom(): RoomConfig {
-  currentRoom = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {} };
+  currentRoom = { ...DEFAULT_ROOM, furniture: [...DEFAULT_ROOM.furniture], posters: [...DEFAULT_ROOM.posters], furnitureColors: {}, furniturePositions: {}, posterPositions: [null, null, null] };
   save();
   return getRoomConfig();
 }
@@ -233,10 +430,15 @@ export const WALL_THEMES: Record<WallTheme, { bg: string; brick: string; accent:
   amber:    { bg: '#1a150a', brick: '#28200e', accent: '#3a2e14', label: 'Amber Den' },
   slate:    { bg: '#12121a', brick: '#1a1a24', accent: '#2a2a3a', label: 'Slate' },
   neon:     { bg: '#04040a', brick: '#08080e', accent: '#0e0e1a', label: 'Neon Grid' },
-  void:     { bg: '#060608', brick: '#0a0a0e', accent: '#0e0e14', label: 'Void' },
   rose:     { bg: '#1a0c14', brick: '#2a1020', accent: '#3e1a2e', label: 'Rose' },
   ocean:    { bg: '#080e1a', brick: '#0c1428', accent: '#122038', label: 'Ocean' },
   rust:     { bg: '#1a0e08', brick: '#28180c', accent: '#3a2010', label: 'Rust' },
+  cityview: { bg: '#04080f', brick: '#0a0e1a', accent: '#1a1e2a', label: 'City View' },
+  cabin:    { bg: '#110904', brick: '#1a0d06', accent: '#3a1e0a', label: 'Log Cabin' },
+  void:     { bg: '#060608', brick: '#0a0a0e', accent: '#0e0e14', label: 'Void' },
+  dungeon:     { bg: '#0c0c0e', brick: '#141416', accent: '#2a2a30', label: 'Dungeon' },
+  brickwall:   { bg: '#1a0e08', brick: '#2a1810', accent: '#3a2014', label: 'Brick Wall' },
+  oldpaperwall:{ bg: '#1a1610', brick: '#24201a', accent: '#3a3428', label: 'Old Paper Wall' },
 };
 
 /** Color definitions for each floor style */
@@ -250,6 +452,9 @@ export const FLOOR_STYLES: Record<FloorStyle, { base: string; alt: string; groov
   tatami:   { base: '#1a1808', alt: '#242010', groove: '#141206', label: 'Tatami' },
   hex:      { base: '#12101e', alt: '#1a182c', groove: '#0e0c18', label: 'Hex Tile' },
   bamboo:   { base: '#2a2e12', alt: '#3e4418', groove: '#1a1e08', label: 'Bamboo' },
+  dungeon:        { base: '#141416', alt: '#1a1a1e', groove: '#0c0c0e', label: 'Dungeon' },
+  dirtfloor:      { base: '#1a1208', alt: '#221808', groove: '#100c04', label: 'Dirt Floor' },
+  oldwoodenfloor: { base: '#1e1408', alt: '#2a1e0c', groove: '#140e04', label: 'Old Wood Floor' },
 };
 
 /** Color definitions for each lighting mood */
@@ -291,6 +496,35 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   trunk:         { label: 'Trunk',         emoji: '🧳' },
   bookstack:     { label: 'Book Stack',    emoji: '📚' },
   bar_cart:      { label: 'Bar Cart',      emoji: '🍾' },
+  walltapestry1: { label: 'Tapestry 1',   emoji: '🖼' },
+  walltapestry2: { label: 'Tapestry 2',   emoji: '🖼' },
+  walltapestry3: { label: 'Tapestry 3',   emoji: '🖼' },
+  sworddec:        { label: 'Sword Mount',    emoji: '⚔️' },
+  persianrugwall1: { label: 'Persian Rug',   emoji: '🪆' },
+  persianrug:      { label: 'Persian Rug',   emoji: '🪆' },
+  bearskin:        { label: 'Bearskin Rug',  emoji: '🐻' },
+  striperug:       { label: 'Stripe Rug',    emoji: '🟫' },
+  armchair:        { label: 'Arm Chair',     emoji: '🪑' },
+  plant1:          { label: 'Snake Plant',   emoji: '🪴' },
+  plant2:          { label: 'Bonsai',        emoji: '🪴' },
+  plant3:          { label: 'Lavender',      emoji: '🪴' },
+  plant4:          { label: 'Monstera',      emoji: '🪴' },
+  plant5:          { label: 'Red Tulips',    emoji: '🪴' },
+  nostrsign:       { label: 'NOSTR Sign',    emoji: '🟣' },
+  plant6:          { label: 'Mini Sunflower', emoji: '🪴' },
+  cactus:            { label: 'Cactus',               emoji: '🌵' },
+  daffodils:         { label: 'Daffodils',            emoji: '🌼' },
+  neonskull:         { label: 'Skull Neon Sign',      emoji: '💀' },
+  neoncoffee:        { label: 'Coffee Neon Sign',     emoji: '☕' },
+  decoratedcouch:    { label: 'Decorated Couch',      emoji: '🛋' },
+  decoratedarmchair: { label: 'Decorated Armchair',   emoji: '🪑' },
+  tigerskin:         { label: 'Tiger Skin Rug',       emoji: '🐯' },
+  coelacanthmount:   { label: 'Coelacanth Mount',     emoji: '🐟' },
+  safe:              { label: 'Safe',                  emoji: '🔒' },
+  neongfy:           { label: 'GFY Neon Sign',         emoji: '🔆' },
+  neon58k:           { label: '58k Neon Sign',         emoji: '🔆' },
+  bitcoincircularrug: { label: 'Bitcoin Circular Rug', emoji: '₿' },
+  endtable:           { label: 'End Table',             emoji: '🪵' },
 };
 
 /** Poster display data */

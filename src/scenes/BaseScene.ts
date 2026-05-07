@@ -1040,7 +1040,7 @@ export abstract class BaseScene extends Phaser.Scene {
     // ? — Hotkey modal (document-level listener so it works outside Phaser focus)
     const hotkeyHandler = (e: KeyboardEvent) => {
       if (e.key !== '?') return;
-      if (ci()) return;
+      if (ci() || blk()) return;
       this.hotkeyModal.toggle();
     };
     document.addEventListener('keydown', hotkeyHandler);
@@ -1049,7 +1049,7 @@ export abstract class BaseScene extends Phaser.Scene {
     // Tab — World map (document-level so it works outside Phaser focus)
     const mapHandler = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
-      if (ci()) return;
+      if (ci() || blk()) return;
       e.preventDefault();
       this.worldMap.toggle();
     };

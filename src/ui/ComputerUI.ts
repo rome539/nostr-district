@@ -1,93 +1,72 @@
-/**
- * ComputerUI.ts — Interactive computer terminal in MY ROOM
- *
- * Opens when player presses E near the computer desk.
- * Tabs: Wardrobe, Profile (kind:0 edit), Room Customization
- */
-
-import { P } from '../config/game.config';
-import { isOwned, CATALOG } from '../stores/marketStore';
-import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../stores/avatarStore';
-import { renderRoomSprite, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from '../entities/AvatarRenderer';
-import { authStore } from '../stores/authStore';
-import { publishEvent, signEvent, publishRoomConfig, publishOutfits, publishAvatar } from '../nostr/nostrService';
-import { getStatus, setStatus } from '../stores/statusStore';
-import {
-  getRoomConfig, setRoomConfig, toggleFurniture, setPoster, markSetupComplete,
-  setFurnitureColor, getFurnitureColor, DEFAULT_FURNITURE_COLORS,
-  WALL_THEMES, FLOOR_STYLES, LIGHTING_MOODS, FURNITURE_DATA, POSTER_DATA,
-  ALL_FURNITURE, ALL_POSTERS,
-  WallTheme, FloorStyle, LightingMood, FurnitureId, PosterId, RoomConfig,
-} from '../stores/roomStore';
-import { getPet, setPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../stores/petStore';
-import { sendStatusUpdate } from '../nostr/presenceService';
-import { SoundEngine, MYROOM_TRACKS, MyRoomTrackId } from '../audio/SoundEngine';
+import { WardrobeTab } from './computer/WardrobeTab';
+import { ProfileTab }  from './computer/ProfileTab';
+import { RoomTab }     from './computer/RoomTab';
+import type { TabCtx, OnAvatarChange, OnRoomChange, OnPetChange, OnStatusUpdate, OnMusicChange } from './computer/types';
 
 const PANEL_ID = 'computer-panel';
-
-type OnAvatarChange   = (avatar: AvatarConfig) => void;
-type OnRoomChange     = (config: RoomConfig) => void;
-type OnPetChange      = (sel: PetSelection) => void;
-type OnStatusUpdate   = (status: string) => void;
-type OnMusicChange    = (trackId: MyRoomTrackId) => void;
-
-function esc(s: string): string {
-  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
-}
-
-function fmtLabel(s: string): string {
-  return esc(s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
-}
 
 export class ComputerUI {
   private backdrop: HTMLDivElement | null = null;
   private panel: HTMLDivElement | null = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
-  private onAvatarChange: OnAvatarChange | null = null;
-  private onProfileSave: ((name: string) => void) | null = null;
-  private onRoomChange: OnRoomChange | null = null;
-  private onPetChange: OnPetChange | null = null;
-  private onStatusUpdate: OnStatusUpdate | null = null;
-  private onMusicChange: OnMusicChange | null = null;
+  private previewPill: HTMLDivElement | null = null;
   private currentTab: 'wardrobe' | 'profile' | 'room' = 'wardrobe';
   private allowedTabs: ('wardrobe' | 'profile' | 'room')[] = ['wardrobe', 'profile', 'room'];
-  private currentSlot = 'top';
-  private currentRoomSection: 'walls' | 'floor' | 'lighting' | 'furniture' | 'posters' | 'pets' | 'music' = 'walls';
-  private activePosterSlot: 0 | 1 | 2 = 0;
-  private activeFurnitureColor: FurnitureId | null = null;
-  private activeFurnitureCategory = 'lounge';
-  private previewPill: HTMLDivElement | null = null;
-  private draftAvatar: AvatarConfig | null = null;
-  private wardrobePage = 0;
-  private _previewAnimId: number | null = null;
-  private draftRoom: RoomConfig | null = null;
-  private previewBaseline: RoomConfig | null = null;
-  private previewSaved = false;
 
-  open(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange, allowedTabs?: ('wardrobe' | 'profile' | 'room')[]): void {
+  private onAvatarChange:  OnAvatarChange | null = null;
+  private onProfileSave:   ((name: string) => void) | null = null;
+  private onRoomChange:    OnRoomChange | null = null;
+  private onPetChange:     OnPetChange | null = null;
+  private onStatusUpdate:  OnStatusUpdate | null = null;
+  private onMusicChange:   OnMusicChange | null = null;
+  private onEnterArrange:  ((newItemId?: string) => void) | null = null;
+
+  private wardrobeTab = new WardrobeTab();
+  private profileTab  = new ProfileTab();
+  private roomTab     = new RoomTab();
+
+  open(
+    onAvatarChange?: OnAvatarChange,
+    onProfileSave?:  (name: string) => void,
+    onRoomChange?:   OnRoomChange,
+    onPetChange?:    OnPetChange,
+    onStatusUpdate?: OnStatusUpdate,
+    onMusicChange?:  OnMusicChange,
+    allowedTabs?:    ('wardrobe' | 'profile' | 'room')[],
+    onEnterArrange?: (newItemId?: string) => void,
+    startTab?:       'wardrobe' | 'profile' | 'room',
+  ): void {
     if (this.panel) this.close();
-    this.onAvatarChange = onAvatarChange || null;
-    this.onProfileSave = onProfileSave || null;
-    this.onRoomChange = onRoomChange || null;
-    this.onPetChange = onPetChange || null;
-    this.onStatusUpdate = onStatusUpdate || null;
-    this.onMusicChange = onMusicChange || null;
-    this.allowedTabs = allowedTabs ?? ['wardrobe', 'profile', 'room'];
-    this.currentTab = this.allowedTabs[0];
+    this.onAvatarChange  = onAvatarChange  || null;
+    this.onProfileSave   = onProfileSave   || null;
+    this.onRoomChange    = onRoomChange    || null;
+    this.onPetChange     = onPetChange     || null;
+    this.onStatusUpdate  = onStatusUpdate  || null;
+    this.onMusicChange   = onMusicChange   || null;
+    this.onEnterArrange  = onEnterArrange  || null;
+    this.allowedTabs     = allowedTabs ?? ['wardrobe', 'profile', 'room'];
+    this.currentTab      = startTab ?? this.allowedTabs[0];
     this.buildPanel();
   }
 
-  /** Open directly to the Room tab (for first-time setup) */
-  openToRoom(onAvatarChange?: OnAvatarChange, onProfileSave?: (name: string) => void, onRoomChange?: OnRoomChange, onPetChange?: OnPetChange, onStatusUpdate?: OnStatusUpdate, onMusicChange?: OnMusicChange): void {
+  openToRoom(
+    onAvatarChange?: OnAvatarChange,
+    onProfileSave?:  (name: string) => void,
+    onRoomChange?:   OnRoomChange,
+    onPetChange?:    OnPetChange,
+    onStatusUpdate?: OnStatusUpdate,
+    onMusicChange?:  OnMusicChange,
+  ): void {
     if (this.panel) this.close();
-    this.onAvatarChange = onAvatarChange || null;
-    this.onProfileSave = onProfileSave || null;
-    this.onRoomChange = onRoomChange || null;
-    this.onPetChange = onPetChange || null;
-    this.onStatusUpdate = onStatusUpdate || null;
-    this.onMusicChange = onMusicChange || null;
-    this.currentTab = 'room';
-    this.currentRoomSection = 'walls';
+    this.onAvatarChange  = onAvatarChange  || null;
+    this.onProfileSave   = onProfileSave   || null;
+    this.onRoomChange    = onRoomChange    || null;
+    this.onPetChange     = onPetChange     || null;
+    this.onStatusUpdate  = onStatusUpdate  || null;
+    this.onMusicChange   = onMusicChange   || null;
+    this.allowedTabs     = ['wardrobe', 'profile', 'room'];
+    this.currentTab      = 'room';
+    this.roomTab.resetSection();
     this.buildPanel();
   }
 
@@ -98,17 +77,11 @@ export class ComputerUI {
     }
     this.previewPill?.remove();
     this.previewPill = null;
-    if (this.previewBaseline && !this.previewSaved) {
-      setRoomConfig(this.previewBaseline);
-      this.onRoomChange?.(getRoomConfig());
-    }
-    if (this._previewAnimId !== null) { cancelAnimationFrame(this._previewAnimId); this._previewAnimId = null; }
-    this.draftAvatar = null;
-    this.draftRoom = null;
-    this.previewBaseline = null;
-    this.previewSaved = false;
+    this.roomTab.revertIfNeeded();
+    this.wardrobeTab.destroy();
+    this.roomTab.destroy();
     if (this.backdrop) { this.backdrop.remove(); this.backdrop = null; }
-    if (this.panel) { this.panel.remove(); this.panel = null; }
+    if (this.panel)    { this.panel.remove();    this.panel    = null; }
   }
 
   isOpen(): boolean { return !!this.panel; }
@@ -130,7 +103,7 @@ export class ComputerUI {
       border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:10px;
       font-family:'Courier New',monospace;
       box-shadow:0 8px 30px rgba(0,0,0,0.8),0 0 40px color-mix(in srgb,var(--nd-accent) 3%,transparent);
-      width:min(460px,96vw);max-height:min(88dvh,680px);overflow:hidden;
+      width:min(540px,96vw);max-height:min(88dvh,680px);overflow:hidden;
       display:flex;flex-direction:column;
     `;
 
@@ -140,13 +113,13 @@ export class ComputerUI {
           <span style="color:var(--nd-accent);font-size:11px;">&#9679;</span>
           <span style="color:var(--nd-text);font-size:14px;font-weight:bold;">TERMINAL</span>
         </div>
-        <button id="comp-close" style="background:none;border:none;color:var(--nd-dpurp);font-size:18px;cursor:pointer;padding:4px 8px;">\u2715</button>
+        <button id="comp-close" style="background:none;border:none;color:var(--nd-dpurp);font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
       <div id="comp-tabs" style="display:flex;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);"></div>
       <div id="comp-body" style="flex:1;overflow-y:auto;padding:16px 18px;"></div>
     `;
 
-    this.panel.addEventListener('keydown', (e) => e.stopPropagation());
+    this.panel.addEventListener('keydown',     (e) => e.stopPropagation());
     this.panel.addEventListener('pointerdown', (e) => e.stopPropagation());
     document.body.appendChild(this.panel);
 
@@ -154,11 +127,8 @@ export class ComputerUI {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        if (this.previewPill) {
-          this.exitPreview();
-        } else {
-          this.close();
-        }
+        if (this.previewPill) this.showAfterPreview();
+        else this.close();
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
@@ -174,9 +144,9 @@ export class ComputerUI {
     if (!container) return;
 
     const tabs = [
-      { key: 'wardrobe', label: '\uD83D\uDC55 Wardrobe' },
-      { key: 'room',     label: '\uD83C\uDFE0 Room' },
-      { key: 'profile',  label: '\uD83D\uDC64 Profile' },
+      { key: 'wardrobe', label: '👕 Wardrobe' },
+      { key: 'room',     label: '🏠 Room' },
+      { key: 'profile',  label: '👤 Profile' },
     ].filter(t => this.allowedTabs.includes(t.key as any));
 
     container.innerHTML = tabs.map(t => `
@@ -201,1200 +171,53 @@ export class ComputerUI {
   private renderBody(): void {
     const body = this.panel?.querySelector('#comp-body') as HTMLElement;
     if (!body) return;
+    const ctx = this.makeCtx();
     switch (this.currentTab) {
-      case 'wardrobe': this.renderWardrobe(body); break;
-      case 'profile':  this.renderProfile(body);  break;
-      case 'room':     this.renderRoom(body);      break;
+      case 'wardrobe': this.wardrobeTab.render(body, ctx); break;
+      case 'profile':  this.profileTab.render(body, ctx);  break;
+      case 'room':     this.roomTab.render(body, ctx);     break;
     }
   }
 
-  // ══════════════════════════════════════
-  // WARDROBE TAB
-  // ══════════════════════════════════════
-  private renderWardrobe(body: HTMLElement): void {
-    if (!this.draftAvatar) this.draftAvatar = { ...getAvatar() };
-    const avatar = this.draftAvatar;
-    body.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">WARDROBE</span>
-        <button id="ward-nostr-sync" style="
-          padding:5px 12px;border-radius:4px;cursor:pointer;
-          font-family:'Courier New',monospace;font-size:11px;
-          background:color-mix(in srgb,var(--nd-accent) 20%,transparent);
-          border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);
-          color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-        " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
-      </div>
-      <div style="display:flex;gap:16px;margin-bottom:14px;">
-        <div id="ward-preview" style="width:96px;height:216px;background:linear-gradient(180deg,color-mix(in srgb,var(--nd-purp) 55%,var(--nd-navy)) 0%,var(--nd-navy) 68%,var(--nd-bg) 100%);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04),inset 0 -18px 28px rgba(0,0,0,0.3);position:relative;overflow:hidden;"></div>
-        <div style="flex:1;min-width:0;">
-          <div id="ward-slots" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:10px;"></div>
-          <div id="ward-options"></div>
-        </div>
-      </div>
-      <div id="ward-colors"></div>
-      <div id="ward-outfits" style="margin-top:14px;"></div>
-    `;
-    this.renderPreview(this.draftAvatar);
-    this.renderSlotTabs(body);
-    this.renderOptions(body);
-    this.renderColors(body);
-    this.renderOutfits(body);
-
-    const wardSync = body.querySelector('#ward-nostr-sync') as HTMLButtonElement | null;
-    if (authStore.getState().isGuest) {
-      if (wardSync) wardSync.style.display = 'none';
-    } else {
-      wardSync?.addEventListener('click', () => {
-        if (!wardSync || !this.draftAvatar) return;
-        const committed = setAvatar(this.draftAvatar);
-        this.onAvatarChange?.(committed);
-        publishAvatar(committed);
-        wardSync.textContent = 'Saved!';
-        wardSync.disabled = true;
-        setTimeout(() => { if (wardSync.isConnected) { wardSync.textContent = 'Save'; wardSync.disabled = false; } }, 1500);
-      });
-    }
-  }
-
-  private renderPreview(avatar: AvatarConfig): void {
-    if (this._previewAnimId !== null) { cancelAnimationFrame(this._previewAnimId); this._previewAnimId = null; }
-    const container = this.panel?.querySelector('#ward-preview');
-    if (!container) return;
-    container.innerHTML = '';
-    const backdrop = document.createElement('div');
-    backdrop.style.cssText = 'position:absolute;inset:0;background:radial-gradient(circle at 50% 24%, rgba(255,255,255,0.12), transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 52%, transparent 52%), linear-gradient(90deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 16px), linear-gradient(180deg, transparent 0%, transparent 78%, rgba(255,244,200,0.10) 78%, rgba(255,244,200,0.16) 100%);pointer-events:none;';
-    container.appendChild(backdrop);
-    const preview = document.createElement('canvas');
-    preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;';
-    container.appendChild(preview);
-
-    const EYE_CYCLE_TYPES = new Set(['blaze', 'frost', 'cosmic']);
-    const EYE_PALETTES: Record<string, string[]> = {
-      blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
-      frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
-      cosmic: ['#ffffff', '#aa88ff', '#ff88ff', '#88ffff', '#ffff88'],
+  private makeCtx(): TabCtx {
+    return {
+      panel:            this.panel!,
+      rerender:         () => this.renderBody(),
+      hideForPreview:   () => this.hideForPreview(),
+      showAfterPreview: () => this.showAfterPreview(),
+      onAvatarChange:   this.onAvatarChange,
+      onProfileSave:    this.onProfileSave,
+      onRoomChange:     this.onRoomChange,
+      onPetChange:      this.onPetChange,
+      onStatusUpdate:   this.onStatusUpdate,
+      onMusicChange:    this.onMusicChange,
+      onEnterArrange:   this.onEnterArrange,
     };
-    const EYE_SPEED: Record<string, number> = { blaze: 100, frost: 280, cosmic: 360 };
-
-    if (this.currentSlot === 'eyes' && EYE_CYCLE_TYPES.has(avatar.eyes ?? '')) {
-      const pal = EYE_PALETTES[avatar.eyes!];
-      const spd = EYE_SPEED[avatar.eyes!];
-      let lastStep = -1;
-      const loop = () => {
-        const step = Math.floor(Date.now() / spd) % pal.length;
-        if (step !== lastStep) {
-          lastStep = step;
-          const src = renderRoomSprite({ ...avatar, eyeColor: pal[step] });
-          preview.width = src.width * 3; preview.height = src.height * 3;
-          const px = preview.getContext('2d')!;
-          px.imageSmoothingEnabled = false;
-          px.drawImage(src, 0, 0, src.width, src.height, 0, 0, src.width * 3, src.height * 3);
-        }
-        this._previewAnimId = requestAnimationFrame(loop);
-      };
-      loop();
-    } else {
-      const src = renderRoomSprite(avatar);
-      preview.width = src.width * 3; preview.height = src.height * 3;
-      const px = preview.getContext('2d')!;
-      px.imageSmoothingEnabled = false;
-      px.drawImage(src, 0, 0, src.width, src.height, 0, 0, src.width * 3, src.height * 3);
-    }
   }
 
-  private renderSlotTabs(body: HTMLElement): void {
-    const container = body.querySelector('#ward-slots');
-    if (!container) return;
-    const slots = [
-      { key: 'hair', label: 'Hair' },
-      { key: 'top', label: 'Top' }, { key: 'bottom', label: 'Bottom' },
-      { key: 'hat', label: 'Hat' }, { key: 'accessory', label: 'Acc' },
-      { key: 'eyes', label: 'Eyes' },
-      { key: 'nameColor', label: 'Name' }, { key: 'chatColor', label: 'Chat' },
-      { key: 'rodSkin', label: 'Rod' }, { key: 'nameAnim', label: 'Anim' },
-      { key: 'aura', label: 'Aura' },
-    ];
-    container.innerHTML = slots.map(s => `
-      <button class="ws" data-slot="${s.key}" style="
-        padding:4px 7px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;white-space:nowrap;
-        cursor:pointer;border:1px solid ${this.currentSlot === s.key ? 'color-mix(in srgb,var(--nd-accent) 40%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-        background:${this.currentSlot === s.key ? 'color-mix(in srgb,var(--nd-accent) 13%,transparent)' : 'transparent'};
-        color:${this.currentSlot === s.key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
-      ">${s.label}</button>
-    `).join('');
-    container.querySelectorAll('.ws').forEach(el => {
-      el.addEventListener('click', () => {
-        this.currentSlot = (el as HTMLElement).dataset.slot!;
-        this.wardrobePage = 0;
-        this.renderSlotTabs(body); this.renderOptions(body); this.renderColors(body);
-      });
-    });
-  }
+  private hideForPreview(): void {
+    if (this.panel)    this.panel.style.display    = 'none';
+    if (this.backdrop) this.backdrop.style.display = 'none';
 
-  private renderOptions(body: HTMLElement): void {
-    const container = body.querySelector('#ward-options');
-    if (!container) return;
-    const avatar = this.draftAvatar ?? getAvatar();
-
-    // ── Purchased cosmetic slots (nameColor / chatColor / rodSkin) ────────────
-    const COSMETIC_SLOTS = ['nameColor', 'chatColor', 'rodSkin', 'nameAnim', 'aura'] as const;
-    if ((COSMETIC_SLOTS as readonly string[]).includes(this.currentSlot)) {
-      const current = (avatar as any)[this.currentSlot] as string;
-      const catalogSlot = this.currentSlot === 'chatColor' ? 'nameColor' : this.currentSlot;
-      const ownedItems = CATALOG.filter(i => i.slot === catalogSlot && isOwned(i.slot, i.value));
-
-      container.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-        <!-- None / clear button -->
-        <button class="wo" data-v="" style="
-          padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border:1px solid ${current === '' ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-          background:${current === '' ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
-          color:${current === '' ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
-        ">None</button>
-        ${ownedItems.map(item => {
-          const active = current === item.value;
-          const isColor = item.value.startsWith('#');
-          const swatch = isColor
-            ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${item.value};vertical-align:middle;margin-right:4px;flex-shrink:0;border:1px solid rgba(255,255,255,0.2);"></span>`
-            : '';
-          const label = item.name.replace(/ Name Tag$| Chat$| Rod$/, '').trim();
-          return `<button class="wo" data-v="${item.value}" style="
-            padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-            border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-            background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
-            color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};
-            display:flex;align-items:center;
-          ">${swatch}${esc(label)}</button>`;
-        }).join('')}
-        ${ownedItems.length === 0 ? `<span style="color:var(--nd-subtext);font-size:10px;opacity:0.5;">No items owned — visit the shop (/shop)</span>` : ''}
-      </div>`;
-
-      container.querySelectorAll('.wo').forEach(el => {
-        el.addEventListener('click', () => {
-          const v = (el as HTMLElement).dataset.v;
-          const patch: Partial<AvatarConfig> = { [this.currentSlot]: v } as any;
-          if (this.currentSlot === 'nameColor') patch.chatColor = v;
-          this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), ...patch };
-          this.renderPreview(this.draftAvatar); this.renderOptions(body); this.renderColors(body);
-        });
-      });
-      return;
-    }
-
-    // ── Standard wearable slots ───────────────────────────────────────────────
-    const optMap: Record<string, readonly string[]> = {
-      hair: AVATAR_OPTIONS.hair, top: AVATAR_OPTIONS.top,
-      bottom: [...AVATAR_OPTIONS.bottom, ...CATALOG.filter(i => i.slot === 'bottom' && i.earn).map(i => i.value as any)],
-      hat:    [...AVATAR_OPTIONS.hat,    ...CATALOG.filter(i => i.slot === 'hat'    && i.earn).map(i => i.value as any)],
-      accessory: AVATAR_OPTIONS.accessory,
-      eyes: [...AVATAR_OPTIONS.eyes, ...CATALOG.filter(i => i.slot === 'eyes' && i.value !== 'cry').map(i => i.value as any)],
-    };
-    const valMap: Record<string, string> = {
-      hair: avatar.hair, top: avatar.top,
-      bottom: avatar.bottom, hat: avatar.hat, accessory: avatar.accessory,
-      eyes: avatar.eyes,
-    };
-    const allOptions = (optMap[this.currentSlot] || []).filter(opt => isOwned(this.currentSlot, opt));
-    const current = valMap[this.currentSlot] || '';
-
-    const PAGE_SIZE = 21;
-    const totalPages = Math.ceil(allOptions.length / PAGE_SIZE);
-    this.wardrobePage = Math.min(this.wardrobePage, Math.max(0, totalPages - 1));
-    const pageOpts = allOptions.slice(this.wardrobePage * PAGE_SIZE, (this.wardrobePage + 1) * PAGE_SIZE);
-
-    const btnBase = `padding:5px 9px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;`;
-    const arrowBtn = (sym: string, id: string, disabled: boolean) =>
-      `<button id="${id}" style="min-width:44px;min-height:36px;padding:0 10px;background:none;border:none;font-size:16px;cursor:pointer;opacity:${disabled ? '0.15' : '0.35'};color:var(--nd-subtext);${disabled ? 'pointer-events:none;' : ''}">${sym}</button>`;
-
-    container.innerHTML = `
-      <div style="position:relative;min-height:${totalPages > 1 ? '168px' : '0'};">
-        <div style="display:flex;flex-wrap:wrap;gap:4px;padding-bottom:${totalPages > 1 ? '36px' : '0'};">
-          ${pageOpts.map(opt => {
-            const active = current === opt;
-            return `<button class="wo" data-v="${opt}" style="
-              ${btnBase}
-              border:1px solid ${active ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-              background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,transparent)' : 'transparent'};
-              color:${active ? 'var(--nd-accent)' : 'var(--nd-text)'};
-            ">${fmtLabel(opt)}</button>`;
-          }).join('')}
-        </div>
-        ${totalPages > 1 ? `
-          <div style="position:absolute;bottom:0;right:0;display:flex;align-items:center;">
-            ${arrowBtn('‹', 'ward-prev', this.wardrobePage === 0)}
-            <span style="font-family:'Courier New',monospace;font-size:10px;color:var(--nd-subtext);opacity:0.25;min-width:28px;text-align:center;">${this.wardrobePage + 1}/${totalPages}</span>
-            ${arrowBtn('›', 'ward-next', this.wardrobePage >= totalPages - 1)}
-          </div>
-        ` : ''}
-      </div>
-    `;
-    container.querySelectorAll('.wo').forEach(el => {
-      el.addEventListener('click', () => {
-        this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), [this.currentSlot]: (el as HTMLElement).dataset.v };
-        this.renderPreview(this.draftAvatar); this.renderOptions(body); this.renderColors(body);
-      });
-    });
-    container.querySelector('#ward-prev')?.addEventListener('click', () => {
-      this.wardrobePage = Math.max(0, this.wardrobePage - 1);
-      this.renderOptions(body);
-    });
-    container.querySelector('#ward-next')?.addEventListener('click', () => {
-      this.wardrobePage = Math.min(totalPages - 1, this.wardrobePage + 1);
-      this.renderOptions(body);
-    });
-  }
-
-  private renderColors(body: HTMLElement): void {
-    const container = body.querySelector('#ward-colors');
-    if (!container) return;
-    const avatar = this.draftAvatar ?? getAvatar();
-    const keyMap: Record<string, string> = {
-      hair: 'hairColor', top: 'topColor',
-      bottom: 'bottomColor', hat: 'hatColor', accessory: 'accessoryColor',
-      eyes: 'eyeColor',
-    };
-    const colorKey = keyMap[this.currentSlot];
-    if (!colorKey) { container.innerHTML = ''; return; }
-    const eyeCycleTypes = new Set(['blaze', 'frost', 'cosmic']);
-    if (this.currentSlot === 'eyes' && eyeCycleTypes.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
-    const currentColor = (avatar as any)[colorKey] as string;
-
-    container.innerHTML = `
-      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:6px;opacity:0.5;">Color</div>
-      <div style="display:flex;flex-wrap:wrap;gap:3px;">
-        ${COLOR_PRESETS.map(c => `
-          <div class="wc" data-c="${c}" style="
-            width:22px;height:22px;border-radius:4px;cursor:pointer;
-            background:${c};border:2px solid ${currentColor === c ? '#fff' : 'transparent'};
-          "></div>
-        `).join('')}
-      </div>
-    `;
-    container.querySelectorAll('.wc').forEach(el => {
-      el.addEventListener('click', () => {
-        this.draftAvatar = { ...(this.draftAvatar ?? getAvatar()), [colorKey]: (el as HTMLElement).dataset.c };
-        this.renderPreview(this.draftAvatar); this.renderColors(body);
-      });
-    });
-  }
-
-  private renderOutfits(body: HTMLElement): void {
-    const container = body.querySelector('#ward-outfits') as HTMLElement;
-    if (!container) return;
-    const outfits = getOutfits();
-    const inputStyle = `width:100%;padding:6px 8px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;`;
-    container.innerHTML = `
-      <div style="margin-bottom:6px;">
-        <span style="color:var(--nd-subtext);font-size:10px;opacity:0.5;">SAVED OUTFITS</span>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <input id="outfit-name" type="text" maxlength="20" placeholder="Outfit name..." style="${inputStyle}flex:1;"/>
-        <button id="outfit-save" style="padding:6px 10px;background:color-mix(in srgb,var(--nd-accent) 13%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 27%,transparent);border-radius:4px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
-      </div>
-      <div id="outfit-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
-        ${outfits.length === 0 ? `<div style="color:var(--nd-dpurp);font-size:11px;text-align:center;padding:8px 0;">No saved outfits</div>` : outfits.map((o, i) => `
-          <div style="display:flex;align-items:center;gap:6px;background:color-mix(in srgb,black 40%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 12%,transparent);border-radius:4px;padding:5px 8px;">
-            <span style="flex:1;color:var(--nd-text);font-size:11px;">${esc(o.name)}</span>
-            <button class="outfit-load" data-i="${i}" style="padding:3px 8px;background:color-mix(in srgb,var(--nd-accent) 22%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 44%,transparent);border-radius:3px;color:var(--nd-accent);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">Wear</button>
-            <button class="outfit-del" data-i="${i}" style="padding:3px 6px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border-radius:3px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">✕</button>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    container.querySelector('#outfit-save')?.addEventListener('click', () => {
-      const nameEl = container.querySelector('#outfit-name') as HTMLInputElement;
-      const name = nameEl.value.trim();
-      if (!name) return;
-      saveOutfit(name);
-      nameEl.value = '';
-      this.renderOutfits(body);
-      if (!authStore.getState().isGuest) publishOutfits(getOutfits());
-    });
-
-    container.querySelectorAll('.outfit-load').forEach(el => {
-      el.addEventListener('click', () => {
-        const i = parseInt((el as HTMLElement).dataset.i!);
-        const outfit = getOutfits()[i];
-        if (!outfit) return;
-        const newAvatar = setAvatar(outfit.avatar);
-        this.draftAvatar = { ...newAvatar };
-        this.onAvatarChange?.(newAvatar);
-        if (!authStore.getState().isGuest) publishAvatar(newAvatar);
-        this.renderPreview(newAvatar);
-        this.renderOptions(body);
-        this.renderColors(body);
-        this.onAvatarChange?.(newAvatar);
-      });
-    });
-    container.querySelectorAll('.outfit-del').forEach(el => {
-      el.addEventListener('click', () => {
-        deleteOutfit(parseInt((el as HTMLElement).dataset.i!));
-        this.renderOutfits(body);
-        if (!authStore.getState().isGuest) publishOutfits(getOutfits());
-      });
-    });
-  }
-
-  // ══════════════════════════════════════
-  // PROFILE TAB
-  // ══════════════════════════════════════
-  private renderProfile(body: HTMLElement): void {
-    const state = authStore.getState();
-    const profile = state.profile;
-    const isGuest = state.loginMethod === 'guest';
-
-    if (isGuest) {
-      const currentName = state.displayName || 'guest';
-      body.innerHTML = `
-        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;margin-bottom:14px;">Display Name</div>
-        <div style="margin-bottom:10px;">
-          <input id="guest-name" type="text" maxlength="32" value="${esc(currentName)}" style="
-            width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-            color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
-          "/>
-        </div>
-        <div style="margin-top:10px;">
-          <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
-          <input id="guest-status" type="text" maxlength="60" value="${esc(getStatus())}" placeholder="vibing, afk, busy..." style="
-            width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-            color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
-          "/>
-        </div>
-        <button id="guest-name-save" style="
-          width:100%;padding:10px;margin-top:10px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;
-          color:var(--nd-accent);font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
-        ">Save</button>
-        <div id="guest-name-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
-        <div style="color:var(--nd-subtext);font-size:11px;margin-top:20px;text-align:center;">Login with a Nostr key to set a full profile</div>
-      `;
-      const statusEl = body.querySelector('#guest-name-status') as HTMLElement;
-      body.querySelector('#guest-name-save')?.addEventListener('click', () => {
-        const name = ((body.querySelector('#guest-name') as HTMLInputElement).value || '').trim().slice(0, 32);
-        const status = ((body.querySelector('#guest-status') as HTMLInputElement).value || '').trim().slice(0, 60);
-        if (!name) return;
-        localStorage.setItem('nostr_district_guest_name', name);
-        setStatus(status);
-        authStore.setDisplayName(name);
-        this.onProfileSave?.(name);
-        sendStatusUpdate(status);
-        this.onStatusUpdate?.(status);
-        statusEl.style.color = 'var(--nd-accent)';
-        statusEl.textContent = 'Saved!';
-      });
-      return;
-    }
-
-    body.innerHTML = `
-      <div style="color:var(--nd-text);font-size:13px;font-weight:bold;margin-bottom:14px;">Edit Nostr Profile</div>
-      <div style="margin-bottom:10px;">
-        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Display Name</label>
-        <input id="prof-name" type="text" value="${esc(profile.display_name || profile.name || '')}" style="
-          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-          color:var(--nd-text);font-family:'Courier New',monospace;font-size:13px;outline:none;box-sizing:border-box;
-        "/>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">About</label>
-        <textarea id="prof-about" rows="3" style="
-          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;resize:vertical;
-        ">${esc(profile.about || '')}</textarea>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Picture URL</label>
-        <input id="prof-pic" type="text" value="${esc(profile.picture || '')}" style="
-          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
-        "/>
-      </div>
-      <div style="margin-bottom:14px;">
-        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Lightning Address</label>
-        <input id="prof-lnaddr" type="text" value="${esc(profile.lud16 || '')}" placeholder="you@wallet.com" style="
-          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
-        "/>
-      </div>
-      <div style="margin-bottom:14px;">
-        <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
-        <input id="prof-status-input" type="text" maxlength="60" value="${esc(getStatus())}" placeholder="vibing, afk, busy..." style="
-          width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
-          color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
-        "/>
-        <button id="prof-status-save" style="
-          width:100%;margin-top:6px;padding:7px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:4px;
-          color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-        ">Update Status</button>
-      </div>
-      <button id="prof-save" style="
-        width:100%;padding:10px;background:color-mix(in srgb,var(--nd-accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);border-radius:6px;
-        color:var(--nd-accent);font-family:'Courier New',monospace;font-size:13px;cursor:pointer;font-weight:bold;
-      ">Publish Profile (kind:0)</button>
-      <div id="prof-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
-    `;
-
-    body.querySelector('#prof-status-save')?.addEventListener('click', () => {
-      const status = ((body.querySelector('#prof-status-input') as HTMLInputElement).value || '').trim().slice(0, 60);
-      setStatus(status);
-      sendStatusUpdate(status);
-      this.onStatusUpdate?.(status);
-      const el = body.querySelector('#prof-status') as HTMLElement;
-      if (el) { el.style.color = 'var(--nd-accent)'; el.textContent = 'Status updated!'; setTimeout(() => { el.textContent = ''; }, 2000); }
-    });
-
-    body.querySelector('#prof-save')?.addEventListener('click', async () => {
-      const statusEl = body.querySelector('#prof-status') as HTMLElement;
-      statusEl.style.color = 'var(--nd-accent)';
-      statusEl.textContent = 'Publishing...';
-      try {
-        const name    = (body.querySelector('#prof-name')   as HTMLInputElement).value.trim();
-        const about   = (body.querySelector('#prof-about')  as HTMLTextAreaElement).value.trim();
-        const picture = (body.querySelector('#prof-pic')    as HTMLInputElement).value.trim();
-        const lnaddr  = (body.querySelector('#prof-lnaddr') as HTMLInputElement).value.trim();
-        const existing = authStore.getState().profile;
-        const content: Record<string, any> = { ...existing };
-        if (name) { content.name = name; content.display_name = name; }
-        if (about) content.about = about;
-        if (picture) content.picture = picture;
-        if (lnaddr) { content.lud16 = lnaddr; } else { delete content.lud16; }
-
-        const event: any = {
-          kind: 0, created_at: Math.floor(Date.now() / 1000),
-          tags: [], content: JSON.stringify(content),
-        };
-
-        let signed: any;
-        try {
-          signed = await signEvent(event);
-        } catch (sigErr: any) {
-          statusEl.style.color = P.red;
-          statusEl.textContent = sigErr.message || 'Signing failed';
-          return;
-        }
-
-        const ok = await publishEvent(signed);
-        if (!ok) {
-          statusEl.style.color = P.amber;
-          statusEl.textContent = 'No relay confirmed — try again';
-          return;
-        }
-
-        authStore.updateProfile(content);
-        if (name) this.onProfileSave?.(name);
-
-        statusEl.style.color = 'var(--nd-accent)';
-        statusEl.textContent = 'Published!';
-      } catch (e: any) {
-        statusEl.style.color = P.red;
-        statusEl.textContent = e.message || 'Failed';
-      }
-    });
-  }
-
-  /** Apply draftRoom to the store temporarily so the room re-renders without saving. */
-  private _applyLivePreview(): void {
-    if (!this.draftRoom) return;
-    if (!this.previewBaseline) this.previewBaseline = getRoomConfig();
-    setRoomConfig(this.draftRoom);
-    this.onRoomChange?.(this.draftRoom);
-  }
-
-  // ══════════════════════════════════════
-  // ROOM PREVIEW — temporarily hide panel so user can see live result
-  private previewRoom(): void {
-    if (!this.panel || !this.backdrop) return;
-    this.panel.style.display = 'none';
-    this.backdrop.style.display = 'none';
-    if (this.draftRoom) {
-      // Only save baseline if not already saved by a live color preview
-      if (!this.previewBaseline) this.previewBaseline = getRoomConfig();
-      this.previewSaved = false;
-      setRoomConfig(this.draftRoom);
-      this.onRoomChange?.(getRoomConfig());
-      this.onPetChange?.(this.draftRoom.pet);
-    }
-
-    this.previewPill = document.createElement('div');
-    this.previewPill.style.cssText = `
+    const pill = document.createElement('div');
+    pill.style.cssText = `
       position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4000;
-      background:color-mix(in srgb,var(--nd-accent) 18%,var(--nd-bg));
-      border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);
-      border-radius:24px;padding:10px 22px;
-      font-family:'Courier New',monospace;font-size:13px;font-weight:bold;
-      color:var(--nd-accent);cursor:pointer;
-      box-shadow:0 4px 20px rgba(0,0,0,0.6);
-      backdrop-filter:blur(4px);
+      background:color-mix(in srgb,var(--nd-bg) 92%,transparent);
+      border:1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
+      border-radius:20px;padding:8px 18px;
+      color:var(--nd-accent);font-family:'Courier New',monospace;font-size:12px;
+      cursor:pointer;backdrop-filter:blur(6px);
     `;
-    this.previewPill.textContent = '↩ Back to Terminal';
-    this.previewPill.addEventListener('click', () => this.exitPreview());
-    document.body.appendChild(this.previewPill);
+    pill.textContent = '↩ Back to Terminal';
+    pill.addEventListener('click', () => this.showAfterPreview());
+    document.body.appendChild(pill);
+    this.previewPill = pill;
   }
 
-  private exitPreview(): void {
-    if (this.panel)   this.panel.style.display = '';
+  private showAfterPreview(): void {
+    if (this.panel)    this.panel.style.display    = '';
     if (this.backdrop) this.backdrop.style.display = '';
     this.previewPill?.remove();
     this.previewPill = null;
-    // Don't revert here — live preview already wrote the draft to the store.
-    // Revert only happens on close() without saving.
-  }
-
-  // ROOM TAB — Full Customization
-  // ══════════════════════════════════════
-  private renderRoom(body: HTMLElement): void {
-    if (!this.draftRoom) this.draftRoom = getRoomConfig();
-
-    body.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">ROOM CUSTOMIZATION</span>
-        <div style="display:flex;gap:6px;">
-          <button id="room-preview-btn" style="
-            padding:5px 12px;border-radius:4px;cursor:pointer;
-            font-family:'Courier New',monospace;font-size:11px;
-            background:color-mix(in srgb,var(--nd-accent) 10%,transparent);
-            border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);
-            color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">Preview</button>
-          <button id="room-save-btn" style="
-            padding:5px 12px;border-radius:4px;cursor:pointer;
-            font-family:'Courier New',monospace;font-size:11px;
-            background:color-mix(in srgb,var(--nd-accent) 20%,transparent);
-            border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);
-            color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
-        </div>
-      </div>
-      <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;"></div>
-      <div id="room-section-body"></div>
-    `;
-
-    body.querySelector('#room-preview-btn')?.addEventListener('click', () => this.previewRoom());
-
-    const saveBtn = body.querySelector('#room-save-btn') as HTMLButtonElement | null;
-    if (authStore.getState().isGuest) {
-      if (saveBtn) saveBtn.style.display = 'none';
-    } else {
-      saveBtn?.addEventListener('click', () => {
-        if (!saveBtn || !this.draftRoom) return;
-        const committed = setRoomConfig(this.draftRoom);
-        this.onRoomChange?.(committed);
-        this.onPetChange?.(this.draftRoom.pet);
-        publishRoomConfig(committed);
-        this.previewSaved = true;
-        this.previewBaseline = null;
-        this.draftRoom = getRoomConfig();
-        saveBtn.textContent = 'Saved!';
-        saveBtn.disabled = true;
-        setTimeout(() => { if (saveBtn.isConnected) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; } }, 1500);
-      });
-    }
-
-    this.renderRoomSectionTabs(body);
-    this.renderRoomSectionBody(body);
-  }
-
-  private renderRoomSectionTabs(body: HTMLElement): void {
-    const container = body.querySelector('#room-section-tabs');
-    if (!container) return;
-
-    const sections = [
-      { key: 'walls',     label: 'Walls' },
-      { key: 'floor',     label: 'Floor' },
-      { key: 'lighting',  label: 'Lights' },
-      { key: 'furniture', label: 'Furniture' },
-      { key: 'posters',   label: 'Posters' },
-      { key: 'pets',      label: 'Pets' },
-      { key: 'music',     label: 'Music' },
-    ];
-
-    container.innerHTML = sections.map(s => `
-      <button class="rs" data-sec="${s.key}" style="
-        padding:6px 12px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;
-        cursor:pointer;border:1px solid ${this.currentRoomSection === s.key ? 'color-mix(in srgb,var(--nd-accent) 40%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-        background:${this.currentRoomSection === s.key ? 'color-mix(in srgb,var(--nd-accent) 13%,transparent)' : 'transparent'};
-        color:${this.currentRoomSection === s.key ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
-      ">${s.label}</button>
-    `).join('');
-
-    container.querySelectorAll('.rs').forEach(el => {
-      el.addEventListener('click', () => {
-        this.currentRoomSection = (el as HTMLElement).dataset.sec as any;
-        this.renderRoomSectionTabs(body);
-        this.renderRoomSectionBody(body);
-      });
-    });
-  }
-
-  private renderRoomSectionBody(body: HTMLElement): void {
-    const container = body.querySelector('#room-section-body') as HTMLElement;
-    if (!container) return;
-
-    switch (this.currentRoomSection) {
-      case 'walls':     this.renderWallPicker(container, body);      break;
-      case 'floor':     this.renderFloorPicker(container, body);     break;
-      case 'lighting':  this.renderLightingPicker(container, body);  break;
-      case 'furniture': this.renderFurniturePicker(container, body); break;
-      case 'posters':   this.renderPosterPicker(container, body);    break;
-      case 'pets':      this.renderPets(container);                  break;
-      case 'music':     this.renderMusicPicker(container);           break;
-    }
-  }
-
-  private renderWallPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-    const themes = Object.entries(WALL_THEMES) as [WallTheme, typeof WALL_THEMES[WallTheme]][];
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Theme</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-        ${themes.map(([key, theme]) => {
-          const active = cfg.wallTheme === key;
-          return `
-          <button class="wt" data-wall="${key}" style="
-            padding:8px 6px 7px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
-            cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
-            background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,rgba(0,0,0,0.4))' : 'rgba(0,0,0,0.3)'};
-            color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.55)'};
-          ">
-            <div style="width:100%;height:28px;border-radius:3px;margin-bottom:5px;background:${theme.brick};border:1px solid ${theme.accent};box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04);"></div>
-            ${esc(theme.label)}
-          </button>`;
-        }).join('')}
-      </div>
-    `;
-
-    container.querySelectorAll('.wt').forEach(el => {
-      el.addEventListener('click', () => {
-        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), wallTheme: (el as HTMLElement).dataset.wall as WallTheme };
-        this._applyLivePreview();
-        this.renderWallPicker(container, body);
-      });
-    });
-  }
-
-  private renderFloorPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-    const floors = Object.entries(FLOOR_STYLES) as [FloorStyle, typeof FLOOR_STYLES[FloorStyle]][];
-
-    const floorPreview = (key: string): string => {
-      switch (key) {
-        case 'hardwood': return `background:repeating-linear-gradient(180deg,#5a2e10 0px,#5a2e10 10px,#2a1406 10px,#2a1406 12px);`;
-        case 'tile':     return `background-color:#1a1838;background-image:linear-gradient(45deg,#2a285044 25%,transparent 25%,transparent 75%,#2a285044 75%),linear-gradient(45deg,#2a285044 25%,#1a1838 25%,#1a1838 75%,#2a285044 75%);background-size:8px 8px;background-position:0 0,4px 4px;`;
-        case 'carpet':   return `background:#2e1850;`;
-        case 'concrete': return `background-color:#222228;background-image:repeating-linear-gradient(135deg,#2a2a30 0px,#2a2a30 1px,transparent 1px,transparent 4px);background-size:4px 4px;`;
-        case 'neon':     return `background-color:#06060e;background-image:linear-gradient(0deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%),linear-gradient(90deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%);background-size:10px 10px;`;
-        case 'marble':   return `background:#dcd8ec;background-image:linear-gradient(125deg,transparent 28%,rgba(80,72,104,0.35) 30%,rgba(80,72,104,0.15) 33%,transparent 35%),linear-gradient(55deg,transparent 45%,rgba(80,72,104,0.25) 47%,transparent 50%);`;
-        case 'tatami':   return `background-color:#2a2010;background-image:repeating-linear-gradient(0deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 9px),repeating-linear-gradient(90deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 18px);`;
-        case 'hex':      return `background-color:#12101e;background-image:linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%);background-size:10px 18px;background-position:0 0,0 0,5px 9px,5px 9px,0 0,5px 9px;`;
-        case 'bamboo':   return `background-color:#2a2e12;background-image:repeating-linear-gradient(90deg,#3e4418 0px,#3e4418 13px,#1a1e08 13px,#1a1e08 14px),repeating-linear-gradient(0deg,transparent 0px,transparent 7px,rgba(26,30,8,0.6) 7px,rgba(26,30,8,0.6) 9px,transparent 9px,transparent 18px);background-size:14px 18px;`;
-        default:         return `background:#1e1040;`;
-      }
-    };
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Floor Style</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${floors.map(([key, style]) => {
-          const active = cfg.floorStyle === key;
-          return `
-          <button class="ft" data-floor="${key}" style="
-            padding:8px 6px 7px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
-            cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
-            background:${active ? 'color-mix(in srgb,var(--nd-accent) 10%,rgba(0,0,0,0.4))' : 'rgba(0,0,0,0.3)'};
-            color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.55)'};
-          ">
-            <div style="width:100%;height:24px;border-radius:3px;margin-bottom:5px;border:1px solid rgba(255,255,255,0.08);${floorPreview(key)}"></div>
-            ${esc(style.label)}
-          </button>`;
-        }).join('')}
-      </div>
-    `;
-
-    container.querySelectorAll('.ft').forEach(el => {
-      el.addEventListener('click', () => {
-        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), floorStyle: (el as HTMLElement).dataset.floor as FloorStyle };
-        this._applyLivePreview();
-        this.renderFloorPicker(container, body);
-      });
-    });
-  }
-
-  private renderLightingPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-    const moods = Object.entries(LIGHTING_MOODS) as [LightingMood, typeof LIGHTING_MOODS[LightingMood]][];
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Lighting Mood</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${moods.map(([key, mood]) => {
-          const active = cfg.lighting === key;
-          return `
-          <button class="lt" data-light="${key}" style="
-            padding:12px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
-            cursor:pointer;text-align:center;transition:all 0.15s;
-            border:2px solid ${active ? mood.primary : 'rgba(255,255,255,0.08)'};
-            background:${active ? mood.primary + '30' : 'rgba(0,0,0,0.25)'};
-            color:${active ? mood.primary : 'rgba(255,255,255,0.45)'};
-            box-shadow:${active ? `0 0 14px ${mood.primary}44` : 'none'};
-          ">
-            <div style="width:22px;height:22px;border-radius:50%;margin:0 auto 6px;background:${mood.primary};box-shadow:0 0 ${active ? '16px' : '8px'} ${mood.primary}${active ? 'aa' : '55'};"></div>
-            ${esc(mood.label)}
-          </button>`;
-        }).join('')}
-      </div>
-    `;
-
-    container.querySelectorAll('.lt').forEach(el => {
-      el.addEventListener('click', () => {
-        this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), lighting: (el as HTMLElement).dataset.light as LightingMood };
-        this._applyLivePreview();
-        this.renderLightingPicker(container, body);
-      });
-    });
-  }
-
-  private renderFurniturePicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-
-    // Curated palettes per furniture type
-    const PALETTES: Record<FurnitureId, { label: string; colors: string[] }> = {
-      desk:         { label: 'Wood Tones',   colors: ['#2e1e0e','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#0e0c08','#4a3020'] },
-      bookshelf:    { label: 'Wood Tones',   colors: ['#2a1a08','#3a2610','#5a3818','#7a5230','#1a1208','#3d3020','#0e0c08','#4a3828'] },
-      couch:        { label: 'Fabric',       colors: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'] },
-      plant:        { label: 'Pot Colors',   colors: ['#1e3a1a','#3a2818','#c87840','#a85030','#2a3a4a','#3a1a3a','#4a4020','#8a6040'] },
-      rug:          { label: 'Fabric',       colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
-      lamp:         { label: 'Metal / Wood', colors: ['#1e1432','#2a2010','#3a3030','#1a2a1a','#302010','#1a1a2a','#2a1a10','#3a2828'] },
-      speaker:      { label: 'Casing',       colors: ['#1e1432','#181818','#1a2818','#281818','#1a1828','#282010','#203028','#282828'] },
-      minifridge:   { label: 'Casing',       colors: ['#1e1432','#181828','#1a2a1a','#2a1a1a','#1a2028','#282828','#202820','#1a1818'] },
-      beanbag:      { label: 'Fabric',       colors: ['#c44060','#e0603a','#40a060','#4060c4','#a040a0','#c0a030','#30a0a0','#c06040'] },
-      arcade:       { label: 'Cabinet',      colors: ['#1e1432','#1a0808','#081a08','#08081a','#201008','#0a1020','#181020','#201818'] },
-      tv:           { label: 'Bezel',        colors: ['#1a1830','#181818','#141420','#201418','#181420','#141818','#1a1818','#141414'] },
-      pet_bed:      { label: 'Cushion',      colors: ['#7a3858','#c44060','#6b2840','#3d5a80','#2a6040','#7a4828','#6040a0','#5a5a5a'] },
-      cat_tree:     { label: 'Sisal / Wood', colors: ['#5a3a1a','#7a5530','#3a2810','#8a7050','#2a1808','#6a4a28','#4a3818','#9a8060'] },
-      pet_bowl:     { label: 'Bowl Color',   colors: ['#2a1e3e','#181828','#2a2010','#1a2a1a','#281a18','#1e2a28','#281828','#202028'] },
-      coffee_table: { label: 'Wood Tones',   colors: ['#2a1a0c','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#4a3020','#0e0c08'] },
-      record_player:{ label: 'Casing',       colors: ['#1e1432','#181818','#181028','#1a0808','#0a0a18','#201028','#281020','#0a0818'] },
-      lava_lamp:    { label: 'Blob Color',   colors: ['#e87aab','#7b68ee','#5dcaa5','#f0b040','#e85454','#ff6090','#60d0ff','#aaff44'] },
-      whiteboard:   { label: 'Frame Wood',   colors: ['#2a1a0c','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#3a2218','#4a3020'] },
-      server_rack:   { label: 'Casing',       colors: ['#1e1432','#181818','#1a0808','#081a08','#08081a','#201028','#1a1828','#282828'] },
-      candles:       { label: 'Wax Color',    colors: ['#f0e0a8','#f5e8d0','#e8d0b0','#d0c8e0','#e0f0e8','#f0d0d0','#e8e0f0','#f8f0e8'] },
-      record_crates: { label: 'Crate Color',  colors: ['#c87840','#e09050','#a06030','#d0a060','#8a5020','#e8b870','#c06820','#b05818'] },
-      trunk:         { label: 'Wood / Leather', colors: ['#3a2410','#5a3818','#2a1808','#7a5030','#1a1008','#4a3020','#3a2818','#6a4828'] },
-      bookstack:     { label: 'Spine Color',  colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
-      bar_cart:      { label: 'Frame Color',  colors: ['#2a2a2a','#1a1a1a','#3a3030','#2a2018','#383030','#282838','#303828','#383028'] },
-    };
-
-    // Furniture categories — each is its own page
-    const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
-      lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'beanbag', 'rug', 'coffee_table', 'candles', 'trunk', 'bar_cart'] },
-      decor:  { label: 'Decor',  emoji: '🌿', items: ['plant', 'lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack'] },
-      tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates'] },
-      pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },
-    };
-
-    const cat = this.activeFurnitureCategory;
-    const catItems = CATEGORIES[cat]?.items ?? CATEGORIES['lounge'].items;
-    const activeColor = this.activeFurnitureColor;
-    const activePalette = activeColor ? PALETTES[activeColor] : null;
-    const currentColor = activeColor ? getFurnitureColor(cfg, activeColor) : null;
-
-    const furItemHTML = (id: FurnitureId) => {
-      const data = FURNITURE_DATA[id];
-      const active = cfg.furniture.includes(id);
-      const isDesk = id === 'desk';
-      const color = getFurnitureColor(cfg, id);
-      const isExpanded = activeColor === id;
-      return `
-        <div style="
-          border-radius:6px;overflow:hidden;
-          border:1px solid ${isExpanded ? 'var(--nd-accent)' : active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 55%,transparent)' : 'rgba(255,255,255,0.07)'};
-          background:${active || isDesk ? 'color-mix(in srgb,var(--nd-accent) 12%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
-          opacity:${isDesk ? '0.75' : '1'};
-        ">
-          <div class="fur-row" data-fid="${id}" style="
-            padding:8px 10px;display:flex;align-items:center;gap:8px;
-            cursor:${isDesk ? 'default' : 'pointer'};
-          ">
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:11px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
-              <div style="font-size:9px;color:${active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};opacity:${active || isDesk ? '0.6' : '0.8'};">${isDesk ? 'Always on' : active ? 'Placed' : 'Tap to add'}</div>
-            </div>
-            ${active || isDesk ? `
-              <div class="fur-palette-btn" data-fid="${id}" style="
-                width:16px;height:16px;border-radius:3px;flex-shrink:0;
-                background:${color};border:1px solid rgba(255,255,255,0.2);
-                cursor:pointer;
-              " title="Change color"></div>
-            ` : ''}
-          </div>
-          ${isExpanded && activePalette ? `
-            <div style="padding:6px 8px 8px;border-top:1px solid color-mix(in srgb,var(--nd-accent) 13%,transparent);">
-              <div style="font-size:9px;color:var(--nd-subtext);opacity:0.6;margin-bottom:5px;">${activePalette.label}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                ${activePalette.colors.map(c => `
-                  <div class="pal-swatch" data-fid="${id}" data-color="${c}" style="
-                    width:20px;height:20px;border-radius:3px;cursor:pointer;
-                    background:${c};
-                    border:2px solid ${currentColor === c ? 'var(--nd-accent)' : 'rgba(255,255,255,0.12)'};
-                    transition:transform 0.1s;
-                  "></div>
-                `).join('')}
-                <div class="pal-reset" data-fid="${id}" style="
-                  width:20px;height:20px;border-radius:3px;cursor:pointer;
-                  background:transparent;border:1px solid color-mix(in srgb,var(--nd-dpurp) 33%,transparent);
-                  display:flex;align-items:center;justify-content:center;
-                  font-size:11px;color:var(--nd-dpurp);
-                " title="Reset">↺</div>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    };
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:8px;">Furniture</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px;">
-        ${Object.entries(CATEGORIES).map(([key, c]) => {
-          const isActive = cat === key;
-          const placedCount = c.items.filter(id => id === 'desk' || cfg.furniture.includes(id)).length;
-          return `
-            <button class="fur-cat" data-cat="${key}" style="
-              padding:6px 4px;border-radius:5px;font-family:'Courier New',monospace;font-size:9px;
-              cursor:pointer;text-align:center;line-height:1.4;
-              background:${isActive ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.45))' : 'rgba(0,0,0,0.25)'};
-              color:${isActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.4)'};
-              border:1px solid ${isActive ? 'color-mix(in srgb,var(--nd-accent) 50%,transparent)' : 'rgba(255,255,255,0.06)'};
-            ">
-              <div style="font-size:13px;line-height:1.2;">${c.emoji}</div>
-              <div style="font-weight:bold;">${c.label}</div>
-              <div style="font-size:8px;opacity:0.55;">${placedCount}/${c.items.length}</div>
-            </button>
-          `;
-        }).join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">
-        ${catItems.map(id => furItemHTML(id)).join('')}
-      </div>
-    `;
-
-    // Category tab clicks
-    container.querySelectorAll('.fur-cat').forEach(el => {
-      el.addEventListener('click', () => {
-        this.activeFurnitureCategory = (el as HTMLElement).dataset.cat!;
-        this.activeFurnitureColor = null;
-        this.renderFurniturePicker(container, body);
-      });
-    });
-
-    // Toggle place/remove
-    container.querySelectorAll('.fur-row').forEach(el => {
-      el.addEventListener('click', (e) => {
-        const fid = (el as HTMLElement).dataset.fid as FurnitureId;
-        if (fid === 'desk') return;
-        if ((e.target as HTMLElement).classList.contains('fur-palette-btn')) return;
-        if ((e.target as HTMLElement).classList.contains('pal-swatch')) return;
-        if ((e.target as HTMLElement).classList.contains('pal-reset')) return;
-        if (this.activeFurnitureColor === fid) {
-          this.activeFurnitureColor = null;
-          this.renderFurniturePicker(container, body);
-          return;
-        }
-        if (this.activeFurnitureColor !== null) this.activeFurnitureColor = null;
-        const base = this.draftRoom ?? getRoomConfig();
-        const furniture = [...base.furniture];
-        const idx = furniture.indexOf(fid);
-        if (idx >= 0) furniture.splice(idx, 1); else furniture.push(fid);
-        this.draftRoom = { ...base, furniture };
-        this._applyLivePreview();
-        this.renderFurniturePicker(container, body);
-      });
-    });
-
-    // Open/close palette via the color swatch button
-    container.querySelectorAll('.fur-palette-btn').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const fid = (el as HTMLElement).dataset.fid as FurnitureId;
-        this.activeFurnitureColor = this.activeFurnitureColor === fid ? null : fid;
-        this.renderFurniturePicker(container, body);
-      });
-    });
-
-    // Pick a swatch color — live preview
-    container.querySelectorAll('.pal-swatch').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const fid = (el as HTMLElement).dataset.fid as FurnitureId;
-        const color = (el as HTMLElement).dataset.color!;
-        const base = this.draftRoom ?? getRoomConfig();
-        this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: color } };
-        this._applyLivePreview();
-        this.renderFurniturePicker(container, body);
-      });
-    });
-
-    // Reset to default
-    container.querySelectorAll('.pal-reset').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const fid = (el as HTMLElement).dataset.fid as FurnitureId;
-        const base = this.draftRoom ?? getRoomConfig();
-        this.draftRoom = { ...base, furnitureColors: { ...base.furnitureColors, [fid]: DEFAULT_FURNITURE_COLORS[fid] } };
-        this._applyLivePreview();
-        this.renderFurniturePicker(container, body);
-      });
-    });
-  }
-
-  private renderPosterPicker(container: HTMLElement, body: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-
-    const slotLabels = ['Left Wall', 'Center Wall', 'Right Wall'];
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Posters</div>
-      <div style="display:flex;gap:4px;margin-bottom:12px;">
-        ${[0, 1, 2].map(i => {
-          const slotActive = this.activePosterSlot === i;
-          return `
-          <button class="ps" data-pslot="${i}" style="
-            flex:1;padding:7px 6px;border-radius:4px;font-family:'Courier New',monospace;font-size:10px;
-            cursor:pointer;text-align:center;
-            border:1px solid ${slotActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.1)'};
-            background:${slotActive ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.25)'};
-            color:${slotActive ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};
-          ">${slotLabels[i]}<br/><span style="font-size:9px;opacity:0.7;">${POSTER_DATA[cfg.posters[i]].label}</span></button>`;
-        }).join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${ALL_POSTERS.map(id => {
-          const data = POSTER_DATA[id];
-          const active = cfg.posters[this.activePosterSlot] === id;
-          return `
-            <button class="po" data-pid="${id}" style="
-              padding:10px 6px;border-radius:6px;font-family:'Courier New',monospace;font-size:10px;
-              cursor:pointer;text-align:center;transition:all 0.15s;
-              border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
-              background:${active ? 'color-mix(in srgb,var(--nd-accent) 22%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
-              color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.5)'};
-            ">
-              <span style="font-size:9px;">${esc(data.label)}</span>
-            </button>`;
-        }).join('')}
-      </div>
-    `;
-
-    container.querySelectorAll('.ps').forEach(el => {
-      el.addEventListener('click', () => {
-        this.activePosterSlot = Number((el as HTMLElement).dataset.pslot) as 0 | 1 | 2;
-        this.renderPosterPicker(container, body);
-      });
-    });
-
-    container.querySelectorAll('.po').forEach(el => {
-      el.addEventListener('click', () => {
-        const pid = (el as HTMLElement).dataset.pid as PosterId;
-        const base = this.draftRoom ?? getRoomConfig();
-        const posters = [...base.posters] as [PosterId, PosterId, PosterId];
-        posters[this.activePosterSlot] = pid;
-        this.draftRoom = { ...base, posters };
-        this._applyLivePreview();
-        this.renderPosterPicker(container, body);
-      });
-    });
-  }
-
-  // ══════════════════════════════════════
-  // PETS TAB
-  // ══════════════════════════════════════
-  private renderPets(container: HTMLElement): void {
-    const current = this.draftRoom ? this.draftRoom.pet : getPet();
-
-    const petCard = (species: PetSpecies, breed: number, name: string, scale = 1.0) => {
-      const isSelected = current.species === species && current.breed === breed;
-      const imgUrl = `pets/${species}-${breed}-idle.png`;
-      const baseH      = species === 'dog' ? 60 : 52;
-      const dispH      = Math.round(baseH * scale);
-      const dispW      = dispH; // frames are square
-      const nativeSize = species === 'dog' ? 100 : 50;
-      const idleFrames = 10; // both dogs and cats have 10 idle frames
-      const bgW        = Math.round(nativeSize * idleFrames * (dispH / nativeSize));
-      const bgSize     = `${bgW}px ${dispH}px`;
-      return `
-        <button class="pet-btn" data-species="${species}" data-breed="${breed}" style="
-          display:flex;flex-direction:column;align-items:center;gap:4px;
-          padding:8px 6px;border-radius:6px;cursor:pointer;
-          border:1px solid ${isSelected ? 'color-mix(in srgb,var(--nd-accent) 53%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-          background:${isSelected ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)' : 'color-mix(in srgb,black 35%,var(--nd-bg))'};
-          color:${isSelected ? 'var(--nd-accent)' : 'var(--nd-text)'};
-          font-family:'Courier New',monospace;font-size:9px;
-          transition:all 0.12s;
-        ">
-          <div style="
-            width:${dispW}px;height:${dispH}px;overflow:hidden;
-            background-image:url('${imgUrl}');
-            background-size:${bgSize};
-            background-position:0 0;
-            background-repeat:no-repeat;
-            image-rendering:pixelated;
-          "></div>
-          <span>${esc(name)}</span>
-        </button>
-      `;
-    };
-
-    container.innerHTML = `
-      <button class="pet-btn" data-species="none" data-breed="0" style="
-        width:100%;padding:8px;border-radius:6px;cursor:pointer;
-        border:1px solid ${current.species === 'none' ? 'color-mix(in srgb,var(--nd-accent) 66%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 20%,transparent)'};
-        background:${current.species === 'none' ? 'color-mix(in srgb,var(--nd-accent) 18%,transparent)' : 'transparent'};
-        color:${current.species === 'none' ? 'var(--nd-accent)' : 'var(--nd-subtext)'};
-        font-family:'Courier New',monospace;font-size:11px;margin-bottom:12px;display:block;
-      ">No Pet</button>
-
-      <div style="color:var(--nd-accent);font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">DOGS</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;">
-        ${DOG_BREEDS.map(b => petCard('dog', b.id, b.name, b.scale)).join('')}
-      </div>
-
-      <div style="color:var(--nd-accent);font-size:10px;font-weight:bold;margin-bottom:8px;letter-spacing:1px;">CATS</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        ${CAT_BREEDS.map(b => petCard('cat', b.id, b.name)).join('')}
-      </div>
-    `;
-
-    container.querySelectorAll('.pet-btn').forEach(el => {
-      el.addEventListener('click', () => {
-        const species = (el as HTMLElement).dataset.species as PetSpecies;
-        const breed   = Number((el as HTMLElement).dataset.breed);
-        const base = this.draftRoom ?? getRoomConfig();
-        this.draftRoom = { ...base, pet: { species, breed } };
-        this.renderPets(container);
-      });
-    });
-  }
-
-  private renderNotePicker(container: HTMLElement): void {
-    const cfg = this.draftRoom ?? getRoomConfig();
-    const current = cfg.pinnedNote || '';
-    const MAX = 220;
-
-    container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:8px;">Wall Note</div>
-      <div style="color:var(--nd-subtext);font-size:10px;margin-bottom:12px;line-height:1.5;">
-        Pin a note to your room wall. Visitors can read it when they click the note.
-      </div>
-      <textarea id="note-input" maxlength="${MAX}" style="
-        width:100%;height:110px;resize:none;box-sizing:border-box;
-        background:color-mix(in srgb,black 45%,var(--nd-bg));
-        border:1px solid color-mix(in srgb,var(--nd-dpurp) 30%,transparent);
-        border-radius:6px;padding:10px;
-        color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;
-        line-height:1.6;outline:none;
-      " placeholder="Leave a note for visitors...">${esc(current)}</textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-        <span id="note-counter" style="color:var(--nd-subtext);font-size:10px;">${current.length}/${MAX}</span>
-        <div style="display:flex;gap:8px;">
-          ${current ? `<button id="note-clear" style="
-            padding:6px 14px;border-radius:4px;cursor:pointer;
-            background:transparent;border:1px solid color-mix(in srgb,var(--nd-amber) 30%,transparent);
-            color:var(--nd-amber);font-family:'Courier New',monospace;font-size:11px;
-          ">Remove</button>` : ''}
-          <button id="note-save" style="
-            padding:6px 18px;border-radius:4px;cursor:pointer;
-            background:color-mix(in srgb,var(--nd-accent) 18%,transparent);
-            border:1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
-            color:var(--nd-accent);font-family:'Courier New',monospace;font-size:11px;
-          ">Pin Note</button>
-        </div>
-      </div>
-      <div id="note-saved" style="color:var(--nd-accent);font-size:11px;margin-top:8px;opacity:0;transition:opacity 0.3s;">
-        ✓ Note pinned to wall
-      </div>
-    `;
-
-    const textarea = container.querySelector('#note-input') as HTMLTextAreaElement;
-    const counter  = container.querySelector('#note-counter') as HTMLElement;
-    const saved    = container.querySelector('#note-saved') as HTMLElement;
-
-    textarea.addEventListener('input', () => {
-      counter.textContent = `${textarea.value.length}/${MAX}`;
-    });
-
-    container.querySelector('#note-save')?.addEventListener('click', () => {
-      const text = textarea.value.trim();
-      this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), pinnedNote: text || null };
-      saved.style.opacity = '1';
-      setTimeout(() => { saved.style.opacity = '0'; }, 2000);
-      this.renderNotePicker(container);
-    });
-
-    container.querySelector('#note-clear')?.addEventListener('click', () => {
-      this.draftRoom = { ...(this.draftRoom ?? getRoomConfig()), pinnedNote: null };
-      this.renderNotePicker(container);
-    });
-  }
-
-  private renderMusicPicker(container: HTMLElement): void {
-    const snd = SoundEngine.get();
-
-    const allOptions: { id: MyRoomTrackId; label: string }[] = [
-      { id: 'off', label: 'Off' },
-      ...MYROOM_TRACKS,
-    ];
-
-    const render = () => {
-      container.innerHTML = `
-        <div style="padding:8px 0;">
-          <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:12px;">ROOM TRACK</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            ${allOptions.map(t => {
-              const active = t.id === snd.myRoomTrack;
-              return `
-                <div class="mu-track" data-trackid="${t.id}" style="
-                  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;
-                  border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
-                  background:${active ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
-                  transition:background 0.15s,border-color 0.15s;
-                ">
-                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
-                    background:${active ? 'var(--nd-accent)' : 'transparent'};
-                    border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};
-                    box-shadow:${active ? '0 0 6px var(--nd-accent)' : 'none'};
-                  "></span>
-                  <span style="color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.6)'};font-size:12px;">${esc(t.label)}</span>
-                  ${active ? `<span style="color:var(--nd-accent);font-size:10px;margin-left:auto;opacity:0.7;">${t.id === 'off' ? 'silent' : 'playing'}</span>` : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>
-          <div style="color:var(--nd-subtext);font-size:10px;opacity:0.45;margin-top:14px;line-height:1.5;">
-            Music by Kevin MacLeod (incompetech.com)<br>Licensed under CC BY 4.0
-          </div>
-        </div>
-      `;
-
-      container.querySelectorAll('.mu-track').forEach(el => {
-        (el as HTMLElement).addEventListener('mouseenter', () => {
-          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
-            (el as HTMLElement).style.background = 'color-mix(in srgb,var(--nd-dpurp) 12%,transparent)';
-        });
-        (el as HTMLElement).addEventListener('mouseleave', () => {
-          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
-            (el as HTMLElement).style.background = 'transparent';
-        });
-        (el as HTMLElement).addEventListener('click', () => {
-          const tid = (el as HTMLElement).dataset.trackid as MyRoomTrackId;
-          snd.setMyRoomTrack(tid);
-          this.onMusicChange?.(tid);
-          render();
-        });
-      });
-    };
-
-    render();
   }
 }

@@ -29,7 +29,7 @@ import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
 import { incrementAuraProgress } from '../stores/auraUnlockStore';
-import { incrementLegendaryCatch } from '../stores/fishingUnlockStore';
+import { incrementLegendaryCatch, incrementCoelacanth } from '../stores/fishingUnlockStore';
 
 const WOODS_ACCENT = '#aaff44';
 
@@ -1515,6 +1515,7 @@ export class WoodsScene extends BaseScene {
       });
     }
     if (isLegendary) {
+      if (catch_.name === 'leviathan coelacanth') incrementCoelacanth();
       incrementLegendaryCatch();
       const flavor = 'flavor' in catch_ ? catch_.flavor : '';
       const lore = 'lore' in catch_ ? catch_.lore : '';

@@ -20,9 +20,9 @@ export interface ItemDef {
 }
 
 export interface HairDef {
-  roomKey: string; roomX: number; roomY: number; roomW: number; roomH: number;
-  hubKey:  string; hubOffX: number; hubOffY: number; hubW: number; hubH: number;
-  hatRoomKey?: string; hatRoomX?: number; hatRoomY?: number; hatRoomW?: number; hatRoomH?: number;
-  hatHubKey?: string; hatHubOffX?: number; hatHubOffY?: number; hatHubW?: number; hatHubH?: number;
+  roomKey: string; roomX: number; roomY: number;
+  hubKey:  string; hubOffX: number; hubOffY: number;
+  hatRoomKey?: string; hatRoomX?: number; hatRoomY?: number;
+  hatHubKey?: string; hatHubOffX?: number; hatHubOffY?: number;
   flipH?: boolean;
 }

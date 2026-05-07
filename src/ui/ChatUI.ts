@@ -82,7 +82,7 @@ export class ChatUI {
       this.commandMode = false;
     });
     this.input.addEventListener('keydown', (e) => {
-      e.stopPropagation();
+      if (e.key !== 'Escape') e.stopPropagation();
       if (e.key === 'Enter') {
         const text = this.input.value.trim();
         if (!text) { this.input.blur(); return; }

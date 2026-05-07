@@ -86,6 +86,13 @@ export function drawImgItem(x: CanvasRenderingContext2D, name: string, dx: numbe
   x.restore();
 }
 
+/** Draw a hair PNG at its native pixel dimensions (no stretch). */
+export function drawHairNative(x: CanvasRenderingContext2D, key: string, dx: number, dy: number, flipH = false): void {
+  const img = imgCache.get(key);
+  if (!img) return;
+  drawHairImg(x, key, dx, dy, img.naturalWidth, img.naturalHeight, flipH);
+}
+
 export function drawHairImg(x: CanvasRenderingContext2D, key: string, dx: number, dy: number, dw: number, dh: number, flipH = false): void {
   const img = imgCache.get(key);
   if (!img) return;

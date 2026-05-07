@@ -54,38 +54,38 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
 };
 
 // ── Hair definitions ──────────────────────────────────────────────────────────
+// Width/height come from the PNG's natural dimensions at draw time.
+//
 // Hub coords  (origin = head center cx, head top hy):
 //   hubOffX   negative = left of center, positive = right       (cx + hubOffX = image left edge)
 //   hubOffY   negative = above head top, positive = below        (hy + hubOffY = image top edge)
-//   hubW/H    width and height in pixels, always positive
 //
 // Room coords  (origin = canvas left 0, head top oY):
 //   roomX     absolute left edge of image — smaller = further left
 //   roomY     negative = above head top, positive = below        (oY + roomY = image top edge)
-//   roomW/H   width and height in pixels, always positive
 //
 // Hat variants (hatHubOffX/Y, hatRoomX/Y) follow the same rules —
 // used instead of the main coords when a hat is worn.
 export const HAIR_DEFS: Record<string, HairDef> = {
-  short:    { roomKey: 'hair_short',    roomX: 4,  roomY: -3,  roomW: 16, roomH: 7,  hubKey: 'hair_short_hub',    hubOffX: -5,  hubOffY: -2, hubW: 10, hubH: 4  },
-  afro:     { roomKey: 'hair_afro',     roomX: 1,  roomY: -7,  roomW: 22, roomH: 15, hubKey: 'hair_afro_hub',     hubOffX: -8,  hubOffY: -6, hubW: 16, hubH: 12 },
-  ponytail: { roomKey: 'hair_ponytail', roomX: 0,  roomY: -7,  roomW: 20, roomH: 14, hubKey: 'hair_ponytail_hub', hubOffX: -7,  hubOffY: -6, hubW: 13, hubH: 11, flipH: true },
-  bun:      { roomKey: 'hair_bun',      roomX: 5,  roomY: -6, roomW: 14, roomH: 11, hubKey: 'hair_bun_hub',      hubOffX: -5,  hubOffY: -4, hubW: 10, hubH: 7  },
-  grease:   { roomKey: 'hair_grease',   roomX: 0,  roomY: -3, roomW: 19, roomH: 10, hubKey: 'hair_grease_hub',   hubOffX: -8,  hubOffY: -3, hubW: 13, hubH: 6  },
-  swept:    { roomKey: 'hair_swept',    roomX: 4,  roomY: -6, roomW: 17, roomH: 13, hubKey: 'hair_swept_hub',    hubOffX: -6,  hubOffY: -5, hubW: 13, hubH: 9  },
-  pigtails: { roomKey: 'hair_pigtails', roomX: -2, roomY: -5, roomW: 28, roomH: 16, hubKey: 'hair_pigtails_hub', hubOffX: -10, hubOffY: -2, hubW: 20, hubH: 8  },
-  long:     { roomKey: 'hair_long',     roomX: 5,  roomY: -2, roomW: 14, roomH: 16, hubKey: 'hair_long_hub',     hubOffX: -5,  hubOffY: -2, hubW: 10, hubH: 11, flipH: true,
-             hatRoomKey: 'hair_longhat',    hatRoomX: 5,  hatRoomY: 2, hatRoomW: 14, hatRoomH: 12,
-             hatHubKey:  'hair_longhubhat', hatHubOffX: -5, hatHubOffY: 2, hatHubW: 10, hatHubH: 7 },
-  spiky:     { roomKey: 'hair_spiky',     roomX: 1,  roomY: -5, roomW: 22, roomH: 13, hubKey: 'hair_spiky_hub',     hubOffX: -7,  hubOffY: -4, hubW: 14, hubH: 10 },
-  horseshoe: { roomKey: 'hair_horseshoe', roomX: 5,  roomY: 1, roomW: 14, roomH: 4,  hubKey: 'hair_horseshoe_hub', hubOffX: -5,  hubOffY: 0, hubW: 10, hubH: 3  },
-  part:      { roomKey: 'hair_part',      roomX: 5,  roomY: -2, roomW: 14, roomH: 7,  hubKey: 'hair_part_hub',      hubOffX: -5,  hubOffY: -1, hubW: 10, hubH: 4  },
-  partbeard: { roomKey: 'hair_partbeard', roomX: 5,  roomY: -2, roomW: 14, roomH: 16, hubKey: 'hair_partbeard_hub', hubOffX: -5,  hubOffY: -1, hubW: 10, hubH: 11,
-               hatRoomKey: 'hair_partbeardhat',    hatRoomX: 5,  hatRoomY: 2, hatRoomW: 14, hatRoomH: 12,
-               hatHubKey:  'hair_partbeardhubhat', hatHubOffX: -5, hatHubOffY: 2, hatHubW: 10, hatHubH: 8 },
-  braid:     { roomKey: 'hair_braid',     roomX: 4,  roomY: -3, roomW: 16, roomH: 17, hubKey: 'hair_braid_hub',     hubOffX: -5,  hubOffY: -2, hubW: 10, hubH: 11,
-               hatRoomKey: 'hair_braidhat',    hatRoomX: 4,  hatRoomY: 3, hatRoomW: 15, hatRoomH: 11,
-               hatHubKey:  'hair_braidhubhat', hatHubOffX: -5, hatHubOffY: 2, hatHubW: 10, hatHubH: 7 },
+  short:    { roomKey: 'hair_short',    roomX: 4,  roomY: -3, hubKey: 'hair_short_hub',    hubOffX: -5,  hubOffY: -2 },
+  afro:     { roomKey: 'hair_afro',     roomX: 1,  roomY: -7, hubKey: 'hair_afro_hub',     hubOffX: -8,  hubOffY: -6 },
+  ponytail: { roomKey: 'hair_ponytail', roomX: 0,  roomY: -7, hubKey: 'hair_ponytail_hub', hubOffX: -7,  hubOffY: -6, flipH: true },
+  bun:      { roomKey: 'hair_bun',      roomX: 5,  roomY: -6, hubKey: 'hair_bun_hub',      hubOffX: -5,  hubOffY: -4 },
+  grease:   { roomKey: 'hair_grease',   roomX: 0,  roomY: -3, hubKey: 'hair_grease_hub',   hubOffX: -8,  hubOffY: -3 },
+  swept:    { roomKey: 'hair_swept',    roomX: 4,  roomY: -6, hubKey: 'hair_swept_hub',    hubOffX: -6,  hubOffY: -5 },
+  pigtails: { roomKey: 'hair_pigtails', roomX: -2, roomY: -5, hubKey: 'hair_pigtails_hub', hubOffX: -10, hubOffY: -2 },
+  long:     { roomKey: 'hair_long',     roomX: 5,  roomY: -2, hubKey: 'hair_long_hub',     hubOffX: -5,  hubOffY: -2, flipH: true,
+             hatRoomKey: 'hair_longhat',    hatRoomX: 5,  hatRoomY: 2,
+             hatHubKey:  'hair_longhubhat', hatHubOffX: -5, hatHubOffY: 2 },
+  spiky:     { roomKey: 'hair_spiky',     roomX: 1,  roomY: -5, hubKey: 'hair_spiky_hub',     hubOffX: -7,  hubOffY: -4 },
+  horseshoe: { roomKey: 'hair_horseshoe', roomX: 5,  roomY: 1,  hubKey: 'hair_horseshoe_hub', hubOffX: -5,  hubOffY: 0  },
+  part:      { roomKey: 'hair_part',      roomX: 5,  roomY: -2, hubKey: 'hair_part_hub',      hubOffX: -5,  hubOffY: -1 },
+  partbeard: { roomKey: 'hair_partbeard', roomX: 5,  roomY: -2, hubKey: 'hair_partbeard_hub', hubOffX: -5,  hubOffY: -1,
+               hatRoomKey: 'hair_partbeardhat',    hatRoomX: 5,  hatRoomY: 2,
+               hatHubKey:  'hair_partbeardhubhat', hatHubOffX: -5, hatHubOffY: 2 },
+  braid:     { roomKey: 'hair_braid',     roomX: 4,  roomY: -3, hubKey: 'hair_braid_hub',     hubOffX: -5,  hubOffY: -2,
+               hatRoomKey: 'hair_braidhat',    hatRoomX: 4,  hatRoomY: 3,
+               hatHubKey:  'hair_braidhubhat', hatHubOffX: -5, hatHubOffY: 2 },
 };
 
 // ── Asset loading ─────────────────────────────────────────────────────────────
