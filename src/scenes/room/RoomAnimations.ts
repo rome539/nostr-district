@@ -9,7 +9,7 @@ export function updateBlinkingLEDs(
   time: number,
 ): void {
   if (leds.length === 0) return;
-  graphics.setDepth(Math.max(...leds.map(l => l.y)) + 44);
+  graphics.setDepth(Math.max(...leds.map(l => l.depth)));
   graphics.clear();
   leds.forEach(led => {
     const on = Math.sin(time * 0.003 + led.phase) > -0.2 + Math.random() * 0.1;
@@ -31,7 +31,7 @@ export function updateCandleFlames(
 ): void {
   graphics.clear();
   if (flames.length === 0) return;
-  graphics.setDepth(Math.max(...flames.map(f => f.y)) + 44);
+  graphics.setDepth(Math.max(...flames.map(f => f.depth)));
   flames.forEach(f => {
     const flicker = Math.sin(time * 0.009 + f.phase) * 0.4 + Math.sin(time * 0.017 + f.phase * 2.1) * 0.2;
     const sway    = Math.sin(time * 0.006 + f.phase * 1.7) * 1.2;

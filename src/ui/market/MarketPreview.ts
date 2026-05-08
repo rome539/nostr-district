@@ -54,6 +54,8 @@ export const FURNITURE_PATHS: Record<string, string> = {
   neon58k:           'assets/furniture/tech/neon58k.png',
   bitcoincircularrug: 'assets/furniture/lounge/bitcoincircularrug.png',
   endtable:           'assets/furniture/lounge/endtable.png',
+  djtable:            'assets/furniture/tech/djtable.png',
+  ufopinup:           'assets/furniture/tech/ufopinup.png',
 };
 
 export class MarketPreview {
@@ -474,6 +476,39 @@ export class MarketPreview {
         ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
       };
       img.src = src;
+    } else if (value === 'slate') {
+      ctx.fillStyle = '#060608'; ctx.fillRect(0, 0, W, H);
+      const TW = 36; const TH = 18;
+      for (let fy = 0; fy < H; fy += TH) {
+        const row = Math.floor(fy / TH);
+        const off = (row % 2) * (TW / 2);
+        for (let fx = -TW + off; fx < W + TW; fx += TW) {
+          ctx.globalAlpha = 0.04 + (row % 2) * 0.02;
+          ctx.fillStyle = '#1a1a28'; ctx.fillRect(fx, fy, TW - 1, TH - 1);
+          ctx.globalAlpha = 0.07;
+          ctx.fillStyle = '#8080b0'; ctx.fillRect(fx, fy, TW - 1, 1);
+          ctx.fillStyle = '#6060a0'; ctx.fillRect(fx, fy, 1, TH - 1);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(120,120,180,0.14)'; ctx.lineWidth = 1;
+      for (let fy = 0; fy < H; fy += TH) { ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(W, fy); ctx.stroke(); }
+      const glare = ctx.createRadialGradient(W / 2, 8, 0, W / 2, 8, W * 0.7);
+      glare.addColorStop(0, 'rgba(180,180,255,0.07)'); glare.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glare; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(200,200,255,0.25)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.stroke();
+    } else if (value === 'void') {
+      ctx.fillStyle = '#00000a'; ctx.fillRect(0, 0, W, H);
+      const seeded = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+      const COLORS = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'];
+      for (let i = 0; i < 90; i++) {
+        ctx.globalAlpha = 0.2 + seeded(i * 2.1) * 0.55;
+        ctx.fillStyle = COLORS[Math.floor(seeded(i * 6.7) * COLORS.length)];
+        const big = seeded(i * 5.3) > 0.82;
+        ctx.fillRect(seeded(i * 3.7) * W, seeded(i * 1.9) * H, big ? 2 : 1, big ? 2 : 1);
+      }
+      ctx.globalAlpha = 1;
     }
     return c;
   }

@@ -1,5 +1,5 @@
-export type BlinkingLED = { x: number; y: number; color: string; phase: number };
-export type CandleFlame = { x: number; y: number; phase: number };
+export type BlinkingLED = { x: number; y: number; depth: number; color: string; phase: number };
+export type CandleFlame = { x: number; y: number; depth: number; phase: number };
 export type FireplaceFlame = { x: number; y: number; w: number };
 export type VoidStar = { x: number; y: number; color: string; phase: number; size: number };
 

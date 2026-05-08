@@ -271,8 +271,9 @@ export class PetSprite {
       this.sprite.x += (dx / dist) * spd;
       this.sprite.y += (dy / dist) * spd;
       this.sprite.setFlipX(dx < 0);
-      this.applyPerspective(); // scale + depth update every frame while moving
+      this.applyPerspective();
     } else {
+      this.applyPerspective();
       if (!ONE_SHOT_STATES.has(this.state)) {
         this.stateTimer += delta;
         if (this.stateTimer >= this.stateDuration) this.transitionFrom(this.state);
@@ -288,8 +289,7 @@ export class PetSprite {
     const tClamped = Math.max(0, Math.min(1, t));
     const persp = PERSP_FAR + (PERSP_NEAR - PERSP_FAR) * tClamped;
     this.sprite.setScale(this.baseScale * persp);
-    // Keep pets behind the player (depth 10) across the whole room.
-    this.sprite.setDepth(7 + tClamped * 2);
+    this.sprite.setDepth(this.sprite.y);
   }
 
   // ── State machine ───────────────────────────────────────────────────────────

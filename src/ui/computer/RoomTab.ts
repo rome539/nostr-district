@@ -502,6 +502,8 @@ export class RoomTab {
         case 'dungeon':       return `background-image:url(assets/furniture/floors/dungeonfloor.png);background-size:cover;`;
         case 'dirtfloor':     return `background-image:url(assets/furniture/floors/dirtfloor.png);background-size:cover;`;
         case 'oldwoodenfloor':return `background-image:url(assets/furniture/floors/oldwoodenfloor.png);background-size:cover;`;
+        case 'void':          return `background:#00000a;background-image:radial-gradient(1px 1px at 15% 30%,#fad480 0%,transparent 100%),radial-gradient(1px 1px at 40% 70%,#fff 0%,transparent 100%),radial-gradient(1px 1px at 65% 20%,#7b68ee 0%,transparent 100%),radial-gradient(1px 1px at 80% 55%,#5dcaa5 0%,transparent 100%),radial-gradient(1px 1px at 25% 80%,#e87aab 0%,transparent 100%),radial-gradient(2px 2px at 55% 45%,rgba(255,255,255,0.8) 0%,transparent 100%);`;
+        case 'slate':         return `background:#060608;background-image:linear-gradient(180deg,rgba(180,180,220,0.07) 0%,rgba(0,0,0,0.06) 100%),repeating-linear-gradient(180deg,transparent 0px,transparent 17px,rgba(200,200,255,0.04) 17px,rgba(200,200,255,0.04) 18px);border-top:1px solid rgba(220,220,255,0.2);`;
         default:              return `background:#1e1040;`;
       }
     };
@@ -593,7 +595,7 @@ export class RoomTab {
   private renderFurniturePicker(container: HTMLElement): void {
     const cfg = this.draftRoom ?? getRoomConfig();
 
-    const PALETTES: Record<FurnitureId, { label: string; colors: string[] }> = {
+    const PALETTES: Partial<Record<FurnitureId, { label: string; colors: string[] }>> & Record<string, { label: string; colors: string[] }> = {
       desk:         { label: 'Wood Tones',   colors: ['#2e1e0e','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#0e0c08','#4a3020'] },
       bookshelf:    { label: 'Wood Tones',   colors: ['#2a1a08','#3a2610','#5a3818','#7a5230','#1a1208','#3d3020','#0e0c08','#4a3828'] },
       couch:        { label: 'Fabric',       colors: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'] },
@@ -652,7 +654,7 @@ export class RoomTab {
     const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
       lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'armchair', 'beanbag', 'rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug', 'coffee_table', 'endtable', 'candles', 'trunk', 'bar_cart', 'safe', 'decoratedcouch', 'decoratedarmchair'] },
       decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'sworddec', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
-      tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates'] },
+      tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates', 'djtable', 'ufopinup'] },
       pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },
     };
 
@@ -693,7 +695,7 @@ export class RoomTab {
               <div style="font-size:11px;color:${locked ? 'rgba(255,255,255,0.3)' : active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.45)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(data.label)}</div>
               <div style="font-size:9px;color:${locked ? 'rgba(255,255,255,0.2)' : active || isDesk ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};opacity:${active || isDesk ? '0.6' : '0.8'};">${isDesk ? 'Always on' : locked ? (isFreeFlower ? '🌸 Free — log in' : '🔒 Buy in Market') : active ? 'Placed' : 'Tap to add'}</div>
             </div>
-            ${(active || isDesk) ? `
+            ${(active || isDesk) && PALETTES[id] ? `
               <div class="fur-palette-btn" data-fid="${id}" style="
                 width:16px;height:16px;border-radius:3px;flex-shrink:0;
                 background:${color};border:1px solid rgba(255,255,255,0.2);

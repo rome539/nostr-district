@@ -290,6 +290,7 @@ export function drawFloor(
   floor: { base: string; alt: string; groove: string },
   light: { primary: string },
   r: FillRect,
+  voidStarsOut?: VoidStar[],
 ): void {
   r(0, FY, W, H - FY, floor.base);
 
@@ -390,6 +391,46 @@ export function drawFloor(
     bSheen.addColorStop(0, 'rgba(160,200,40,0.06)');
     bSheen.addColorStop(1, 'rgba(0,0,0,0.08)');
     x.fillStyle = bSheen; x.fillRect(0, FY, W, H - FY);
+  } else if (floorStyle === 'void') {
+    const seeded = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+    const STAR_COLORS = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'];
+    for (let i = 0; i < 160; i++) {
+      const sx = seeded(i * 3.7 + 10) * W;
+      const sy = FY + seeded(i * 1.9 + 20) * (H - FY);
+      const big = seeded(i * 5.3 + 30) > 0.82;
+      x.globalAlpha = 0.15 + seeded(i * 2.1 + 40) * 0.45;
+      x.fillStyle = STAR_COLORS[Math.floor(seeded(i * 6.7 + 50) * STAR_COLORS.length)];
+      x.fillRect(sx, sy, big ? 2 : 1, big ? 2 : 1);
+    }
+    const nebGrad = x.createLinearGradient(0, FY, 0, H);
+    nebGrad.addColorStop(0, 'rgba(40,20,80,0.06)');
+    nebGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = nebGrad; x.fillRect(0, FY, W, H - FY);
+    x.globalAlpha = 1;
+  } else if (floorStyle === 'slate') {
+    const TW = 60; const TH = 28;
+    for (let fy = FY; fy < H; fy += TH) {
+      const row = Math.floor((fy - FY) / TH);
+      const off = (row % 2) * (TW / 2);
+      for (let fx = -TW + off; fx < W + TW; fx += TW) {
+        x.globalAlpha = 0.03 + (row % 2) * 0.015;
+        r(fx, fy, TW - 1, TH - 1, '#1a1a28');
+        x.globalAlpha = 0.06;
+        r(fx, fy, TW - 1, 1, '#8080b0');
+        r(fx, fy, 1, TH - 1, '#6060a0');
+        x.globalAlpha = 1;
+      }
+    }
+    x.strokeStyle = 'rgba(120,120,180,0.12)'; x.lineWidth = 1;
+    for (let fy = FY; fy < H; fy += TH) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
+    x.globalAlpha = 1;
+    const glare = x.createRadialGradient(W * 0.5, FY + 10, 0, W * 0.5, FY + 10, W * 0.6);
+    glare.addColorStop(0, 'rgba(180,180,255,0.06)');
+    glare.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = glare; x.fillRect(0, FY, W, H - FY);
+    x.strokeStyle = 'rgba(200,200,255,0.22)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(0, FY); x.lineTo(W, FY); x.stroke();
+    x.globalAlpha = 1;
   } else {
     // Hardwood planks
     const WOOD_BASE  = '#3d1f0a';

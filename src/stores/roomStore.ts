@@ -33,6 +33,8 @@ export type FloorStyle =
   | 'tatami'     // japanese woven mat
   | 'hex'        // hexagonal tile pattern
   | 'bamboo'          // vertical bamboo stalks
+  | 'slate'           // polished dark slate tiles
+  | 'void'            // deep space — stars beneath your feet
   | 'dungeon'         // dungeon stone PNG floor
   | 'dirtfloor'       // dirt floor PNG
   | 'oldwoodenfloor'; // old wooden floor PNG
@@ -101,7 +103,9 @@ export type FurnitureId =
   | 'neongfy'          // GFY neon sign (wall)
   | 'neon58k'          // 58k neon sign (wall)
   | 'bitcoincircularrug' // bitcoin circular floor rug
-  | 'endtable';          // small end table (lounge)
+  | 'endtable'           // small end table (lounge)
+  | 'djtable'            // DJ turntable setup (tech)
+  | 'ufopinup';          // UFO pin-up wall poster (tech)
 
 export type PosterId =
   | 'none'
@@ -175,6 +179,8 @@ export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> =
   neongfy:           { x: 100, y: 50  },
   neon58k:           { x: 180, y: 50  },
   bitcoincircularrug: { x: 310, y: 310 },
+  djtable:            { x: 290, y: 295 },
+  ufopinup:           { x: 340, y: 50  },
 };
 
 export function getDefaultPos(id: FurnitureId): FurniturePos {
@@ -201,10 +207,10 @@ export const FURNITURE_BOUNDS: Partial<Record<FurnitureId, { w: number; h: numbe
   pet_bowl:      { w: 48,  h: 16  },
   coffee_table:  { w: 130, h: 26  },
   record_player: { w: 28,  h: 40  },
-  lava_lamp:     { w: 18,  h: 72  },
+  lava_lamp:     { w: 18,  h: 70  },
   whiteboard:    { w: 56,  h: 81  },
   server_rack:   { w: 32,  h: 110 },
-  candles:       { w: 34,  h: 36  },
+  candles:       { w: 34,  h: 34  },
   record_crates: { w: 70,  h: 61  },
   trunk:         { w: 70,  h: 44  },
   bookstack:     { w: 54,  h: 60  },
@@ -377,6 +383,8 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   neon58k:           '#ff3355',
   bitcoincircularrug: '#ffffff',
   endtable:           '#2a1a08',
+  djtable:            '#ffffff',
+  ufopinup:           '#ffffff',
 };
 
 export function setFurnitureColor(id: FurnitureId, color: string): RoomConfig {
@@ -451,7 +459,9 @@ export const FLOOR_STYLES: Record<FloorStyle, { base: string; alt: string; groov
   marble:   { base: '#dcd8ec', alt: '#504868', groove: '#a098b8', label: 'Marble' },
   tatami:   { base: '#1a1808', alt: '#242010', groove: '#141206', label: 'Tatami' },
   hex:      { base: '#12101e', alt: '#1a182c', groove: '#0e0c18', label: 'Hex Tile' },
-  bamboo:   { base: '#2a2e12', alt: '#3e4418', groove: '#1a1e08', label: 'Bamboo' },
+  bamboo:         { base: '#2a2e12', alt: '#3e4418', groove: '#1a1e08', label: 'Bamboo' },
+  slate:          { base: '#060608', alt: '#0e0e14', groove: '#040408', label: 'Slate' },
+  void:           { base: '#00000a', alt: '#0a0818', groove: '#050510', label: 'Void' },
   dungeon:        { base: '#141416', alt: '#1a1a1e', groove: '#0c0c0e', label: 'Dungeon' },
   dirtfloor:      { base: '#1a1208', alt: '#221808', groove: '#100c04', label: 'Dirt Floor' },
   oldwoodenfloor: { base: '#1e1408', alt: '#2a1e0c', groove: '#140e04', label: 'Old Wood Floor' },
@@ -525,6 +535,8 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   neon58k:           { label: '58k Neon Sign',         emoji: '🔆' },
   bitcoincircularrug: { label: 'Bitcoin Circular Rug', emoji: '₿' },
   endtable:           { label: 'End Table',             emoji: '🪵' },
+  djtable:            { label: 'DJ Table',              emoji: '🎧' },
+  ufopinup:           { label: 'UFO Pin-Up',            emoji: '🛸' },
 };
 
 /** Poster display data */

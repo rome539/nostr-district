@@ -58,7 +58,7 @@ export function drawRelay(
       r(rx + 8, sy, 84, 12, '#060412');
       for (let lx = rx + 12; lx < rx + 88; lx += 8) {
         const lc = [P.teal, P.pink, P.amber, P.purp, P.red][Math.floor(Math.random() * 5)];
-        blinkingLEDs.push({ x: lx, y: sy + 3, color: lc, phase: Math.random() * Math.PI * 2 });
+        blinkingLEDs.push({ x: lx, y: sy + 3, depth: FY, color: lc, phase: Math.random() * Math.PI * 2 });
       }
     }
   }

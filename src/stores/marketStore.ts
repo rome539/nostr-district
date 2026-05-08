@@ -201,6 +201,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'wall_dungeon',     name: 'Dungeon',        slot: 'wallTheme',  value: 'dungeon',      price: 0.50, tier: 'basic'   },
   { id: 'wall_brickwall',   name: 'Brick Wall',     slot: 'wallTheme',  value: 'brickwall',    price: 0.50, tier: 'basic'   },
   { id: 'wall_oldpaper',    name: 'Old Paper Wall', slot: 'wallTheme',  value: 'oldpaperwall', price: 1.50, tier: 'premium' },
+  { id: 'floor_slate',      name: 'Slate Floor',    slot: 'floorStyle', value: 'slate',        price: 0.50, tier: 'basic'   },
+  { id: 'floor_void',       name: 'Void Floor',     slot: 'floorStyle', value: 'void',         price: 3.00, tier: 'rare'    },
   { id: 'floor_dungeon',    name: 'Dungeon Floor',  slot: 'floorStyle', value: 'dungeon',      price: 0.50, tier: 'basic'   },
   { id: 'floor_dirt',       name: 'Dirt Floor',     slot: 'floorStyle', value: 'dirtfloor',    price: 0.50, tier: 'basic'   },
   { id: 'floor_oldwood',    name: 'Old Wood Floor', slot: 'floorStyle', value: 'oldwoodenfloor', price: 1.50, tier: 'premium' },
@@ -233,6 +235,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'fur_bitcoincircularrug', name: 'Bitcoin Circular Rug', slot: 'furniture', value: 'bitcoincircularrug', price: 1.50, tier: 'premium', subcat: 'lounge' },
   { id: 'fur_endtable',          name: 'End Table',            slot: 'furniture', value: 'endtable',          price: 0.50, tier: 'basic',   subcat: 'lounge' },
   { id: 'fur_safe',            name: 'Safe',              slot: 'furniture', value: 'safe',            price: 0.50, tier: 'basic',   subcat: 'lounge' },
+  { id: 'fur_djtable',         name: 'DJ Table',          slot: 'furniture', value: 'djtable',         price: 2.00, tier: 'rare',   subcat: 'tech'   },
+  { id: 'fur_ufopinup',        name: 'UFO Pin-Up',        slot: 'furniture', value: 'ufopinup',        price: 0.50, tier: 'basic',  subcat: 'tech'   },
   { id: 'fur_nostrsign',       name: 'NOSTR Sign',        slot: 'furniture', value: 'nostrsign',       price: 0.50, tier: 'basic',   subcat: 'tech'   },
   // ── Fishing unlocks (earned by catching legendary fish) ─────────────────────
   { id: 'hat_fishhat',          name: 'Fish Hat',           slot: 'hat',       value: 'fishhat',         price: 0, tier: 'rare', earn: true, hidden: true },

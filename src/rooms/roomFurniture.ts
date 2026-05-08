@@ -129,7 +129,7 @@ export function drawMyRoomFurniture(
       x.fillStyle = col; x.globalAlpha = 0.5;
       x.fillRect(cv + 1, canY - h + 2, 2, Math.floor(h / 4)); x.globalAlpha = 1;
       r(cv, canY - h - 4, 1, 4, '#1a0a04');
-      candleFlames.push({ x: cv + dx, y: canY - h - 4 + dy, phase });
+      candleFlames.push({ x: cv + dx, y: canY - h - 4 + dy, depth: FY + dy, phase });
     });
     x.restore();
   }
@@ -228,7 +228,7 @@ export function drawMyRoomFurniture(
       x.globalAlpha = 0.12;
       for (let di = 8; di < 20; di += 4) r(srvX + di, ruY + 5, 2, 5, srvLight);
       x.globalAlpha = 1;
-      blinkingLEDs.push({ x: srvX + 25 + dx, y: ruY + 9 + dy, color: ledColors[ru], phase: (ru * 1.3) % (Math.PI * 2) });
+      blinkingLEDs.push({ x: srvX + 25 + dx, y: ruY + 9 + dy, depth: FY + 2 + dy + 1, color: ledColors[ru], phase: (ru * 1.3) % (Math.PI * 2) });
     }
     x.globalAlpha = 0.3;
     for (let vy = srvY + 100; vy < srvY + 106; vy += 3) r(srvX + 5, vy, 22, 1, srvDark);
@@ -298,7 +298,7 @@ export function drawMyRoomFurniture(
     x.fillStyle = light.primary; x.globalAlpha = 0.4;
     x.fillRect(216, FY - 38, 3, 12);
     x.globalAlpha = 1;
-    blinkingLEDs.push({ x: 198 + dx, y: FY - 42 + dy, color: light.primary, phase: Math.random() * Math.PI * 2 });
+    blinkingLEDs.push({ x: 198 + dx, y: FY - 42 + dy, depth: FY + dy + 3, color: light.primary, phase: Math.random() * Math.PI * 2 });
     x.restore();
   }
 

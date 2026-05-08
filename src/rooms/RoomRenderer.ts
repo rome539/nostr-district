@@ -84,6 +84,8 @@ export const PNG_FURNITURE_IDS = new Set<FurnitureId>([
   'neon58k',
   'bitcoincircularrug',
   'endtable',
+  'djtable',
+  'ufopinup',
 ]);
 
 // Asset paths for PNG furniture — defaults to assets/furniture/<id>.png if not listed
@@ -119,6 +121,8 @@ export const PNG_FURNITURE_PATHS: Partial<Record<FurnitureId, string>> = {
   neon58k:           'assets/furniture/tech/neon58k.png',
   bitcoincircularrug: 'assets/furniture/lounge/bitcoincircularrug.png',
   endtable:           'assets/furniture/lounge/endtable.png',
+  djtable:            'assets/furniture/tech/djtable.png',
+  ufopinup:           'assets/furniture/tech/ufopinup.png',
 };
 
 export type { CandleFlame };
@@ -212,7 +216,7 @@ export class RoomRenderer {
 
     drawWalls(x, W, FY, cfg.wallTheme, wall, light, r, undefined, this.voidStars);
     if (cfg.wallTheme === 'cabin') this.fireplaceFlames.push({ x: 400, y: 294, w: 48 });
-    drawFloor(x, W, H, FY, cfg.floorStyle, floor, light, r);
+    drawFloor(x, W, H, FY, cfg.floorStyle, floor, light, r, this.voidStars);
     // Background-only items (rug, pet_bed) always behind player
     for (const id of cfg.furniture) {
       if (BACKGROUND_ONLY_IDS.has(id)) {
