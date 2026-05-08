@@ -233,34 +233,41 @@ export async function fetchInventory(pubkey: string): Promise<string[] | null> {
 }
 
 const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
-let _storeNostrPubkey: string | null = null;
 
-async function getStoreNostrPubkey(): Promise<string | null> {
-  if (_storeNostrPubkey) return _storeNostrPubkey;
+// All store nostr pubkeys ever used — add the old one here before switching lightning addresses
+// so receipts signed by previous providers are still honoured.
+const KNOWN_STORE_PUBKEYS = new Set<string>([
+  'be1d89794bf92de5dd64c1e60f6a2c70c140abac9932418fee30c5c637fe9479', // Wallet of Satoshi (current)
+]);
+
+async function loadCurrentStoreNostrPubkey(): Promise<void> {
   try {
     const [user, domain] = STORE_LUD16.split('@');
     const res = await fetch(`https://${domain}/.well-known/lnurlp/${user}`);
     const data = await res.json();
-    if (data.allowsNostr && data.nostrPubkey) {
-      _storeNostrPubkey = data.nostrPubkey;
-      return _storeNostrPubkey;
-    }
+    if (data.allowsNostr && data.nostrPubkey) KNOWN_STORE_PUBKEYS.add(data.nostrPubkey);
   } catch { /* */ }
-  return null;
 }
 
 export async function fetchReceiptInventory(userPubkey: string): Promise<string[]> {
-  const storeNostrPubkey = await getStoreNostrPubkey();
-  if (!storeNostrPubkey) return [];
+  await loadCurrentStoreNostrPubkey();
+  if (KNOWN_STORE_PUBKEYS.size === 0) return [];
   if (!pool) await loadNostrTools();
   try {
-    const events: any[] = await pool.querySync(RELAYS, {
-      kinds: [9735],
-      '#p': [storeNostrPubkey],
-      limit: 500,
-    });
+    const allEvents: any[] = [];
+    for (const pubkey of KNOWN_STORE_PUBKEYS) {
+      const events: any[] = await pool.querySync(RELAYS, {
+        kinds: [9735],
+        '#p': [pubkey],
+        limit: 500,
+      });
+      allEvents.push(...events);
+    }
     const items: string[] = [];
-    for (const ev of events) {
+    const seen = new Set<string>();
+    for (const ev of allEvents) {
+      if (seen.has(ev.id)) continue;
+      seen.add(ev.id);
       const descTag = ev.tags?.find((t: string[]) => t[0] === 'description');
       if (!descTag?.[1]) continue;
       try {
