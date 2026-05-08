@@ -154,6 +154,7 @@ All kind 30078 events are namespaced by their `d` tag:
 | `nostr-district-avatar` | any user | Avatar configuration (body, hair, clothes, colors) |
 | `nostr-district-outfits` | any user | Saved outfit presets |
 | `nostr-district-room` | any user | Room decoration and layout config |
+| `nostr-district-inventory` | any user | Purchased item cache (free/earned items only — paid items are derived from kind:9735 zap receipts) |
 | `nd-crew-{id}` | founder | Crew definition (name, emblem, roles, kicked list) |
 | `nd-m-{crewId}` | each member | Per-member crew membership status (`active: true/false, role`) |
 | `nd-invite-{token}` | invitee | Consumed invite token record (one-time use, cross-device) |
@@ -174,7 +175,7 @@ All kind 30078 events are namespaced by their `d` tag:
 | NIP-44 | Encrypted payloads v2 | Primary encryption for DMs and NWC requests |
 | NIP-46 | Remote signing | Login via Bunker URL or QR-based client flow |
 | NIP-47 | Nostr Wallet Connect | Pay zap invoices from a connected lightning wallet |
-| NIP-57 | Zaps | Zap requests and receipt verification |
+| NIP-57 | Zaps | Zap requests, receipt verification, and ZAP-gated item ownership — paid items are unlocked exclusively by verifying kind:9735 receipts signed by the store's lightning wallet |
 | NIP-59 | Gift wraps | Seals and gift wraps for NIP-17 DM privacy |
 | NIP-78 | App-specific data | Kind 30078 for avatar, room config, crew definitions, membership, and invite tokens |
 | NIP-88 | Polls | Create polls and record votes in rooms |
