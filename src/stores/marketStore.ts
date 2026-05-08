@@ -235,7 +235,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'fur_bitcoincircularrug', name: 'Bitcoin Circular Rug', slot: 'furniture', value: 'bitcoincircularrug', price: 1.50, tier: 'premium', subcat: 'lounge' },
   { id: 'fur_endtable',          name: 'End Table',            slot: 'furniture', value: 'endtable',          price: 0.50, tier: 'basic',   subcat: 'lounge' },
   { id: 'fur_safe',            name: 'Safe',              slot: 'furniture', value: 'safe',            price: 0.50, tier: 'basic',   subcat: 'lounge' },
-  { id: 'fur_djtable',         name: 'DJ Table',          slot: 'furniture', value: 'djtable',         price: 2.00, tier: 'rare',   subcat: 'tech'   },
+  { id: 'fur_djtable',         name: 'DJ Table',          slot: 'furniture', value: 'djtable',         price: 2.00, tier: 'rare',   subcat: 'tech',   hidden: true },
   { id: 'fur_ufopinup',        name: 'UFO Pin-Up',        slot: 'furniture', value: 'ufopinup',        price: 0.50, tier: 'basic',  subcat: 'tech'   },
   { id: 'fur_nostrsign',       name: 'NOSTR Sign',        slot: 'furniture', value: 'nostrsign',       price: 0.50, tier: 'basic',   subcat: 'tech'   },
   // ── Fishing unlocks (earned by catching legendary fish) ─────────────────────
