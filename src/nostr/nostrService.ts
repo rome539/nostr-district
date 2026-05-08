@@ -7,7 +7,7 @@ import type { RoomConfig } from '../stores/roomStore';
 import { applyRemoteRoomConfig } from '../stores/roomStore';
 import type { AvatarConfig, OutfitPreset } from '../stores/avatarStore';
 import { applyRemoteAvatar, applyRemoteOutfits } from '../stores/avatarStore';
-import { applyRemoteInventory } from '../stores/marketStore';
+import { applyRemoteInventory, mergeReceiptInventory } from '../stores/marketStore';
 // @ts-ignore — JS module, no types
 import { BunkerClient, renderQR } from '../../nip46-bunker.js';
 
@@ -232,6 +232,52 @@ export async function fetchInventory(pubkey: string): Promise<string[] | null> {
   }
 }
 
+const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
+let _storeNostrPubkey: string | null = null;
+
+async function getStoreNostrPubkey(): Promise<string | null> {
+  if (_storeNostrPubkey) return _storeNostrPubkey;
+  try {
+    const [user, domain] = STORE_LUD16.split('@');
+    const res = await fetch(`https://${domain}/.well-known/lnurlp/${user}`);
+    const data = await res.json();
+    if (data.allowsNostr && data.nostrPubkey) {
+      _storeNostrPubkey = data.nostrPubkey;
+      return _storeNostrPubkey;
+    }
+  } catch { /* */ }
+  return null;
+}
+
+export async function fetchReceiptInventory(userPubkey: string): Promise<string[]> {
+  const storeNostrPubkey = await getStoreNostrPubkey();
+  if (!storeNostrPubkey) return [];
+  if (!pool) await loadNostrTools();
+  try {
+    const events: any[] = await pool.querySync(RELAYS, {
+      kinds: [9735],
+      '#p': [storeNostrPubkey],
+      limit: 500,
+    });
+    const items: string[] = [];
+    for (const ev of events) {
+      const descTag = ev.tags?.find((t: string[]) => t[0] === 'description');
+      if (!descTag?.[1]) continue;
+      try {
+        const zapReq = JSON.parse(descTag[1]);
+        if (zapReq.pubkey !== userPubkey) continue;
+        const itemTag = zapReq.tags?.find((t: string[]) => t[0] === 'item');
+        if (itemTag?.[2] && itemTag?.[3]) items.push(`${itemTag[2]}:${itemTag[3]}`);
+      } catch { /* */ }
+    }
+    console.log(`[Market] receipt-verified items for ${userPubkey.slice(0, 8)}:`, items);
+    return items;
+  } catch (e) {
+    console.warn('[Nostr] fetchReceiptInventory failed:', e);
+    return [];
+  }
+}
+
 let _onAvatarSynced: (() => void) | null = null;
 let _avatarSynced = false;
 let _onRoomSynced: (() => void) | null = null;
@@ -270,6 +316,9 @@ function syncFromRelays(pubkey: string): void {
   }).catch(() => {});
   fetchInventory(pubkey).then(remote => {
     if (remote) applyRemoteInventory(remote);
+  }).catch(() => {});
+  fetchReceiptInventory(pubkey).then(verified => {
+    if (verified.length > 0) mergeReceiptInventory(verified);
   }).catch(() => {});
 
   fetchAvatar(pubkey).then(remote => {

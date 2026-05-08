@@ -326,9 +326,15 @@ export function getInventory(): string[] {
   return Array.from(_inventory);
 }
 
-/** Overwrites local inventory from a Nostr fetch. */
+/** Overwrites local inventory from a Nostr fetch.
+ *  Paid catalog items are stripped — those must come from verified zap receipts. */
 export function applyRemoteInventory(items: string[]): void {
-  _inventory = new Set(items);
+  _inventory = new Set(items.filter(key => !PAID_KEYS.has(key)));
+}
+
+/** Merges receipt-verified items into existing inventory without wiping earned/granted items. */
+export function mergeReceiptInventory(items: string[]): void {
+  for (const item of items) _inventory.add(item);
 }
 
 /** Returns the catalog entry for a slot+value pair, or undefined if free. */

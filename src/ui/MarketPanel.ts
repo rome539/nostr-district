@@ -622,7 +622,7 @@ export class MarketPanel {
 
     setStatus(`Buying ${item.name} for ${sats.toLocaleString()} sats…`);
 
-    const result = await payLightningAddress(STORE_LUD16, sats, setStatus);
+    const result = await payLightningAddress(STORE_LUD16, sats, setStatus, { id: item.id, slot: item.slot, value: item.value, name: item.name });
 
     if (result.status === 'paid') {
       addToInventory(item.slot, item.value);

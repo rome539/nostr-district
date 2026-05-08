@@ -126,6 +126,7 @@ export async function payLightningAddress(
   lud16: string,
   amountSats: number,
   onStatus?: (msg: string) => void,
+  item?: { id: string; slot: string; value: string; name: string },
 ): Promise<ZapResult> {
   const amountMsats = amountSats * 1000;
   const url = lud16ToUrl(lud16);
@@ -157,12 +158,13 @@ export async function payLightningAddress(
       const zapReq = {
         kind: 9734,
         created_at: Math.floor(Date.now() / 1000),
-        content: 'market-purchase',
+        content: item ? `market-purchase:${item.name}` : 'market-purchase',
         tags: [
           ['p', storeNostrPubkey],
           ['amount', String(amountMsats)],
           ['lnurl', lnurlData.callback],
           ['relays', ...RELAYS],
+          ...(item ? [['item', item.id, item.slot, item.value]] : []),
         ],
       };
       try {
@@ -334,6 +336,14 @@ export function watchForPurchaseReceipt(
     try {
       const zapReq = JSON.parse(descTag[1]);
       if (zapReq.id === zapEventId) {
+        const itemTag = zapReq.tags?.find((t: string[]) => t[0] === 'item');
+        console.log('[Market] zap receipt received', {
+          receiptId: ev.id,
+          receiptPubkey: ev.pubkey,
+          zapRequestId: zapReq.id,
+          item: itemTag ? { id: itemTag[1], slot: itemTag[2], value: itemTag[3] } : null,
+          fullReceipt: ev,
+        });
         cleanup();
         onPaid();
       }
