@@ -108,6 +108,33 @@ export function drawMyRoomFurniture(
     x.restore();
   }
 
+  // ── Playing Cards ──
+  if (item('carddeck')) {
+    const { dx, dy } = pd('carddeck');
+    x.save(); x.translate(dx, dy);
+    const deckX = 88; const deckY = FY - 13;
+    const backC = fc('carddeck');
+    const backDark = darken(backC, 16);
+    const backLight = lighten(backC, 24);
+    x.fillStyle = '#000'; x.globalAlpha = 0.22;
+    x.beginPath(); x.ellipse(deckX + 22, deckY + 20, 25, 5, 0, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = 1;
+    for (let i = 0; i < 4; i++) {
+      r(deckX + i, deckY + 3 - i, 40, 18, '#d8d2c8');
+      r(deckX + i + 1, deckY + 4 - i, 38, 16, '#f3eee2');
+    }
+    r(deckX + 4, deckY + 2, 40, 18, '#d8d2c8');
+    r(deckX + 5, deckY + 3, 38, 16, '#f3eee2');
+    r(deckX + 8, deckY + 6, 32, 10, backC);
+    r(deckX + 11, deckY + 9, 26, 4, backDark);
+    x.strokeStyle = backLight; x.lineWidth = 1; x.globalAlpha = 0.78;
+    x.strokeRect(deckX + 10.5, deckY + 7.5, 28, 7);
+    x.globalAlpha = 1;
+    r(deckX + 22, deckY + 9, 4, 4, backLight);
+    x.globalAlpha = 0.22; r(deckX + 10, deckY + 5, 28, 1, '#fff'); x.globalAlpha = 1;
+    x.restore();
+  }
+
   // ── Candles ──
   if (item('candles')) {
     const { dx, dy } = pd('candles');

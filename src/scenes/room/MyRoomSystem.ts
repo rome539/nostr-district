@@ -10,6 +10,7 @@ import { publishRoomConfig, onNextRoomSync } from '../../nostr/nostrService';
 import { PetSprite } from '../../entities/PetSprite';
 import { getPet, petTexKey, PET_FRAME_SIZE, PetSelection, getAnimSpecs } from '../../stores/petStore';
 import { BookcaseModal } from '../../ui/BookcaseModal';
+import { CardTableModal } from '../../ui/CardTableModal';
 import { renderRoomSprite, renderHubSprite } from '../../entities/AvatarRenderer';
 import { getAvatar } from '../../stores/avatarStore';
 import { sendAvatarUpdate, sendNameUpdate, sendChat, setRoomRequestHandler, clearRoomRequestHandler } from '../../nostr/presenceService';
@@ -79,6 +80,10 @@ export class MyRoomSystem {
   private bookcasePrompt!: Phaser.GameObjects.Text;
   private bookcasePromptBg!: Phaser.GameObjects.Graphics;
   private nearBookcaseField = false;
+  private cardPrompt!: Phaser.GameObjects.Text;
+  private cardPromptBg!: Phaser.GameObjects.Graphics;
+  private hasCardDeckField = false;
+  private nearCardDeckField = false;
   private pet: any = null; // PetSprite
 
   readonly intro = new RoomIntro();
@@ -141,6 +146,7 @@ export class MyRoomSystem {
 
     this.parsedRoomConfig = parsedOwnerConfig ?? (isOwner ? getRoomConfig() : null);
     this.hasBookcaseField = Array.isArray(this.parsedRoomConfig?.furniture) && this.parsedRoomConfig.furniture.includes('bookshelf');
+    this.hasCardDeckField = Array.isArray(this.parsedRoomConfig?.furniture) && this.parsedRoomConfig.furniture.includes('carddeck');
 
     this.buildForegroundImages(parsedOwnerConfig);
     this.furnitureDragUI = new FurnitureDragUI(scene, () => this.refresh());
@@ -175,31 +181,45 @@ export class MyRoomSystem {
     this.spawnPet(petSel);
 
     // Computer interaction prompt
-    this.computerPromptBg = scene.add.graphics().setDepth(50).setVisible(false);
+    this.computerPromptBg = scene.add.graphics().setDepth(900).setVisible(false);
     this.computerPromptBg.fillStyle(hexToNum(P.bg), 0.9);
     this.computerPromptBg.fillRoundedRect(0, 0, 130, 28, 5);
     this.computerPromptBg.lineStyle(1, hexToNum(P.teal), 0.3);
     this.computerPromptBg.strokeRoundedRect(0, 0, 130, 28, 5);
     this.computerPrompt = scene.add.text(0, 0, '[E] Use Computer', {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
-    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    }).setOrigin(0.5).setDepth(901).setVisible(false);
     this.computerPrompt.setInteractive();
     this.computerPrompt.on('pointerdown', () => {
       if (!this.intro.isActive && this.nearComputerField && isOwner) this.openComputer();
     });
 
     // Bookcase interaction prompt
-    this.bookcasePromptBg = scene.add.graphics().setDepth(50).setVisible(false);
+    this.bookcasePromptBg = scene.add.graphics().setDepth(900).setVisible(false);
     this.bookcasePromptBg.fillStyle(hexToNum(P.bg), 0.9);
     this.bookcasePromptBg.fillRoundedRect(0, 0, 148, 28, 5);
     this.bookcasePromptBg.lineStyle(1, hexToNum(P.purp), 0.3);
     this.bookcasePromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
     this.bookcasePrompt = scene.add.text(0, 0, '[E] Sign the bookcase', {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.purp, fontStyle: 'bold', align: 'center',
-    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    }).setOrigin(0.5).setDepth(901).setVisible(false);
     this.bookcasePrompt.setInteractive();
     this.bookcasePrompt.on('pointerdown', () => {
       if (!this.intro.isActive && this.nearBookcaseField) this.openBookcase();
+    });
+
+    // Card deck interaction prompt
+    this.cardPromptBg = scene.add.graphics().setDepth(900).setVisible(false);
+    this.cardPromptBg.fillStyle(hexToNum(P.bg), 0.9);
+    this.cardPromptBg.fillRoundedRect(0, 0, 112, 28, 5);
+    this.cardPromptBg.lineStyle(1, hexToNum(P.teal), 0.3);
+    this.cardPromptBg.strokeRoundedRect(0, 0, 112, 28, 5);
+    this.cardPrompt = scene.add.text(0, 0, '[E] Play Cards', {
+      fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(901).setVisible(false);
+    this.cardPrompt.setInteractive();
+    this.cardPrompt.on('pointerdown', () => {
+      if (!this.intro.isActive && this.nearCardDeckField) this.openCardTable();
     });
 
     // E key handler
@@ -207,9 +227,11 @@ export class MyRoomSystem {
       if (this.intro.isActive) return;
       if (this.arrangeMode) return;
       if (BookcaseModal.isOpen()) return;
+      if (CardTableModal.isOpen()) return;
       if (document.activeElement === chatUI.getInput()) return;
       if (this.nearComputerField && isOwner) this.openComputer();
       else if (this.nearBookcaseField) this.openBookcase();
+      else if (this.nearCardDeckField) this.openCardTable();
     });
 
     scene.input.keyboard?.on('keydown-ENTER', () => {
@@ -294,11 +316,23 @@ export class MyRoomSystem {
       if (nearShelf !== this.nearBookcaseField) this.nearBookcaseField = nearShelf;
       this.setBookcasePromptVisible(nearShelf && !BookcaseModal.isOpen());
     }
+    if (this.hasCardDeckField) {
+      const cfg = this.ctx.isOwner ? getRoomConfig() : this.parsedRoomConfig;
+      const pos = cfg?.furniturePositions?.carddeck ?? getDefaultPos('carddeck');
+      const bounds = getFurnitureBounds(this.ctx.scene, 'carddeck') ?? { w: 44, h: 21 };
+      const nearCards = playerX > pos.x - 70 && playerX < pos.x + bounds.w + 70;
+      if (nearCards !== this.nearCardDeckField) this.nearCardDeckField = nearCards;
+      this.setCardPromptVisible(nearCards && !CardTableModal.isOpen());
+    }
   }
 
   handleEsc(): boolean {
     if (!this.ctx) return false;
     if (this.arrangeMode) return true;
+    if (CardTableModal.isOpen()) {
+      CardTableModal.destroy();
+      return true;
+    }
     if (BookcaseModal.isOpen()) {
       if (document.getElementById('profile-modal')) return true;
       BookcaseModal.destroy();
@@ -349,7 +383,7 @@ export class MyRoomSystem {
   }
 
   shouldBlockKeys(): boolean {
-    return BookcaseModal.isOpen() || this.arrangeMode;
+    return BookcaseModal.isOpen() || CardTableModal.isOpen() || this.arrangeMode;
   }
 
   switchPet(sel: PetSelection): void {
@@ -375,12 +409,18 @@ export class MyRoomSystem {
     scene.load.start();
   }
 
+  update(delta: number): void {
+    this.pet?.update(delta);
+  }
+
   refresh(onComplete?: () => void): void {
     const { scene, roomId, neonColor, roomBgImage, roomRenderer } = this.ctx;
     const liveConfig = getRoomConfig();
     this.parsedRoomConfig = liveConfig;
     this.hasBookcaseField = Array.isArray(liveConfig?.furniture) && liveConfig.furniture.includes('bookshelf');
     if (!this.hasBookcaseField) this.setBookcasePromptVisible(false);
+    this.hasCardDeckField = Array.isArray(liveConfig?.furniture) && liveConfig.furniture.includes('carddeck');
+    if (!this.hasCardDeckField) this.setCardPromptVisible(false);
     const texKey = roomRenderer.render(scene, roomId, neonColor, GAME_WIDTH, GAME_HEIGHT);
     roomBgImage.setTexture(texKey);
     this.buildForegroundImages(undefined, onComplete);
@@ -391,6 +431,7 @@ export class MyRoomSystem {
     this.intro.destroy();
     this.toast.destroy();
     BookcaseModal.destroy();
+    CardTableModal.destroy();
     clearRoomRequestHandler(this.incomingRoomRequestHandler);
     if (this.arrangeMode) this.furnitureDragUI.exit();
   }
@@ -422,7 +463,8 @@ export class MyRoomSystem {
       const pos = cfg?.furniturePositions?.[id] ?? getDefaultPos(id);
       const bounds = getFurnitureBounds(scene, id);
       if (!pos || !bounds) continue;
-      const img = scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(pos.y + bounds.h);
+      const depth = this.getSurfaceItemDepth(id, pos, bounds, cfg) ?? (pos.y + bounds.h);
+      const img = scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(depth);
       this.roomItemImages.set(id, img);
     }
 
@@ -434,7 +476,7 @@ export class MyRoomSystem {
       const bounds = getFurnitureBounds(scene, id);
       if (!pos || !bounds) continue;
       const color = cfg ? getFurnitureColor(cfg, id) : null;
-      const depth = PNG_BACKGROUND_IDS.has(id) ? 1 : pos.y + bounds.h;
+      const depth = PNG_BACKGROUND_IDS.has(id) ? 1 : (this.getSurfaceItemDepth(id, pos, bounds, cfg) ?? (pos.y + bounds.h));
 
       let useKey = texKey;
       if (PNG_TINT_WHITE_IDS.has(id) && color && color !== '#ffffff') {
@@ -449,6 +491,33 @@ export class MyRoomSystem {
     }
 
     onComplete?.();
+  }
+
+  private getSurfaceItemDepth(
+    id: FurnitureId,
+    pos: { x: number; y: number },
+    bounds: { w: number; h: number },
+    cfg?: RoomConfig | null,
+  ): number | null {
+    if (!cfg || id === 'coffee_table' || id === 'endtable') return null;
+    const itemBottom = pos.y + bounds.h;
+    const itemCenterX = pos.x + bounds.w / 2;
+    const tables: Array<{ id: FurnitureId; surfaceY: number; xOff: number; w: number }> = [
+      { id: 'coffee_table', surfaceY: 0, xOff: 0, w: 130 },
+      { id: 'endtable', surfaceY: 0, xOff: 0, w: 89 },
+    ];
+
+    for (const table of tables) {
+      if (!cfg.furniture.includes(table.id)) continue;
+      const tablePos = cfg.furniturePositions?.[table.id] ?? getDefaultPos(table.id);
+      const surfaceY = tablePos.y + table.surfaceY;
+      if (Math.abs(itemBottom - surfaceY) > 2) continue;
+      if (itemCenterX < tablePos.x + table.xOff || itemCenterX > tablePos.x + table.xOff + table.w) continue;
+      const tableBounds = getFurnitureBounds(this.ctx.scene, table.id);
+      if (!tableBounds) continue;
+      return tablePos.y + tableBounds.h + 1;
+    }
+    return null;
   }
 
   private setComputerPromptVisible(visible: boolean): void {
@@ -467,6 +536,26 @@ export class MyRoomSystem {
       this.bookcasePromptBg.setPosition(634, 318);
       this.bookcasePrompt.setPosition(708, 332);
     }
+  }
+
+  private setCardPromptVisible(visible: boolean): void {
+    this.cardPrompt.setVisible(visible);
+    this.cardPromptBg.setVisible(visible);
+    if (visible) {
+      const cfg = this.ctx.isOwner ? getRoomConfig() : this.parsedRoomConfig;
+      const pos = cfg?.furniturePositions?.carddeck ?? getDefaultPos('carddeck');
+      const bounds = getFurnitureBounds(this.ctx.scene, 'carddeck') ?? { w: 44, h: 21 };
+      const x = Math.round(pos.x + bounds.w / 2);
+      const y = Math.max(30, Math.round(pos.y - 38));
+      this.cardPromptBg.setPosition(x - 56, y - 14);
+      this.cardPrompt.setPosition(x, y);
+    }
+  }
+
+  private openCardTable(): void {
+    if (CardTableModal.isOpen()) { CardTableModal.destroy(); return; }
+    this.setCardPromptVisible(false);
+    CardTableModal.show();
   }
 
   private onArrangeExit: (() => void) | null = null;

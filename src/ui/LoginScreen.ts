@@ -126,7 +126,6 @@ export class LoginScreen {
           <div id="login-bottom">
             <div class="login-divider"></div>
             <button id="login-create" class="login-link">New to Nostr? Create a free account</button>
-            <button id="login-guest" class="login-link guest-link" style="font-size:11px;padding:4px 8px;">or continue as guest</button>
           </div>
         </div>
 
@@ -186,6 +185,7 @@ export class LoginScreen {
             <p class="create-desc">Pick a username and we'll generate your Nostr keys.</p>
             <input type="text" id="create-username" placeholder="Username" class="nsec-input create-field" autocomplete="off" spellcheck="false" maxlength="32">
             <button id="create-passkey" class="login-btn login-btn-primary create-generate-btn">Create Account</button>
+            <button id="create-guest" class="login-link guest-link" style="font-size:12px;padding:10px 8px;margin-top:14px;">or skip and enter as guest</button>
           </div>
 
           <div id="create-step-2" class="hidden">
@@ -477,7 +477,8 @@ export class LoginScreen {
       }
       .bunker-url-btn:hover { opacity: 0.85; }
       .bunker-cancel { font-size: 13px; color: var(--nd-subtext); }
-      .login-box.view-nostr #bunker-cancel {
+      .login-box.view-nostr #bunker-cancel,
+      .login-box.view-create #create-back {
         position: absolute; top: 8px; right: 10px;
         margin: 0; padding: 6px 10px; font-size: 11px;
       }
@@ -982,6 +983,7 @@ export class LoginScreen {
     const goToCreate = () => {
       this.el('login-main').classList.add('hidden');
       this.el('login-create-view').classList.remove('hidden');
+      this.container.querySelector('.login-box')!.classList.add('view-create');
       this.setStatus('');
     };
     this.el('login-create').addEventListener('click', goToCreate);
@@ -989,6 +991,7 @@ export class LoginScreen {
     this.el('create-back').addEventListener('click', () => {
       this.el('login-create-view').classList.add('hidden');
       this.el('login-main').classList.remove('hidden');
+      this.container.querySelector('.login-box')!.classList.remove('view-create');
       this.setStatus('');
       // Reset form state
       this.el('create-step-1').classList.remove('hidden');
@@ -1016,7 +1019,7 @@ export class LoginScreen {
       this.onConfirmCreate(this._pendingCreateNsec, this._pendingCreateUsername);
     });
 
-    this.el('login-guest').addEventListener('click', () => this.onGuestLogin());
+    this.el('create-guest').addEventListener('click', () => this.onGuestLogin());
   }
 
   private async _submitCreateWithPasskey(): Promise<void> {

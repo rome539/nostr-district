@@ -237,6 +237,7 @@ export class RoomScene extends BaseScene {
     sendPosition(this.player.x, this.player.y, this.facingRight);
 
     if (this.roomConfig.id.startsWith('myroom:') && !this.myRoom.intro.isActive) {
+      this.myRoom.update(delta);
       this.myRoom.updateFrame(this.player.x);
     }
 

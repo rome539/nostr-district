@@ -22,6 +22,32 @@ const SLOT_LABEL: Record<string, string> = {
 
 const WEARABLE_SLOTS = new Set<string>(['hair', 'top', 'bottom', 'hat', 'accessory', 'eyes']);
 
+const FURNITURE_PREVIEW_PALETTES: Partial<Record<string, string[]>> = {
+  couch:           ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'],
+  beanbag:         ['#c44060','#e0603a','#40a060','#4060c4','#a040a0','#c0a030','#30a0a0','#c06040'],
+  armchair:        ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'],
+  walltapestry1:   ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'],
+  walltapestry2:   ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'],
+  walltapestry3:   ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'],
+  persianrugwall1: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'],
+  persianrug:      ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'],
+  striperug:       ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'],
+  plant1:          ['#ffffff','#c87840','#3d2860','#8b0000','#1e3a1a','#2a1a08','#1a1a2e','#b08060'],
+  nostrsign:       ['#7b2ff7','#5dcaa5','#e87aab','#f0b040','#00e5ff','#e85454','#aaff44','#ffffff'],
+  neonskull:       ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'],
+  neoncoffee:      ['#ff9020','#5dcaa5','#7b68ee','#00e5ff','#e87aab','#ff3355','#aaff44','#ffffff'],
+  neongfy:         ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'],
+  neon58k:         ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'],
+  decoratedcouch:  ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'],
+  decoratedarmchair: ['#3d2860','#6b2840','#283d6b','#28503d','#5a3a1a','#5a1a1a','#1a1a5a','#4a4a4a'],
+  bitcoincircularrug: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'],
+  endtable:        ['#2a1a08','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#4a3020','#0e0c08'],
+};
+
+const FULL_TEXTURE_PREVIEW_TINT = new Set<string>([
+  'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'endtable',
+]);
+
 export const FURNITURE_PATHS: Record<string, string> = {
   walltapestry1:   'assets/furniture/decor/walltapestry1.png',
   walltapestry2:   'assets/furniture/decor/walltapestry2.png',
@@ -264,7 +290,7 @@ export class MarketPreview {
         MarketPreview._setCanvas(MarketPreview._makeRodCanvas(item.value));
       }
     } else if (item.slot === 'furniture') {
-      MarketPreview._setCanvas(MarketPreview.makeFurnitureCanvas(item.value));
+      MarketPreview._setCanvas(MarketPreview.makeFurnitureCanvas(item.value, MarketPreview._randomPreviewColor(item.value)));
     } else if (item.slot === 'wallTheme') {
       MarketPreview._setCanvas(MarketPreview._makeWallThemeCanvas(item.value));
     } else if (item.slot === 'floorStyle') {
@@ -295,7 +321,7 @@ export class MarketPreview {
     if (item.slot === 'nameColor')        canvas = MarketPreview._makeNameTagCanvas(getAvatar(), item.value);
     else if (item.slot === 'chatColor')   canvas = MarketPreview._makeChatCanvas(getAvatar(), item.value);
     else if (item.slot === 'rodSkin')     canvas = MarketPreview._makeRodCanvas(item.value);
-    else if (item.slot === 'furniture')   canvas = MarketPreview.makeFurnitureCanvas(item.value);
+    else if (item.slot === 'furniture')   canvas = MarketPreview.makeFurnitureCanvas(item.value, MarketPreview._randomPreviewColor(item.value));
     else if (item.slot === 'wallTheme')   canvas = MarketPreview._makeWallThemeCanvas(item.value);
     else if (item.slot === 'floorStyle')  canvas = MarketPreview._makeFloorCanvas(item.value);
     else if (WEARABLE_SLOTS.has(item.slot)) canvas = renderHubSprite({ ...getAvatar(), [item.slot]: item.value } as AvatarConfig);
@@ -323,6 +349,14 @@ export class MarketPreview {
     canvas.style.cssText = `width:111px;height:168px;image-rendering:pixelated;display:block;`;
     wrap.innerHTML = '';
     wrap.appendChild(canvas);
+  }
+
+  private static _randomPreviewColor(value: string): string | undefined {
+    const palette = FURNITURE_PREVIEW_PALETTES[value];
+    if (!palette || palette.length === 0) return undefined;
+    const colors = palette.filter(c => c.toLowerCase() !== '#ffffff');
+    const pickFrom = colors.length > 0 ? colors : palette;
+    return pickFrom[Math.floor(Math.random() * pickFrom.length)];
   }
 
   private static _makeWallThemeCanvas(value: string): HTMLCanvasElement {
@@ -524,7 +558,7 @@ export class MarketPreview {
   }
 
   /** PNG furniture item — dark bg, image fitted with padding. Loads async and redraws in-place. */
-  static makeFurnitureCanvas(value: string): HTMLCanvasElement {
+  static makeFurnitureCanvas(value: string, previewColor?: string): HTMLCanvasElement {
     const W = 111, H = 168;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
@@ -545,10 +579,63 @@ export class MarketPreview {
       const dw = img.width  * scale;
       const dh = img.height * scale;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      const dx = Math.round((W - dw) / 2);
+      const dy = Math.round((H - dh) / 2);
+      if (previewColor) {
+        const tmp = document.createElement('canvas');
+        tmp.width = Math.max(1, Math.round(dw));
+        tmp.height = Math.max(1, Math.round(dh));
+        const tctx = tmp.getContext('2d')!;
+        tctx.imageSmoothingEnabled = false;
+        tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
+        if (FULL_TEXTURE_PREVIEW_TINT.has(value)) {
+          MarketPreview._multiplyTintPixels(tctx, tmp.width, tmp.height, previewColor);
+        } else {
+          MarketPreview._tintLightPixels(tctx, tmp.width, tmp.height, previewColor);
+        }
+        ctx.drawImage(tmp, dx, dy);
+      } else {
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
     };
     img.src = path;
     return c;
+  }
+
+  private static _tintLightPixels(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const cr = parseInt(color.slice(1, 3), 16);
+    const cg = parseInt(color.slice(3, 5), 16);
+    const cb = parseInt(color.slice(5, 7), 16);
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      const max = Math.max(d[i], d[i + 1], d[i + 2]);
+      const min = Math.min(d[i], d[i + 1], d[i + 2]);
+      const neutralGray = max - min <= 30 && max >= 54;
+      const lightPixel = d[i] >= 131 && d[i + 1] >= 130 && d[i + 2] >= 130;
+      if (lightPixel || neutralGray) {
+        d[i]     = Math.round(d[i]     * cr / 255);
+        d[i + 1] = Math.round(d[i + 1] * cg / 255);
+        d[i + 2] = Math.round(d[i + 2] * cb / 255);
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  private static _multiplyTintPixels(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const cr = parseInt(color.slice(1, 3), 16);
+    const cg = parseInt(color.slice(3, 5), 16);
+    const cb = parseInt(color.slice(5, 7), 16);
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      d[i]     = Math.round(d[i]     * cr / 255);
+      d[i + 1] = Math.round(d[i + 1] * cg / 255);
+      d[i + 2] = Math.round(d[i + 2] * cb / 255);
+    }
+    ctx.putImageData(imgData, 0, 0);
   }
 
   /** 111×168 canvas: avatar + name-tag pill + optional chat bubble (for nameColor/chatColor). */

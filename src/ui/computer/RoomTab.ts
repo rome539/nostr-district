@@ -656,11 +656,12 @@ export class RoomTab {
       neongfy:           { label: 'Sign Color',   colors: ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'] },
       neon58k:           { label: 'Sign Color',   colors: ['#ff3355','#5dcaa5','#7b68ee','#00e5ff','#f0b040','#e87aab','#aaff44','#ffffff'] },
       bitcoincircularrug: { label: 'Rug Tint',    colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
+      carddeck:           { label: 'Card Back',   colors: ['#8b0000','#1a1a5a','#184830','#3d2860','#5a3a1a','#1a1a1a','#b08030','#d4c4a8'] },
       endtable:           { label: 'Wood Tones',  colors: ['#2a1a08','#3d2810','#5a3818','#7a5230','#1a1208','#2a2218','#4a3020','#0e0c08'] },
     };
 
     const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
-      lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'armchair', 'beanbag', 'rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug', 'coffee_table', 'endtable', 'candles', 'trunk', 'bar_cart', 'safe', 'decoratedcouch', 'decoratedarmchair'] },
+      lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'armchair', 'beanbag', 'rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug', 'coffee_table', 'endtable', 'carddeck', 'candles', 'trunk', 'bar_cart', 'safe', 'decoratedcouch', 'decoratedarmchair'] },
       decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
       tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates', 'djtable', 'ufopinup'] },
       pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },

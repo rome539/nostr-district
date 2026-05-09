@@ -112,6 +112,7 @@ export type FurnitureId =
   | 'neongfy'          // GFY neon sign (wall)
   | 'neon58k'          // 58k neon sign (wall)
   | 'bitcoincircularrug' // bitcoin circular floor rug
+  | 'carddeck'           // small deck of playing cards
   | 'endtable'           // small end table (lounge)
   | 'djtable'            // DJ turntable setup (tech)
   | 'ufopinup';          // UFO pin-up wall poster (tech)
@@ -189,6 +190,7 @@ export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> =
   neongfy:           { x: 100, y: 50  },
   neon58k:           { x: 180, y: 50  },
   bitcoincircularrug: { x: 310, y: 310 },
+  carddeck:           { x: 88,  y: 287 },
   djtable:            { x: 290, y: 295 },
   ufopinup:           { x: 340, y: 50  },
 };
@@ -225,6 +227,7 @@ export const FURNITURE_BOUNDS: Partial<Record<FurnitureId, { w: number; h: numbe
   trunk:         { w: 70,  h: 44  },
   bookstack:     { w: 54,  h: 60  },
   bar_cart:      { w: 56,  h: 85  },
+  carddeck:      { w: 44,  h: 21  },
 };
 
 export const POSTER_DEFAULT_POS: [FurniturePos, FurniturePos, FurniturePos] = [
@@ -393,6 +396,7 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   neongfy:           '#ff3355',
   neon58k:           '#ff3355',
   bitcoincircularrug: '#ffffff',
+  carddeck:           '#8b0000',
   endtable:           '#2a1a08',
   djtable:            '#ffffff',
   ufopinup:           '#ffffff',
@@ -554,6 +558,7 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   neongfy:           { label: 'GFY Neon Sign',         emoji: '🔆' },
   neon58k:           { label: '58k Neon Sign',         emoji: '🔆' },
   bitcoincircularrug: { label: 'Bitcoin Circular Rug', emoji: '₿' },
+  carddeck:           { label: 'Playing Cards',        emoji: '🃏' },
   endtable:           { label: 'End Table',             emoji: '🪵' },
   djtable:            { label: 'DJ Table',              emoji: '🎧' },
   ufopinup:           { label: 'UFO Pin-Up',            emoji: '🛸' },
@@ -576,7 +581,7 @@ export const POSTER_DATA: Record<PosterId, { label: string; emoji: string }> = {
 };
 
 /** All available furniture IDs */
-export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv', 'pet_bed', 'cat_tree', 'pet_bowl', 'coffee_table', 'record_player', 'lava_lamp', 'whiteboard', 'server_rack', 'candles', 'record_crates', 'trunk', 'bookstack', 'bar_cart'];
+export const ALL_FURNITURE: FurnitureId[] = ['desk', 'bookshelf', 'couch', 'plant', 'rug', 'lamp', 'speaker', 'minifridge', 'beanbag', 'arcade', 'tv', 'pet_bed', 'cat_tree', 'pet_bowl', 'coffee_table', 'record_player', 'lava_lamp', 'whiteboard', 'server_rack', 'candles', 'record_crates', 'trunk', 'bookstack', 'bar_cart', 'carddeck'];
 
 /** All available poster IDs */
 export const ALL_POSTERS: PosterId[] = ['none', 'bitcoin', 'nostr', 'pixel_art', 'landscape', 'cat', 'skull', 'moon', 'code', 'synthwave', 'matrix', 'space'];

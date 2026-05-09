@@ -302,7 +302,7 @@ export class MarketPanel {
         : `$${usd.toFixed(2)}`;
 
     banner.innerHTML = `
-      <div style="
+      <div id="mp-sale-card" style="
         display:flex;align-items:center;gap:10px;padding:8px 12px;
         background:color-mix(in srgb,#5dcaa5 8%,transparent);
         border:1px solid color-mix(in srgb,#5dcaa5 35%,transparent);
@@ -335,6 +335,26 @@ export class MarketPanel {
     banner.querySelector('#mp-sale-buy')?.addEventListener('click', () => {
       MarketPanel._purchase(item, sale);
     });
+
+    const card = banner.querySelector('#mp-sale-card') as HTMLElement | null;
+    card?.addEventListener('mouseenter', () => {
+      if (MarketPanel._isMobile() || item.slot === 'aura') return;
+      MarketPreview.update(item, false);
+    });
+    card?.addEventListener('mouseleave', () => {
+      if (MarketPanel._isMobile()) return;
+      MarketPreview.update(null, false);
+    });
+    card?.addEventListener('touchstart', () => {
+      if (item.slot === 'aura') return;
+      if (MarketPreview.previewedId === item.id) {
+        MarketPreview.previewedId = null;
+        MarketPreview.update(null, true);
+      } else {
+        MarketPreview.previewedId = item.id;
+        MarketPreview.update(item, true);
+      }
+    }, { passive: true });
   }
 
   // ─── TABS — group + sub-category navigation ─────────────────
