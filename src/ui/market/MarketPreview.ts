@@ -26,6 +26,7 @@ export const FURNITURE_PATHS: Record<string, string> = {
   walltapestry1:   'assets/furniture/decor/walltapestry1.png',
   walltapestry2:   'assets/furniture/decor/walltapestry2.png',
   walltapestry3:   'assets/furniture/decor/walltapestry3.png',
+  hangingivy:      'assets/furniture/decor/hangingivy.png',
   sworddec:        'assets/furniture/decor/sworddec.png',
   persianrugwall1: 'assets/furniture/decor/persianrugwall1.png',
   persianrug:      'assets/furniture/lounge/persianrug.png',
@@ -436,12 +437,14 @@ export class MarketPreview {
       ctx.globalAlpha = 1;
       // Hearth ledge
       r(fpX - fpW / 2 - 2, H - 5, fpW + 4, 5, '#5a5248');
-    } else if (value === 'dungeon' || value === 'brickwall' || value === 'oldpaperwall') {
+    } else if (value === 'dungeon' || value === 'brickwall' || value === 'marblewall' || value === 'marblewallblack' || value === 'oldpaperwall') {
       ctx.fillStyle = '#0c0c0e'; ctx.fillRect(0, 0, W, H);
       const srcs: Record<string, string> = {
-        dungeon:      'assets/furniture/walls/dungeonwall.png',
-        brickwall:    'assets/furniture/walls/brickwall.png',
-        oldpaperwall: 'assets/furniture/walls/oldpaperwall.png',
+        dungeon:         'assets/furniture/walls/dungeonwall.png',
+        brickwall:       'assets/furniture/walls/brickwall.png',
+        marblewall:      'assets/furniture/walls/marblewall.png',
+        marblewallblack: 'assets/furniture/walls/marblewallblack.png',
+        oldpaperwall:    'assets/furniture/walls/oldpaperwall.png',
       };
       const img = new Image();
       img.onload = () => {
@@ -466,6 +469,13 @@ export class MarketPreview {
       dungeon:        'assets/furniture/floors/dungeonfloor.png',
       dirtfloor:      'assets/furniture/floors/dirtfloor.png',
       oldwoodenfloor: 'assets/furniture/floors/oldwoodenfloor.png',
+      marble:         'assets/furniture/floors/marblefloor.png',
+      marbleblack:    'assets/furniture/floors/marblefloorblack.png',
+      carpetred:      'assets/furniture/floors/carpetred.png',
+      carpetpurple:   'assets/furniture/floors/carpetpurple.png',
+      carpetblue:     'assets/furniture/floors/carpetblue.png',
+      carpetgold:     'assets/furniture/floors/carpetgold.png',
+      parquetwood:    'assets/furniture/floors/ParquetWoodfloor.png',
     };
     const src = srcs[value];
     if (src) {

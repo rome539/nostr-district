@@ -15,12 +15,12 @@ const LABEL_STYLE   = { fontSize: '7px', fontFamily: '"Courier New", monospace',
 // Desk is always fixed — exclude from collision targets but block placement inside it
 const DESK_BLOCK = { x: 558, y: 160, w: 196, h: 140 };
 // Cabin fireplace exclusion zone (mantel top to floor, full surround width)
-const CABIN_FP_BLOCK = { x: 346, y: 190, w: 108, h: 110 };
+const CABIN_FP_BLOCK = { x: 334, y: 170, w: 132, h: 130 };
 
 const FLOOR_Y = 300; // floor divider line in canvas space
 
 // Wall-mounted items — constrained to stay above the floor line
-const WALL_ITEMS = new Set<FurnitureId>(['tv', 'whiteboard', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'sworddec', 'persianrugwall1', 'nostrsign', 'neonskull', 'neoncoffee', 'coelacanthmount', 'neongfy', 'neon58k', 'ufopinup']);
+const WALL_ITEMS = new Set<FurnitureId>(['tv', 'whiteboard', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'persianrugwall1', 'nostrsign', 'neonskull', 'neoncoffee', 'coelacanthmount', 'neongfy', 'neon58k', 'ufopinup']);
 // Flat floor rugs — must be fully below the floor line (no straddling the wall)
 const FLOOR_RUG_ITEMS = new Set<FurnitureId>(['rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug']);
 
@@ -385,6 +385,7 @@ export class FurnitureDragUI {
     if (nx < 0 || ny < 0 || nx + sz.w > GAME_WIDTH || ny + sz.h > GAME_HEIGHT) return false;
     // Posters are wall items — must stay above the floor line
     if (ny + sz.h > FLOOR_Y) return false;
+    if (this.wallTheme === 'cabin' && this.overlaps({ x: nx, y: ny, ...sz }, CABIN_FP_BLOCK)) return false;
     return true;
   }
 

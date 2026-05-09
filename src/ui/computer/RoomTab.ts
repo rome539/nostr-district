@@ -87,6 +87,8 @@ function _wallPreviewStyle(key: string, theme: { brick: string }): string {
   const PNG_MAP: Record<string, string> = {
     dungeon:      'background-image:url(assets/furniture/walls/dungeonwall.png);background-size:cover;',
     brickwall:    'background-image:url(assets/furniture/walls/brickwall.png);background-size:cover;',
+    marblewall:   'background-image:url(assets/furniture/walls/marblewall.png);background-size:cover;',
+    marblewallblack: 'background-image:url(assets/furniture/walls/marblewallblack.png);background-size:cover;',
     oldpaperwall: 'background-image:url(assets/furniture/walls/oldpaperwall.png);background-size:cover;',
     cityview:     `background-image:url(${_CITY_PREVIEW_URL});background-size:cover;`,
     cabin:        `background-image:url(${_CABIN_PREVIEW_URL});background-size:cover;`,
@@ -495,7 +497,13 @@ export class RoomTab {
         case 'carpet':   return `background:#2e1850;`;
         case 'concrete': return `background-color:#222228;background-image:repeating-linear-gradient(135deg,#2a2a30 0px,#2a2a30 1px,transparent 1px,transparent 4px);background-size:4px 4px;`;
         case 'neon':     return `background-color:#06060e;background-image:linear-gradient(0deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%),linear-gradient(90deg,transparent 85%,rgba(80,220,180,0.5) 85%,rgba(80,220,180,0.5) 90%,transparent 90%);background-size:10px 10px;`;
-        case 'marble':   return `background:#dcd8ec;background-image:linear-gradient(125deg,transparent 28%,rgba(80,72,104,0.35) 30%,rgba(80,72,104,0.15) 33%,transparent 35%),linear-gradient(55deg,transparent 45%,rgba(80,72,104,0.25) 47%,transparent 50%);`;
+        case 'marble':   return `background-image:url(assets/furniture/floors/marblefloor.png);background-size:cover;`;
+        case 'marbleblack': return `background-image:url(assets/furniture/floors/marblefloorblack.png);background-size:cover;`;
+        case 'carpetred': return `background-image:url(assets/furniture/floors/carpetred.png);background-size:cover;`;
+        case 'carpetpurple': return `background-image:url(assets/furniture/floors/carpetpurple.png);background-size:cover;`;
+        case 'carpetblue': return `background-image:url(assets/furniture/floors/carpetblue.png);background-size:cover;`;
+        case 'carpetgold': return `background-image:url(assets/furniture/floors/carpetgold.png);background-size:cover;`;
+        case 'parquetwood': return `background-image:url(assets/furniture/floors/ParquetWoodfloor.png);background-size:cover;`;
         case 'tatami':   return `background-color:#2a2010;background-image:repeating-linear-gradient(0deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 9px),repeating-linear-gradient(90deg,rgba(100,80,30,0.5) 0px,rgba(100,80,30,0.5) 1px,transparent 1px,transparent 18px);`;
         case 'hex':      return `background-color:#12101e;background-image:linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(30deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(150deg,#1a182c 12%,transparent 12.5%,transparent 87%,#1a182c 87.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%),linear-gradient(60deg,#1a182c 25%,transparent 25.5%,transparent 75%,#1a182c 75.5%);background-size:10px 18px;background-position:0 0,0 0,5px 9px,5px 9px,0 0,5px 9px;`;
         case 'bamboo':        return `background-color:#2a2e12;background-image:repeating-linear-gradient(90deg,#3e4418 0px,#3e4418 13px,#1a1e08 13px,#1a1e08 14px),repeating-linear-gradient(0deg,transparent 0px,transparent 7px,rgba(26,30,8,0.6) 7px,rgba(26,30,8,0.6) 9px,transparent 9px,transparent 18px);background-size:14px 18px;`;
@@ -653,7 +661,7 @@ export class RoomTab {
 
     const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
       lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'armchair', 'beanbag', 'rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug', 'coffee_table', 'endtable', 'candles', 'trunk', 'bar_cart', 'safe', 'decoratedcouch', 'decoratedarmchair'] },
-      decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'sworddec', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
+      decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
       tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates', 'djtable', 'ufopinup'] },
       pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },
     };

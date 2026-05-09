@@ -56,6 +56,7 @@ export const PNG_FURNITURE_IDS = new Set<FurnitureId>([
   'walltapestry1',
   'walltapestry2',
   'walltapestry3',
+  'hangingivy',
   'sworddec',
   'persianrugwall1',
   'persianrug',
@@ -93,6 +94,7 @@ export const PNG_FURNITURE_PATHS: Partial<Record<FurnitureId, string>> = {
   walltapestry1:   'assets/furniture/decor/walltapestry1.png',
   walltapestry2:   'assets/furniture/decor/walltapestry2.png',
   walltapestry3:   'assets/furniture/decor/walltapestry3.png',
+  hangingivy:      'assets/furniture/decor/hangingivy.png',
   sworddec:        'assets/furniture/decor/sworddec.png',
   persianrugwall1: 'assets/furniture/decor/persianrugwall1.png',
   persianrug:      'assets/furniture/lounge/persianrug.png',
@@ -215,7 +217,7 @@ export class RoomRenderer {
     const FY = 300;
 
     drawWalls(x, W, FY, cfg.wallTheme, wall, light, r, undefined, this.voidStars);
-    if (cfg.wallTheme === 'cabin') this.fireplaceFlames.push({ x: 400, y: 294, w: 48 });
+    if (cfg.wallTheme === 'cabin') this.fireplaceFlames.push({ x: 400, y: 289, w: 48 });
     drawFloor(x, W, H, FY, cfg.floorStyle, floor, light, r, this.voidStars);
     // Background-only items (rug, pet_bed) always behind player
     for (const id of cfg.furniture) {

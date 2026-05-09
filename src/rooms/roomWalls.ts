@@ -5,6 +5,8 @@ const _wallImgs: Partial<Record<string, HTMLImageElement>> = {};
 for (const [key, src] of [
   ['dungeon',      'assets/furniture/walls/dungeonwall.png'],
   ['brickwall',    'assets/furniture/walls/brickwall.png'],
+  ['marblewall',   'assets/furniture/walls/marblewall.png'],
+  ['marblewallblack', 'assets/furniture/walls/marblewallblack.png'],
   ['oldpaperwall', 'assets/furniture/walls/oldpaperwall.png'],
 ] as [string, string][]) {
   const img = new Image(); img.src = src; _wallImgs[key] = img;
@@ -13,9 +15,81 @@ const _floorImgs: Partial<Record<string, HTMLImageElement>> = {};
 for (const [key, src] of [
   ['dungeon',        'assets/furniture/floors/dungeonfloor.png'],
   ['dirtfloor',      'assets/furniture/floors/dirtfloor.png'],
+  ['marble',         'assets/furniture/floors/marblefloor.png'],
+  ['marbleblack',    'assets/furniture/floors/marblefloorblack.png'],
+  ['carpetred',      'assets/furniture/floors/carpetred.png'],
+  ['carpetpurple',   'assets/furniture/floors/carpetpurple.png'],
+  ['carpetblue',     'assets/furniture/floors/carpetblue.png'],
+  ['carpetgold',     'assets/furniture/floors/carpetgold.png'],
+  ['parquetwood',    'assets/furniture/floors/ParquetWoodfloor.png'],
   ['oldwoodenfloor', 'assets/furniture/floors/oldwoodenfloor.png'],
 ] as [string, string][]) {
   const img = new Image(); img.src = src; _floorImgs[key] = img;
+}
+
+const VOID_BG = '#060608';
+const VOID_STAR_COLORS = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'];
+const VOID_DESK_BLOCK = { x: 548, y: 150, w: 216, h: 150 };
+
+function seeded(n: number): number {
+  return Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+}
+
+function inRect(px: number, py: number, rect: { x: number; y: number; w: number; h: number }): boolean {
+  return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
+}
+
+function drawVoidStaticSpace(
+  x: CanvasRenderingContext2D,
+  W: number,
+  y: number,
+  h: number,
+  starCount: number,
+  seedOffset = 0,
+): void {
+  x.fillStyle = VOID_BG;
+  x.fillRect(0, y, W, h);
+
+  for (let i = 0; i < starCount; i++) {
+    x.globalAlpha = 0.10 + seeded(seedOffset + i * 2.7) * 0.25;
+    x.fillStyle = '#d0d8ff';
+    x.fillRect(seeded(seedOffset + i * 3.3) * W, y + seeded(seedOffset + i * 1.7) * h, 1, 1);
+  }
+
+  const nebulas = [[0.18, 0.3, 90, 40], [0.62, 0.45, 110, 35], [0.82, 0.18, 70, 30]];
+  for (const [nx2, ny2, nw, nh] of nebulas) {
+    const cx = nx2 * W;
+    const cy = y + ny2 * h;
+    const grad = x.createRadialGradient(cx, cy, 0, cx, cy, nw);
+    grad.addColorStop(0, 'rgba(80,50,140,0.05)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = grad; x.fillRect(cx - nw, cy - nh, nw * 2, nh * 2);
+  }
+  x.globalAlpha = 1;
+}
+
+function addVoidAnimatedStars(
+  voidStarsOut: VoidStar[] | undefined,
+  W: number,
+  y: number,
+  h: number,
+  seedOffset = 0,
+  block?: { x: number; y: number; w: number; h: number },
+): void {
+  if (!voidStarsOut) return;
+
+  for (let i = 0; i < 55; i++) {
+    const sx = Math.round(seeded(seedOffset + i * 2.1) * W);
+    const sy = Math.round(y + seeded(seedOffset + i * 3.7) * h);
+    if (block && inRect(sx, sy, block)) continue;
+    voidStarsOut.push({
+      x: sx,
+      y: sy,
+      color: VOID_STAR_COLORS[Math.floor(seeded(seedOffset + i * 6.3) * VOID_STAR_COLORS.length)],
+      phase: seeded(seedOffset + i * 4.9) * Math.PI * 2,
+      size: seeded(seedOffset + i * 5.3) > 0.78 ? 2 : 1,
+    });
+  }
 }
 
 export function drawWalls(
@@ -32,12 +106,11 @@ export function drawWalls(
   r(0, 0, W, FY, wall.bg);
 
   if (wallTheme === 'cabin') {
-    // Small fireplace centered on wall, sitting at floor line
     const CX  = W / 2;
-    const FP  = { x: CX - 46, y: FY - 110, w:  92, h: 110 }; // stone surround (sits to floor)
-    const FB  = { x: CX - 30, y: FY -  88, w:  60, h:  80 }; // firebox opening
-    const MAN = { x: CX - 54, y: FY - 110, w: 108, h:   9 }; // mantel shelf
-    const HTH = { x: CX - 38, y: FY -   6, w:  76, h:   6 }; // hearth ledge
+    const FP  = { x: CX - 56, y: FY - 124, w: 112, h: 124 };
+    const FB  = { x: CX - 35, y: FY -  80, w:  70, h:  70 };
+    const MAN = { x: CX - 66, y: FY - 130, w: 132, h:  11 };
+    const HTH = { x: CX - 62, y: FY -  10, w: 124, h:  10 };
 
     // Log bands — full wall width
     const LOG_H = 26, CHINK = 2;
@@ -57,65 +130,141 @@ export function drawWalls(
       x.globalAlpha = 1;
     }
 
-    // ── Stone surround ──────────────────────────────────────
-    r(FP.x, FP.y + MAN.h, FP.w, FP.h - MAN.h, '#706860');
-    x.fillStyle = '#3c3430'; x.globalAlpha = 0.65;
-    for (let sy = FP.y + MAN.h; sy < FP.y + FP.h; sy += 18)
-      x.fillRect(FP.x, sy, FP.w, 1);
-    const sRows = Math.ceil((FP.h - MAN.h) / 18);
-    for (let row = 0; row < sRows; row++) {
-      const ry = FP.y + MAN.h + row * 18;
-      const off = row % 2 === 0 ? 0 : 14;
-      for (let vx = FP.x + off; vx < FP.x + FP.w; vx += 28)
-        x.fillRect(vx, ry, 1, 18);
-    }
+    // ── Stone arched fireplace ───────────────────────────────
+    x.fillStyle = '#000'; x.globalAlpha = 0.24;
+    x.fillRect(FP.x + 4, FP.y + 8, FP.w, FP.h);
     x.globalAlpha = 1;
-    x.globalAlpha = 0.10; r(FP.x, FP.y + MAN.h, 2, FP.h - MAN.h, '#ffffff'); x.globalAlpha = 1;
+
+    const stoneBase = '#7f796e';
+    const stoneDark = '#4e4942';
+    const stoneLite = '#aaa294';
+    r(FP.x, FP.y, FP.w, FP.h, stoneBase);
+
+    const archCx = CX;
+    const archCy = FB.y + 6;
+    const archRx = 44;
+    const archRy = 42;
+    x.fillStyle = '#0a0503';
+    x.beginPath();
+    x.moveTo(FB.x, FY - 10);
+    x.lineTo(FB.x, archCy);
+    x.quadraticCurveTo(archCx, archCy - archRy, FB.x + FB.w, archCy);
+    x.lineTo(FB.x + FB.w, FY - 10);
+    x.closePath();
+    x.fill();
+
+    x.fillStyle = stoneBase;
+    x.beginPath();
+    x.moveTo(FB.x - 11, FY);
+    x.lineTo(FB.x - 11, archCy + 5);
+    x.quadraticCurveTo(archCx, archCy - archRy - 20, FB.x + FB.w + 11, archCy + 5);
+    x.lineTo(FB.x + FB.w + 11, FY);
+    x.lineTo(FB.x + FB.w - 1, FY);
+    x.lineTo(FB.x + FB.w - 1, archCy);
+    x.quadraticCurveTo(archCx, archCy - archRy, FB.x + 1, archCy);
+    x.lineTo(FB.x + 1, FY);
+    x.closePath();
+    x.fill();
+
+    x.strokeStyle = stoneDark; x.lineWidth = 2; x.globalAlpha = 0.78;
+    x.beginPath();
+    x.moveTo(FB.x - 11, FY);
+    x.lineTo(FB.x - 11, archCy + 5);
+    x.quadraticCurveTo(archCx, archCy - archRy - 20, FB.x + FB.w + 11, archCy + 5);
+    x.lineTo(FB.x + FB.w + 11, FY);
+    x.stroke();
+    x.globalAlpha = 1; x.lineWidth = 1;
+
+    // Block seams, kept chunky so the stonework reads at game scale
+    x.strokeStyle = stoneDark; x.globalAlpha = 0.55;
+    for (let sy = FP.y + 24; sy < FY - 12; sy += 26) {
+      x.beginPath(); x.moveTo(FP.x + 5, sy); x.lineTo(FB.x - 10, sy); x.stroke();
+      x.beginPath(); x.moveTo(FB.x + FB.w + 10, sy); x.lineTo(FP.x + FP.w - 5, sy); x.stroke();
+    }
+    for (let vx = FP.x + 19; vx < FB.x - 8; vx += 20) {
+      x.beginPath(); x.moveTo(vx, FP.y + 3); x.lineTo(vx, FY - 13); x.stroke();
+    }
+    for (let vx = FB.x + FB.w + 18; vx < FP.x + FP.w - 5; vx += 20) {
+      x.beginPath(); x.moveTo(vx, FP.y + 3); x.lineTo(vx, FY - 13); x.stroke();
+    }
+    for (let i = -3; i <= 3; i++) {
+      const ax = archCx + i * 12;
+      x.beginPath(); x.moveTo(ax, archCy - 34 + Math.abs(i) * 7); x.lineTo(ax + i * 2, archCy + 6); x.stroke();
+    }
+    x.globalAlpha = 0.16; r(FP.x + 4, FP.y + 4, FP.w - 8, 3, stoneLite);
+    x.globalAlpha = 0.28; r(FP.x + FP.w - 7, FP.y + 8, 4, FP.h - 20, '#1a1714');
+    x.globalAlpha = 1;
 
     // ── Mantel shelf ────────────────────────────────────────
-    r(MAN.x, MAN.y, MAN.w, MAN.h, '#3a2010');
-    x.globalAlpha = 0.18; r(MAN.x, MAN.y, MAN.w, 1, '#c09060');
-    x.globalAlpha = 0.45; r(MAN.x, MAN.y + MAN.h - 3, MAN.w, 3, '#1a0e06');
+    r(MAN.x + 6, MAN.y - 5, MAN.w - 12, 5, '#1d0d05');
+    r(MAN.x, MAN.y, MAN.w, MAN.h, '#4a260f');
+    x.globalAlpha = 0.22; r(MAN.x, MAN.y, MAN.w, 3, '#b0703a');
+    x.globalAlpha = 0.55; r(MAN.x, MAN.y + MAN.h - 4, MAN.w, 4, '#1a0e06');
     x.globalAlpha = 0.05;
     for (let gx = MAN.x + 8; gx < MAN.x + MAN.w; gx += 12)
       { x.fillStyle = '#080402'; x.fillRect(gx, MAN.y, 1, MAN.h); }
     x.globalAlpha = 1;
 
     // ── Hearth ledge ────────────────────────────────────────
-    r(HTH.x, HTH.y, HTH.w, HTH.h, '#5a5248');
-    x.fillStyle = '#3c3430'; x.globalAlpha = 0.55;
-    for (let hx = HTH.x; hx < HTH.x + HTH.w; hx += 24) x.fillRect(hx, HTH.y, 1, HTH.h);
-    x.fillRect(HTH.x, HTH.y, HTH.w, 1);
+    r(HTH.x, HTH.y, HTH.w, HTH.h, '#5f594f');
+    x.globalAlpha = 0.28; r(HTH.x, HTH.y, HTH.w, 2, stoneLite);
+    x.globalAlpha = 0.58; r(HTH.x, HTH.y + HTH.h - 4, HTH.w, 4, '#2c2824');
+    x.globalAlpha = 0.45;
+    for (let hx = HTH.x + 20; hx < HTH.x + HTH.w; hx += 28) r(hx, HTH.y, 1, HTH.h, stoneDark);
     x.globalAlpha = 1;
 
     // ── Firebox interior ─────────────────────────────────────
-    r(FB.x, FB.y, FB.w, FB.h, '#080402');
-    const lsh = x.createLinearGradient(FB.x, 0, FB.x + 12, 0);
-    lsh.addColorStop(0, 'rgba(0,0,0,0.65)'); lsh.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = lsh; x.fillRect(FB.x, FB.y, 12, FB.h);
-    const rsh = x.createLinearGradient(FB.x + FB.w - 12, 0, FB.x + FB.w, 0);
-    rsh.addColorStop(0, 'rgba(0,0,0,0)'); rsh.addColorStop(1, 'rgba(0,0,0,0.65)');
-    x.fillStyle = rsh; x.fillRect(FB.x + FB.w - 12, FB.y, 12, FB.h);
-    const tsh = x.createLinearGradient(0, FB.y, 0, FB.y + 12);
-    tsh.addColorStop(0, 'rgba(0,0,0,0.55)'); tsh.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = tsh; x.fillRect(FB.x, FB.y, FB.w, 12);
-    // Ash floor
-    r(FB.x, FB.y + FB.h - 14, FB.w, 14, '#242018');
-    // Static ember glow
-    const eg = x.createRadialGradient(FB.x + FB.w/2, FB.y + FB.h - 6, 2, FB.x + FB.w/2, FB.y + FB.h - 6, 36);
-    eg.addColorStop(0, 'rgba(255,80,0,0.40)'); eg.addColorStop(1, 'rgba(255,80,0,0)');
-    x.fillStyle = eg; x.fillRect(FB.x, FB.y + FB.h - 36, FB.w, 36);
-    // Ember dots
-    for (const ef of [0.15, 0.35, 0.55, 0.75]) {
-      x.globalAlpha = 0.7; x.fillStyle = '#cc3000';
-      x.fillRect(FB.x + ef * FB.w, FB.y + FB.h - 7, 3, 2);
-      x.globalAlpha = 0.9; x.fillStyle = '#ff6020';
-      x.fillRect(FB.x + ef * FB.w + 1, FB.y + FB.h - 8, 1, 1);
+    x.save();
+    x.beginPath();
+    x.moveTo(FB.x + 2, FY - 10);
+    x.lineTo(FB.x + 2, archCy);
+    x.quadraticCurveTo(archCx, archCy - archRy, FB.x + FB.w - 2, archCy);
+    x.lineTo(FB.x + FB.w - 2, FY - 10);
+    x.closePath();
+    x.clip();
+    r(FB.x, FB.y - 6, FB.w, FB.h + 12, '#080402');
+    const insideGrad = x.createLinearGradient(0, FB.y, 0, FY - 10);
+    insideGrad.addColorStop(0, 'rgba(0,0,0,0.72)');
+    insideGrad.addColorStop(0.62, 'rgba(30,10,2,0.22)');
+    insideGrad.addColorStop(1, 'rgba(70,36,18,0.42)');
+    x.fillStyle = insideGrad; x.fillRect(FB.x, FB.y - 8, FB.w, FB.h + 12);
+    r(FB.x, FY - 25, FB.w, 15, '#241c15');
+
+    const emberGlow = x.createRadialGradient(FB.x + FB.w / 2, FY - 24, 2, FB.x + FB.w / 2, FY - 24, 38);
+    emberGlow.addColorStop(0, 'rgba(255,110,24,0.48)');
+    emberGlow.addColorStop(0.45, 'rgba(180,42,8,0.16)');
+    emberGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = emberGlow; x.fillRect(FB.x, FB.y + 8, FB.w, FB.h);
+
+    // Charred logs and hot coal bed under the animated flame layer
+    x.save();
+    x.translate(FB.x + FB.w / 2, FY - 25);
+    x.rotate(-0.16);
+    r(-24, -5, 48, 7, '#3a1808');
+    x.globalAlpha = 0.45; r(-20, -4, 36, 2, '#7a3410'); x.globalAlpha = 1;
+    r(-27, -6, 6, 8, '#120804');
+    r(21, -6, 6, 8, '#120804');
+    x.rotate(0.32);
+    r(-22, -5, 44, 7, '#2a1006');
+    x.globalAlpha = 0.42; r(-16, -4, 31, 2, '#a54410'); x.globalAlpha = 1;
+    r(-26, -6, 6, 8, '#120804');
+    r(20, -6, 6, 8, '#120804');
+    x.restore();
+
+    for (const ef of [0.14, 0.25, 0.38, 0.52, 0.67, 0.82]) {
+      x.globalAlpha = 0.75; x.fillStyle = '#b82808';
+      x.fillRect(FB.x + ef * FB.w, FB.y + FB.h - 10, 3, 2);
+      x.globalAlpha = 0.95; x.fillStyle = '#ffb040';
+      x.fillRect(FB.x + ef * FB.w + 1, FB.y + FB.h - 11, 1, 1);
     }
     x.globalAlpha = 1;
-    const flg = x.createRadialGradient(FB.x + FB.w/2, FB.y + FB.h/2, 6, FB.x + FB.w/2, FB.y + FB.h/2, 60);
-    flg.addColorStop(0, 'rgba(255,100,20,0.16)'); flg.addColorStop(1, 'rgba(255,100,20,0)');
-    x.fillStyle = flg; x.fillRect(FB.x, FB.y, FB.w, FB.h);
+
+    const fireGlow = x.createRadialGradient(FB.x + FB.w / 2, FB.y + FB.h - 24, 8, FB.x + FB.w / 2, FB.y + FB.h - 24, 64);
+    fireGlow.addColorStop(0, 'rgba(255,150,40,0.16)');
+    fireGlow.addColorStop(0.48, 'rgba(255,70,20,0.06)');
+    fireGlow.addColorStop(1, 'rgba(255,70,20,0)');
+    x.fillStyle = fireGlow; x.fillRect(FB.x - 4, FB.y, FB.w + 8, FB.h);
+    x.restore();
 
   } else if (wallTheme === 'cityview') {
     const seeded = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
@@ -219,35 +368,8 @@ export function drawWalls(
     for (let gx = 20; gx < W; gx += 24) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, FY); x.stroke(); }
     x.globalAlpha = 1;
   } else if (wallTheme === 'void') {
-    const seeded = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
-    const COLORS = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'];
-    // Faint static background stars on canvas
-    for (let i = 0; i < 140; i++) {
-      x.globalAlpha = 0.10 + seeded(i * 2.7) * 0.25;
-      x.fillStyle = '#d0d8ff';
-      x.fillRect(seeded(i * 3.3) * W, seeded(i * 1.7) * FY, 1, 1);
-    }
-    // Subtle nebula clouds
-    const nebulas = [[0.18, 0.3, 90, 40], [0.62, 0.45, 110, 35], [0.82, 0.18, 70, 30]];
-    for (const [nx2, ny2, nw, nh] of nebulas) {
-      const grad = x.createRadialGradient(nx2 * W, ny2 * FY, 0, nx2 * W, ny2 * FY, nw);
-      grad.addColorStop(0, 'rgba(80,50,140,0.05)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      x.fillStyle = grad; x.fillRect(nx2 * W - nw, ny2 * FY - nh, nw * 2, nh * 2);
-    }
-    x.globalAlpha = 1;
-    // Bright animated stars — pushed to voidStarsOut for Phaser to blink each frame
-    if (voidStarsOut) {
-      for (let i = 0; i < 55; i++) {
-        voidStarsOut.push({
-          x: Math.round(seeded(i * 2.1) * W),
-          y: Math.round(seeded(i * 3.7) * FY),
-          color: COLORS[Math.floor(seeded(i * 6.3) * COLORS.length)],
-          phase: seeded(i * 4.9) * Math.PI * 2,
-          size: seeded(i * 5.3) > 0.78 ? 2 : 1,
-        });
-      }
-    }
+    drawVoidStaticSpace(x, W, 0, FY, 140);
+    addVoidAnimatedStars(voidStarsOut, W, 0, FY, 0, VOID_DESK_BLOCK);
   } else {
     // Brick pattern (default and most themes)
     for (let wy = 8; wy < FY; wy += 24) {
@@ -273,7 +395,7 @@ export function drawWalls(
   }
 
   // Baseboard (skipped for PNG walls, cabin, and cityview which have their own treatment)
-  const _PNG_WALLS = new Set(['dungeon', 'brickwall', 'oldpaperwall']);
+  const _PNG_WALLS = new Set(['dungeon', 'brickwall', 'marblewall', 'marblewallblack', 'oldpaperwall']);
   if (wallTheme !== 'cabin' && wallTheme !== 'cityview' && wallTheme !== 'void' && !_PNG_WALLS.has(wallTheme)) {
     r(0, FY - 10, W, 10, wall.accent);
     r(0, FY - 12, W, 2, wall.accent);
@@ -325,18 +447,6 @@ export function drawFloor(
     for (let fy = FY + 22; fy < H; fy += 22) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
     for (let fx = 0; fx < W; fx += 38) { x.beginPath(); x.moveTo(fx, FY); x.lineTo(fx, H); x.stroke(); }
     x.globalAlpha = 1; x.lineWidth = 1;
-  } else if (floorStyle === 'marble') {
-    const slabW = 90; const slabH = 24;
-    for (let fy = FY; fy < H; fy += slabH) {
-      for (let fx = 0; fx < W; fx += slabW) {
-        x.globalAlpha = 0.04 + ((Math.floor(fx / slabW) + Math.floor((fy - FY) / slabH)) % 2) * 0.04;
-        r(fx, fy, slabW - 1, slabH - 1, floor.alt);
-      }
-    }
-    x.globalAlpha = 0.5; x.strokeStyle = floor.groove; x.lineWidth = 1;
-    for (let fy = FY; fy < H; fy += slabH) { x.beginPath(); x.moveTo(0, fy); x.lineTo(W, fy); x.stroke(); }
-    for (let fx = 0; fx < W; fx += slabW) { x.beginPath(); x.moveTo(fx, FY); x.lineTo(fx, H); x.stroke(); }
-    x.globalAlpha = 1;
   } else if (floorStyle === 'tatami') {
     for (let fy = FY; fy < H; fy += 18) {
       for (let fx = 0; fx < W; fx += 36) {
@@ -392,21 +502,8 @@ export function drawFloor(
     bSheen.addColorStop(1, 'rgba(0,0,0,0.08)');
     x.fillStyle = bSheen; x.fillRect(0, FY, W, H - FY);
   } else if (floorStyle === 'void') {
-    const seeded = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
-    const STAR_COLORS = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'];
-    for (let i = 0; i < 160; i++) {
-      const sx = seeded(i * 3.7 + 10) * W;
-      const sy = FY + seeded(i * 1.9 + 20) * (H - FY);
-      const big = seeded(i * 5.3 + 30) > 0.82;
-      x.globalAlpha = 0.15 + seeded(i * 2.1 + 40) * 0.45;
-      x.fillStyle = STAR_COLORS[Math.floor(seeded(i * 6.7 + 50) * STAR_COLORS.length)];
-      x.fillRect(sx, sy, big ? 2 : 1, big ? 2 : 1);
-    }
-    const nebGrad = x.createLinearGradient(0, FY, 0, H);
-    nebGrad.addColorStop(0, 'rgba(40,20,80,0.06)');
-    nebGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = nebGrad; x.fillRect(0, FY, W, H - FY);
-    x.globalAlpha = 1;
+    drawVoidStaticSpace(x, W, FY, H - FY, 140, 2000);
+    addVoidAnimatedStars(voidStarsOut, W, FY, H - FY, 2000);
   } else if (floorStyle === 'slate') {
     const TW = 60; const TH = 28;
     for (let fy = FY; fy < H; fy += TH) {

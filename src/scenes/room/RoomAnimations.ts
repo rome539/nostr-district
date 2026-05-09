@@ -60,41 +60,52 @@ export function updateFireplaceFlames(
     const { x, y, w } = f;
     const t = time;
 
-    // Glow at base
-    const gp = 0.07 + Math.sin(t * 0.003) * 0.015;
-    graphics.fillStyle(0xf08030, gp * 1.2);
-    graphics.fillCircle(x, y - 10, w * 0.55);
-    graphics.fillStyle(0xe85030, gp * 0.7);
-    graphics.fillCircle(x, y - 10, w * 0.30);
+    const pulse = Math.sin(t * 0.004) * 0.5 + Math.sin(t * 0.011) * 0.25;
+    graphics.fillStyle(0xff8a28, 0.055 + pulse * 0.012);
+    graphics.fillEllipse(x, y - 25, w * 1.05, w * 0.95);
+    graphics.fillStyle(0xff4018, 0.055 + Math.abs(pulse) * 0.016);
+    graphics.fillEllipse(x, y - 16, w * 0.74, w * 0.50);
 
-    // Flame rects
-    const fc = [0xf0a040, 0xe87030, 0xe85030, 0xfac060, 0xff6020];
-    const flameCount = 6;
+    const flameCount = 7;
     for (let i = 0; i < flameCount; i++) {
-      const ox = Math.sin(t * 0.005 + i * 1.3) * w * 0.14;
-      const fh = 26 + Math.sin(t * 0.008 + i * 0.9) * 8 + Math.sin(t * 0.013 + i * 1.7) * 5;
-      const fw = 2.5 + Math.abs(Math.sin(t * 0.004 + i * 2.1));
-      const bx = x - w * 0.38 + i * (w * 0.15) + ox;
-      const a  = 0.45 + Math.sin(t * 0.006 + i * 1.4) * 0.18;
-      graphics.fillStyle(fc[i % fc.length], a);
-      graphics.fillRect(bx - fw / 2, y - fh - 10, fw, fh);
-      graphics.fillStyle(0xffd060, a * 0.5);
-      graphics.fillRect(bx - 1, y - fh * 0.55 - 10, 2, fh * 0.4);
+      const phase = i * 0.9;
+      const baseX = x - w * 0.32 + i * (w * 0.107);
+      const sway = Math.sin(t * 0.006 + phase) * 3 + Math.sin(t * 0.013 + phase * 1.7) * 1.4;
+      const fh = 24 + Math.sin(t * 0.008 + phase) * 7 + Math.sin(t * 0.015 + phase * 1.4) * 4;
+      const fw = 8 + Math.sin(t * 0.005 + phase * 1.2) * 1.6;
+      const bx = baseX + sway;
+      const by = y - 13;
+      const alpha = 0.48 + Math.sin(t * 0.006 + phase * 1.3) * 0.14;
+
+      graphics.fillStyle(i % 3 === 0 ? 0xff5a18 : i % 3 === 1 ? 0xe83210 : 0xff8a20, alpha);
+      graphics.fillTriangle(bx - fw * 0.55, by, bx + fw * 0.55, by, bx + sway * 0.35, by - fh);
+      graphics.fillStyle(0xffd45a, alpha * 0.72);
+      graphics.fillTriangle(bx - fw * 0.25, by - 2, bx + fw * 0.25, by - 2, bx + sway * 0.2, by - fh * 0.68);
+      graphics.fillStyle(0xffffb0, alpha * 0.42);
+      graphics.fillTriangle(bx - 1.8, by - 3, bx + 1.8, by - 3, bx + sway * 0.12, by - fh * 0.44);
     }
 
     // Hot coal bed
-    graphics.fillStyle(0xf0a040, 0.30 + Math.sin(t * 0.004) * 0.08);
-    graphics.fillRect(x - w * 0.34, y - 12, w * 0.68, 4);
+    graphics.fillStyle(0x3a1408, 0.8);
+    graphics.fillRect(x - w * 0.40, y - 14, w * 0.80, 5);
+    graphics.fillStyle(0xffb040, 0.34 + Math.sin(t * 0.004) * 0.08);
+    graphics.fillRect(x - w * 0.34, y - 13, w * 0.68, 3);
+    for (let i = 0; i < 9; i++) {
+      const coalX = x - w * 0.36 + i * (w * 0.09);
+      const glow = 0.32 + Math.sin(t * 0.006 + i * 0.8) * 0.22;
+      graphics.fillStyle(i % 2 === 0 ? 0xff6020 : 0xffc060, glow);
+      graphics.fillRect(coalX, y - 13 + (i % 2), 2, 2);
+    }
 
     // Embers
-    for (let i = 0; i < 6; i++) {
-      const prog  = ((t * 0.016 + i * 19) % 80) / 80;
+    for (let i = 0; i < 10; i++) {
+      const prog  = ((t * 0.012 + i * 13) % 90) / 90;
       const sx    = x + Math.sin(t * 0.005 + i * 1.6) * w * 0.28;
-      const sy    = y - 10 - prog * 45;
-      const alpha = Math.max(0, (1 - prog) * 0.65);
+      const sy    = y - 12 - prog * 52;
+      const alpha = Math.max(0, (1 - prog) * 0.55);
       if (sy < y - 4) {
         graphics.fillStyle(prog < 0.5 ? 0xffd060 : 0xf0a040, alpha);
-        graphics.fillRect(sx, sy, 1.5, 1.5);
+        graphics.fillRect(sx, sy, prog < 0.35 ? 2 : 1.2, prog < 0.35 ? 2 : 1.2);
       }
     }
   }

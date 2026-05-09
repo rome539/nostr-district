@@ -21,6 +21,8 @@ export type WallTheme =
   | 'cabin'       // log cabin wall with stone fireplace
   | 'dungeon'     // dungeon stone PNG wall
   | 'brickwall'   // brick wall PNG
+  | 'marblewall'  // marble wall PNG
+  | 'marblewallblack' // black marble wall PNG
   | 'oldpaperwall'; // old paper/worn wall PNG
 
 export type FloorStyle =
@@ -35,6 +37,12 @@ export type FloorStyle =
   | 'bamboo'          // vertical bamboo stalks
   | 'slate'           // polished dark slate tiles
   | 'void'            // deep space — stars beneath your feet
+  | 'marbleblack'     // black marble PNG floor
+  | 'carpetred'       // red carpet PNG floor
+  | 'carpetpurple'    // purple carpet PNG floor
+  | 'carpetblue'      // blue carpet PNG floor
+  | 'carpetgold'      // gold carpet PNG floor
+  | 'parquetwood'     // parquet wood PNG floor
   | 'dungeon'         // dungeon stone PNG floor
   | 'dirtfloor'       // dirt floor PNG
   | 'oldwoodenfloor'; // old wooden floor PNG
@@ -78,6 +86,7 @@ export type FurnitureId =
   | 'walltapestry1' // square wall tapestry
   | 'walltapestry2' // tall wall tapestry
   | 'walltapestry3' // large wall tapestry
+  | 'hangingivy'     // hanging ivy wall plant
   | 'sworddec'       // decorative sword wall mount
   | 'persianrugwall1' // persian rug wall hanging
   | 'persianrug'      // persian rug floor item
@@ -155,6 +164,7 @@ export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> =
   walltapestry1: { x: 50,  y: 30  },
   walltapestry2: { x: 450, y: 20  },
   walltapestry3: { x: 655, y: 15  },
+  hangingivy:    { x: 690, y: 30  },
   sworddec:        { x: 200, y: 20  },
   persianrugwall1: { x: 350, y: 20  },
   persianrug:      { x: 260, y: 318 },
@@ -357,6 +367,7 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   walltapestry1: '#d4c4a8',  // warm ivory
   walltapestry2: '#d4c4a8',  // warm ivory
   walltapestry3: '#d4c4a8',  // warm ivory
+  hangingivy:    '#ffffff',
   sworddec:        '#c8c8c8',  // steel grey
   persianrugwall1: '#d4c4a8',  // warm ivory
   persianrug:      '#d4c4a8',  // warm ivory
@@ -446,6 +457,8 @@ export const WALL_THEMES: Record<WallTheme, { bg: string; brick: string; accent:
   void:     { bg: '#060608', brick: '#0a0a0e', accent: '#0e0e14', label: 'Void' },
   dungeon:     { bg: '#0c0c0e', brick: '#141416', accent: '#2a2a30', label: 'Dungeon' },
   brickwall:   { bg: '#1a0e08', brick: '#2a1810', accent: '#3a2014', label: 'Brick Wall' },
+  marblewall:  { bg: '#d8d4df', brick: '#c8c3d0', accent: '#90889c', label: 'Marble Wall' },
+  marblewallblack: { bg: '#08080c', brick: '#101018', accent: '#303040', label: 'Black Marble Wall' },
   oldpaperwall:{ bg: '#1a1610', brick: '#24201a', accent: '#3a3428', label: 'Old Paper Wall' },
 };
 
@@ -456,15 +469,21 @@ export const FLOOR_STYLES: Record<FloorStyle, { base: string; alt: string; groov
   carpet:   { base: '#201838', alt: '#241c3e', groove: '#1a1230', label: 'Carpet' },
   concrete: { base: '#1a1a20', alt: '#1e1e26', groove: '#14141a', label: 'Concrete' },
   neon:     { base: '#06060e', alt: '#0e0e1a', groove: '#060610', label: 'Neon' },
-  marble:   { base: '#dcd8ec', alt: '#504868', groove: '#a098b8', label: 'Marble' },
+  slate:    { base: '#060608', alt: '#0e0e14', groove: '#040408', label: 'Slate' },
   tatami:   { base: '#1a1808', alt: '#242010', groove: '#141206', label: 'Tatami' },
   hex:      { base: '#12101e', alt: '#1a182c', groove: '#0e0c18', label: 'Hex Tile' },
   bamboo:         { base: '#2a2e12', alt: '#3e4418', groove: '#1a1e08', label: 'Bamboo' },
-  slate:          { base: '#060608', alt: '#0e0e14', groove: '#040408', label: 'Slate' },
-  void:           { base: '#00000a', alt: '#0a0818', groove: '#050510', label: 'Void' },
+  marble:         { base: '#dcd8ec', alt: '#504868', groove: '#a098b8', label: 'Marble' },
+  marbleblack:    { base: '#08080c', alt: '#20202a', groove: '#383848', label: 'Black Marble' },
+  carpetred:      { base: '#321018', alt: '#501828', groove: '#18080c', label: 'Red Carpet' },
+  carpetpurple:   { base: '#241038', alt: '#3a1a58', groove: '#140820', label: 'Purple Carpet' },
+  carpetblue:     { base: '#101c38', alt: '#183060', groove: '#081020', label: 'Blue Carpet' },
+  carpetgold:     { base: '#4a3510', alt: '#7a5a18', groove: '#241804', label: 'Gold Carpet' },
+  parquetwood:    { base: '#3a220c', alt: '#5a3412', groove: '#1a0e04', label: 'Parquet Wood' },
   dungeon:        { base: '#141416', alt: '#1a1a1e', groove: '#0c0c0e', label: 'Dungeon' },
   dirtfloor:      { base: '#1a1208', alt: '#221808', groove: '#100c04', label: 'Dirt Floor' },
   oldwoodenfloor: { base: '#1e1408', alt: '#2a1e0c', groove: '#140e04', label: 'Old Wood Floor' },
+  void:           { base: '#060608', alt: '#0a0a0e', groove: '#0e0e14', label: 'Void' },
 };
 
 /** Color definitions for each lighting mood */
@@ -509,6 +528,7 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   walltapestry1: { label: 'Tapestry 1',   emoji: '🖼' },
   walltapestry2: { label: 'Tapestry 2',   emoji: '🖼' },
   walltapestry3: { label: 'Tapestry 3',   emoji: '🖼' },
+  hangingivy:    { label: 'Hanging Ivy',  emoji: '🌿' },
   sworddec:        { label: 'Sword Mount',    emoji: '⚔️' },
   persianrugwall1: { label: 'Persian Rug',   emoji: '🪆' },
   persianrug:      { label: 'Persian Rug',   emoji: '🪆' },
