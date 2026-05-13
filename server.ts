@@ -254,6 +254,17 @@ wss.on('connection', (ws) => {
         }
       }
 
+      if (msg.type === 'game_msg' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (!player) return;
+        const out = JSON.stringify({ ...msg, pubkey: myPubkey });
+        for (const [, p] of players) {
+          if (p.room === player.room && p.ws.readyState === WebSocket.OPEN) {
+            p.ws.send(out);
+          }
+        }
+      }
+
     } catch (e) {}
   });
 

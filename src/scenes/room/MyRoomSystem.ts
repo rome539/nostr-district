@@ -366,13 +366,15 @@ export class MyRoomSystem {
   }
 
   onPlayerJoin(): void {
-    const { isOwner, roomId, scene } = this.ctx;
+    if (!this.ctx) return;
+    const { isOwner, scene } = this.ctx;
     if (isOwner) {
       scene.time.delayedCall(300, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
     }
   }
 
   onChatCommand(pk: string, text: string): boolean {
+    if (!this.ctx) return false;
     const { roomId, ownerPubkey } = this.ctx;
     if (text.startsWith('/game:music:') && roomId.startsWith('myroom:') && pk === ownerPubkey) {
       const trackId = text.slice('/game:music:'.length) as any;

@@ -225,6 +225,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'fur_walltapestry3',   name: 'Wall Tapestry III', slot: 'furniture', value: 'walltapestry3',   price: 0.50, tier: 'basic',   subcat: 'decor'  },
   { id: 'fur_hangingivy',      name: 'Hanging Ivy',       slot: 'furniture', value: 'hangingivy',      price: 0.50, tier: 'basic',   subcat: 'decor'  },
   // { id: 'fur_sworddec',        name: 'Sword Mount',       slot: 'furniture', value: 'sworddec',        price: 1.50, tier: 'premium', subcat: 'decor'  },
+  { id: 'fur_gladusmount',     name: 'Gladius Mount',     slot: 'furniture', value: 'gladusmount',     price: 0.50, tier: 'premium', subcat: 'decor'  },
+  { id: 'fur_swordmount',     name: 'Sword Mount',      slot: 'furniture', value: 'swordmount',     price: 0.50, tier: 'premium', subcat: 'decor'  },
   { id: 'fur_persianrugwall1', name: 'Persian Wall Rug',  slot: 'furniture', value: 'persianrugwall1', price: 1.50, tier: 'premium', subcat: 'decor'  },
   { id: 'fur_plant1',          name: 'Snake Plant',       slot: 'furniture', value: 'plant1',          price: 0.50, tier: 'basic',   subcat: 'decor'  },
   { id: 'fur_plant2',          name: 'Bonsai',            slot: 'furniture', value: 'plant2',          price: 0.50, tier: 'basic',   subcat: 'decor'  },

@@ -20,7 +20,7 @@ const CABIN_FP_BLOCK = { x: 334, y: 170, w: 132, h: 130 };
 const FLOOR_Y = 300; // floor divider line in canvas space
 
 // Wall-mounted items — constrained to stay above the floor line
-const WALL_ITEMS = new Set<FurnitureId>(['tv', 'whiteboard', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'persianrugwall1', 'nostrsign', 'neonskull', 'neoncoffee', 'coelacanthmount', 'neongfy', 'neon58k', 'ufopinup']);
+const WALL_ITEMS = new Set<FurnitureId>(['tv', 'whiteboard', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'gladusmount', 'swordmount', 'persianrugwall1', 'nostrsign', 'neonskull', 'neoncoffee', 'coelacanthmount', 'neongfy', 'neon58k', 'ufopinup']);
 // Flat floor rugs — must be fully below the floor line (no straddling the wall)
 const FLOOR_RUG_ITEMS = new Set<FurnitureId>(['rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug']);
 

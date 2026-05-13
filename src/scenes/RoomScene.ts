@@ -24,6 +24,8 @@ import { updateLoungeRoom } from './room/RoomLoungeSystem';
 import { updateBlinkingLEDs, updateCandleFlames, updateAmbient, updateLightingOverlay, updateFireplaceFlames, updateVoidStars } from './room/RoomAnimations';
 import { MyRoomSystem } from './room/MyRoomSystem';
 import { MarketRoomSystem } from './room/MarketRoomSystem';
+import { initCardGameService, setRoomPlayers, teardownCardGameService } from '../ui/games/cardGameService';
+import { notifyGamePlayerLeft } from '../ui/CardTableModal';
 
 interface RoomSceneConfig { id: string; name: string; neonColor: string; ownerPubkey?: string; ownerRoomConfig?: string; }
 
@@ -175,6 +177,7 @@ export class RoomScene extends BaseScene {
     if (this.roomConfig.id === 'market') this.market.setup(this);
 
     this.setupPresenceCallbacks(myPubkey);
+    initCardGameService();
     sendRoomChange(this.roomConfig.id, GAME_WIDTH / 2, this.playerY);
     const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on`)));
     if (this.isOwner && this.roomConfig.id.startsWith('myroom:')) {
@@ -204,6 +207,7 @@ export class RoomScene extends BaseScene {
       clearRoomKickHandler(this.roomKickHandler);
       clearRoomGrantedHandler(this.roomGrantedHandler);
       clearRoomDeniedHandler(this.roomDeniedHandler);
+      teardownCardGameService();
     });
   }
 
@@ -337,7 +341,16 @@ export class RoomScene extends BaseScene {
   protected override onPresenceCountUpdate(c: number): void { super.onPresenceCountUpdate(c); this.globalPlayerCount = c; }
   protected override afterPlayerJoin(_p: { pubkey: string; [k: string]: unknown }): void {
     this.myRoom.onPlayerJoin();
+    setRoomPlayers([...this.otherPlayers.entries()].map(([pk, o]) => ({ pubkey: pk, name: o.name })));
   }
+  protected override onBeforeRemoveOtherPlayer(pk: string): void {
+    const remaining = [...this.otherPlayers.entries()]
+      .filter(([k]) => k !== pk)
+      .map(([k, o]) => ({ pubkey: k, name: o.name }));
+    setRoomPlayers(remaining);
+    notifyGamePlayerLeft(pk);
+  }
+
   protected override handleSceneChatCommand(pk: string, _name: string, text: string, _isMe: boolean): boolean {
     return this.myRoom.onChatCommand(pk, text);
   }

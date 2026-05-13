@@ -632,6 +632,8 @@ export class RoomTab {
       walltapestry2:{ label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
       walltapestry3:{ label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
       sworddec:       { label: 'Metal',        colors: ['#c8c8c8','#a8a8a8','#888888','#c8a060','#a07840','#805830','#6060a0','#404040'] },
+      gladusmount:    { label: 'Metal',        colors: ['#c8c8c8','#a8a8a8','#888888','#c8a060','#a07840','#805830','#6060a0','#404040'] },
+      swordmount:    { label: 'Metal',        colors: ['#c8c8c8','#a8a8a8','#888888','#c8a060','#a07840','#805830','#6060a0','#404040'] },
       persianrugwall1:{ label: 'Fabric',       colors: ['#d4c4a8','#8b4513','#2f4f4f','#4b0082','#8b0000','#006400','#1a1a2e','#5c4033'] },
       persianrug:     { label: 'Fabric',       colors: ['#2a1858','#581828','#183058','#184830','#484018','#381838','#282858','#582818'] },
       bearskin:       { label: 'Fur Color',    colors: ['#c8b89a','#a89070','#887050','#d4c4a8','#6b4c2a','#e8d8b8','#4a3020','#f0e8d0'] },
@@ -662,7 +664,7 @@ export class RoomTab {
 
     const CATEGORIES: Record<string, { label: string; emoji: string; items: FurnitureId[] }> = {
       lounge: { label: 'Lounge', emoji: '🛋', items: ['couch', 'armchair', 'beanbag', 'rug', 'persianrug', 'bearskin', 'striperug', 'tigerskin', 'bitcoincircularrug', 'coffee_table', 'endtable', 'carddeck', 'candles', 'trunk', 'bar_cart', 'safe', 'decoratedcouch', 'decoratedarmchair'] },
-      decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
+      decor:  { label: 'Decor',  emoji: '🌿', items: ['lamp', 'lava_lamp', 'whiteboard', 'bookshelf', 'bookstack', 'walltapestry1', 'walltapestry2', 'walltapestry3', 'hangingivy', 'sworddec', 'gladusmount', 'swordmount', 'persianrugwall1', 'coelacanthmount', 'plant', 'plant1', 'plant2', 'plant3', 'plant4', 'plant5', 'plant6', 'daffodils', 'cactus'] },
       tech:   { label: 'Tech',   emoji: '🖥',  items: ['desk', 'nostrsign', 'neonskull', 'neoncoffee', 'neongfy', 'neon58k', 'speaker', 'minifridge', 'arcade', 'tv', 'record_player', 'server_rack', 'record_crates', 'djtable', 'ufopinup'] },
       pets:   { label: 'Pets',   emoji: '🐾', items: ['pet_bed', 'cat_tree', 'pet_bowl'] },
     };

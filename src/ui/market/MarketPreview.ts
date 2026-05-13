@@ -54,6 +54,8 @@ export const FURNITURE_PATHS: Record<string, string> = {
   walltapestry3:   'assets/furniture/decor/walltapestry3.png',
   hangingivy:      'assets/furniture/decor/hangingivy.png',
   sworddec:        'assets/furniture/decor/sworddec.png',
+  gladusmount:     'assets/furniture/decor/gladusmount.png',
+  swordmount:     'assets/furniture/decor/swordmount.png',
   persianrugwall1: 'assets/furniture/decor/persianrugwall1.png',
   persianrug:      'assets/furniture/lounge/persianrug.png',
   bearskin:        'assets/furniture/lounge/bearskin.png',

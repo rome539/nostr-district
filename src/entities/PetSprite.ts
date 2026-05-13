@@ -113,6 +113,12 @@ const CAT_BREED_SCALE: Record<number, number> = {
   5: 2.3,  // Fluffy/Persian — slightly larger
   6: 2.2,
 };
+// Pet sprite sheets include transparent padding below the visible paws. Use the
+// visible contact point for room depth sorting instead of the raw sprite origin.
+const PET_DEPTH_FOOT_OFFSET: Record<'dog' | 'cat', number> = {
+  dog: 0.16,
+  cat: 0.11,
+};
 
 // States that play once then auto-transition via ANIMATION_COMPLETE
 const ONE_SHOT_STATES = new Set(['stretch', 'lick', 'itch', 'emote']);
@@ -289,7 +295,11 @@ export class PetSprite {
     const tClamped = Math.max(0, Math.min(1, t));
     const persp = PERSP_FAR + (PERSP_NEAR - PERSP_FAR) * tClamped;
     this.sprite.setScale(this.baseScale * persp);
-    this.sprite.setDepth(this.sprite.y);
+    this.sprite.setDepth(this.getDepthY());
+  }
+
+  private getDepthY(): number {
+    return this.sprite.y - this.sprite.displayHeight * PET_DEPTH_FOOT_OFFSET[this.species];
   }
 
   // ── State machine ───────────────────────────────────────────────────────────

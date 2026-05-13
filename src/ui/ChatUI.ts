@@ -348,7 +348,7 @@ export class ChatUI {
       wordWrap: { width: 220, useAdvancedWrap: true },
       ...(NEON_COLORS.has(tint) ? { shadow: { offsetX: 0, offsetY: 0, color: tint, blur: 10, fill: true } } : {}),
     });
-    bubbleText.setOrigin(0.5); bubbleText.setDepth(91);
+    bubbleText.setOrigin(0.5); bubbleText.setDepth(9999);
     bubbleText.setAlpha(0);
     scene.tweens.add({ targets: bubbleText, alpha: 1, y: by - 16, duration: 200, ease: 'Quad.easeOut' });
     scene.time.delayedCall(lifetime - 400, () => {

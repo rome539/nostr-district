@@ -39,6 +39,21 @@ export interface ZoneCounts {
 }
 type ZoneCountsHandler = (data: ZoneCounts) => void;
 
+type GameMsgHandler = (msg: Record<string, unknown>) => void;
+let onGameMsg: GameMsgHandler | null = null;
+
+export function setGameMsgHandler(handler: GameMsgHandler | null): void { onGameMsg = handler; }
+
+export function sendGameMsg(payload: Record<string, unknown>): void {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'game_msg', ...payload }));
+}
+
+// Returns true to consume the message (skip scene onChat), false to pass through
+type ChatInterceptor = (pubkey: string, name: string, text: string) => boolean;
+let chatInterceptor: ChatInterceptor | null = null;
+
+export function setChatInterceptor(fn: ChatInterceptor | null): void { chatInterceptor = fn; }
+
 let onRoomRequest: RoomRequestHandler | null = null;
 let onRoomGranted: RoomGrantedHandler | null = null;
 let onRoomDenied: RoomDeniedHandler | null = null;
@@ -157,7 +172,12 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'move') callbacks?.onPlayerMove(msg.pubkey, msg.x, msg.y, msg.f);
       if (msg.type === 'leave') callbacks?.onPlayerLeave(msg.pubkey);
       if (msg.type === 'count') callbacks?.onCountUpdate(msg.count);
-      if (msg.type === 'chat') callbacks?.onChat(msg.pubkey, msg.name, msg.text, msg.emojis);
+      if (msg.type === 'chat') {
+        // Allow a pre-interceptor to consume game-protocol messages before the scene sees them
+        if (!chatInterceptor?.(msg.pubkey, msg.name, msg.text)) {
+          callbacks?.onChat(msg.pubkey, msg.name, msg.text, msg.emojis);
+        }
+      }
       if (msg.type === 'avatar_update') callbacks?.onAvatarUpdate?.(msg.pubkey, msg.avatar);
       if (msg.type === 'name_update') callbacks?.onNameUpdate?.(msg.pubkey, msg.name);
       if (msg.type === 'status_update') callbacks?.onStatusUpdate?.(msg.pubkey, msg.status);
@@ -169,6 +189,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'room_kick') onRoomKick?.(msg.reason);
       if (msg.type === 'online_players') { onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
       if (msg.type === 'zone_counts') onZoneCounts?.(msg as ZoneCounts);
+      if (msg.type === 'game_msg') onGameMsg?.(msg);
     } catch (e) {}
   };
 

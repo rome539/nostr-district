@@ -88,6 +88,8 @@ export type FurnitureId =
   | 'walltapestry3' // large wall tapestry
   | 'hangingivy'     // hanging ivy wall plant
   | 'sworddec'       // decorative sword wall mount
+  | 'gladusmount'    // decorative gladius wall mount
+  | 'swordmount'    // decorative katana wall mount
   | 'persianrugwall1' // persian rug wall hanging
   | 'persianrug'      // persian rug floor item
   | 'bearskin'        // bearskin rug
@@ -167,6 +169,8 @@ export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> =
   walltapestry3: { x: 655, y: 15  },
   hangingivy:    { x: 690, y: 30  },
   sworddec:        { x: 200, y: 20  },
+  gladusmount:      { x: 90,  y: 90  },
+  swordmount:      { x: 250, y: 90  },
   persianrugwall1: { x: 350, y: 20  },
   persianrug:      { x: 260, y: 318 },
   bearskin:        { x: 200, y: 320 },
@@ -372,6 +376,8 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   walltapestry3: '#d4c4a8',  // warm ivory
   hangingivy:    '#ffffff',
   sworddec:        '#c8c8c8',  // steel grey
+  gladusmount:      '#c8c8c8',  // steel grey
+  swordmount:      '#c8c8c8',  // steel grey
   persianrugwall1: '#d4c4a8',  // warm ivory
   persianrug:      '#d4c4a8',  // warm ivory
   bearskin:        '#c8b89a',  // natural tan
@@ -534,6 +540,8 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   walltapestry3: { label: 'Tapestry 3',   emoji: '🖼' },
   hangingivy:    { label: 'Hanging Ivy',  emoji: '🌿' },
   sworddec:        { label: 'Sword Mount',    emoji: '⚔️' },
+  gladusmount:      { label: 'Gladius Mount',  emoji: '⚔️' },
+  swordmount:      { label: 'Katana Mount',   emoji: '⚔️' },
   persianrugwall1: { label: 'Persian Rug',   emoji: '🪆' },
   persianrug:      { label: 'Persian Rug',   emoji: '🪆' },
   bearskin:        { label: 'Bearskin Rug',  emoji: '🐻' },
