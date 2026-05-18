@@ -439,16 +439,40 @@ export async function ensureLightningAddress(displayName: string, pubkeyHex: str
 
     const base     = (displayName || pubkeyHex.slice(0, 8)).toLowerCase().replace(/[^a-z0-9_]/g, '');
     const username = base.length >= 3 ? base : `nd${pubkeyHex.slice(0, 6)}`;
-
     const candidate = username.slice(0, 30);
-    const available = await _sdk.checkLightningAddressAvailable({ username: candidate }).catch(() => false);
-    const finalName = available ? candidate : `${candidate}${pubkeyHex.slice(0, 4)}`;
 
-    const info = await _sdk.registerLightningAddress({
-      username: finalName,
-      description: `Pay ${displayName || finalName} on Nostr District`,
-    });
-    return info?.lightningAddress ?? null;
+    // Try preferred name first; if taken, try progressively-more-unique fallbacks.
+    // This handles the case where the user's previous wallet (different mnemonic,
+    // same nsec) already registered the preferred name — Breez sees us as a new
+    // identity and rejects the duplicate with 409 "name already taken."
+    const isNameTakenError = (e: any): boolean => {
+      const msg = String(e?.message || e || '').toLowerCase();
+      return msg.includes('name already taken') || msg.includes('409');
+    };
+
+    const attempts = [
+      candidate,                                          // preferred
+      `${candidate}${pubkeyHex.slice(0, 4)}`,             // + 4 hex
+      `${candidate}${pubkeyHex.slice(0, 8)}`,             // + 8 hex
+      `${candidate}${pubkeyHex.slice(0, 4)}${Date.now().toString(36).slice(-4)}`, // + time
+      `nd${pubkeyHex.slice(0, 12)}${Date.now().toString(36).slice(-4)}`,          // last resort, drop display name
+    ];
+
+    for (const tryName of attempts) {
+      const name = tryName.slice(0, 30);
+      try {
+        const info = await _sdk.registerLightningAddress({
+          username: name,
+          description: `Pay ${displayName || name} on Nostr District`,
+        });
+        if (info?.lightningAddress) return info.lightningAddress;
+      } catch (e) {
+        if (isNameTakenError(e)) continue; // try next variant
+        throw e;                            // other error — bail
+      }
+    }
+    console.warn('[Spark] All Lightning address candidates were taken — wallet still works, but lud16 unset');
+    return null;
   } catch (e) {
     console.error('[Spark] Failed to ensure Lightning address:', e);
     return null;
