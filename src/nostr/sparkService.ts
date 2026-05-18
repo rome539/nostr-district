@@ -252,15 +252,21 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
   }
 }
 
-/** Try to fetch and decrypt the user's mnemonic backup from Nostr. Returns null if not found / undecryptable. */
+/**
+ * Try to fetch and decrypt the user's mnemonic backup from Nostr. Returns null
+ * if not found / undecryptable / times out. Hard 4-second cap so a slow or
+ * unresponsive relay can't block wallet init indefinitely.
+ */
 async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<string | null> {
   try {
     const { DEFAULT_RELAYS } = await import('./relayManager');
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
-    const event = await pool.get(DEFAULT_RELAYS.slice(0, 6), {
+    const fetchPromise = pool.get(DEFAULT_RELAYS.slice(0, 6), {
       kinds: [30078], authors: [pubkeyHex], '#d': [MNEMONIC_SYNC_D_TAG],
     });
+    const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), 4000));
+    const event = await Promise.race([fetchPromise, timeoutPromise]);
     if (!event?.content) return null;
     const decrypted = await selfDecryptForUser(event.content, pubkeyHex);
     if (decrypted && looksLikeMnemonic(decrypted)) return decrypted;
