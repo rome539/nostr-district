@@ -50,7 +50,7 @@ export class ExtensionWarning {
 
     const backdrop = document.createElement('div');
     backdrop.id = 'ext-warning-backdrop';
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:5099;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px);';
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:10099;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px);';
     document.body.appendChild(backdrop);
 
     const modal = document.createElement('div');
@@ -100,7 +100,7 @@ export class ExtensionWarning {
     style.id = 'ext-warning-styles';
     style.textContent = `
       #${MODAL_ID} {
-        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5100;
+        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10100;
         background:linear-gradient(180deg,var(--nd-bg) 0%,var(--nd-navy) 100%);
         border:1px solid color-mix(in srgb,#f0b040 45%,transparent);
         border-radius:12px;

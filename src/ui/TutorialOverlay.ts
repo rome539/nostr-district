@@ -36,14 +36,14 @@ const STEPS: Step[] = [
     key: '← →',
   },
   {
-    title: 'Entering Buildings',
-    body: 'Walk up to a building door and press <b>E</b> or <b>Space</b> to enter. You\'ll see a prompt appear when you\'re close enough. Press <b>Esc</b> to leave and return to the district.',
-    key: 'E',
-  },
-  {
     title: 'Chat',
     body: 'Press <b>Enter</b> to focus the chat bar and talk with everyone in the district. Type <b>/help</b> to see all available commands.',
     key: 'Enter',
+  },
+  {
+    title: 'Entering Buildings',
+    body: 'Walk up to a building door and press <b>E</b> or <b>Space</b> to enter. You\'ll see a prompt appear when you\'re close enough. Press <b>Esc</b> to leave and return to the district.',
+    key: 'E',
   },
   {
     title: 'Your Room',
@@ -55,9 +55,9 @@ const STEPS: Step[] = [
     body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><b>W</b> — Wallet &nbsp;&nbsp; <b>Tab</b> — World map<br><br>Press <b>?</b> anytime to see all hotkeys. Type <b>/tutorial</b> to reopen this guide.',
   },
   {
-    title: 'Crews',
-    body: 'Join or create a <b>Crew</b> — your own private group with chat, posts, and member ranks. Press <b>G</b> to open.',
-    key: 'G',
+    title: 'Settings',
+    body: 'Press <b>S</b> to open Settings. From there you can browse and apply community <b>Nostr themes</b>, load custom <b>emoji packs</b>, connect an external Lightning wallet via <b>NWC</b>, view your <b>npub / nsec</b>, and pull up the full hotkeys & commands reference.',
+    key: 'S',
   },
   {
     title: 'The Shop',
