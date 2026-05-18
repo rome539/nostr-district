@@ -2,6 +2,7 @@ import { authStore } from '../stores/authStore';
 import { setLocalKey, clearLocalKey, getLocalKey } from './dmService';
 import { setChannelKey, clearChannelKey } from './channelService';
 import { initNWC, clearNWCCache } from './nwcService';
+import { initSparkWallet, ensureLightningAddress, disconnectSparkWallet } from './sparkService';
 import { DEFAULT_RELAYS } from './relayManager';
 import type { RoomConfig } from '../stores/roomStore';
 import { applyRemoteRoomConfig } from '../stores/roomStore';
@@ -88,6 +89,63 @@ export async function signEvent(event: any): Promise<any> {
   }
 
   throw new Error('No signer available — login with a key or extension');
+}
+
+// ── In-game zap routing (NIP-78 app-data) ────────────────────────────────────
+//
+// We publish a kind:30078 event with d="nostr-district:spark-address" that maps
+// the user's Nostr pubkey → their in-game (Spark) Lightning address. Other
+// Nostr District clients query this event when zapping a player, so in-game
+// zaps land in the recipient's in-game wallet — without touching kind:0.
+// Outside clients (Damus, Amethyst, etc.) ignore this event.
+
+const SPARK_ADDR_D_TAG = 'nostr-district:spark-address';
+const _sparkAddrCache = new Map<string, { lud16: string | null; ts: number }>();
+const SPARK_ADDR_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Publish kind:30078 with the user's Spark Lightning address. */
+export async function publishSparkAddress(pubkey: string, lud16: string): Promise<void> {
+  if (!pubkey || !lud16) return;
+  // Avoid redundant relay writes: skip if the same address was already
+  // published from this browser previously.
+  const lastKey = `nd_spark_addr_published_${pubkey.slice(0, 16)}`;
+  if (localStorage.getItem(lastKey) === lud16) return;
+  try {
+    const signed = await signEvent({
+      kind: 30078,
+      pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', SPARK_ADDR_D_TAG]],
+      content: JSON.stringify({ lud16 }),
+    });
+    const ok = await publishEvent(signed);
+    if (ok) localStorage.setItem(lastKey, lud16);
+  } catch (e) {
+    console.warn('[Spark] Failed to publish spark-address event:', e);
+  }
+}
+
+/** Look up a player's in-game Spark Lightning address from kind:30078. */
+export async function fetchSparkAddress(pubkey: string): Promise<string | null> {
+  const cached = _sparkAddrCache.get(pubkey);
+  if (cached && (Date.now() - cached.ts) < SPARK_ADDR_CACHE_TTL_MS) return cached.lud16;
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds:    [30078],
+      authors:  [pubkey],
+      '#d':     [SPARK_ADDR_D_TAG],
+      limit:    1,
+    });
+    if (event) {
+      const data = JSON.parse(event.content);
+      const lud16 = (data?.lud16 || null) as string | null;
+      _sparkAddrCache.set(pubkey, { lud16, ts: Date.now() });
+      return lud16;
+    }
+  } catch { /* ignore */ }
+  _sparkAddrCache.set(pubkey, { lud16: null, ts: Date.now() });
+  return null;
 }
 
 export async function publishEvent(event: any): Promise<boolean> {
@@ -339,6 +397,51 @@ function syncFromRelays(pubkey: string): void {
   }).catch(() => {});
 }
 
+// Ensures the user has a Spark Lightning address registered with Breez, then
+// publishes a kind:30078 event mapping their pubkey → that address so other
+// players' clients can route in-game zaps to it.
+function ensureAndPublishSparkAddress(dn: string, pubkey: string): void {
+  ensureLightningAddress(dn, pubkey).then((lud16) => {
+    if (lud16) publishSparkAddress(pubkey, lud16);
+  }).catch(() => {});
+}
+
+// Shared helper: kick off Spark wallet init + Lightning-address registration
+// for bunker-logged-in users. Bunker requires the user to approve a remote
+// sign request; the cached mnemonic skips that on subsequent reloads.
+function initBunkerSparkWallet(pubkey: string): void {
+  initSparkWallet(pubkey, signEvent).then(async () => {
+    try {
+      const profile = await fetchProfile(pubkey);
+      const dn = profile?.display_name || profile?.name || '';
+      ensureAndPublishSparkAddress(dn, pubkey);
+    } catch {
+      ensureAndPublishSparkAddress('', pubkey);
+    }
+  }).catch(() => {});
+}
+
+/**
+ * Verify the extension actually implements NIP-44 by doing a self-encrypt →
+ * self-decrypt round-trip with a known plaintext. Some extensions (e.g.,
+ * Nostore on Safari) expose `nip44.encrypt`/`decrypt` but the implementation
+ * is broken or partial — they'll silently fail every DM / crew chatKey /
+ * gift-wrap operation. Returns true only if the round-trip succeeds.
+ */
+async function extensionSupportsNip44(pubkey: string): Promise<boolean> {
+  const ext = (window as any).nostr?.nip44;
+  if (!ext?.encrypt || !ext?.decrypt) return false;
+  try {
+    const sample = `nd-nip44-test-${Date.now()}`;
+    const ct = await ext.encrypt(pubkey, sample);
+    if (typeof ct !== 'string' || !ct) return false;
+    const pt = await ext.decrypt(pubkey, ct);
+    return pt === sample;
+  } catch {
+    return false;
+  }
+}
+
 export async function loginWithExtension(): Promise<void> {
   if (typeof (window as any).nostr === 'undefined') {
     throw new Error('No Nostr extension found. Install Alby, nos2x, or similar.');
@@ -351,7 +454,29 @@ export async function loginWithExtension(): Promise<void> {
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'extension' });
 
+  // Capability check: if the extension's NIP-44 is broken, surface a one-time
+  // warning so the user understands why DMs/crew chat will appear empty.
+  extensionSupportsNip44(pubkey).then(ok => {
+    if (!ok) {
+      import('../ui/ExtensionWarning').then(({ ExtensionWarning }) => {
+        ExtensionWarning.maybeShow();
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+
   initNWC().catch(() => {});
+
+  // Spark wallet via signed-event derivation. First sign prompts the
+  // extension popup; subsequent reloads use the cached mnemonic.
+  initSparkWallet(pubkey, signEvent).then(async () => {
+    try {
+      const profile = await fetchProfile(pubkey);
+      const dn = profile?.display_name || profile?.name || '';
+      ensureAndPublishSparkAddress(dn, pubkey);
+    } catch {
+      ensureAndPublishSparkAddress('', pubkey);
+    }
+  }).catch(() => {});
 
   // Fetch profile and room config in background
   fetchProfile(pubkey).then(profile => {
@@ -360,7 +485,7 @@ export async function loginWithExtension(): Promise<void> {
   syncFromRelays(pubkey);
 }
 
-export async function loginWithNsec(nsecString: string): Promise<void> {
+export async function loginWithNsec(nsecString: string, knownDisplayName?: string): Promise<void> {
   if (!nsecString.startsWith('nsec1')) {
     throw new Error('Invalid nsec. Must start with nsec1');
   }
@@ -373,8 +498,30 @@ export async function loginWithNsec(nsecString: string): Promise<void> {
   setLocalKey(secretKey as Uint8Array);
   setChannelKey(secretKey as Uint8Array);
 
+  // Warm the crew chat-key cache from localStorage so subscribeCrewChat can
+  // decrypt messages immediately instead of waiting for gift-wrap DMs.
+  import('./crewKeyCache').then(({ preloadCrewKeys }) => preloadCrewKeys()).catch(() => {});
+  import('./crewSkCache').then(({ preloadCrewSks }) => preloadCrewSks()).catch(() => {});
+
   // Login immediately — don't block on relay fetch
   authStore.getState().login({ pubkey, npub, nsec: nsecString, profile: {}, loginMethod: 'nsec' });
+
+  // Init Spark wallet in background — derives the BIP39 mnemonic from a
+  // deterministic signed Nostr event so any login method (nsec, passkey,
+  // extension, bunker) can provision the same wallet for the same identity.
+  initSparkWallet(pubkey, signEvent).then(async () => {
+    if (knownDisplayName) {
+      ensureAndPublishSparkAddress(knownDisplayName, pubkey);
+      return;
+    }
+    try {
+      const profile = await fetchProfile(pubkey);
+      const dn = profile?.display_name || profile?.name || '';
+      ensureAndPublishSparkAddress(dn, pubkey);
+    } catch {
+      ensureAndPublishSparkAddress('', pubkey);
+    }
+  }).catch(() => {});
 
   // Load (and if needed migrate) NWC URI into memory now that key is available
   initNWC().catch(() => {});
@@ -425,6 +572,7 @@ export async function startBunkerFlow(
     const pubkey = bunkerClient.userPubkey;
     const npub = NostrTools.nip19.npubEncode(pubkey);
     authStore.getState().login({ pubkey, npub, profile: {}, loginMethod: 'bunker' });
+    initBunkerSparkWallet(pubkey);
     fetchProfile(pubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
@@ -444,6 +592,7 @@ export async function startBunkerFlow(
   const loginPromise = waitForConnect.then((userPubkey: string) => {
     const npub = NostrTools.nip19.npubEncode(userPubkey);
     authStore.getState().login({ pubkey: userPubkey, npub, profile: {}, loginMethod: 'bunker' });
+    initBunkerSparkWallet(userPubkey);
     fetchProfile(userPubkey).then(profile => {
       if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
     });
@@ -490,21 +639,24 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
 }
 
 export async function loginWithNewAccount(nsecString: string, displayName: string): Promise<void> {
-  await loginWithNsec(nsecString);
-  // Update auth state with nsec and display name so it's available in-session
+  // Pass the chosen name through so the in-game wallet's Lightning address
+  // is registered as `<displayName>@breez.tips` instead of a pubkey fallback.
+  await loginWithNsec(nsecString, displayName);
   authStore.getState().nsec = nsecString;
   authStore.updateProfile({ name: displayName, display_name: displayName });
-  // Publish kind:0 profile in background — non-blocking
+
   const pubkey = authStore.getState().pubkey;
-  if (pubkey) {
-    signEvent({
-      kind: 0,
-      pubkey,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [],
-      content: JSON.stringify({ name: displayName, display_name: displayName }),
-    }).then(ev => publishEvent(ev)).catch(() => {});
-  }
+  if (!pubkey) return;
+
+  // Publish a minimal kind:0 (no lud16) so other Nostr clients see the name.
+  signEvent({
+    kind: 0,
+    pubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [],
+    content: JSON.stringify({ name: displayName, display_name: displayName }),
+  }).then(ev => publishEvent(ev)).catch(() => {
+  });
 }
 
 export async function loginAsGuest(): Promise<void> {
@@ -618,9 +770,14 @@ export function logout(): void {
   _onAvatarSynced = null;
   _roomSynced = false;
   _onRoomSynced = null;
+  const pkBeforeLogout = authStore.getState().pubkey || undefined;
   clearLocalKey();
   clearChannelKey();
+  // Clear crew chat-key cache (in-memory) — localStorage is per-pubkey so other accounts on the same browser keep theirs
+  import('./crewKeyCache').then(({ clearAllCrewKeys }) => clearAllCrewKeys()).catch(() => {});
+  import('./crewSkCache').then(({ clearAllCrewSks }) => clearAllCrewSks()).catch(() => {});
   clearNWCCache();
+  disconnectSparkWallet(pkBeforeLogout).catch(() => {});
   if (bunkerClient) {
     bunkerClient.destroy();
     bunkerClient = null;

@@ -12,6 +12,10 @@ export function isTutorialDone(): boolean {
 
 export function markTutorialDone(): void {
   localStorage.setItem(STORAGE_KEY, '1');
+  // Notify subscribers (e.g., deferred ExtensionWarning) that the tutorial
+  // is finished. Anything that should wait for first-run onboarding to
+  // complete before showing a modal can listen for this event.
+  window.dispatchEvent(new CustomEvent('nd:tutorial-done'));
 }
 
 interface Step {
@@ -48,7 +52,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Panels & Hotkeys',
-    body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><b>Tab</b> — World map<br><br>Press <b>?</b> anytime to see all hotkeys. Type <b>/tutorial</b> to reopen this guide.',
+    body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><b>W</b> — Wallet &nbsp;&nbsp; <b>Tab</b> — World map<br><br>Press <b>?</b> anytime to see all hotkeys. Type <b>/tutorial</b> to reopen this guide.',
   },
   {
     title: 'Crews',
@@ -59,6 +63,11 @@ const STEPS: Step[] = [
     title: 'The Shop',
     body: 'Type <b>/shop</b> in chat to open the item shop. Buy clothes, accessories, name colors, animations, and more — paid with Bitcoin over Lightning.',
     img: 'assets/shop.png',
+  },
+  {
+    title: 'Your Wallet',
+    body: 'You have a built-in Lightning wallet — press <b>W</b> to open it. Your <b>Lightning address</b> lets anyone send you sats from any wallet. Spend them in the shop or zap other players.',
+    key: 'W',
   },
   {
     title: 'You\'re ready.',

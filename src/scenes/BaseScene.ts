@@ -54,6 +54,7 @@ import { DMPanel } from '../ui/DMPanel';
 import { CrewPanel } from '../ui/CrewPanel';
 import { FollowsPanel } from '../ui/FollowsPanel';
 import { SettingsPanel } from '../ui/SettingsPanel';
+import { WalletPanel } from '../ui/WalletPanel';
 import { HotkeyModal } from '../ui/HotkeyModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { SoundEngine } from '../audio/SoundEngine';
@@ -1052,6 +1053,20 @@ export abstract class BaseScene extends Phaser.Scene {
       this.pollBoard.toggle();
     });
 
+    // W — Wallet (allow W to close wallet even though it itself blocks panel keys).
+    // If the WalletInfo modal is open on top of the wallet, close it first so W
+    // dismisses one layer at a time instead of jumping past it to close the wallet.
+    this.input.keyboard?.on('keydown-W', () => {
+      if (ci()) return;
+      if (document.getElementById('wallet-info')) {
+        import('../ui/WalletInfo').then(m => m.WalletInfo.destroy()).catch(() => {});
+        return;
+      }
+      if (WalletPanel.isOpen()) { WalletPanel.destroy(); return; }
+      if (blk()) return;
+      WalletPanel.open();
+    });
+
     // ? — Hotkey modal (document-level listener so it works outside Phaser focus)
     const hotkeyHandler = (e: KeyboardEvent) => {
       if (e.key !== '?') return;
@@ -1070,6 +1085,11 @@ export abstract class BaseScene extends Phaser.Scene {
     };
     document.addEventListener('keydown', mapHandler);
     this.events.once('shutdown', () => document.removeEventListener('keydown', mapHandler));
+
+    // Listen for wallet → "open profile editor" intent dispatched by WalletPanel.
+    const openProfileHandler = () => { if (!blk() && !ci()) this.onTKey(); };
+    window.addEventListener('nd-open-profile-tab', openProfileHandler);
+    this.events.once('shutdown', () => window.removeEventListener('nd-open-profile-tab', openProfileHandler));
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1108,11 +1128,14 @@ export abstract class BaseScene extends Phaser.Scene {
   protected abstract getPlayerSprite(): Phaser.GameObjects.Image;
 
   /**
-   * Return true to block all panel hotkeys (M, G, F, S, T, U, ENTER).
-   * Override in scenes where a scene-specific modal can capture keyboard input
-   * (e.g., RoomScene overrides to return BookcaseModal.isOpen()).
+   * Return true to block all panel hotkeys (M, G, F, S, T, U, ENTER) and
+   * scene-level interaction keys (E, Space). Globally blocks while any
+   * full-screen DOM modal is open so clicks/keys don't pass through to the game.
+   * Scenes can override to add their own scene-specific blockers.
    */
-  protected shouldBlockPanelKeys(): boolean { return false; }
+  protected shouldBlockPanelKeys(): boolean {
+    return WalletPanel.isOpen() || MarketPanel.isOpen();
+  }
 
   /**
    * Called when the T key is pressed and not blocked.
@@ -1150,6 +1173,7 @@ export abstract class BaseScene extends Phaser.Scene {
   //   playerPicker → muteList → profile-modal (DOM) → zap-modal (DOM)
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonEsc(): boolean {
+    if (WalletPanel.isOpen())           { WalletPanel.destroy();        return true; }
     if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
     if (this.worldMap.isOpen())         { this.worldMap.close();        return true; }
     if (this.crewPanel?.isVisible())    { this.crewPanel.pressEsc();    return true; }
@@ -1754,6 +1778,11 @@ export abstract class BaseScene extends Phaser.Scene {
       // ── Shop ─────────────────────────────────────────────────────────────
       case 'shop': case 'store': case 'market':
         MarketPanel.isOpen() ? MarketPanel.destroy() : MarketPanel.open();
+        return true;
+
+      // ── Wallet ───────────────────────────────────────────────────────────
+      case 'wallet': case 'sats': case 'lightning':
+        WalletPanel.toggle();
         return true;
 
       // ── Tutorial ─────────────────────────────────────────────────────────
