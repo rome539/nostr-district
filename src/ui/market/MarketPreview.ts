@@ -298,7 +298,7 @@ export class MarketPreview {
     } else if (item.slot === 'floorStyle') {
       MarketPreview._setCanvas(MarketPreview._makeFloorCanvas(item.value));
     } else if (WEARABLE_SLOTS.has(item.slot)) {
-      MarketPreview._drawAvatarCanvas({ ...getAvatar(), [item.slot]: item.value } as AvatarConfig);
+      MarketPreview._drawAvatarCanvas(MarketPreview._wearablePreviewConfig(item));
     } else {
       MarketPreview._drawAvatarCanvas(getAvatar());
     }
@@ -326,7 +326,7 @@ export class MarketPreview {
     else if (item.slot === 'furniture')   canvas = MarketPreview.makeFurnitureCanvas(item.value, MarketPreview._randomPreviewColor(item.value));
     else if (item.slot === 'wallTheme')   canvas = MarketPreview._makeWallThemeCanvas(item.value);
     else if (item.slot === 'floorStyle')  canvas = MarketPreview._makeFloorCanvas(item.value);
-    else if (WEARABLE_SLOTS.has(item.slot)) canvas = renderHubSprite({ ...getAvatar(), [item.slot]: item.value } as AvatarConfig);
+    else if (WEARABLE_SLOTS.has(item.slot)) canvas = renderHubSprite(MarketPreview._wearablePreviewConfig(item));
     else                                  canvas = renderHubSprite(getAvatar());
 
     canvas.style.cssText = 'width:37px;height:56px;image-rendering:pixelated;display:block;';
@@ -359,6 +359,40 @@ export class MarketPreview {
     const colors = palette.filter(c => c.toLowerCase() !== '#ffffff');
     const pickFrom = colors.length > 0 ? colors : palette;
     return pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  }
+
+  // Map wearable slot → the AvatarConfig color field it controls.
+  private static readonly WEARABLE_COLOR_FIELD: Partial<Record<string, keyof AvatarConfig>> = {
+    top:       'topColor',
+    bottom:    'bottomColor',
+    hat:       'hatColor',
+    accessory: 'accessoryColor',
+    hair:      'hairColor',
+    eyes:      'eyeColor',
+  };
+
+  // Color pool for clothing previews — mirrors the furniture color cycling so
+  // the player sees an item in a randomized color each time they click it,
+  // rather than always in their current avatar's color.
+  private static readonly CLOTHING_PREVIEW_PALETTE: string[] = [
+    '#7b68ee', '#e87aab', '#5dcaa5', '#f0b040', '#ff3355', '#aaff44',
+    '#00e5ff', '#9a6eff', '#ff9020', '#c44060', '#40a060', '#4060c4',
+    '#a040a0', '#3d2860', '#283d6b', '#5a3a1a', '#1a1040', '#d4c4a8',
+  ];
+
+  private static _randomClothingColor(): string {
+    return MarketPreview.CLOTHING_PREVIEW_PALETTE[
+      Math.floor(Math.random() * MarketPreview.CLOTHING_PREVIEW_PALETTE.length)
+    ];
+  }
+
+  /** Build an AvatarConfig override that previews a wearable in a random color. */
+  private static _wearablePreviewConfig(item: MarketItem): AvatarConfig {
+    const base = getAvatar();
+    const colorField = MarketPreview.WEARABLE_COLOR_FIELD[item.slot];
+    const overrides: Partial<AvatarConfig> = { [item.slot]: item.value as never };
+    if (colorField) overrides[colorField] = MarketPreview._randomClothingColor() as never;
+    return { ...base, ...overrides } as AvatarConfig;
   }
 
   private static _makeWallThemeCanvas(value: string): HTMLCanvasElement {

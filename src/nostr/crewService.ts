@@ -17,16 +17,20 @@
  * groups and keep them invisible to other apps on the same relay.
  */
 
-import { nip19 } from 'nostr-tools';
+import { nip19, generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools';
 import { authStore } from '../stores/authStore';
 import { signEvent, publishEvent, fetchProfile } from './nostrService';
 import { DEFAULT_RELAYS, RelayManager } from './relayManager';
 import { extractEmojiTags } from './emojiService';
+import { getCrewKey, setCrewKey, clearCrewKey } from './crewKeyCache';
+import { getCrewSk, setCrewSk, clearCrewSk, listCrewSkIds } from './crewSkCache';
+import { onDMReceived, sendDirectMessage } from './dmService';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NIP29_RELAYS     = ['wss://groups.0xchat.com', 'wss://relay.groups.nip29.com'];
-const CREW_DEF_PREFIX  = 'nd-crew-';
+const CREW_DEF_PREFIX  = 'nd-crew-';     // def d-tag — author is the crew's shared crewPk
+const CREW_PTR_PREFIX  = 'nd-crew-ptr-'; // pointer d-tag — author is the founder's personal pubkey
 const MEMBER_PREFIX    = 'nd-m-';   // d-tag prefix for per-member kind:30078 membership events
 const DISCOVERY_RELAYS = DEFAULT_RELAYS.slice(0, 5);
 // Chat/posts publish and query on all relays so messages always land somewhere
@@ -50,12 +54,14 @@ export interface Crew {
   emblemEmojis?: { code: string; url: string }[]; // resolved URLs for emblem shortcodes
   founderTitle?: string; // custom title replacing "Founder" label
   color: string;
-  founderPubkey: string;
+  founderPubkey: string;  // from the pointer event — cryptographic founder identity
+  crewPk: string;         // from the pointer — shared crew identity pubkey signing the def
   isOpen: boolean;
   createdAt: number;
   chatKey?: string;   // 32-byte hex — NIP-44 conversation key for crew chat + posts
+  wrappedChatKey?: string; // closed crews: chatKey NIP-44-encrypted from crewSk → crewPk
   memberCount?: number;
-  memberRoles?: Record<string, MemberRole>; // pubkey → role/title (set by founder)
+  memberRoles?: Record<string, MemberRole>; // pubkey → role/title
   kickedPubkeys?: string[];                 // pubkeys banned by founder/admin
   pendingReinvites?: Record<string, number>; // pubkey → unkick timestamp (invited back but not yet rejoined)
 }
@@ -140,9 +146,67 @@ async function ensureNip44(): Promise<void> {
   nip44 = (nt as any).nip44;
 }
 
+// NOTE on crew chat encryption:
+// - OPEN crews: the `chatKey` is published in plaintext in the public crew def.
+//   That's intentional — open crews accept all joiners freely so encryption is
+//   pure obfuscation against passive scrapers, not real privacy.
+// - CLOSED crews: the chatKey is stored as `wrappedChatKey` (NIP-44 founder-
+//   self-encrypted) in the crew def and distributed to approved members via
+//   gift-wrapped DMs at accept time. The plaintext `chatKey` field is NOT
+//   written for closed crews.
 async function encryptContent(plaintext: string, chatKey: string): Promise<string> {
   await ensureNip44();
   return nip44.encrypt(plaintext, hexToBytes(chatKey));
+}
+
+/**
+ * Returns the effective chatKey to use for encrypt/decrypt operations.
+ * - Closed crews: check the cache (filled from gift-wrap DMs or admin self-unwrap)
+ * - Open crews: fall back to the plaintext chatKey from the crew def
+ */
+async function getEffectiveChatKey(crewId: string): Promise<string | null> {
+  const cached = await getCrewKey(crewId);
+  if (cached) return cached;
+  return crewCache.get(crewId)?.chatKey ?? null;
+}
+
+/**
+ * If we hold the crewSk for this crew (founder or admin) and haven't cached
+ * the chatKey yet, decrypt wrappedChatKey using crewSk → crewPk and cache it.
+ * This is the path that gives any admin access to chat without a separate
+ * gift-wrap DM at promotion time.
+ */
+async function hydrateAdminChatKey(crew: Crew): Promise<void> {
+  if (!crew.wrappedChatKey || !crew.crewPk) return;
+  const existing = await getCrewKey(crew.id);
+  if (existing) return;
+  const crewSk = await getCrewSk(crew.id);
+  if (!crewSk) return;
+  try {
+    const chatKey = await unwrapChatKeyForCrew(crew.wrappedChatKey, crewSk, crew.crewPk);
+    await setCrewKey(crew.id, chatKey);
+  } catch (e) {
+    console.warn('[Crews] Failed to unwrap chatKey for crew', crew.id, e);
+  }
+}
+
+/**
+ * Resolve the chatKey for a crew, hydrating it from the def + crewSk if not
+ * already cached. Returns null only when neither path is available (open crew
+ * with a plain chatKey will hit the cache fallback below).
+ *
+ * Use this whenever you need the chatKey synchronously for a user action
+ * (e.g., sending it to a newly-accepted member). For background reads you
+ * can keep calling getCrewKey() directly.
+ */
+export async function ensureChatKey(crewId: string): Promise<string | null> {
+  const cached = await getCrewKey(crewId);
+  if (cached) return cached;
+  const crew = crewCache.get(crewId);
+  if (!crew) return null;
+  if (crew.isOpen && crew.chatKey) return crew.chatKey;
+  await hydrateAdminChatKey(crew);
+  return getCrewKey(crewId);
 }
 
 async function decryptContent(ciphertext: string, chatKey: string): Promise<string> {
@@ -150,17 +214,152 @@ async function decryptContent(ciphertext: string, chatKey: string): Promise<stri
   return nip44.decrypt(ciphertext, hexToBytes(chatKey));
 }
 
-function parseCrew(event: any): Crew | null {
+// ── Crew identity keypair (v2 authority model) ───────────────────────────────
+//
+// Each crew has its own (crewSk, crewPk). The crew definition event is signed
+// by `crewSk`, so any holder of the secret key (founder + admins) can publish
+// authoritative updates. The founder's personal nsec signs a separate pointer
+// event that names the current `crewPk` — only the founder can rotate it.
+
+/** Generate a fresh crew identity keypair. */
+function genCrewKeypair(): { crewSk: string; crewPk: string } {
+  const sk = generateSecretKey();
+  const pk = getPublicKey(sk);
+  return { crewSk: bytesToHexLocal(sk), crewPk: pk };
+}
+
+function bytesToHexLocal(b: Uint8Array): string {
+  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** Sign an event template with a raw secret key (deterministic, no signer prompt). */
+function signWithKey(secretKeyHex: string, template: { kind: number; created_at: number; tags: string[][]; content: string }): any {
+  return finalizeEvent({ ...template }, hexToBytes(secretKeyHex));
+}
+
+/** Wrap a chatKey to the crew identity using crewSk → crewPk NIP-44 self-encrypt. */
+async function wrapChatKeyForCrew(chatKeyHex: string, crewSkHex: string, crewPkHex: string): Promise<string> {
+  await ensureNip44();
+  const convKey = nip44.getConversationKey(hexToBytes(crewSkHex), crewPkHex);
+  return nip44.encrypt(chatKeyHex, convKey);
+}
+
+/** Unwrap a chatKey that was wrapped for the crew identity. */
+async function unwrapChatKeyForCrew(wrapped: string, crewSkHex: string, crewPkHex: string): Promise<string> {
+  await ensureNip44();
+  const convKey = nip44.getConversationKey(hexToBytes(crewSkHex), crewPkHex);
+  return nip44.decrypt(wrapped, convKey);
+}
+
+// ── Pointer event (founder-signed → names current crewPk) ────────────────────
+
+export interface CrewPointer {
+  crewPk: string;
+  founderPubkey: string;
+  createdAt: number;
+}
+
+const pointerCache = new Map<string, CrewPointer>();
+
+function parsePointer(event: any): CrewPointer | null {
   try {
+    const data = JSON.parse(event.content);
+    if (!data || data.deleted) return null;
+    if (typeof data.crewPk !== 'string' || !/^[0-9a-f]{64}$/.test(data.crewPk)) return null;
+    return { crewPk: data.crewPk, founderPubkey: event.pubkey, createdAt: event.created_at ?? 0 };
+  } catch { return null; }
+}
+
+/**
+ * Publish the pointer event (founder-signed) naming the current crewPk for
+ * this crew. Returns true only if at least one relay accepted the event —
+ * callers MUST check, because a failed pointer publish silently breaks crew
+ * discovery (createCrew) and revocation (rotateCrewKey).
+ */
+async function publishCrewPointer(crewId: string, crewPk: string): Promise<boolean> {
+  const { pubkey } = authStore.getState();
+  if (!pubkey) throw new Error('Must be logged in');
+  const event = await signEvent({
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
+    content: JSON.stringify({ crewPk }),
+    pubkey,
+  });
+  const ok = await publishEvent(event);
+  if (ok) pointerCache.set(crewId, { crewPk, founderPubkey: pubkey, createdAt: event.created_at });
+  return ok;
+}
+
+/**
+ * Fetch the canonical pointer for a crew. If multiple authors have published
+ * pointers under the same crewId d-tag (squatting / collision), the oldest
+ * wins — first-publisher is canonical. crewIds are random 8-byte values, so
+ * collisions are practically nonexistent; this rule just makes behavior
+ * deterministic across clients if it ever happens.
+ */
+async function fetchCrewPointer(crewId: string, forceRefresh = false): Promise<CrewPointer | null> {
+  if (!forceRefresh && pointerCache.has(crewId)) return pointerCache.get(crewId)!;
+  await ensurePool();
+  try {
+    const events: any[] = await pool.querySync(DISCOVERY_RELAYS, {
+      kinds: [30078], '#d': [CREW_PTR_PREFIX + crewId],
+    }, { maxWait: 4000 });
+    if (!events.length) return null;
+    // Pick the canonical pointer: earliest created_at wins; among ties, lowest pubkey.
+    let canonical: any | null = null;
+    for (const ev of events) {
+      const p = parsePointer(ev);
+      if (!p) continue;
+      if (!canonical) { canonical = ev; continue; }
+      if (ev.created_at < canonical.created_at ||
+          (ev.created_at === canonical.created_at && ev.pubkey < canonical.pubkey)) {
+        canonical = ev;
+      }
+    }
+    if (!canonical) return null;
+    // Among events with the SAME pubkey as the canonical author, take the latest
+    // (replaceable event semantics — canonical author can rotate crewPk).
+    let latestByAuthor: any = canonical;
+    for (const ev of events) {
+      if (ev.pubkey !== canonical.pubkey) continue;
+      if (ev.created_at > latestByAuthor.created_at) latestByAuthor = ev;
+    }
+    const parsed = parsePointer(latestByAuthor);
+    if (parsed) pointerCache.set(crewId, parsed);
+    return parsed;
+  } catch { return null; }
+}
+
+/** Cache a pointer entry locally without hitting relays (used when we just published it). */
+function setPointerCache(crewId: string, ptr: CrewPointer): void {
+  pointerCache.set(crewId, ptr);
+}
+
+/**
+ * Parse a crew def event into a Crew object. The def is signed by crewSk, so
+ * `event.pubkey === crewPk` and the canonical founder identity must come from
+ * the pointer (passed in as `pointer`). If `pointer.crewPk !== event.pubkey`,
+ * the def is stale (signed by a rotated-away key) and we return null.
+ *
+ * Defs that kick the founder named by the pointer are ignored — an admin
+ * cannot oust the founder; the founder's recourse is a full crewSk rotation.
+ */
+function parseCrew(event: any, pointer: CrewPointer): Crew | null {
+  try {
+    if (event.pubkey !== pointer.crewPk) return null; // stale or rogue def
     const data = JSON.parse(event.content);
     const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
     const id = dTag.replace(CREW_DEF_PREFIX, '');
     if (!id || !data.name || data.deleted) return null; // skip tombstones
     if (getDeletedCrews().has(id)) return null;         // skip locally deleted
-    // Sync kicked/pending state with what the relay says
+    const kickedPubkeys: string[] = (data.kickedPubkeys ?? []).filter(
+      (pk: string) => pk !== pointer.founderPubkey,
+    );
+    // Sync kicked/pending state with what the relay says (LOCAL ONLY).
     const myPubkey = authStore.getState().pubkey;
     if (myPubkey) {
-      if ((data.kickedPubkeys ?? []).includes(myPubkey)) {
+      if (kickedPubkeys.includes(myPubkey)) {
         removeJoinedCrew(id);
         markKickedLocally(id);
       } else {
@@ -178,12 +377,14 @@ function parseCrew(event: any): Crew | null {
       emblemEmojis: emblemEmojis.length ? emblemEmojis : undefined,
       founderTitle: data.founderTitle || undefined,
       color: data.color ?? '#5dcaa5',
-      founderPubkey: event.pubkey,
+      founderPubkey: pointer.founderPubkey,
+      crewPk: pointer.crewPk,
       isOpen: data.isOpen !== false,
       createdAt: event.created_at ?? 0,
       chatKey: data.chatKey,
+      wrappedChatKey: data.wrappedChatKey,
       memberRoles: data.memberRoles ?? {},
-      kickedPubkeys: data.kickedPubkeys ?? [],
+      kickedPubkeys,
       pendingReinvites: data.pendingReinvites ?? {},
     };
   } catch { return null; }
@@ -234,30 +435,41 @@ export function subscribeCrewUpdates(crewId: string, onKicked: () => void): () =
     onKicked();
   };
 
-  const check = (content: string) => {
+  const check = (event: any) => {
+    const ptr = pointerCache.get(crewId);
+    if (ptr && event.pubkey !== ptr.crewPk) return; // stale def from rotated-away key
     try {
-      const data = JSON.parse(content);
+      const data = JSON.parse(event.content);
+      // Founder can't be kicked even if a def claims otherwise
+      if (ptr && pubkey === ptr.founderPubkey) return;
       if ((data.kickedPubkeys ?? []).includes(pubkey)) fire();
     } catch {}
   };
 
-  // Live subscription via RelayManager
   const rm = new RelayManager(DISCOVERY_RELAYS);
   rm.connectAll();
-  rm.subscribe(
-    `crew-kick-${crewId}-${pubkey.slice(0, 8)}`,
-    [{ kinds: [30078], '#d': [CREW_DEF_PREFIX + crewId] }],
-    (ev: any) => check(ev.content)
-  );
 
-  // Poll fallback — in case the relay doesn't push the update in time
+  // Resolve the pointer once, then subscribe to defs authored by that crewPk.
+  fetchCrewPointer(crewId).then(ptr => {
+    if (!ptr || fired) return;
+    rm.subscribe(
+      `crew-kick-${crewId}-${pubkey.slice(0, 8)}`,
+      [{ kinds: [30078], '#d': [CREW_DEF_PREFIX + crewId], authors: [ptr.crewPk] }],
+      (ev: any) => check(ev)
+    );
+  }).catch(() => {});
+
+  // Poll fallback — refresh pointer + def each tick in case of relay delivery gaps
   const poll = setInterval(() => {
     if (fired) { clearInterval(poll); return; }
-    ensurePool().then(() =>
-      pool.get(DISCOVERY_RELAYS, { kinds: [30078], '#d': [CREW_DEF_PREFIX + crewId] })
-        .then((ev: any) => { if (ev) check(ev.content); })
-        .catch(() => {})
-    );
+    ensurePool().then(async () => {
+      const ptr = await fetchCrewPointer(crewId, true);
+      if (!ptr) return;
+      const ev = await pool.get(DISCOVERY_RELAYS, {
+        kinds: [30078], '#d': [CREW_DEF_PREFIX + crewId], authors: [ptr.crewPk],
+      });
+      if (ev) check(ev);
+    }).catch(() => {});
   }, 8_000);
 
   return () => {
@@ -349,10 +561,15 @@ async function publishToNip29(event: any): Promise<void> {
   await Promise.allSettled(pool.publish(NIP29_RELAYS, event));
 }
 
-/** Publish a chat/post event to all relays (NIP-29 + regular) for reliability. */
-async function publishToChat(event: any): Promise<void> {
+/**
+ * Publish a chat/post event to all relays (NIP-29 + regular). Returns the
+ * number of relays that accepted the event. Callers that care about delivery
+ * (e.g., chat send) can retry if this returns 0.
+ */
+async function publishToChat(event: any): Promise<number> {
   await ensurePool();
-  await Promise.allSettled(pool.publish(CHAT_RELAYS, event));
+  const results = await Promise.allSettled(pool.publish(CHAT_RELAYS, event));
+  return results.filter(r => r.status === 'fulfilled').length;
 }
 
 // ── Local crew cache ──────────────────────────────────────────────────────────
@@ -374,18 +591,40 @@ export async function createCrew(
 
   const id = genId();
 
-  // 1. Publish crew definition to regular relays for discovery
+  // Generate the crew identity keypair — this is what signs the def event.
+  // Founder retains a copy locally; admins receive theirs via gift-wrap DM on promotion.
+  const { crewSk, crewPk } = genCrewKeypair();
+
+  // 1. Publish crew definition signed by crewSk
+  //    - Open crews:   plaintext chatKey in the def (obfuscation only)
+  //    - Closed crews: wrappedChatKey (encrypted from crewSk → crewPk so any admin can decrypt)
+  const chatKey = genChatKey();
+  const defContent: Record<string, any> = { name, about, emblem, color, isOpen };
+  if (isOpen) {
+    defContent.chatKey = chatKey;
+  } else {
+    defContent.wrappedChatKey = await wrapChatKeyForCrew(chatKey, crewSk, crewPk);
+  }
+  await setCrewKey(id, chatKey); // cache plaintext chatKey for self
+  await setCrewSk(id, crewSk);
+
   const emblemEmojiTags = extractEmojiTags(emblem).map(e => ['emoji', e.code, e.url]);
-  const defEvent = await signEvent({
+  const defEvent = signWithKey(crewSk, {
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
     tags: [['d', CREW_DEF_PREFIX + id], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
-    content: JSON.stringify({ name, about, emblem, color, isOpen, chatKey: genChatKey() }),
-    pubkey,
+    content: JSON.stringify(defContent),
   });
   await publishEvent(defEvent);
 
-  // 2. Create the NIP-29 group on the relay (best-effort)
+  // 2. Publish the founder-signed pointer naming this crewPk. If this fails,
+  //    the crew is invisible to other clients (and to ourselves on next session)
+  //    because they discover crews via the pointer. Abort loudly so the user
+  //    can retry rather than ending up with a phantom crew.
+  const ptrOk = await publishCrewPointer(id, crewPk);
+  if (!ptrOk) throw new Error('Failed to publish the crew pointer — please try again');
+
+  // 3. Create the NIP-29 group on the relay (best-effort) — founder personal key
   try {
     const createEvent = await signEvent({
       kind: 9007,
@@ -399,7 +638,7 @@ export async function createCrew(
     console.warn('[Crews] NIP-29 group create failed (relay may be unavailable):', e);
   }
 
-  // 3. Founder joins automatically (best-effort)
+  // 4. Founder joins automatically (best-effort)
   try {
     const joinEvent = await signEvent({
       kind: 9021,
@@ -413,10 +652,14 @@ export async function createCrew(
     console.warn('[Crews] NIP-29 join failed:', e);
   }
 
-  // Always add to local joined list regardless of relay outcome
   addJoinedCrew(id);
 
-  const crew: Crew = { id, name, about, emblem, color, founderPubkey: pubkey, isOpen, createdAt: defEvent.created_at };
+  const crew: Crew = {
+    id, name, about, emblem, color,
+    founderPubkey: pubkey, crewPk, isOpen,
+    createdAt: defEvent.created_at,
+    ...(isOpen ? { chatKey } : { wrappedChatKey: defContent.wrappedChatKey as string }),
+  };
   crewCache.set(id, crew);
   return id;
 }
@@ -439,8 +682,10 @@ export async function fetchMyCrews(): Promise<Crew[]> {
 
   const resultMap = new Map<string, Crew>();
 
-  // Single query: all kind:30078 events authored by this pubkey
-  // This covers both crew definitions (CREW_DEF_PREFIX) and membership cards (MEMBER_PREFIX)
+  // Single query: all kind:30078 events authored by this pubkey.
+  // Covers pointers (CREW_PTR_PREFIX — crews I founded) and membership cards
+  // (MEMBER_PREFIX — crews I joined). Defs themselves are authored by crewPk,
+  // so they don't show up here; we fetch them via fetchCrew below.
   let allUserEvents: any[] = [];
   try {
     allUserEvents = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], authors: [pubkey], limit: 150 }, { maxWait: 6000 });
@@ -450,20 +695,34 @@ export async function fetchMyCrews(): Promise<Crew[]> {
 
   const dTag = (ev: any): string => ev.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
 
-  // ── 1. Crews this user created ────────────────────────────────────────────
-  const crewDefEvents = allUserEvents.filter(ev => dTag(ev).startsWith(CREW_DEF_PREFIX));
+  // ── 1. Crews this user founded (via their pointer events) ────────────────
+  const pointerEvents = allUserEvents.filter(ev => dTag(ev).startsWith(CREW_PTR_PREFIX));
   const byCrewId = new Map<string, any>();
-  for (const ev of crewDefEvents) {
-    const id = dTag(ev).replace(CREW_DEF_PREFIX, '');
+  for (const ev of pointerEvents) {
+    const id = dTag(ev).replace(CREW_PTR_PREFIX, '');
     if (!byCrewId.has(id) || ev.created_at > byCrewId.get(id).created_at) byCrewId.set(id, ev);
   }
-  for (const [id, ev] of byCrewId) {
-    const crew = parseCrew(ev);
-    if (crew) { crewCache.set(id, crew); addJoinedCrew(id); resultMap.set(id, crew); }
+  for (const [id, ptrEv] of byCrewId) {
+    const ptr = parsePointer(ptrEv);
+    if (!ptr) continue;
+    pointerCache.set(id, ptr);
+    addJoinedCrew(id);
+    const crew = await fetchCrew(id, true);
+    if (crew) resultMap.set(id, crew);
+    await new Promise(r => setTimeout(r, 0));
   }
 
-  // ── 2. Crews this user joined (membership cards) ──────────────────────────
-  // Each membership card is a replaceable event — latest per d-tag is the truth.
+  // ── 2. Crews this user holds crewSk for (admin-promoted) ─────────────────
+  // The crewSk cache is the source of truth for "where am I an admin?"
+  for (const id of listCrewSkIds()) {
+    if (resultMap.has(id)) continue;
+    addJoinedCrew(id);
+    const crew = await fetchCrew(id, true).catch(() => null);
+    if (crew) resultMap.set(id, crew);
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  // ── 3. Crews this user joined (membership cards) ─────────────────────────
   const membershipEvents = allUserEvents.filter(ev => dTag(ev).startsWith(MEMBER_PREFIX));
   const latestMembership = new Map<string, any>();
   for (const ev of membershipEvents) {
@@ -472,8 +731,6 @@ export async function fetchMyCrews(): Promise<Crew[]> {
       latestMembership.set(crewId, ev);
     }
   }
-  // Process membership events sequentially to avoid a burst of parallel relay queries
-  // that would all resolve at once and stall the game loop
   for (const [crewId, ev] of latestMembership) {
     try {
       const data = JSON.parse(ev.content);
@@ -484,9 +741,7 @@ export async function fetchMyCrews(): Promise<Crew[]> {
       addJoinedCrew(crewId);
       const crew = await fetchCrew(crewId, true);
       if (crew && !resultMap.has(crewId)) resultMap.set(crewId, crew);
-      // Don't removeJoinedCrew on null — fetchCrew can return null on cold relay connections
     } catch {}
-    // Yield to the browser between each crew fetch so the game loop isn't starved
     await new Promise(r => setTimeout(r, 0));
   }
 
@@ -498,55 +753,106 @@ let allCrewsCache: Crew[] = [];
 let allCrewsCacheAt = 0;
 const ALL_CREWS_TTL = 2 * 60 * 1000; // 2 minutes
 
-/** Fetch all public crews from regular relays. Results are cached for 2 minutes. */
+/**
+ * Fetch all public crews from regular relays. Two-stage query:
+ *   1. Pull all pointers (one query, filtered by #t: nostr-district + d-tag prefix)
+ *   2. Batch-fetch the defs they reference (one query, filtered by authors=[crewPks])
+ * Results are cached for 2 minutes.
+ */
 export async function fetchAllCrews(forceRefresh = false): Promise<Crew[]> {
   if (!forceRefresh && allCrewsCache.length > 0 && Date.now() - allCrewsCacheAt < ALL_CREWS_TTL) {
     return allCrewsCache;
   }
   await ensurePool();
-  let events: any[] = [];
+
+  // Stage 1: pointers
+  let ptrEvents: any[] = [];
   try {
-    // Must stay high — this fetches ALL users' kind:30078 and filters crew defs client-side.
-    // Lower limits cause crew events to get crowded out by avatar/room/membership events.
-    events = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], '#t': ['nostr-district'], limit: 200 }, { maxWait: 6000 });
+    ptrEvents = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], '#t': ['nostr-district'], limit: 400 }, { maxWait: 6000 });
   } catch (e) {
-    console.warn('[Crews] fetchAllCrews failed:', e);
-    return allCrewsCache; // return stale cache on error rather than empty
+    console.warn('[Crews] fetchAllCrews pointer query failed:', e);
+    return allCrewsCache;
+  }
+  const pointers = new Map<string, CrewPointer>();
+  // Group by crewId, pick canonical (earliest, tiebreak by lowest pubkey), then latest for that author
+  type Bucket = { canonical: any; latestByAuthor: any };
+  const buckets = new Map<string, Bucket>();
+  for (const ev of ptrEvents) {
+    const dt = ev.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
+    if (!dt.startsWith(CREW_PTR_PREFIX)) continue;
+    const id = dt.replace(CREW_PTR_PREFIX, '');
+    const b = buckets.get(id);
+    if (!b) { buckets.set(id, { canonical: ev, latestByAuthor: ev }); continue; }
+    if (ev.created_at < b.canonical.created_at ||
+        (ev.created_at === b.canonical.created_at && ev.pubkey < b.canonical.pubkey)) {
+      b.canonical = ev;
+      b.latestByAuthor = ev;
+    } else if (ev.pubkey === b.canonical.pubkey && ev.created_at > b.latestByAuthor.created_at) {
+      b.latestByAuthor = ev;
+    }
+  }
+  for (const [id, b] of buckets) {
+    const p = parsePointer(b.latestByAuthor);
+    if (p) { pointers.set(id, p); pointerCache.set(id, p); }
+  }
+  if (pointers.size === 0) {
+    allCrewsCache = [];
+    allCrewsCacheAt = Date.now();
+    return [];
   }
 
-  const crewEvents = events.filter((ev: any) => {
-    const dTag = ev.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
-    return dTag.startsWith(CREW_DEF_PREFIX);
-  });
-
-  // Deduplicate — keep newest per id
-  const byId = new Map<string, any>();
-  for (const ev of crewEvents) {
-    const dTag = ev.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
-    const id = dTag.replace(CREW_DEF_PREFIX, '');
-    if (!byId.has(id) || ev.created_at > byId.get(id).created_at) byId.set(id, ev);
+  // Stage 2: defs authored by any of these crewPks
+  const authors = [...new Set([...pointers.values()].map(p => p.crewPk))];
+  let defEvents: any[] = [];
+  try {
+    defEvents = await pool.querySync(DISCOVERY_RELAYS, { kinds: [30078], authors, limit: 400 }, { maxWait: 6000 });
+  } catch (e) {
+    console.warn('[Crews] fetchAllCrews def query failed:', e);
+    return allCrewsCache;
   }
 
-  // parseCrew already filters deleted:true tombstones — no need for a separate kind:5 query
-  const crews = [...byId.values()].map(parseCrew).filter(Boolean) as Crew[];
+  const latestDefByCrewId = new Map<string, any>();
+  for (const ev of defEvents) {
+    const dt = ev.tags?.find((t: string[]) => t[0] === 'd')?.[1] ?? '';
+    if (!dt.startsWith(CREW_DEF_PREFIX)) continue;
+    const id = dt.replace(CREW_DEF_PREFIX, '');
+    const ptr = pointers.get(id);
+    if (!ptr || ev.pubkey !== ptr.crewPk) continue; // ignore stale defs
+    const cur = latestDefByCrewId.get(id);
+    if (!cur || ev.created_at > cur.created_at) latestDefByCrewId.set(id, ev);
+  }
+
+  const crews: Crew[] = [];
+  for (const [id, ev] of latestDefByCrewId) {
+    const c = parseCrew(ev, pointers.get(id)!);
+    if (c) crews.push(c);
+  }
   crews.forEach(c => crewCache.set(c.id, c));
+  Promise.all(crews.map(hydrateAdminChatKey)).catch(() => {});
+
   const sorted = crews.sort((a, b) => b.createdAt - a.createdAt);
   allCrewsCache = sorted;
   allCrewsCacheAt = Date.now();
   return sorted;
 }
 
-/** Fetch a single crew definition by id. */
+/** Fetch a single crew by id. Resolves pointer first, then the def authored by crewPk. */
 export async function fetchCrew(id: string, forceRefresh = false): Promise<Crew | null> {
-  // Only use cache if chatKey is already present and no force refresh requested
   const cached = crewCache.get(id);
-  if (cached?.chatKey && !forceRefresh) return cached;
+  if (cached && (cached.chatKey || cached.wrappedChatKey) && !forceRefresh) return cached;
   await ensurePool();
+  const ptr = await fetchCrewPointer(id, forceRefresh);
+  if (!ptr) return null;
   try {
-    const ev = await pool.get(DISCOVERY_RELAYS, { kinds: [30078], '#d': [CREW_DEF_PREFIX + id] });
+    const ev = await pool.get(DISCOVERY_RELAYS, {
+      kinds: [30078], '#d': [CREW_DEF_PREFIX + id], authors: [ptr.crewPk],
+    });
     if (!ev) return null;
-    const crew = parseCrew(ev);
-    if (crew) crewCache.set(id, crew);
+    const crew = parseCrew(ev, ptr);
+    if (crew) {
+      crewCache.set(id, crew);
+      hydrateAdminChatKey(crew).catch(() => {});
+    }
     return crew;
   } catch { return null; }
 }
@@ -611,49 +917,57 @@ export async function deleteCrew(crewId: string): Promise<void> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
 
-  // Save name before clearing cache
-  const crewName = crewCache.get(crewId)?.name ?? 'this crew';
+  const crew = crewCache.get(crewId);
+  const crewName = crew?.name ?? 'this crew';
+  if (crew && crew.founderPubkey !== pubkey) throw new Error('Only the founder can delete the crew');
 
-  // 1. Local cleanup FIRST (synchronous, before any await) — UI sees clean state immediately
+  // 1. Local cleanup FIRST — UI sees clean state immediately
   markCrewDeleted(crewId);
   crewCache.delete(crewId);
+  pointerCache.delete(crewId);
   removeJoinedCrew(crewId);
-  allCrewsCache = allCrewsCache.filter(c => c.id !== crewId); // remove from Find a Crew immediately
+  allCrewsCache = allCrewsCache.filter(c => c.id !== crewId);
 
   // 2. Notify members via system message
   try {
     await sendCrewSystemMessage(crewId, `${crewName} has been dissolved by the founder.`);
   } catch (_) {}
 
-  // 3. kind:5 deletion — primary method
-  try {
-    const kind5 = await signEvent({
-      kind: 5,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [['a', `30078:${pubkey}:${CREW_DEF_PREFIX + crewId}`], ['client', 'Nostr District']],
-      content: 'Crew deleted',
-      pubkey,
-    });
-    await publishEvent(kind5);
-  } catch (e) {
-    console.warn('[Crews] kind:5 deletion failed:', e);
+  // 3. Def tombstone — overwrite the crewSk-signed def with deleted:true
+  const crewSk = await getCrewSk(crewId);
+  if (crewSk) {
+    try {
+      const tombstone = signWithKey(crewSk, {
+        kind: 30078,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
+        content: JSON.stringify({ deleted: true }),
+      });
+      await publishEvent(tombstone);
+    } catch (e) {
+      console.warn('[Crews] def tombstone publish failed:', e);
+    }
   }
 
-  // 4. Tombstone overwrite as backup
+  // 4. Pointer tombstone — overwrites the founder-signed pointer with deleted:true
   try {
-    const tombstone = await signEvent({
+    const ptrTombstone = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', CREW_DEF_PREFIX + crewId], ['client', 'Nostr District']],
+      tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
       content: JSON.stringify({ deleted: true }),
       pubkey,
     });
-    await publishEvent(tombstone);
+    await publishEvent(ptrTombstone);
   } catch (e) {
-    console.warn('[Crews] tombstone publish failed:', e);
+    console.warn('[Crews] pointer tombstone publish failed:', e);
   }
 
-  // 5. NIP-29 group deletion — best effort
+  // 5. Clean up local secrets
+  await clearCrewSk(crewId).catch(() => {});
+  await clearCrewKey(crewId).catch(() => {});
+
+  // 6. NIP-29 group deletion — best effort
   try {
     const deleteGroupEvent = await signEvent({
       kind: 9008,
@@ -672,6 +986,17 @@ export async function deleteCrew(crewId: string): Promise<void> {
 export async function leaveCrew(crewId: string): Promise<void> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') return;
+
+  // Announce leave FIRST while we still have membership on the NIP-29 relay,
+  // otherwise the leave message gets rejected by the relay once kind:9022
+  // strips us from the group.
+  try {
+    const profile = await fetchProfile(pubkey).catch(() => null);
+    const name = profile?.display_name || profile?.name || pubkey.slice(0, 8) + '…';
+    await sendCrewSystemMessage(crewId, `${name} left the crew`, pubkey);
+  } catch (e) {
+    console.warn('[Crews] Leave announcement failed:', e);
+  }
 
   // NIP-29 leave (best-effort)
   try {
@@ -704,13 +1029,6 @@ export async function leaveCrew(crewId: string): Promise<void> {
   removeJoinedCrew(crewId);
   // Update in-memory cache so isCrewAdmin returns false immediately
   if (pubkey) demoteInCache(crewId, pubkey);
-  // Announce leave — resolve name first
-  fetchProfile(pubkey).then(p => {
-    const name = p?.display_name || p?.name || pubkey.slice(0, 8) + '…';
-    sendCrewSystemMessage(crewId, `${name} left the crew`).catch(() => {});
-  }).catch(() => {
-    sendCrewSystemMessage(crewId, `${pubkey.slice(0, 8)}… left the crew`).catch(() => {});
-  });
 }
 
 /**
@@ -839,6 +1157,22 @@ export async function fetchCrewMembers(crewId: string): Promise<CrewMember[]> {
       }
     }
 
+    // Final fallback: anyone the founder explicitly granted an admin/officer
+    // role to in the crew def, even if their membership card is missing or
+    // corrupted (e.g. active:false from a prior bug). The founder considers
+    // them part of the crew; they should appear.
+    for (const [pubkey, role] of Object.entries(storedRoles)) {
+      if (seen.has(pubkey)) continue;
+      if (kickedSet.has(pubkey)) continue;
+      seen.add(pubkey);
+      members.push({
+        pubkey,
+        role: role.role,
+        title: role.title,
+        joinedAt: 0,
+      });
+    }
+
     return members;
   } catch (e) {
     console.warn('[Crews] fetchCrewMembers failed:', e);
@@ -883,11 +1217,17 @@ export async function subscribeCrewChat(
   const seen = new Set<string>();
   const { pubkey: myPubkey } = authStore.getState();
 
-  // Always ensure the crew def is loaded so chatKey is available before decrypting
-  if (!crewCache.get(crewId)?.chatKey) {
+  // Ensure the crew def AND the decryption chatKey are both ready before we
+  // start processing history events. Without this, admins opening a closed
+  // crew for the first time see an empty chat because every historical event
+  // fails to decrypt (cache is empty when emit() is called) and gets silently
+  // skipped — the late-arriving chatKey only helps future events, not the
+  // already-processed history.
+  const cachedDef = crewCache.get(crewId);
+  if (!cachedDef?.chatKey && !cachedDef?.wrappedChatKey) {
     await fetchCrew(crewId).catch(() => {});
   }
-  const chatKey = crewCache.get(crewId)?.chatKey;
+  await ensureChatKey(crewId).catch(() => {});
 
   const emit = async (ev: any) => {
     if (seen.has(ev.id)) return;
@@ -896,9 +1236,37 @@ export async function subscribeCrewChat(
     const isJoinRequest = ev.tags?.some((t: string[]) => t[0] === 't' && t[1] === 'nd-joinreq');
     seen.add(ev.id);
     let content = ev.content;
-    // Join requests are unencrypted — skip decryption attempt
-    if (chatKey && !isJoinRequest) {
-      try { content = await decryptContent(ev.content, chatKey); } catch (_) {}
+    // Join requests are unencrypted — skip decryption attempt.
+    // Note: look up the chatKey dynamically here (not captured in closure)
+    // so that late-arriving keys (e.g. gift-wrap DM processed after the
+    // subscription started) can decrypt messages that have already been buffered.
+    if (!isJoinRequest) {
+      const liveChatKey = await getEffectiveChatKey(crewId);
+      if (liveChatKey) {
+        try {
+          content = await decryptContent(ev.content, liveChatKey);
+        } catch (_) {
+          // Decryption failed — most likely the founder rotated the chatKey
+          // (kick rotation). Re-fetch the crew def to see if we got kicked.
+          // If yes, trigger onKick so the UI closes; either way skip showing
+          // the ciphertext.
+          if (onKick && myPubkey) {
+            fetchCrew(crewId, true).then(c => {
+              if (c && (c.kickedPubkeys ?? []).includes(myPubkey)) {
+                markKickedLocally(crewId);
+                clearMembership(crewId).catch(() => {});
+                clearCrewKey(crewId).catch(() => {});
+                onKick();
+              }
+            }).catch(() => {});
+          }
+          return;
+        }
+      } else if (ev.content && /^[A-Za-z0-9+/=]{20,}$/.test(ev.content.trim())) {
+        // No key at all but the content looks like NIP-44 ciphertext — skip
+        // rather than show garbage. (Open crews with no chat key fall through.)
+        return;
+      }
     }
     // Detect kick system message for the current user in real-time.
     // The system message text is resolved from the member's profile name — we can't
@@ -939,8 +1307,11 @@ export async function subscribeCrewChat(
     }
   } catch (_) {}
 
-  // Live subscription via RelayManager — same persistent WebSocket push as DMs, no polling delay
-  const rm = new RelayManager();
+  // Live subscription via RelayManager — same persistent WebSocket push as DMs, no polling delay.
+  // Must include the NIP-29 relays explicitly: sendCrewChat publishes to CHAT_RELAYS
+  // (NIP-29 + discovery), so a default RelayManager (DM + DEFAULT only) would miss messages
+  // that land exclusively on the NIP-29 relays.
+  const rm = new RelayManager(CHAT_RELAYS);
   rm.connectAll();
   rm.subscribe(
     `crew-chat-${gid}`,
@@ -948,17 +1319,60 @@ export async function subscribeCrewChat(
     (ev: any) => { emit(ev).catch(() => {}); }
   );
 
-  return () => rm.destroy();
+  // Poll fallback: live WebSockets occasionally miss events (relay drop,
+  // reconnect window, NIP-29 quirks). Every 5s, querySync recent events and
+  // emit anything the live sub missed. seen-set dedupes against history +
+  // live so users don't see duplicates.
+  let pollSince = Math.floor(Date.now() / 1000) - 10;
+  const pollInterval = setInterval(async () => {
+    try {
+      const recent = await pool.querySync(CHAT_RELAYS, { kinds: [9], '#h': [gid], since: pollSince, limit: 100 });
+      const next = pollSince;
+      let maxTs = next;
+      const sorted = recent.sort((a: any, b: any) => a.created_at - b.created_at);
+      for (const ev of sorted) {
+        if (ev.created_at > maxTs) maxTs = ev.created_at;
+        await emit(ev);
+      }
+      // Step the since cursor forward (minus 5s overlap so we never skip an
+      // event that arrived in the gap between two polls).
+      pollSince = Math.max(maxTs - 5, next);
+    } catch (_) {}
+  }, 5000);
+
+  return () => { clearInterval(pollInterval); rm.destroy(); };
 }
+
+// Per-crew last-send timestamp so we can stagger publishes ≥500ms apart and
+// stay under NIP-29 relay burst limits. Messages still appear instantly in the
+// sender's UI (optimistic render in CrewPanel) — this just paces the relay calls.
+const SEND_MIN_INTERVAL_MS = 500;
+const SEND_RETRY_DELAY_MS = 1200;
+const SEND_MAX_ATTEMPTS = 3;
+const lastSendAt = new Map<string, number>();
+const sendChain = new Map<string, Promise<unknown>>();
 
 /** Send a chat message to the crew's NIP-29 group. */
 export async function sendCrewChat(crewId: string, content: string): Promise<void> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
 
-  const chatKey = crewCache.get(crewId)?.chatKey;
+  // Chain sends per crew so they run serially and we can enforce the min interval.
+  const prev = sendChain.get(crewId) ?? Promise.resolve();
+  const next = prev.then(() => doSendCrewChat(crewId, content, pubkey)).catch(() => {});
+  sendChain.set(crewId, next);
+  await next;
+}
+
+async function doSendCrewChat(crewId: string, content: string, pubkey: string): Promise<void> {
+  const now = Date.now();
+  const last = lastSendAt.get(crewId) ?? 0;
+  const wait = Math.max(0, SEND_MIN_INTERVAL_MS - (now - last));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastSendAt.set(crewId, Date.now());
+
+  const chatKey = await getEffectiveChatKey(crewId);
   const payload = chatKey ? await encryptContent(content, chatKey) : content;
-  // Embed emoji tags so receivers can render custom emojis without having the pack
   const emojiTags = extractEmojiTags(content).map(e => ['emoji', e.code, e.url]);
 
   const event = await signEvent({
@@ -968,14 +1382,25 @@ export async function sendCrewChat(crewId: string, content: string): Promise<voi
     content: payload,
     pubkey,
   });
-  await publishToChat(event);
+
+  // Retry if zero relays accepted (rate-limit, transient drop, etc.) so the
+  // message isn't silently lost. Same event id on retry, so duplicate relays
+  // will dedupe it as one event.
+  for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
+    const accepted = await publishToChat(event);
+    if (accepted > 0) return;
+    if (attempt < SEND_MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, SEND_RETRY_DELAY_MS * attempt));
+    }
+  }
+  console.warn('[Crews] chat message dropped — no relays accepted after retries', { crewId });
 }
 
 /** Publish a system announcement to crew chat (join/leave/kick notices). */
-async function sendCrewSystemMessage(crewId: string, text: string, subjectPubkey?: string): Promise<void> {
+export async function sendCrewSystemMessage(crewId: string, text: string, subjectPubkey?: string): Promise<void> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') return;
-  const chatKey = crewCache.get(crewId)?.chatKey;
+  const chatKey = await getEffectiveChatKey(crewId);
   const payload = chatKey ? await encryptContent(text, chatKey) : text;
   try {
     const tags: string[][] = [['h', groupId(crewId)], ['t', 'nd-system'], ['client', 'Nostr District']];
@@ -1093,7 +1518,7 @@ export function stopCrewJoinReqSubscription(): void {
 export async function fetchCrewAnnouncements(crewId: string, _founderPubkey?: string, limit = 20): Promise<CrewAnnouncement[]> {
   await ensurePool();
   const gid = groupId(crewId);
-  const chatKey = crewCache.get(crewId)?.chatKey;
+  const chatKey = await getEffectiveChatKey(crewId);
   try {
     const events = await pool.querySync(CHAT_RELAYS, { kinds: [9], '#h': [gid], limit: 200 });
     const posts = events
@@ -1101,13 +1526,18 @@ export async function fetchCrewAnnouncements(crewId: string, _founderPubkey?: st
       .sort((a: any, b: any) => b.created_at - a.created_at)
       .slice(0, limit);
 
-    return Promise.all(posts.map(async (ev: any) => {
+    const decoded = await Promise.all(posts.map(async (ev: any) => {
       let content = ev.content;
+      let ok = true;
       if (chatKey) {
-        try { content = await decryptContent(ev.content, chatKey); } catch (_) {}
+        try { content = await decryptContent(ev.content, chatKey); }
+        catch (_) { ok = false; }
+      } else if (ev.content && /^[A-Za-z0-9+/=]{20,}$/.test(ev.content.trim())) {
+        ok = false; // looks encrypted but we have no key
       }
-      return { id: ev.id, pubkey: ev.pubkey, content, createdAt: ev.created_at };
+      return ok ? { id: ev.id, pubkey: ev.pubkey, content, createdAt: ev.created_at } : null;
     }));
+    return decoded.filter(Boolean) as CrewAnnouncement[];
   } catch (e) {
     console.warn('[Crews] fetchCrewAnnouncements failed:', e);
     return [];
@@ -1119,7 +1549,7 @@ export async function postCrewAnnouncement(crewId: string, content: string): Pro
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
 
-  const chatKey = crewCache.get(crewId)?.chatKey;
+  const chatKey = await getEffectiveChatKey(crewId);
   const payload = chatKey ? await encryptContent(content, chatKey) : content;
 
   const event = await signEvent({
@@ -1132,10 +1562,79 @@ export async function postCrewAnnouncement(crewId: string, content: string): Pro
   await publishToChat(event);
 }
 
-/** Kick a member. Publishes NIP-29 kind:9001 AND republishes crew def with kicked pubkey so client picks it up. */
-export async function kickCrewMember(crewId: string, memberPubkey: string): Promise<void> {
+export interface KickProgress {
+  step: 'starting' | 'rotating-key' | 'distributing' | 'publishing-def' | 'done';
+  /** For 'distributing' steps: how many key DMs have been sent so far. */
+  sent?: number;
+  /** For 'distributing' steps: total members the new key is going to. */
+  total?: number;
+}
+
+/**
+ * Kick a member. Publishes NIP-29 kind:9001 AND republishes crew def with the
+ * kicked pubkey so other clients detect the kick.
+ *
+ * For CLOSED crews: also rotates the chatKey, gift-wraps the new key to all
+ * remaining members via DM, and replaces `wrappedChatKey` in the crew def.
+ * The kicked member retains their old chatKey but can't decrypt any messages
+ * encrypted under the new one.
+ *
+ * Pass `onProgress` to drive a UI indicator for the rotation steps.
+ */
+/**
+ * Build + publish a crew def update. Signs with the crewSk for this crew —
+ * caller must hold it in the crewSk cache, otherwise this throws. `mutate`
+ * receives the current content and returns the new content.
+ *
+ * Founder is unkickable: even if a caller tries to add founderPubkey to
+ * kickedPubkeys, we strip it back out before signing.
+ */
+async function publishCrewDef(
+  crew: Crew,
+  mutate: (content: Record<string, any>) => Record<string, any>,
+): Promise<void> {
+  const crewSk = await getCrewSk(crew.id);
+  if (!crewSk) throw new Error('You do not have admin authority for this crew');
+
+  const base: Record<string, any> = {
+    name: crew.name, about: crew.about, emblem: crew.emblem,
+    color: crew.color, isOpen: crew.isOpen,
+    chatKey: crew.chatKey, wrappedChatKey: crew.wrappedChatKey,
+    founderTitle: crew.founderTitle || undefined,
+    memberRoles: crew.memberRoles, kickedPubkeys: crew.kickedPubkeys,
+    pendingReinvites: crew.pendingReinvites,
+  };
+  const content = mutate({ ...base });
+
+  // Founder is uncickable
+  if (Array.isArray(content.kickedPubkeys)) {
+    content.kickedPubkeys = content.kickedPubkeys.filter((pk: string) => pk !== crew.founderPubkey);
+  }
+
+  const emblemEmojiTags = extractEmojiTags(content.emblem ?? crew.emblem).map(e => ['emoji', e.code, e.url]);
+  const defEvent = signWithKey(crewSk, {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', CREW_DEF_PREFIX + crew.id], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
+    content: JSON.stringify(content),
+  });
+  const ok = await publishEvent(defEvent);
+  if (!ok) throw new Error('No relay accepted the crew def update — please try again');
+}
+
+export async function kickCrewMember(
+  crewId: string,
+  memberPubkey: string,
+  onProgress?: (p: KickProgress) => void,
+): Promise<void> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
+
+  onProgress?.({ step: 'starting' });
+
+  const crew = crewCache.get(crewId);
+  if (!crew) return;
+  if (memberPubkey === crew.founderPubkey) throw new Error('The founder cannot be kicked');
 
   // NIP-29 remove-user (best effort)
   try {
@@ -1151,37 +1650,70 @@ export async function kickCrewMember(crewId: string, memberPubkey: string): Prom
     console.warn('[Crews] NIP-29 kick failed:', e);
   }
 
-  // Republish crew def with kicked pubkey so other clients detect the kick
-  const crew = crewCache.get(crewId);
-  if (crew) {
-    const kickedPubkeys = [...new Set([...(crew.kickedPubkeys ?? []), memberPubkey])];
-    // Clear pending reinvite state and strip any admin role — kicked members lose their rank
-    const pendingReinvites = { ...(crew.pendingReinvites ?? {}) };
-    delete pendingReinvites[memberPubkey];
-    const memberRoles = { ...(crew.memberRoles ?? {}) };
-    delete memberRoles[memberPubkey];
-    const kickEmblemEmojiTags = extractEmojiTags(crew.emblem).map(e => ['emoji', e.code, e.url]);
-    const defEvent = await signEvent({
-      kind: 30078,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...kickEmblemEmojiTags, ['client', 'Nostr District']],
-      content: JSON.stringify({
-        name: crew.name, about: crew.about, emblem: crew.emblem,
-        color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey,
-        founderTitle: crew.founderTitle || undefined,
-        memberRoles, kickedPubkeys, pendingReinvites,
-      }),
-      pubkey,
-    });
-    await publishEvent(defEvent);
-    crewCache.set(crewId, { ...crew, memberRoles, kickedPubkeys, pendingReinvites });
-    // Announce kick — resolve name first
-    fetchProfile(memberPubkey).then(p => {
-      const name = p?.display_name || p?.name || memberPubkey.slice(0, 8) + '…';
-      sendCrewSystemMessage(crewId, `${name} was removed from the crew`).catch(() => {});
-    }).catch(() => {
-      sendCrewSystemMessage(crewId, `${memberPubkey.slice(0, 8)}… was removed from the crew`).catch(() => {});
-    });
+  const kickedPubkeys = [...new Set([...(crew.kickedPubkeys ?? []), memberPubkey])];
+  const pendingReinvites = { ...(crew.pendingReinvites ?? {}) };
+  delete pendingReinvites[memberPubkey];
+  const memberRoles = { ...(crew.memberRoles ?? {}) };
+  delete memberRoles[memberPubkey];
+
+  // For closed crews: rotate the chatKey so the kicked member can no longer
+  // decrypt future messages. The new key is encrypted to crewPk so any admin
+  // can recover it from the def.
+  let newWrappedChatKey: string | undefined = crew.wrappedChatKey;
+  let newChatKey: string | undefined;
+  const rotationFailedFor: string[] = [];
+  if (!crew.isOpen) {
+    onProgress?.({ step: 'rotating-key' });
+    const crewSk = await getCrewSk(crewId);
+    if (!crewSk) throw new Error('You do not have admin authority for this crew');
+    newChatKey = genChatKey();
+    try {
+      newWrappedChatKey = await wrapChatKeyForCrew(newChatKey, crewSk, crew.crewPk);
+      await setCrewKey(crewId, newChatKey);
+    } catch (e) {
+      console.warn('[Crews] Failed to wrap rotated chatKey, keeping old key:', e);
+      newWrappedChatKey = crew.wrappedChatKey;
+      newChatKey = undefined;
+    }
+
+    if (newChatKey && newWrappedChatKey !== crew.wrappedChatKey) {
+      try {
+        const members = await fetchCrewMembers(crewId);
+        const recipients = members
+          .map(m => m.pubkey)
+          .filter(pk => pk !== pubkey && !kickedPubkeys.includes(pk));
+
+        onProgress?.({ step: 'distributing', sent: 0, total: recipients.length });
+        for (let i = 0; i < recipients.length; i++) {
+          try {
+            await sendDirectMessage(recipients[i], `nd-key:${crewId}:${newChatKey}`);
+          } catch (e) {
+            console.warn('[Crews] Failed to send new chatKey to', recipients[i], e);
+            rotationFailedFor.push(recipients[i]);
+          }
+          onProgress?.({ step: 'distributing', sent: i + 1, total: recipients.length });
+        }
+      } catch (e) {
+        console.warn('[Crews] Failed to enumerate members for key rotation:', e);
+      }
+    }
+  }
+
+  onProgress?.({ step: 'publishing-def' });
+  await publishCrewDef(crew, (c) => ({ ...c, memberRoles, kickedPubkeys, pendingReinvites, wrappedChatKey: newWrappedChatKey }));
+  crewCache.set(crewId, { ...crew, memberRoles, kickedPubkeys, pendingReinvites, wrappedChatKey: newWrappedChatKey });
+
+  fetchProfile(memberPubkey).then(p => {
+    const name = p?.display_name || p?.name || memberPubkey.slice(0, 8) + '…';
+    sendCrewSystemMessage(crewId, `${name} was removed from the crew`).catch(() => {});
+  }).catch(() => {
+    sendCrewSystemMessage(crewId, `${memberPubkey.slice(0, 8)}… was removed from the crew`).catch(() => {});
+  });
+
+  onProgress?.({ step: 'done' });
+
+  if (rotationFailedFor.length > 0) {
+    console.warn('[Crews] Key rotation completed with', rotationFailedFor.length, 'failed deliveries — those members will lose chat access until manually re-keyed.');
   }
 }
 
@@ -1194,24 +1726,10 @@ export async function unKickCrewMember(crewId: string, memberPubkey: string): Pr
   if (!crew) return;
 
   const kickedPubkeys = (crew.kickedPubkeys ?? []).filter(p => p !== memberPubkey);
-  // Record the unkick timestamp — fetchCrewMembers uses this to require a fresh
-  // kind:9021 join event (after this timestamp) before showing the member again
   const pendingReinvites: Record<string, number> = { ...(crew.pendingReinvites ?? {}) };
   pendingReinvites[memberPubkey] = Math.floor(Date.now() / 1000);
-  const unkickEmblemEmojiTags = extractEmojiTags(crew.emblem).map(e => ['emoji', e.code, e.url]);
-  const defEvent = await signEvent({
-    kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...unkickEmblemEmojiTags, ['client', 'Nostr District']],
-    content: JSON.stringify({
-      name: crew.name, about: crew.about, emblem: crew.emblem,
-      color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey,
-      founderTitle: crew.founderTitle || undefined,
-      memberRoles: crew.memberRoles, kickedPubkeys, pendingReinvites,
-    }),
-    pubkey,
-  });
-  await publishEvent(defEvent);
+
+  await publishCrewDef(crew, (c) => ({ ...c, kickedPubkeys, pendingReinvites }));
   crewCache.set(crewId, { ...crew, kickedPubkeys, pendingReinvites });
 }
 
@@ -1230,10 +1748,13 @@ export function isCrewOfficer(crewId: string, pubkey: string): boolean {
 }
 
 /**
- * Update a member's role and/or custom title.
- * Founders can set any role (admin/officer/member).
- * Admins can only set officer or member (cannot grant admin).
- * Republishes the kind:30078 crew definition with updated memberRoles.
+ * Update a member's role and/or custom title. Any admin (crewSk holder) can do this.
+ *
+ * Promoting to admin also hands the crewSk to the new admin via a gift-wrapped DM
+ * (`nd-crew-sk:<crewId>:<crewSkHex>`) so they can sign def updates themselves.
+ * Demoting from admin is "soft" — the def removes their role, but they still hold
+ * the cached crewSk. Only a founder rotation (rotateCrewKey) cryptographically
+ * revokes admin authority.
  */
 export async function updateCrewMember(
   crewId: string,
@@ -1246,38 +1767,29 @@ export async function updateCrewMember(
 
   const crew = crewCache.get(crewId);
   if (!crew) throw new Error('Crew not found');
-
-  const callerIsFounder = crew.founderPubkey === pubkey;
-  const callerIsAdmin = !callerIsFounder && (crew.memberRoles?.[pubkey]?.role === 'admin');
-  if (!callerIsFounder && !callerIsAdmin) throw new Error('Only founders and admins can manage members');
-  if (callerIsAdmin && role === 'admin') throw new Error('Admins cannot grant admin rank');
+  if (memberPubkey === crew.founderPubkey) throw new Error("Cannot change the founder's role");
 
   const memberRoles: Record<string, MemberRole> = { ...(crew.memberRoles ?? {}) };
-  if (title !== undefined && title.trim()) {
-    memberRoles[memberPubkey] = { role, title: title.trim() };
-  } else {
-    memberRoles[memberPubkey] = { role };
-    if (memberRoles[memberPubkey].title) delete memberRoles[memberPubkey].title;
-  }
-  const roleEmblemEmojiTags = extractEmojiTags(crew.emblem).map(e => ['emoji', e.code, e.url]);
-  const defEvent = await signEvent({
-    kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...roleEmblemEmojiTags, ['client', 'Nostr District']],
-    content: JSON.stringify({
-      name: crew.name, about: crew.about, emblem: crew.emblem,
-      color: crew.color, isOpen: crew.isOpen, chatKey: crew.chatKey, memberRoles,
-      founderTitle: crew.founderTitle || undefined,
-      kickedPubkeys: crew.kickedPubkeys, pendingReinvites: crew.pendingReinvites,
-    }),
-    pubkey,
-  });
-  await publishEvent(defEvent);
+  const trimmed = title?.trim();
+  memberRoles[memberPubkey] = trimmed ? { role, title: trimmed } : { role };
+
+  await publishCrewDef(crew, (c) => ({ ...c, memberRoles }));
   crewCache.set(crewId, { ...crew, memberRoles });
 
-  // Announce role change in chat
-  const RANK = { admin: 2, officer: 1, member: 0 } as const;
+  // If promoting to admin, gift-wrap the crewSk so the new admin can sign updates.
   const oldRole = (crew.memberRoles ?? {})[memberPubkey]?.role ?? 'member';
+  if (role === 'admin' && oldRole !== 'admin') {
+    const crewSk = await getCrewSk(crewId);
+    if (crewSk) {
+      try {
+        await sendDirectMessage(memberPubkey, `nd-crew-sk:${crewId}:${crewSk}`);
+      } catch (e) {
+        console.warn('[Crews] Failed to deliver crewSk to new admin — they will have no signing authority until re-promoted:', e);
+      }
+    }
+  }
+
+  const RANK = { admin: 2, officer: 1, member: 0 } as const;
   if (oldRole !== role) {
     const roleLabel = role === 'admin' ? 'Admin' : role === 'officer' ? 'Officer' : 'Member';
     const verb = RANK[role] > RANK[oldRole as keyof typeof RANK] ? 'promoted to' : 'demoted to';
@@ -1290,7 +1802,143 @@ export async function updateCrewMember(
   }
 }
 
-/** Update crew definition fields (name, about, emblem, color, isOpen). Founder only. */
+export interface RotateProgress {
+  step: 'starting' | 'wrapping' | 'publishing-def' | 'publishing-pointer' | 'distributing' | 'done';
+  sent?: number;
+  total?: number;
+}
+
+/**
+ * Founder-only cryptographic rotation. Generates a new (crewSk2, crewPk2),
+ * republishes the def under crewPk2 (preserving the existing chatKey), updates
+ * the pointer to crewPk2, and gift-wraps crewSk2 to every remaining admin.
+ *
+ * Use to revoke a rogue admin: also pass their pubkey in `removeAdminPubkey`
+ * and we'll strip them from memberRoles + kickedPubkeys/etc. before republishing.
+ * The demoted admin retains their old crewSk, but well-behaved clients ignore
+ * the old def because the pointer now names crewPk2.
+ *
+ * Requires: founder must hold both the current crewSk (to recover chatKey from
+ * wrappedChatKey if needed) and their personal nsec (to sign the new pointer).
+ */
+export async function rotateCrewKey(
+  crewId: string,
+  options: { removeAdminPubkey?: string } = {},
+  onProgress?: (p: RotateProgress) => void,
+): Promise<void> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
+
+  const crew = crewCache.get(crewId);
+  if (!crew) throw new Error('Crew not found');
+  if (crew.founderPubkey !== pubkey) throw new Error('Only the founder can rotate the crew key');
+
+  onProgress?.({ step: 'starting' });
+
+  // Recover the current chatKey so we can rewrap it under the new crewPk
+  // without forcing a member-wide chatKey redistribution.
+  const oldSk = await getCrewSk(crewId);
+  let chatKey: string | null = await getCrewKey(crewId);
+  if (!chatKey && !crew.isOpen && crew.wrappedChatKey && oldSk) {
+    try {
+      chatKey = await unwrapChatKeyForCrew(crew.wrappedChatKey, oldSk, crew.crewPk);
+      await setCrewKey(crewId, chatKey);
+    } catch {
+      chatKey = null;
+    }
+  }
+  if (crew.isOpen) chatKey = crew.chatKey ?? null;
+
+  // 1. Generate new keypair
+  onProgress?.({ step: 'wrapping' });
+  const { crewSk: newSk, crewPk: newPk } = genCrewKeypair();
+
+  // 2. Build new wrappedChatKey under the new crewPk (closed crews only)
+  let newWrappedChatKey: string | undefined;
+  if (!crew.isOpen) {
+    if (!chatKey) {
+      // No chatKey available — rotate to a fresh one. Existing members will lose
+      // access until they're re-keyed via the next kick/unkick cycle or manual redistribution.
+      chatKey = genChatKey();
+      console.warn('[Crews] rotateCrewKey: chatKey unavailable, generating fresh — members may need re-keying');
+    }
+    newWrappedChatKey = await wrapChatKeyForCrew(chatKey, newSk, newPk);
+    await setCrewKey(crewId, chatKey);
+  }
+
+  // 3. Build the new def's content, stripping the demoted admin if any
+  const memberRoles = { ...(crew.memberRoles ?? {}) };
+  if (options.removeAdminPubkey) delete memberRoles[options.removeAdminPubkey];
+
+  const content: Record<string, any> = {
+    name: crew.name, about: crew.about, emblem: crew.emblem,
+    color: crew.color, isOpen: crew.isOpen,
+    chatKey: crew.isOpen ? chatKey : undefined,
+    wrappedChatKey: newWrappedChatKey,
+    founderTitle: crew.founderTitle || undefined,
+    memberRoles,
+    kickedPubkeys: crew.kickedPubkeys,
+    pendingReinvites: crew.pendingReinvites,
+  };
+
+  // 4. Sign + publish new def under crewPk2
+  onProgress?.({ step: 'publishing-def' });
+  const emblemEmojiTags = extractEmojiTags(crew.emblem).map(e => ['emoji', e.code, e.url]);
+  const defEvent = signWithKey(newSk, {
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
+    content: JSON.stringify(content),
+  });
+  const okDef = await publishEvent(defEvent);
+  if (!okDef) throw new Error('No relay accepted the new crew def — rotation aborted');
+
+  // 5. Update the pointer to name the new crewPk. Critical: if this fails,
+  //    well-behaved clients keep following the old pointer (old crewPk → old
+  //    def → old admin set), so the revocation never actually takes effect
+  //    even though the new def is on the relay. Fail loudly.
+  onProgress?.({ step: 'publishing-pointer' });
+  const ptrOk = await publishCrewPointer(crewId, newPk);
+  if (!ptrOk) throw new Error('Failed to publish the new crew pointer — rotation incomplete. Try again.');
+  setPointerCache(crewId, { crewPk: newPk, founderPubkey: pubkey, createdAt: defEvent.created_at });
+
+  // 6. Cache the new crewSk locally and update the in-memory crew
+  await setCrewSk(crewId, newSk);
+  crewCache.set(crewId, {
+    ...crew,
+    crewPk: newPk,
+    memberRoles,
+    wrappedChatKey: newWrappedChatKey,
+    chatKey: crew.isOpen ? chatKey ?? undefined : undefined,
+  });
+
+  // 7. Gift-wrap the new crewSk to remaining admins so they can keep editing.
+  const remainingAdmins = Object.entries(memberRoles)
+    .filter(([_, r]) => r.role === 'admin')
+    .map(([pk]) => pk)
+    .filter(pk => pk !== options.removeAdminPubkey);
+  onProgress?.({ step: 'distributing', sent: 0, total: remainingAdmins.length });
+  for (let i = 0; i < remainingAdmins.length; i++) {
+    try {
+      await sendDirectMessage(remainingAdmins[i], `nd-crew-sk:${crewId}:${newSk}`);
+    } catch (e) {
+      console.warn('[Crews] Failed to deliver rotated crewSk to', remainingAdmins[i], e);
+    }
+    onProgress?.({ step: 'distributing', sent: i + 1, total: remainingAdmins.length });
+  }
+
+  onProgress?.({ step: 'done' });
+
+  // Audit-trail system message
+  if (options.removeAdminPubkey) {
+    fetchProfile(options.removeAdminPubkey).then(p => {
+      const name = p?.display_name || p?.name || options.removeAdminPubkey!.slice(0, 8) + '…';
+      sendCrewSystemMessage(crewId, `${name}'s admin authority was revoked by the founder`).catch(() => {});
+    }).catch(() => {});
+  }
+}
+
+/** Update crew definition fields (name, about, emblem, color, isOpen). Any admin. */
 export async function updateCrewDefinition(
   crewId: string,
   fields: { name?: string; about?: string; emblem?: string; color?: string; isOpen?: boolean; founderTitle?: string }
@@ -1299,23 +1947,17 @@ export async function updateCrewDefinition(
   if (!pubkey || loginMethod === 'guest') throw new Error('Must be logged in');
   const crew = crewCache.get(crewId);
   if (!crew) throw new Error('Crew not found');
-  if (crew.founderPubkey !== pubkey) throw new Error('Only the founder can edit the crew');
+  // founderTitle is reserved for the founder
+  if (fields.founderTitle !== undefined && crew.founderPubkey !== pubkey) {
+    throw new Error('Only the founder can change the founder title');
+  }
   const updated = { ...crew, ...fields };
-  const updatedEmblemEmojiTags = extractEmojiTags(updated.emblem).map(e => ['emoji', e.code, e.url]);
-  const defEvent = await signEvent({
-    kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...updatedEmblemEmojiTags, ['client', 'Nostr District']],
-    content: JSON.stringify({
-      name: updated.name, about: updated.about, emblem: updated.emblem,
-      color: updated.color, isOpen: updated.isOpen, chatKey: crew.chatKey,
-      founderTitle: updated.founderTitle || undefined,
-      memberRoles: crew.memberRoles, kickedPubkeys: crew.kickedPubkeys,
-      pendingReinvites: crew.pendingReinvites,
-    }),
-    pubkey,
-  });
-  await publishEvent(defEvent);
+  await publishCrewDef(crew, (c) => ({
+    ...c,
+    name: updated.name, about: updated.about, emblem: updated.emblem,
+    color: updated.color, isOpen: updated.isOpen,
+    founderTitle: updated.founderTitle || undefined,
+  }));
   crewCache.set(crewId, updated);
 }
 
@@ -1357,3 +1999,38 @@ export function getCachedName(pubkey: string): string {
 export function shortNpub(pubkey: string): string {
   try { const npub = nip19.npubEncode(pubkey); return npub.slice(0, 12) + '…'; } catch { return pubkey.slice(0, 8) + '…'; }
 }
+
+// ── Closed-crew chat key delivery via DM ──────────────────────────────────────
+//
+// When a founder/admin/officer accepts a join request for a closed crew, they
+// also gift-wrap the chatKey as a DM with content `nd-key:<crewId>:<chatKeyHex>`.
+// Here we listen for those DMs and cache the chatKey so the recipient can
+// decrypt crew chat on next read.
+onDMReceived((msg) => {
+  const content = msg.content || '';
+  if (!content.startsWith('nd-key:')) return;
+  const idx1 = content.indexOf(':');
+  const idx2 = content.indexOf(':', idx1 + 1);
+  if (idx1 < 0 || idx2 < 0) return;
+  const crewId  = content.slice(idx1 + 1, idx2);
+  const chatKey = content.slice(idx2 + 1).trim();
+  if (!crewId || !/^[0-9a-f]{64}$/.test(chatKey)) return;
+  setCrewKey(crewId, chatKey).catch(() => {});
+});
+
+// ── Admin promotion: crewSk delivery via DM ──────────────────────────────────
+//
+// When a founder/admin promotes a member to admin, they gift-wrap the crewSk
+// to them as `nd-crew-sk:<crewId>:<crewSkHex>`. Here we cache the received
+// crewSk so the new admin can sign def updates immediately.
+onDMReceived((msg) => {
+  const content = msg.content || '';
+  if (!content.startsWith('nd-crew-sk:')) return;
+  const idx1 = content.indexOf(':');
+  const idx2 = content.indexOf(':', idx1 + 1);
+  if (idx1 < 0 || idx2 < 0) return;
+  const crewId = content.slice(idx1 + 1, idx2);
+  const crewSk = content.slice(idx2 + 1).trim();
+  if (!crewId || !/^[0-9a-f]{64}$/.test(crewSk)) return;
+  setCrewSk(crewId, crewSk).catch(() => {});
+});

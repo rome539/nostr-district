@@ -560,12 +560,17 @@ export class SettingsPanel {
 
     const destroy = () => {
       overlay.remove();
-      document.removeEventListener('keydown', escHandler, { capture: true });
+      document.removeEventListener('keydown', keyHandler, { capture: true });
     };
-    const escHandler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); destroy(); }
+    // Capture-phase swallows all keys so Phaser scene hotkeys (E, SPACE, etc.)
+    // don't fire while the modal is open. Escape closes the modal. Typing into
+    // inputs inside the modal still works because the keydown only stops
+    // propagation, not the default action.
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); destroy(); return; }
+      e.stopPropagation();
     };
-    document.addEventListener('keydown', escHandler, { capture: true });
+    document.addEventListener('keydown', keyHandler, { capture: true });
 
     overlay.querySelector('#sp-keys-close')?.addEventListener('click', destroy);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) destroy(); });

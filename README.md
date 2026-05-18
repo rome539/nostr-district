@@ -155,7 +155,10 @@ All kind 30078 events are namespaced by their `d` tag:
 | `nostr-district-outfits` | any user | Saved outfit presets |
 | `nostr-district-room` | any user | Room decoration and layout config |
 | `nostr-district-inventory` | any user | Purchased item cache (free/earned items only — paid items are derived from kind:9735 zap receipts) |
-| `nd-crew-{id}` | founder | Crew definition (name, emblem, roles, kicked list) |
+| `nostr-district:spark-address` | any user | Maps the user's Nostr pubkey → in-game Spark Lightning address so in-game zaps land in the in-game wallet |
+| `nostr-district:spark-mnemonic` | any user | NIP-44 self-encrypted Spark wallet mnemonic — enables cross-device wallet sync (same nsec → same wallet on every browser/device) |
+| `nd-crew-ptr-{id}` | founder | Crew pointer (v2 authority) — names the current `crewPk`. Only the founder can replace it; cryptographic recovery anchor. |
+| `nd-crew-{id}` | crew `crewPk` | Crew definition (name, emblem, roles, kicked list, wrappedChatKey). Signed by the shared `crewSk` — any admin who holds the key can update it. |
 | `nd-m-{crewId}` | each member | Per-member crew membership status (`active: true/false, role`) |
 | `nd-invite-{token}` | invitee | Consumed invite token record (one-time use, cross-device) |
 
@@ -184,20 +187,43 @@ All kind 30078 events are namespaced by their `d` tag:
 | NIP-96 | HTTP file storage | Card images upscaled and uploaded to a free NIP-96 host (nostr.build → nostrcheck.me fallback) before publishing tarot spread notes |
 | NIP-98 | HTTP auth | Signs NIP-96 upload requests with the user's Nostr key — no account or subscription required |
 
-## Crews (NIP-29)
+## Crews (NIP-29 + custom multi-admin authority)
 
-Crews are persistent guilds backed by NIP-29 groups on dedicated relay infrastructure. Each crew has:
+Crews are persistent guilds backed by NIP-29 groups on dedicated relay infrastructure. Roles:
 
-- **Founder** — creates and fully controls the crew; can promote/kick anyone
-- **Admins** — can accept/decline join requests and kick officers and members
-- **Officers** — can accept/decline join requests and kick members
-- **Members** — can chat, post, and react in the crew channel
+- **Founder** — creates the crew, owns the cryptographic "pointer" event, can do everything plus cryptographically revoke admins
+- **Admins** — hold the shared `crewSk` and can edit any crew metadata, kick/unkick members, promote/demote roles, and accept/decline join requests
+- **Officers** — can accept/decline join requests and post in the Posts (announcements) tab
+- **Members** — can chat, react, and read posts
 
-### How membership works
+### Authority model (v2)
+
+To let multiple admins co-control a crew on top of Nostr's "events are keyed by author" rule, every crew has its own keypair `(crewSk, crewPk)` and is represented by two events:
+
+| Event | d-tag | Signer | Purpose |
+|---|---|---|---|
+| **Pointer** | `nd-crew-ptr-{id}` | Founder's personal nsec | Names the current `crewPk`. Only the founder can replace it. |
+| **Definition** | `nd-crew-{id}` | `crewSk` | All mutable state: name, emblem, members, roles, kicked list, chat key. Any holder of `crewSk` can update it. |
+
+The crew identity keypair `crewSk` is generated at creation and shared with each admin via a NIP-17 gift-wrapped DM (`nd-crew-sk:{crewId}:{hex}`) at promotion time. Holders can sign def updates as authoritative co-admins.
+
+**Soft demote** (set role to Member via dropdown): UI-only, trust-based. The demoted user still has `crewSk` cached locally — same model as Discord/Slack.
+
+**Cryptographic revoke** (founder-only "Revoke" button): generates a new `(crewSk2, crewPk2)`, rewraps the chat key under `crewPk2`, republishes the def under `crewPk2`, updates the pointer to name `crewPk2`, and gift-wraps the new key to remaining admins. The revoked admin's old `crewSk` becomes useless — well-behaved clients follow the pointer and ignore their def updates.
+
+The founder is uncickable (clients filter `founderPubkey` from `kickedPubkeys` before honoring the def).
+
+### Chat encryption
+
+Crew chat is NIP-44-encrypted with a per-crew `chatKey`. For closed crews the chatKey is wrapped under the crew identity (`crewSk → crewPk` NIP-44 self-encrypt) inside the def, so any admin can decrypt it directly. Regular members receive their `chatKey` via gift-wrapped DM (`nd-key:{crewId}:{hex}`) when their join request is accepted.
+
+### Membership records
 
 Each member publishes their own `kind:30078` event (d-tag `nd-m-{crewId}`) as a self-owned membership record — analogous to a kind:3 contact list. `active: true` means joined; `active: false` means left. This is the authoritative membership source and syncs across all devices and browsers automatically.
 
-The crew definition (d-tag `nd-crew-{id}`) published by the founder stores roles, the kicked list, and the NIP-44 chat key used to encrypt crew chat history.
+### Join request resolution
+
+Join requests appear as `kind:9` chat events tagged `nd-joinreq` with a token. Any admin or officer can Accept or Decline. The resolver publishes a system message in crew chat (`"X's request to join was accepted"` / `"... was declined"`), which all members see — the join-request card swaps to an "Accepted" or "Declined" badge for everyone. No per-user resolution cache; chat is the single source of truth.
 
 ### Invite tokens
 
@@ -206,6 +232,40 @@ DM crew invites include a one-time token. When accepted, a `kind:30078` event wi
 ### NIP-29 relay infrastructure
 
 Crew chat, membership actions, and group management use [groups.0xchat.com](wss://groups.0xchat.com) and [relay.groups.nip29.com](wss://relay.groups.nip29.com) as the NIP-29 relay layer. Crew definitions and member records are also mirrored to standard discovery relays (kind:30078) so crews are browsable without needing NIP-29 access.
+
+Live chat subscription uses both layers, with a 5-second poll fallback to catch any messages the live socket misses. Sends are throttled to ~2 msg/sec and retried up to 3× if zero relays ACK, to handle NIP-29 burst rate limits.
+
+## In-game Wallet (Spark / Breez SDK)
+
+Every logged-in user gets an in-game Lightning wallet powered by [Breez SDK](https://breez.technology/sdk) on the [Spark](https://spark.money) Bitcoin layer-2. The wallet is **non-custodial** — Nostr District never holds anyone's keys or funds.
+
+### How it's bound to your Nostr key
+
+The wallet's BIP-39 mnemonic is derived from a signature: the app asks the user's signer to sign a fixed canonical event (`kind:22242`, content `nostr-district-spark-wallet-v1`), HKDFs the resulting 64-byte Schnorr signature, and converts the bits to a 12-word mnemonic.
+
+Result: every login method (nsec / passkey / extension / bunker) provisions a Spark wallet bound to the user's Nostr identity. No separate seed phrase to write down — your nsec is your wallet.
+
+### Cross-device wallet sync
+
+Schnorr signatures (BIP-340) are non-deterministic by default (auxiliary randomness), so re-signing the seed event on a new device produces a *different* signature and therefore a different mnemonic. To make the same nsec yield the same wallet on every browser/device, the mnemonic is also published to Nostr:
+
+- **Backup event:** `kind:30078` with d-tag `nostr-district:spark-mnemonic`, content = mnemonic **NIP-44 self-encrypted to the user's own pubkey**.
+- **On login:** the client fetches the backup once per session. If present, it's adopted as the canonical mnemonic (overrides any locally derived one). If absent, the local mnemonic is published as the canonical one for future devices.
+
+Only the user (with their nsec / signer) can decrypt the backup. The encrypted content is public; the key material isn't.
+
+### Wallet keys at rest
+
+| Login method | Mnemonic storage in localStorage |
+|---|---|
+| nsec / passkey | AES-GCM encrypted with a key derived via HKDF from the nsec |
+| Extension / bunker | Plaintext (no raw nsec available to derive an encryption key) |
+
+The plaintext fallback is the same trade-off documented in the WalletInfo modal — the wallet is hot-wallet storage in either case, intended for in-game amounts, not savings. Anyone with browser-data access can read plaintext entries; nsec-based ciphertext is useless without the nsec.
+
+### Extension compatibility
+
+The wallet sync, DMs, crew chat, and admin gift-wraps all rely on **NIP-44** encryption. Some Nostr extensions (notably Nostore on Safari) implement `nip44.encrypt`/`decrypt` partially or not at all. After a successful NIP-07 login the app runs a self-encrypt → self-decrypt round-trip; if it fails, a one-time warning modal explains the limitation and suggests logging in with `nsec` directly or switching to a fully-featured extension (Alby, nos2x).
 
 ## Security
 

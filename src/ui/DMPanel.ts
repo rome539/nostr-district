@@ -303,6 +303,11 @@ export class DMPanel {
   // ════════════════════════════════════════════
 
   private handleMessage(msg: DMMessage): void {
+    // System-level DMs used by Nostr District for crew key distribution —
+    // never surfaced in the DM UI.
+    if (msg.content?.startsWith('nd-key:')) return;
+    if (msg.content?.startsWith('nd-crew-sk:')) return;
+
     const convPubkey = msg.conversationPubkey;
 
     // No content filtering in DMs — private conversations between two people

@@ -27,6 +27,18 @@ import { fetchProfile } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+
+// Force every crew emblem emoji to render as a text-style/monochrome glyph
+// (the look some Nostr themes' custom fonts give for free) instead of the OS
+// colorful emoji. Strategy: stack fonts that ship text-style emoji glyphs by
+// default (Apple Symbols / Segoe UI Symbol / Symbola), plus the CSS hint.
+// Custom emoji shortcodes (which renderEmojis turns into <img> tags) are
+// rendered unchanged because the span style only affects text rendering.
+function renderEmblem(emblem: string, emblemEmojis?: { code: string; url: string }[]): string {
+  const rendered = renderEmojis(emblem, emblemEmojis);
+  return `<span style="font-family:'Apple Symbols','Segoe UI Symbol','Symbola','Noto Sans Symbols 2',monospace !important;font-variant-emoji:text">${rendered}</span>`;
+}
+import { ndConfirm } from './ndConfirm';
 import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,6 +70,8 @@ export class CrewPanel {
   // Chat state
   private chatMessages: CrewChatMessage[] = [];
   private chatUnsub: (() => void) | null = null;
+  // Posts polling — re-fetches announcements every few seconds while Posts tab is open
+  private postsPollInterval: ReturnType<typeof setInterval> | null = null;
   private gifPicker: GifPicker | null = null;
 
   // Discover
@@ -165,6 +179,10 @@ export class CrewPanel {
     this.chatUnsub = null;
   }
 
+  private stopPostsPoll(): void {
+    if (this.postsPollInterval) { clearInterval(this.postsPollInterval); this.postsPollInterval = null; }
+  }
+
   private stopFindRefresh(): void {
     if (this.findRefreshInterval) { clearInterval(this.findRefreshInterval); this.findRefreshInterval = null; }
   }
@@ -268,6 +286,7 @@ export class CrewPanel {
 
   private backToList(): void {
     this.stopChatSub();
+    this.stopPostsPoll();
     this.activeCrew = null;
     this.render();
   }
@@ -282,7 +301,10 @@ export class CrewPanel {
 
     fetchMyCrews().then(crews => {
       if (!this.bodyEl || this.activeCrew || this.activeTab !== 'mine') return;
-      if (crews.length === 0) {
+      // Hide crews the user has been kicked from — they're not really "mine" anymore.
+      // They can find/rejoin via the Find a Crew tab if they want.
+      const visibleCrews = crews.filter(c => !isKickedLocally(c.id));
+      if (visibleCrews.length === 0) {
         this.bodyEl.innerHTML = `
           <div class="cp-body-scroll"><div class="cp-empty">
             <div style="color:var(--nd-text);font-weight:bold;margin-bottom:6px">No crew yet</div>
@@ -293,7 +315,7 @@ export class CrewPanel {
       }
       const scroll = document.createElement('div');
       scroll.className = 'cp-body-scroll';
-      crews.forEach(crew => scroll.appendChild(this.buildCrewCard(crew, true)));
+      visibleCrews.forEach(crew => scroll.appendChild(this.buildCrewCard(crew, true)));
       this.bodyEl.innerHTML = '';
       this.bodyEl.appendChild(scroll);
     }).catch(() => {
@@ -359,7 +381,7 @@ export class CrewPanel {
     const card = document.createElement('div');
     card.className = 'cp-crew-card';
     card.innerHTML = `
-      <div class="cp-crew-emblem" style="${crew.emblem.startsWith('http') ? `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;padding:0;overflow:hidden` : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
+      <div class="cp-crew-emblem" style="${crew.emblem.startsWith('http') ? `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;padding:0;overflow:hidden` : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block" />` : renderEmblem(esc(crew.emblem), crew.emblemEmojis)}</div>
       <div class="cp-crew-body">
         <div class="cp-crew-name">${esc(crew.name)}</div>
         <div class="cp-crew-about">${esc(crew.about || (crew.isOpen ? 'Open crew' : 'Closed crew'))}</div>
@@ -383,17 +405,22 @@ export class CrewPanel {
     const state = authStore.getState();
     const isFounder = crew.founderPubkey === state.pubkey;
     const isKicked = isKickedLocally(crew.id) || (!isFounder && (crew.kickedPubkeys ?? []).includes(state.pubkey ?? ''));
-    const isAdmin   = !isKicked && joined && (state.pubkey ? isCrewAdmin(crew.id, state.pubkey) : false);
-    const isOfficer = !isKicked && joined && !isAdmin && !isFounder && (state.pubkey ? isCrewOfficer(crew.id, state.pubkey) : false);
+    // Admin/officer roles come from the founder's crew def regardless of the
+    // local `joined` state — we must NOT gate them on `joined` because a
+    // corrupted membership card (active:false) would otherwise hide the
+    // Leave button from a promoted user and trap them in the crew.
+    const isAdmin   = !isKicked && (state.pubkey ? isCrewAdmin(crew.id, state.pubkey) : false) && !isFounder;
+    const isOfficer = !isKicked && !isAdmin && !isFounder && (state.pubkey ? isCrewOfficer(crew.id, state.pubkey) : false);
     const canInvite = isFounder || isAdmin;
-    // Closed + not member → show Request to Join instead of Join
-    const showRequestBtn = !crew.isOpen && !joined && !isFounder && !isKicked;
-    const showJoinBtn = crew.isOpen && !joined && !isFounder && !isKicked;
+    // Members (joined or promoted) can leave. Non-members see Join/Request.
+    const hasMembership = joined || isAdmin || isOfficer;
+    const showRequestBtn = !crew.isOpen && !hasMembership && !isFounder && !isKicked;
+    const showJoinBtn = crew.isOpen && !hasMembership && !isFounder && !isKicked;
 
     this.bodyEl.innerHTML = `
       <div class="cp-detail-header" style="border-bottom:2px solid ${esc(crew.color)}44">
         <button class="cp-back-btn">← Back</button>
-        <div class="cp-detail-emblem" style="color:${esc(crew.color)}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;vertical-align:middle;display:inline-block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
+        <div class="cp-detail-emblem" style="color:${esc(crew.color)}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;vertical-align:middle;display:inline-block" />` : renderEmblem(esc(crew.emblem), crew.emblemEmojis)}</div>
         <div class="cp-detail-title">
           <div class="cp-detail-name">${esc(crew.name)}</div>
           <div class="cp-detail-sub">${esc(crew.about)}</div>
@@ -404,7 +431,7 @@ export class CrewPanel {
             ? `<button class="cp-join-action cp-request-join">Request</button>`
             : showJoinBtn
               ? `<button class="cp-join-action cp-join">Join</button>`
-              : joined && !isFounder
+              : hasMembership && !isFounder
                 ? `<button class="cp-join-action cp-leave" style="border-color:${esc(crew.color)}55;color:${esc(crew.color)}">Leave</button>`
                 : ''}
         ${canInvite ? `<button class="cp-manage-btn" title="Manage crew">Manage</button>` : ''}
@@ -453,6 +480,8 @@ export class CrewPanel {
     // Detail tabs
     this.bodyEl.querySelectorAll('.cp-dtab').forEach(btn => {
       btn.addEventListener('click', () => {
+        // Tab change — stop tab-specific intervals
+        this.stopPostsPoll();
         this.activeCrewTab = (btn as HTMLElement).dataset.dtab as any;
         this.bodyEl?.querySelectorAll('.cp-dtab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -551,12 +580,17 @@ export class CrewPanel {
       if (this.chatMsgEl) {
         this.chatMsgEl.querySelector('.cp-loading')?.remove();
         this.appendChatMessage(msg, myPubkey);
-        // Real-time: if a "joined" or "declined" system message arrives, remove request cards older than it
+        // Real-time: when a resolving system message arrives, swap the join-request
+        // card's buttons for an Accepted/Declined badge (everyone in chat sees the
+        // same state — same idea as the "Invite used" badge on DM invite cards).
         if (msg.isSystem && msg.systemSubjectPubkey &&
-            (msg.content?.includes('joined the crew') || msg.content?.includes('request to join was declined'))) {
+            (msg.content?.includes('joined the crew') || msg.content?.includes('request to join was declined') || msg.content?.includes('request to join was accepted'))) {
+          const badge = msg.content?.includes('declined') ? 'Declined' : 'Accepted';
           this.chatMsgEl.querySelectorAll(`[data-joinreq="${CSS.escape(msg.systemSubjectPubkey)}"]`).forEach(card => {
             const reqTs = parseInt((card as HTMLElement).dataset.ts || '0');
-            if (msg.createdAt > reqTs) card.remove();
+            if (msg.createdAt <= reqTs) return;
+            const btns = card.querySelector('.cp-msg-joinreq-btns');
+            if (btns) btns.innerHTML = `<span class="cp-msg-joinreq-resolved">${badge}</span>`;
           });
         }
         this.scrollChat();
@@ -564,21 +598,29 @@ export class CrewPanel {
     }, onKick).then(unsub => {
       this.chatUnsub = unsub;
       this.chatMsgEl?.querySelector('.cp-loading')?.remove();
-      // After history loads, remove request cards where a "joined" or "declined" message arrived after the request
-      const resolvedAtMap = new Map<string, number>();
+      // After history loads, stamp Accepted/Declined badges onto request cards
+      // that already have a resolving system message later in chat.
+      const resolvedMap = new Map<string, { ts: number; verdict: 'Accepted' | 'Declined' }>();
       this.chatMessages
         .filter(m => m.isSystem && m.systemSubjectPubkey &&
-          (m.content?.includes('joined the crew') || m.content?.includes('request to join was declined')))
+          (m.content?.includes('joined the crew') || m.content?.includes('request to join was declined') || m.content?.includes('request to join was accepted')))
         .forEach(m => {
-          const prev = resolvedAtMap.get(m.systemSubjectPubkey!);
-          if (!prev || m.createdAt > prev) resolvedAtMap.set(m.systemSubjectPubkey!, m.createdAt);
+          const prev = resolvedMap.get(m.systemSubjectPubkey!);
+          if (!prev || m.createdAt > prev.ts) {
+            resolvedMap.set(m.systemSubjectPubkey!, {
+              ts: m.createdAt,
+              verdict: m.content?.includes('declined') ? 'Declined' : 'Accepted',
+            });
+          }
         });
       this.chatMsgEl?.querySelectorAll('[data-joinreq]').forEach(card => {
         const el = card as HTMLElement;
         const pk = el.dataset.joinreq!;
         const reqTs = parseInt(el.dataset.ts || '0');
-        const resolvedTs = resolvedAtMap.get(pk);
-        if (resolvedTs && resolvedTs > reqTs) card.remove();
+        const resolved = resolvedMap.get(pk);
+        if (!resolved || resolved.ts <= reqTs) return;
+        const btns = card.querySelector('.cp-msg-joinreq-btns');
+        if (btns) btns.innerHTML = `<span class="cp-msg-joinreq-resolved">${resolved.verdict}</span>`;
       });
     });
 
@@ -615,8 +657,9 @@ export class CrewPanel {
       const name = p?.display_name || p?.name;
       if (name) {
         this.resolvedNames.set(pubkey, name);
-        // Update any rendered name elements for this pubkey
-        this.chatMsgEl?.querySelectorAll(`[data-pk="${pubkey}"]`).forEach(el => { el.textContent = name; });
+        // Update only elements explicitly tagged for name updates — not buttons
+        // or other interactive elements that may share the pubkey via `data-pk`.
+        this.chatMsgEl?.querySelectorAll(`[data-name-pk="${pubkey}"]`).forEach(el => { el.textContent = name; });
       }
     }).catch(() => {});
     return this.shortNpub(pubkey);
@@ -641,13 +684,18 @@ export class CrewPanel {
     if (msg.isJoinRequest) {
       const crew = this.activeCrew!;
       const { pubkey: myPubkey } = authStore.getState();
-      // Skip if this person joined OR was declined AFTER this specific request
-      const hasResolvedAfter = this.chatMessages.some(m =>
+      // Resolution comes purely from the chat: find the system message
+      // posted after this request that resolves it. Everyone in the crew sees
+      // the same chat, so everyone sees the same badge — same model as the
+      // "Invite used" state on DM invite cards.
+      const resolvingMsg = this.chatMessages.find(m =>
         m.isSystem && m.systemSubjectPubkey === msg.pubkey &&
-        (m.content?.includes('joined the crew') || m.content?.includes('request to join was declined')) &&
-        m.createdAt > msg.createdAt
+        m.createdAt > msg.createdAt &&
+        (m.content?.includes('joined the crew') || m.content?.includes('request to join was accepted') || m.content?.includes('request to join was declined'))
       );
-      if (hasResolvedAfter) return;
+      const resolution: 'accept' | 'decline' | undefined = resolvingMsg
+        ? (resolvingMsg.content?.includes('declined') ? 'decline' : 'accept')
+        : undefined;
       // Replace any earlier card from the same person with the newest request
       const existing = this.chatMsgEl.querySelector(`[data-joinreq="${CSS.escape(msg.pubkey)}"]`);
       existing?.remove();
@@ -658,15 +706,19 @@ export class CrewPanel {
       el.dataset.ts = String(msg.createdAt);
       if (msg.requestToken) el.dataset.token = msg.requestToken;
       el.innerHTML = `
-        <span class="cp-msg-joinreq-text"><b>${esc(name)}</b> wants to join the crew</span>
-        ${canAccept ? `
-          <div class="cp-msg-joinreq-btns">
-            <button class="cp-msg-accept-btn" data-pk="${esc(msg.pubkey)}">Accept</button>
-            <button class="cp-msg-decline-btn" data-pk="${esc(msg.pubkey)}">Decline</button>
-          </div>
-        ` : ''}
+        <span class="cp-msg-joinreq-text"><b data-name-pk="${esc(msg.pubkey)}">${esc(name)}</b> wants to join the crew</span>
+        <div class="cp-msg-joinreq-btns">
+          ${resolution === 'accept'
+            ? '<span class="cp-msg-joinreq-resolved">Accepted</span>'
+            : resolution === 'decline'
+              ? '<span class="cp-msg-joinreq-resolved">Declined</span>'
+              : canAccept
+                ? `<button class="cp-msg-accept-btn" data-pk="${esc(msg.pubkey)}">Accept</button>
+                   <button class="cp-msg-decline-btn" data-pk="${esc(msg.pubkey)}">Decline</button>`
+                : ''}
+        </div>
       `;
-      if (canAccept) {
+      if (canAccept && !resolution) {
         const acceptBtn = el.querySelector('.cp-msg-accept-btn') as HTMLButtonElement;
         const declineBtn = el.querySelector('.cp-msg-decline-btn') as HTMLButtonElement;
         acceptBtn.addEventListener('click', async () => {
@@ -677,17 +729,43 @@ export class CrewPanel {
             if (wasKicked) await unKickCrewMember(crew.id, msg.pubkey);
             const inviteToken = Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2,'0')).join('');
             await sendDirectMessage(msg.pubkey, `nd-invite:${crew.id}:${crew.name}:${inviteToken}`);
-            acceptBtn.textContent = 'Invited ✓';
-            setTimeout(() => el.remove(), 1500);
-          } catch { acceptBtn.textContent = 'Failed'; acceptBtn.disabled = false; declineBtn.disabled = false; }
+            // Closed crews: also gift-wrap the chatKey to the new member so they
+            // can decrypt chat. Open crews still publish chatKey in the def, no
+            // separate distribution needed.
+            if (!currentCrew.isOpen) {
+              try {
+                const { ensureChatKey } = await import('../nostr/crewService');
+                const chatKey = await ensureChatKey(crew.id);
+                if (chatKey) {
+                  await sendDirectMessage(msg.pubkey, `nd-key:${crew.id}:${chatKey}`);
+                }
+              } catch (e) {
+                console.warn('[Crews] Failed to send chat key to new member:', e);
+              }
+            }
+            // Publish a system message — every member sees it in chat and the
+            // join-request card swaps to the "Accepted" badge (no local cache).
+            const reqName = this.getDisplayName(msg.pubkey, myPubkey);
+            const { sendCrewSystemMessage } = await import('../nostr/crewService');
+            sendCrewSystemMessage(crew.id, `${reqName}'s request to join was accepted`, msg.pubkey).catch(() => {});
+            acceptBtn.textContent = 'Accepted';
+            acceptBtn.classList.add('cp-msg-joinreq-resolved');
+            declineBtn.remove();
+          } catch (err) {
+            acceptBtn.textContent = 'Failed';
+            acceptBtn.title = String((err as any)?.message ?? err);
+            acceptBtn.disabled = false;
+            declineBtn.disabled = false;
+          }
         });
         declineBtn.addEventListener('click', async () => {
           acceptBtn.disabled = true; declineBtn.disabled = true; declineBtn.textContent = 'Declining…';
           try {
             await sendDirectMessage(msg.pubkey, `nd-decline:${crew.id}:${crew.name}`);
+            // declineCrewJoinRequest publishes the "request to join was declined"
+            // system message — every member sees the card swap to "Declined".
             await declineCrewJoinRequest(crew.id, msg.pubkey);
             declineBtn.textContent = 'Declined';
-            setTimeout(() => el.remove(), 1500);
           } catch { declineBtn.textContent = 'Failed'; acceptBtn.disabled = false; declineBtn.disabled = false; }
         });
       }
@@ -703,7 +781,7 @@ export class CrewPanel {
 
     el.className = 'cp-msg ' + (isOwn ? 'cp-msg-own' : 'cp-msg-other');
     el.innerHTML = `
-      <div class="cp-msg-name" data-pk="${esc(msg.pubkey)}">${esc(name)}</div>
+      <div class="cp-msg-name" data-name-pk="${esc(msg.pubkey)}">${esc(name)}</div>
       ${isGif
         ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;${isOwn ? 'margin-left:auto;' : ''}" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : `<div class="cp-msg-bubble"></div>`}
@@ -776,11 +854,28 @@ export class CrewPanel {
     const crew = this.activeCrew;
     const state = authStore.getState();
     const isFounder = crew.founderPubkey === state.pubkey;
-    const canPost = isFounder || isCrewAdmin(crew.id, state.pubkey ?? '');
+    const canPost = isFounder || isCrewAdmin(crew.id, state.pubkey ?? '') || isCrewOfficer(crew.id, state.pubkey ?? '');
+
+    // Live updates: re-fetch every 5s while Posts tab is open. Only triggers a
+    // full re-render when a new post id appears, and skips while the user is
+    // typing in the composer so we don't wipe drafts.
+    this.stopPostsPoll();
+    let lastSeenIds = new Set<string>();
+    this.postsPollInterval = setInterval(() => {
+      if (!this.activeCrew || this.activeCrew.id !== crew.id || this.activeCrewTab !== 'announcements') return;
+      const ta = el.querySelector('.cp-composer-input') as HTMLTextAreaElement | null;
+      if (ta && ta.value.trim()) return; // user is drafting — don't disrupt
+      fetchCrewAnnouncements(crew.id, crew.founderPubkey).then(posts => {
+        const currentIds = new Set(posts.map(p => p.id));
+        const changed = currentIds.size !== lastSeenIds.size || [...currentIds].some(id => !lastSeenIds.has(id));
+        if (changed) this.renderAnnouncements(el);
+      }).catch(() => {});
+    }, 5000);
 
     el.innerHTML = '<div class="cp-loading">Loading posts…</div>';
 
     fetchCrewAnnouncements(crew.id, crew.founderPubkey).then(posts => {
+      lastSeenIds = new Set(posts.map(p => p.id));
       if (!this.activeCrew || this.activeCrew.id !== crew.id || this.activeCrewTab !== 'announcements') return;
       el.innerHTML = '';
 
@@ -933,7 +1028,8 @@ export class CrewPanel {
           if (canDelete) {
             card.querySelector('.cp-post-del')!.addEventListener('click', async (e) => {
               e.stopPropagation();
-              if (!confirm('Delete this post?')) return;
+              const okDel = await ndConfirm({ title: 'Delete post', message: 'Delete this post?', confirmLabel: 'Delete', destructive: true });
+              if (!okDel) return;
               try {
                 await deleteCrewAnnouncement(post.id);
                 card.remove();
@@ -991,7 +1087,7 @@ export class CrewPanel {
             </label>
           </div>
           <div class="cp-manage-edit-emblem-row">
-            <div class="cp-modal-emblem-preview" id="cme-preview" style="${crew.emblem.startsWith('http') ? 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);overflow:hidden;padding:0' : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" />` : renderEmojis(esc(crew.emblem), crew.emblemEmojis)}</div>
+            <div class="cp-modal-emblem-preview" id="cme-preview" style="${crew.emblem.startsWith('http') ? 'background:transparent;border-color:color-mix(in srgb,var(--nd-text) 15%,transparent);overflow:hidden;padding:0' : `background:${esc(crew.color)}22;border-color:${esc(crew.color)}55;color:${esc(crew.color)}`}">${crew.emblem.startsWith('http') ? `<img src="${esc(crew.emblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" />` : renderEmblem(esc(crew.emblem), crew.emblemEmojis)}</div>
             <div class="cp-manage-members-label" style="margin:0;font-size:10px">Emblem</div>
           </div>
           <div class="cp-emoji-grid" id="cme-emojis">
@@ -1012,8 +1108,8 @@ export class CrewPanel {
           <button class="cp-manage-section-toggle cp-manage-danger-toggle" data-section="danger">Danger Zone ▸</button>
           <div class="cp-manage-section-body" data-section="danger" style="display:none">
             <div class="cp-manage-danger-kicked"></div>
-            <div class="cp-manage-danger-divider"></div>
-            <button class="cp-manage-delete-btn">Delete Crew</button>
+            ${isFounder ? `<div class="cp-manage-danger-divider"></div>
+            <button class="cp-manage-delete-btn">Delete Crew</button>` : ''}
           </div>
         </div>` : ''}
       </div>
@@ -1065,7 +1161,13 @@ export class CrewPanel {
     // Delete (founder only)
     if (isFounder) {
       overlay.querySelector('.cp-manage-delete-btn')!.addEventListener('click', async () => {
-        if (!confirm(`Delete "${crew.name}"? All members will be notified and the crew will be permanently gone. This cannot be undone.`)) return;
+        const okDelete = await ndConfirm({
+          title: 'Delete crew',
+          message: `Delete "${crew.name}"? All members will be notified and the crew will be permanently gone. This cannot be undone.`,
+          confirmLabel: 'Delete',
+          destructive: true,
+        });
+        if (!okDelete) return;
         const btn = overlay.querySelector('.cp-manage-delete-btn') as HTMLButtonElement;
         btn.disabled = true;
         btn.textContent = 'Deleting…';
@@ -1116,7 +1218,7 @@ export class CrewPanel {
           editPreview.innerHTML = `<img src="${safeUrl(editEmblem)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
         } else {
           editPreview.style.cssText = `background:${editColor}22;border-color:${editColor}55;color:${editColor};`;
-          editPreview.innerHTML = renderEmojis(esc(editEmblem));
+          editPreview.innerHTML = renderEmblem(esc(editEmblem));
         }
       };
 
@@ -1225,28 +1327,24 @@ export class CrewPanel {
             row.innerHTML = `
               <span class="cp-manage-mname">${esc(getCachedName(member.pubkey))}</span>
               <div class="cp-manage-mcontrols">
-                ${isFounder ? `
+                ${(isFounder || isAdmin) ? `
                 <select class="cp-manage-role-sel">
                   <option value="admin" ${member.role === 'admin' ? 'selected' : ''}>Admin</option>
                   <option value="officer" ${member.role === 'officer' ? 'selected' : ''}>Officer</option>
                   <option value="member" ${member.role === 'member' ? 'selected' : ''}>Member</option>
                 </select>
-                <input class="cp-manage-title-input" type="text" maxlength="24" placeholder="Custom title…" value="${esc(currentTitle)}" />
-                <button class="cp-manage-save-btn">Save</button>` : isAdmin && member.role !== 'admin' ? `
-                <select class="cp-manage-role-sel">
-                  <option value="officer" ${member.role === 'officer' ? 'selected' : ''}>Officer</option>
-                  <option value="member" ${member.role === 'member' ? 'selected' : ''}>Member</option>
-                </select>
+                ${isFounder ? `<input class="cp-manage-title-input" type="text" maxlength="24" placeholder="Custom title…" value="${esc(currentTitle)}" />` : ''}
                 <button class="cp-manage-save-btn">Save</button>` : `<span class="cp-manage-mrole">${esc(currentTitle || (member.role === 'admin' ? 'Admin' : member.role === 'officer' ? 'Officer' : 'Member'))}</span>`}
-                ${member.pubkey !== myPubkey && (isFounder ? true : (isAdmin && (member.role === 'member' || member.role === 'officer'))) ? `<button class="cp-manage-kick-btn" title="Kick member">Kick</button>` : ''}
+                ${isFounder && member.role === 'admin' && member.pubkey !== myPubkey ? `<button class="cp-manage-revoke-btn" title="Cryptographically revoke admin authority (rotates the crew key)">Revoke</button>` : ''}
+                ${member.pubkey !== myPubkey && (isFounder || isAdmin) ? `<button class="cp-manage-kick-btn" title="Kick member">Kick</button>` : ''}
               </div>
             `;
 
-            if (isFounder || (isAdmin && member.role !== 'admin')) {
+            if (isFounder || isAdmin) {
               const saveBtn = row.querySelector('.cp-manage-save-btn') as HTMLButtonElement;
               saveBtn.addEventListener('click', async () => {
                 const sel = row.querySelector('.cp-manage-role-sel') as HTMLSelectElement;
-                const ti = row.querySelector('.cp-manage-title-input') as HTMLInputElement;
+                const ti = row.querySelector('.cp-manage-title-input') as HTMLInputElement | null;
                 saveBtn.disabled = true; saveBtn.textContent = '…';
                 try {
                   await updateCrewMember(crew.id, member.pubkey, sel.value as 'admin' | 'officer' | 'member', ti?.value);
@@ -1254,24 +1352,70 @@ export class CrewPanel {
                   setTimeout(() => { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }, 1200);
                 } catch { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }
               });
+
+              const revokeBtn = row.querySelector('.cp-manage-revoke-btn') as HTMLButtonElement | null;
+              if (revokeBtn) {
+                revokeBtn.addEventListener('click', async () => {
+                  const ok = await ndConfirm({
+                    title: 'Revoke admin authority',
+                    message: `Cryptographically revoke admin from ${getCachedName(member.pubkey)}? This rotates the crew key and forces other admins to receive a new key. Use this for compromised or rogue admins; for routine demotion just set their role to Member.`,
+                    confirmLabel: 'Revoke',
+                    destructive: true,
+                  });
+                  if (!ok) return;
+                  revokeBtn.disabled = true;
+                  const orig = revokeBtn.textContent;
+                  try {
+                    const { rotateCrewKey } = await import('../nostr/crewService');
+                    await rotateCrewKey(crew.id, { removeAdminPubkey: member.pubkey }, (p) => {
+                      if (p.step === 'wrapping') revokeBtn.textContent = 'Rotating…';
+                      else if (p.step === 'publishing-def') revokeBtn.textContent = 'Publishing def…';
+                      else if (p.step === 'publishing-pointer') revokeBtn.textContent = 'Publishing pointer…';
+                      else if (p.step === 'distributing') revokeBtn.textContent = `Re-keying ${p.sent}/${p.total}…`;
+                    });
+                    revokeBtn.textContent = 'Revoked';
+                    setTimeout(() => row.remove(), 1200);
+                  } catch (e) {
+                    revokeBtn.disabled = false;
+                    revokeBtn.textContent = orig || 'Revoke';
+                    alert('Failed to revoke admin: ' + (e instanceof Error ? e.message : String(e)));
+                  }
+                });
+              }
             }
 
             const kickBtn = row.querySelector('.cp-manage-kick-btn') as HTMLButtonElement;
             kickBtn.addEventListener('click', async () => {
-              if (!confirm(`Kick ${getCachedName(member.pubkey)} from the crew?`)) return;
+              const ok = await ndConfirm({
+                title: 'Kick member',
+                message: `Kick ${getCachedName(member.pubkey)} from the crew?`,
+                confirmLabel: 'Kick',
+                destructive: true,
+              });
+              if (!ok) return;
               kickBtn.disabled = true;
+              const origLabel = kickBtn.textContent;
               try {
-                await kickCrewMember(crew.id, member.pubkey);
+                await kickCrewMember(crew.id, member.pubkey, (p) => {
+                  if (p.step === 'rotating-key') kickBtn.textContent = 'Rotating key…';
+                  else if (p.step === 'distributing') {
+                    kickBtn.textContent = `Re-keying ${p.sent}/${p.total}…`;
+                  } else if (p.step === 'publishing-def') kickBtn.textContent = 'Saving…';
+                });
                 row.remove();
-              } catch { kickBtn.disabled = false; alert('Failed to kick member.'); }
+              } catch {
+                kickBtn.disabled = false;
+                kickBtn.textContent = origLabel || 'Kick';
+                alert('Failed to kick member.');
+              }
             });
 
             listEl.appendChild(row);
           });
           if (!members.length) listEl.innerHTML = '<div style="color:var(--nd-subtext);font-size:12px;padding:8px 0">No members found.</div>';
 
-          // Kicked section lives in Danger Zone (founder only)
-          if (isFounder) {
+          // Kicked section — any admin (crewSk holder) can unkick, same as kick
+          if (isFounder || isAdmin) {
             const dangerKicked = overlay.querySelector('.cp-manage-danger-kicked') as HTMLElement | null;
             if (dangerKicked) {
               dangerKicked.innerHTML = '';
@@ -1321,15 +1465,29 @@ export class CrewPanel {
       krow.querySelector('button')!.addEventListener('click', async (e) => {
         const btn = e.currentTarget as HTMLButtonElement;
         btn.disabled = true; btn.textContent = '…';
+
+        // Optimistic UI: immediately remove the row + update local state so the
+        // user gets instant feedback. If the publish actually fails we restore.
+        const parent = krow.parentNode;
+        const next   = krow.nextSibling;
+        const prevKicked = [...(crew.kickedPubkeys ?? [])];
+        crew.kickedPubkeys = prevKicked.filter(p => p !== pk);
+        krow.remove();
+        const headerEl = container.querySelector('.cp-kicked-header') as HTMLElement | null;
+        const remaining = (crew.kickedPubkeys ?? []).length;
+        if (!remaining) container.remove();
+        else if (headerEl) headerEl.textContent = `Kicked (${remaining})`;
+
         try {
           await unKickCrewMember(crew.id, pk);
-          crew.kickedPubkeys = (crew.kickedPubkeys ?? []).filter(p => p !== pk);
-          krow.remove();
-          const headerEl = container.querySelector('.cp-kicked-header') as HTMLElement;
-          const remaining = (crew.kickedPubkeys ?? []).length;
-          if (!remaining) container.remove();
-          else headerEl.textContent = `Kicked (${remaining})`;
-        } catch { btn.disabled = false; btn.textContent = 'Unkick'; }
+        } catch (err) {
+          // Restore state
+          crew.kickedPubkeys = prevKicked;
+          if (parent) parent.insertBefore(krow, next);
+          btn.disabled = false;
+          btn.textContent = 'Unkick';
+          console.warn('[Crews] Unkick failed, restored UI:', err);
+        }
       });
       return krow;
     };
@@ -1478,7 +1636,7 @@ export class CrewPanel {
         <div class="cp-modal-title">Create a Crew</div>
 
         <div class="cp-modal-preview">
-          <div class="cp-modal-emblem-preview" id="cpm-preview" style="background:${selColor}22;border-color:${selColor}55;color:${selColor}">${renderEmojis(esc(selEmoji))}</div>
+          <div class="cp-modal-emblem-preview" id="cpm-preview" style="background:${selColor}22;border-color:${selColor}55;color:${selColor}">${renderEmblem(esc(selEmoji))}</div>
           <input class="cp-modal-input" id="cpm-name" type="text" maxlength="40" placeholder="Crew name" />
         </div>
 
@@ -1524,7 +1682,7 @@ export class CrewPanel {
         preview.innerHTML = `<img src="${safeUrl(selEmoji)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block" onerror="this.parentElement.textContent='?'" />`;
       } else {
         preview.style.cssText = `background:${selColor}22;border-color:${selColor}55;color:${selColor};`;
-        preview.innerHTML = renderEmojis(esc(selEmoji));
+        preview.innerHTML = renderEmblem(esc(selEmoji));
       }
     };
 
@@ -1818,6 +1976,13 @@ export class CrewPanel {
       }
       .cp-manage-kick-btn:hover { border-color: #e85454; color: #e85454; }
       .cp-manage-kick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .cp-manage-revoke-btn {
+        background: none; border: 1px solid color-mix(in srgb,#f0b040 35%,transparent);
+        color: color-mix(in srgb,#f0b040 75%,transparent); border-radius: 4px; font-family: inherit;
+        font-size: 11px; padding: 2px 7px; cursor: pointer; transition: all 0.15s;
+      }
+      .cp-manage-revoke-btn:hover { border-color: #f0b040; color: #f0b040; background: color-mix(in srgb,#f0b040 12%,transparent); }
+      .cp-manage-revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       .cp-manage-invite-row { display: flex; gap: 6px; align-items: center; }
       .cp-manage-invite-input {
         flex: 1; background: color-mix(in srgb,var(--nd-text) 5%,transparent); color: var(--nd-text);
@@ -1900,6 +2065,20 @@ export class CrewPanel {
         max-width: 90%;
       }
       .cp-msg-joinreq-text { color: var(--nd-text); }
+      .cp-msg-joinreq-resolved {
+        display: inline-block;
+        padding: 5px 12px;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        color: var(--nd-subtext);
+        background: color-mix(in srgb, var(--nd-subtext) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--nd-subtext) 20%, transparent);
+        border-radius: 4px;
+        opacity: 0.7;
+      }
+      .cp-msg-joinreq-checking { opacity: 0.4; }
       .cp-joinreq-toast {
         position: fixed; top: 18px; right: 18px; z-index: 5000;
         max-width: 320px; padding: 12px 16px;
@@ -2157,9 +2336,16 @@ export class CrewPanel {
         border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);
         border-radius: 4px; color: var(--nd-accent); cursor: pointer; font-family: inherit; padding: 7px 16px; transition: all 0.15s;
         white-space: nowrap; flex-shrink: 0; min-width: 100px;
+        outline: none; box-shadow: none;
       }
-      .cp-modal-submit:hover { background: color-mix(in srgb,var(--nd-accent) 35%,transparent); }
-      .cp-modal-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+      .cp-modal-submit:focus, .cp-modal-submit:focus-visible { outline: none; box-shadow: none; }
+      .cp-modal-submit:not(:disabled):hover { background: color-mix(in srgb,var(--nd-accent) 35%,transparent); }
+      .cp-modal-submit:disabled {
+        opacity: 0.5; cursor: not-allowed; transition: none;
+        background: color-mix(in srgb,var(--nd-accent) 20%,transparent);
+        border-color: color-mix(in srgb,var(--nd-accent) 40%,transparent);
+      }
+      .cp-modal-submit:disabled:focus, .cp-modal-submit:disabled:focus-visible { outline: none; box-shadow: none; border-color: color-mix(in srgb,var(--nd-accent) 40%,transparent); }
       .cp-modal-status { font-size: 11px; color: #e85454; min-height: 16px; }
       /* Prevent iOS Safari auto-zoom: inputs must be ≥16px on touch devices */
       @media (hover: none) and (pointer: coarse) {

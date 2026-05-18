@@ -19,6 +19,7 @@ import { getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
 import { usdToSats, getBtcUsdPrice } from '../stores/priceService';
 import { MarketPreview } from './market/MarketPreview';
 import { showInvoiceModal } from './market/MarketInvoice';
+import { boltIcon } from './icons';
 
 const PANEL_ID    = 'market-panel';
 const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
@@ -174,7 +175,7 @@ export class MarketPanel {
     panel.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">
-        <span style="font-size:15px;">⚡</span>
+        ${boltIcon(15)}
         <div style="flex:1;color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">MARKET</div>
         <button id="mp-hide-owned" title="Hide already-purchased items" style="
           padding:3px 8px;border-radius:4px;cursor:pointer;
@@ -189,7 +190,7 @@ export class MarketPanel {
           background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
           border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
           color:var(--nd-subtext);
-        ">${MarketPanel._showSats ? '⚡ SATS' : '$ USD'}</button>
+        ">${MarketPanel._showSats ? `${boltIcon(11)} SATS` : '$ USD'}</button>
         <button id="mp-close" style="background:none;border:none;color:var(--nd-subtext);cursor:pointer;font-size:20px;line-height:1;padding:0;opacity:0.6;">×</button>
       </div>
 
@@ -271,12 +272,14 @@ export class MarketPanel {
         try { MarketPanel._btcPrice = await getBtcUsdPrice(); } catch { MarketPanel._showSats = false; }
         btn.style.opacity = '1';
       }
-      btn.textContent   = MarketPanel._showSats ? '⚡ SATS' : '$ USD';
+      btn.innerHTML     = MarketPanel._showSats ? `${boltIcon(11)} SATS` : '$ USD';
       btn.style.color   = MarketPanel._showSats ? 'var(--nd-amber,#f0b040)' : 'var(--nd-subtext)';
       btn.style.borderColor = MarketPanel._showSats
         ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 40%,transparent)'
         : 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)';
-      MarketPanel._renderItems(!!authStore.getState().pubkey && !authStore.getState().isGuest);
+      const canBuyNow = !!authStore.getState().pubkey && !authStore.getState().isGuest;
+      MarketPanel._renderSaleBanner(canBuyNow);
+      MarketPanel._renderItems(canBuyNow);
     });
 
     MarketPanel._renderTabs();
