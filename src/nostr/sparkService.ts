@@ -450,12 +450,20 @@ export async function ensureLightningAddress(displayName: string, pubkeyHex: str
       return msg.includes('name already taken') || msg.includes('409');
     };
 
+    // Random hex suffix from Web Crypto — fresh per call, not derived from
+    // pubkey or time. Avoids the pitfall where a regenerated wallet hits the
+    // same deterministic fallbacks the previous wallet already burned through.
+    const randHex = (bytes: number): string =>
+      Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
     const attempts = [
-      candidate,                                          // preferred
-      `${candidate}${pubkeyHex.slice(0, 4)}`,             // + 4 hex
-      `${candidate}${pubkeyHex.slice(0, 8)}`,             // + 8 hex
-      `${candidate}${pubkeyHex.slice(0, 4)}${Date.now().toString(36).slice(-4)}`, // + time
-      `nd${pubkeyHex.slice(0, 12)}${Date.now().toString(36).slice(-4)}`,          // last resort, drop display name
+      candidate,                                          // preferred — display name as-is
+      `${candidate}${randHex(2)}`,                        // + 4 random hex (16 bits)
+      `${candidate}${randHex(3)}`,                        // + 6 random hex (24 bits)
+      `${candidate}${randHex(4)}`,                        // + 8 random hex (32 bits)
+      `nd${randHex(6)}`,                                  // last resort: drop display name, 12 random hex (48 bits)
     ];
 
     for (const tryName of attempts) {
