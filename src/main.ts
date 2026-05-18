@@ -56,6 +56,7 @@ import {
   loadNostrTools,
 } from './nostr/nostrService';
 import { getStoredPasskeys, loginWithPasskey, isPasskeySupported, saveWithPasskey } from './stores/passkeyStore';
+import { WalletHUD } from './ui/WalletHUD';
 
 // Auto-fullscreen on landscape rotation (touch devices only)
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -164,6 +165,9 @@ function startGame(): void {
   if (gameStarting || game) return;
   gameStarting = true;
 
+  // Persistent wallet balance HUD (top-right pill) — self-syncs with auth state
+  WalletHUD.init();
+
   let container = document.getElementById('game-container');
   if (!container) {
     container = document.createElement('div');
@@ -253,8 +257,6 @@ const loginScreen = new LoginScreen({
     loginInProgress = true;
     try {
       await loginWithNsec(nsec);
-      const displayName = authStore.getState().displayName || 'Nostr User';
-      await _offerPasskey(nsec, displayName);
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();

@@ -74,7 +74,9 @@ export class RoomScene extends BaseScene {
 
   constructor() { super({ key: 'RoomScene' }); }
 
-  protected override shouldBlockPanelKeys(): boolean { return this.myRoom.shouldBlockKeys(); }
+  protected override shouldBlockPanelKeys(): boolean {
+    return super.shouldBlockPanelKeys() || this.myRoom.shouldBlockKeys();
+  }
 
   protected override onTKey(): void { this.myRoom.onTKey(); }
 

@@ -7,8 +7,9 @@
  */
 
 import { authStore } from '../stores/authStore';
-import { signEvent } from './nostrService';
+import { signEvent, fetchSparkAddress } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
+import { sendSparkPayment, sparkCanCover } from './sparkService';
 
 // ── LNURL helpers ─────────────────────────────────────────────────────────────
 
@@ -179,6 +180,12 @@ export async function payLightningAddress(
   const inv = await fetchInvoice(lnurlData.callback, amountMsats, zapRequestJson);
   if (!inv) return { status: 'error', error: 'Failed to get invoice' };
 
+  // Spark (in-game wallet) — preferred when it has the funds
+  if (await sparkCanCover(amountSats)) {
+    onStatus?.('Paying from in-game wallet…');
+    if (await sendSparkPayment(inv.pr)) return { status: 'paid' };
+  }
+
   if (hasWebLN()) {
     onStatus?.('Paying via WebLN…');
     const result = await weblnPayInvoice(inv.pr);
@@ -231,12 +238,22 @@ export async function zapUser(
 ): Promise<ZapResult> {
   const amountMsats = amountSats * 1000;
 
-  onStatus?.('Fetching profile…');
-  const profile = await fetchKind0(recipientPubkey);
-  if (!profile) return { status: 'error', error: 'Could not fetch profile' };
+  // In-game zaps prefer the recipient's in-game (Spark) wallet via a NIP-78
+  // kind:30078 event. Falls back to whatever's in their kind:0 profile if
+  // they don't have one (e.g., extension users who haven't logged in here yet).
+  onStatus?.('Looking up recipient…');
+  const sparkAddr = await fetchSparkAddress(recipientPubkey).catch(() => null);
 
-  const lud16: string | undefined = profile.lud16;
-  const lud06: string | undefined = profile.lud06;
+  let lud16: string | undefined = sparkAddr || undefined;
+  let lud06: string | undefined;
+
+  if (!lud16) {
+    onStatus?.('Fetching profile…');
+    const profile = await fetchKind0(recipientPubkey);
+    if (!profile) return { status: 'error', error: 'Could not fetch profile' };
+    lud16 = profile.lud16;
+    lud06 = profile.lud06;
+  }
 
   let lnurlpUrl: string | null = null;
   if (lud16) {
@@ -289,6 +306,12 @@ export async function zapUser(
     zapRequestJson || '{}',
   );
   if (!inv) return { status: 'error', error: 'Failed to get invoice' };
+
+  // Spark (in-game wallet) — preferred when it has the funds
+  if (await sparkCanCover(amountSats)) {
+    onStatus?.('Paying from in-game wallet…');
+    if (await sendSparkPayment(inv.pr)) return { status: 'paid' };
+  }
 
   // Try WebLN first
   if (hasWebLN()) {

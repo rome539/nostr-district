@@ -37,6 +37,7 @@ export class HotkeyModal {
       ['T',         'Terminal / avatar editor'],
       ['B',         'Polls board'],
       ['U',         'Mute list'],
+      ['W',         'Wallet'],
       ['S',         'Settings'],
       ['Enter',     'Focus chat'],
       ['Esc',       'Back / close'],
@@ -45,6 +46,7 @@ export class HotkeyModal {
     const navCmds: [string, string][] = [
       ['/map',          'World map'],
       ['/shop',         'Open the item shop'],
+      ['/wallet',       'Open your Lightning wallet'],
       ['/tp <room>',    'Teleport to a room'],
       ['/dm <name>',    'Open direct message'],
       ['/crew',         'Open crews panel'],

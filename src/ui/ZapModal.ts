@@ -8,6 +8,8 @@ import { zapUser, fetchKind0 } from '../nostr/zapService';
 import { authStore } from '../stores/authStore';
 import { sendChat } from '../nostr/presenceService';
 import { SoundEngine } from '../audio/SoundEngine';
+import { getSparkBalance, getSparkSdk } from '../nostr/sparkService';
+import { boltIcon } from './icons';
 
 const PRESETS = [21, 100, 500, 1000, 5000];
 const MODAL_ID = 'zap-modal';
@@ -43,7 +45,7 @@ export class ZapModal {
 
     modal.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
-        <span style="font-size:20px;">⚡</span>
+        <span style="color:var(--nd-accent);display:inline-flex;align-items:center;">${boltIcon(20)}</span>
         <div style="flex:1;">
           <div style="color:var(--nd-text);font-size:14px;font-weight:bold;">Zap ${esc(displayName)}</div>
           <div id="zap-lnaddr" style="color:var(--nd-subtext);font-size:10px;opacity:0.6;">Send a lightning tip</div>
@@ -57,7 +59,10 @@ export class ZapModal {
         </div>
       ` : `
         <div style="margin-bottom:14px;">
-          <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:8px;">AMOUNT (sats)</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;">AMOUNT (sats)</div>
+            <div id="zap-balance" style="color:var(--nd-subtext);font-size:9px;opacity:0.7;"></div>
+          </div>
           <div id="zap-presets" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
             ${PRESETS.map(s => `
               <button class="zap-preset" data-sats="${s}" style="
@@ -85,6 +90,9 @@ export class ZapModal {
             font-family:'Courier New',monospace;font-size:12px;
             padding:8px 10px;outline:none;
           ">
+          <div style="font-size:9px;color:var(--nd-subtext);margin-top:8px;opacity:0.7;line-height:1.4;">
+            Lightning fees vary by route — usually 0–5 sats. Network fee is added on top of your amount.
+          </div>
         </div>
 
         <div id="zap-status" style="color:var(--nd-subtext);font-size:11px;text-align:center;min-height:16px;margin-bottom:10px;"></div>
@@ -96,7 +104,7 @@ export class ZapModal {
             background:color-mix(in srgb,#f0b040 18%,transparent);
             border:1px solid color-mix(in srgb,#f0b040 50%,transparent);
             color:#f0b040;transition:all 0.12s;
-          ">⚡ Open in Wallet</button>
+          "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(13)} Open in Wallet</span></button>
           <button id="zap-copy-invoice" style="
             width:100%;padding:8px;border-radius:5px;cursor:pointer;
             font-family:'Courier New',monospace;font-size:11px;
@@ -112,7 +120,7 @@ export class ZapModal {
           background:color-mix(in srgb,var(--nd-accent) 18%,transparent);
           border:1px solid color-mix(in srgb,var(--nd-accent) 44%,transparent);
           color:var(--nd-accent);transition:all 0.12s;
-        ">⚡ Send Zap</button>
+        "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(14)} Send Zap</span></button>
       `}
     `;
 
@@ -124,6 +132,16 @@ export class ZapModal {
     document.addEventListener('keydown', ZapModal.escHandler);
 
     modal.querySelector('#zap-close')?.addEventListener('click', () => ZapModal.destroy());
+
+    // Show in-game wallet balance if available
+    if (getSparkSdk()) {
+      const balEl = modal.querySelector('#zap-balance') as HTMLElement | null;
+      if (balEl) {
+        getSparkBalance().then(bal => {
+          if (bal !== null) balEl.textContent = `wallet: ${bal.toLocaleString()} sats`;
+        }).catch(() => {});
+      }
+    }
 
     // Fetch lightning address and show it in the subtitle (click to copy)
     fetchKind0(recipientPubkey).then(profile => {

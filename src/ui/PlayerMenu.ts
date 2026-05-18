@@ -9,6 +9,7 @@ import { P } from '../config/game.config';
 import { sendRoomRequest } from '../nostr/presenceService';
 import { ProfileModal } from './ProfileModal';
 import { ZapModal } from './ZapModal';
+import { boltIcon } from './icons';
 import type { DMPanel } from './DMPanel';
 
 const MENU_ID = 'player-context-menu';
@@ -91,7 +92,7 @@ export function showPlayerMenu(
     <div style="color:var(--nd-text);font-size:13px;font-weight:bold;padding:8px 16px 10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 13%,transparent);">${esc(name)}</div>
     <div class="ctx-profile" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDC64 View Profile</div>
     <div class="ctx-dm" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;">\u2709 Send DM</div>
-    <div class="ctx-zap" style="padding:10px 16px;color:#f0b040;font-size:13px;cursor:pointer;transition:background 0.15s;">\u26A1 Zap</div>
+    <div class="ctx-zap" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:8px;">${boltIcon(14)} <span>Zap</span></div>
     <div class="ctx-visit" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA Visit Room</div>
     <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 13%,transparent);margin:2px 0;"></div>
     <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : 'var(--nd-subtext)'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} Unmute' : '\u{1F507} Mute'}</div>

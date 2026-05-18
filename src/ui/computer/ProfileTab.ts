@@ -3,6 +3,7 @@ import { authStore } from '../../stores/authStore';
 import { publishEvent, signEvent } from '../../nostr/nostrService';
 import { getStatus, setStatus } from '../../stores/statusStore';
 import { sendStatusUpdate } from '../../nostr/presenceService';
+import { getSparkSdk } from '../../nostr/sparkService';
 import type { TabCtx } from './types';
 
 function esc(s: string): string {
@@ -85,6 +86,15 @@ export class ProfileTab {
           width:100%;padding:8px 10px;background:color-mix(in srgb,black 55%,var(--nd-bg));border:1px solid color-mix(in srgb,var(--nd-text) 15%,transparent);border-radius:4px;
           color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;outline:none;box-sizing:border-box;
         "/>
+        <div id="prof-lnaddr-hint" style="display:none;margin-top:4px;font-size:10px;color:var(--nd-subtext);opacity:0.7;line-height:1.4;">
+          Suggested: your in-game wallet address. Clear before publishing if you'd rather not use it.
+        </div>
+        <button id="prof-use-spark" style="
+          display:none;margin-top:6px;padding:5px 10px;cursor:pointer;
+          background:color-mix(in srgb,var(--nd-accent) 12%,transparent);
+          border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);border-radius:4px;
+          color:var(--nd-accent);font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.04em;
+        ">Use my in-game wallet</button>
       </div>
       <div style="margin-bottom:14px;">
         <label style="color:var(--nd-subtext);font-size:11px;display:block;margin-bottom:4px;">Status</label>
@@ -104,6 +114,46 @@ export class ProfileTab {
       <div id="prof-status" style="color:var(--nd-dpurp);font-size:11px;margin-top:8px;text-align:center;min-height:16px;"></div>
     `;
 
+    // Lightning address field integration with the in-game (Spark) wallet:
+    //   - If the user has no kind:0 lud16 → pre-fill with the Spark address as
+    //     a suggestion. The hint text explains they can clear it before saving.
+    //   - If the user has a different lud16 → show the "Use my in-game wallet"
+    //     button so they can opt-in to switch.
+    //   - We never publish anything without the user clicking "Publish Profile".
+    const sparkSdk = getSparkSdk();
+    if (sparkSdk) {
+      const lnInput = body.querySelector('#prof-lnaddr')      as HTMLInputElement | null;
+      const useBtn  = body.querySelector('#prof-use-spark')   as HTMLButtonElement | null;
+      const hintEl  = body.querySelector('#prof-lnaddr-hint') as HTMLElement | null;
+      sparkSdk.getLightningAddress().then((info: any) => {
+        const sparkAddr = info?.lightningAddress;
+        if (!sparkAddr || !lnInput) return;
+
+        // Pre-fill when the kind:0 lud16 is empty so users with a wallet can
+        // see their address there as the default rather than a blank field.
+        const wasPreFilled = !lnInput.value.trim();
+        if (wasPreFilled) {
+          lnInput.value = sparkAddr;
+          if (hintEl) hintEl.style.display = 'block';
+        }
+
+        const sync = () => {
+          const current = lnInput.value.trim();
+          // Show the opt-in button only when the field has a *different* lud16
+          // — not when it's empty (already a suggestion to fill) or matches Spark.
+          if (useBtn) useBtn.style.display = (current && current !== sparkAddr) ? 'inline-block' : 'none';
+          // Hint text only relevant while the pre-fill is intact
+          if (hintEl) hintEl.style.display = (wasPreFilled && current === sparkAddr) ? 'block' : 'none';
+        };
+        sync();
+        lnInput.addEventListener('input', sync);
+        useBtn?.addEventListener('click', () => {
+          lnInput.value = sparkAddr;
+          sync();
+        });
+      }).catch(() => {});
+    }
+
     body.querySelector('#prof-status-save')?.addEventListener('click', () => {
       const status = ((body.querySelector('#prof-status-input') as HTMLInputElement).value || '').trim().slice(0, 60);
       setStatus(status);
@@ -122,6 +172,7 @@ export class ProfileTab {
         const about   = (body.querySelector('#prof-about')  as HTMLTextAreaElement).value.trim();
         const picture = (body.querySelector('#prof-pic')    as HTMLInputElement).value.trim();
         const lnaddr  = (body.querySelector('#prof-lnaddr') as HTMLInputElement).value.trim();
+
         const existing = authStore.getState().profile;
         const content: Record<string, any> = { ...existing };
         if (name) { content.name = name; content.display_name = name; }
@@ -150,7 +201,7 @@ export class ProfileTab {
           return;
         }
 
-        authStore.updateProfile(content);
+        authStore.setProfile(content);
         if (name) ctx.onProfileSave?.(name);
 
         statusEl.style.color = 'var(--nd-accent)';

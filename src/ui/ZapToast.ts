@@ -6,9 +6,23 @@
  */
 
 import { SoundEngine } from '../audio/SoundEngine';
+import { boltIcon } from './icons';
 
 const CONTAINER_ID = 'zap-toast-container';
 const TOAST_DURATION = 5000;
+
+// Recent zap-toast registry (incoming only, amount → timestamp ms).
+// Used by sparkService to suppress its generic "Lightning" toast when a
+// named Nostr zap-receipt toast has already shown for the same payment.
+const _recentIncoming = new Map<number, number>();
+// Wide enough to cover slow Spark SDK paymentSucceeded events that lag the
+// Nostr zap-receipt arrival by many seconds.
+const RECENT_WINDOW_MS = 30000;
+
+export function recentNostrZapMatches(amountSats: number, withinMs: number = RECENT_WINDOW_MS): boolean {
+  const ts = _recentIncoming.get(amountSats);
+  return !!ts && (Date.now() - ts) < withinMs;
+}
 
 function getContainer(): HTMLElement {
   let el = document.getElementById(CONTAINER_ID);
@@ -26,6 +40,16 @@ function getContainer(): HTMLElement {
 }
 
 export function showZapToast(senderName: string, amountSats: number, comment?: string, direction: 'incoming' | 'outgoing' = 'incoming'): void {
+  // Track incoming named zaps so the Spark "Lightning" toast can dedupe.
+  // We treat anything labelled "Lightning" as the generic Spark toast — don't record it.
+  if (direction === 'incoming' && senderName !== 'Lightning') {
+    _recentIncoming.set(amountSats, Date.now());
+    setTimeout(() => {
+      const t = _recentIncoming.get(amountSats);
+      if (t && (Date.now() - t) >= RECENT_WINDOW_MS) _recentIncoming.delete(amountSats);
+    }, RECENT_WINDOW_MS + 1000);
+  }
+
   SoundEngine.get().zapSound();
   const container = getContainer();
 
@@ -43,9 +67,12 @@ export function showZapToast(senderName: string, amountSats: number, comment?: s
   `;
 
   const sats = amountSats.toLocaleString();
+  const icon = `<span style="color:#f0b040;display:inline-flex;vertical-align:middle;margin-right:4px;">${boltIcon(13)}</span>`;
   const label = direction === 'incoming'
-    ? `⚡ ${esc(senderName)} zapped you <strong>${sats} sats</strong>!`
-    : `⚡ Zapped ${esc(senderName)} <strong>${sats} sats</strong>`;
+    ? `${icon}${esc(senderName)} zapped you <strong>${sats} sats</strong>!`
+    : (senderName === 'Lightning' || !senderName
+        ? `${icon}Sent <strong>${sats} sats</strong>`
+        : `${icon}Zapped ${esc(senderName)} <strong>${sats} sats</strong>`);
   toast.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">

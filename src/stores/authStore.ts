@@ -54,6 +54,13 @@ export const authStore = {
     if (content.picture) state.picture = content.picture;
     notify();
   },
+  /** Full replace — use when publishing a fresh kind:0 so deleted fields actually disappear. */
+  setProfile: (content: Record<string, any>) => {
+    state.profile = { ...content };
+    state.displayName = content.display_name || content.name || state.displayName;
+    if ('picture' in content) state.picture = content.picture || '';
+    notify();
+  },
 };
 
 state = {
