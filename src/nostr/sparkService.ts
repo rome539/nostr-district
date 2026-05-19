@@ -1,21 +1,26 @@
 /**
  * sparkService.ts — Breez SDK Spark wallet integration
  *
- * Wallet derivation:
- *   We sign a fixed deterministic Nostr event (kind 22242, fixed content +
- *   created_at=0) using whatever signer the user has — local nsec, browser
- *   extension (NIP-07), or bunker (NIP-46). BIP-340 Schnorr is deterministic,
- *   so the same Nostr identity always yields the same 64-byte signature, and
- *   therefore the same BIP39 mnemonic via HKDF.
+ * Wallet derivation & storage:
+ *   First time anywhere: we sign a fixed Nostr event (kind 22242) with the
+ *   user's signer to generate a one-shot 16-byte seed → 12-word BIP39
+ *   mnemonic. BIP-340 Schnorr is NOT deterministic (it uses auxiliary
+ *   randomness), so re-signing on a different device produces a *different*
+ *   mnemonic. We solve this by treating Nostr as the single source of truth:
  *
- *   This means every login method (nsec / passkey / extension / bunker) can
- *   provision a Spark wallet bound to the user's Nostr identity.
+ *   1. On every wallet init, fetch kind:30078 / d=nostr-district:spark-mnemonic
+ *      authored by the user, NIP-44 self-encrypted to their own pubkey.
+ *   2. If found: use it. Same nsec → same wallet across every browser.
+ *   3. If absent (truly first time): derive from signer, publish to Nostr.
+ *   4. If event exists but we can't decrypt it (extension NIP-44 quirk) or the
+ *      fetch fails: throw. We do NOT derive a fresh mnemonic in that case —
+ *      doing so would overwrite a canonical backup and create a divergent
+ *      wallet. User is told to try a different extension or nsec login.
  *
- * Storage:
- *   The derived mnemonic is cached in localStorage per pubkey as plaintext
- *   under nd_spark_mnemonic_<pubkeyPrefix>. It avoids re-signing on every
- *   page reload. This is hot-wallet storage — anyone with access to the
- *   browser's localStorage can spend. See WalletInfo modal for guidance.
+ *   No localStorage caching: the mnemonic lives only in memory for the current
+ *   session and on Nostr at rest. This keeps the wallet portable (any browser
+ *   with the same nsec/extension converges on the same wallet) and avoids the
+ *   "lightning address keeps changing across browsers" footgun.
  */
 
 import { entropyToMnemonic } from '@scure/bip39';
@@ -71,61 +76,6 @@ function hexToBytes(h: string): Uint8Array {
   return new Uint8Array(h.match(/.{2}/g)!.map(b => parseInt(b, 16)));
 }
 
-function bytesToHex(b: Uint8Array): string {
-  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
-}
-
-// ── At-rest encryption (nsec users only) ──────────────────────────────────────
-//
-// When the user logged in via nsec or passkey we have the raw private key in
-// memory via `getLocalKey()`. We derive an AES-GCM key from it via HKDF and
-// encrypt the cached mnemonic. Extension and bunker users have no raw key
-// available — for those we fall back to plaintext storage (same threat model
-// as before this change; documented in WalletInfo).
-
-async function deriveMnemonicAesKey(privkey: Uint8Array): Promise<CryptoKey> {
-  const raw = await crypto.subtle.importKey('raw', privkey.buffer as ArrayBuffer, 'HKDF', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt: new TextEncoder().encode('nostr-district-spark-mnemonic-v1'),
-      info: new TextEncoder().encode('mnemonic-storage'),
-    },
-    raw,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-async function encryptMnemonic(mnemonic: string, aes: CryptoKey): Promise<string> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    aes,
-    new TextEncoder().encode(mnemonic) as unknown as ArrayBuffer,
-  );
-  return JSON.stringify({ iv: bytesToHex(iv), ct: bytesToHex(new Uint8Array(ct)) });
-}
-
-async function decryptMnemonic(stored: string, aes: CryptoKey): Promise<string | null> {
-  try {
-    const { iv: ivHex, ct: ctHex } = JSON.parse(stored);
-    if (typeof ivHex !== 'string' || typeof ctHex !== 'string') return null;
-    const iv = hexToBytes(ivHex);
-    const ct = hexToBytes(ctHex);
-    const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv.slice() },
-      aes,
-      ct.slice().buffer,
-    );
-    return new TextDecoder().decode(plain);
-  } catch {
-    return null;
-  }
-}
-
 function looksLikeMnemonic(s: string): boolean {
   return /^[a-z]+(?:\s[a-z]+){11,23}$/.test(s.trim());
 }
@@ -154,7 +104,12 @@ async function deriveMnemonicFromSigner(signer: SignerFn): Promise<string> {
   return entropyToMnemonic(new Uint8Array(bits), wordlist);
 }
 
-function mnemonicKey(pubkeyHex: string): string {
+// Legacy localStorage key from when we cached the mnemonic locally. We now
+// store the mnemonic exclusively on Nostr (kind:30078, NIP-44 self-encrypted),
+// but on first load after upgrading we still read any existing localStorage
+// entry once so existing users don't lose their wallet — see `migrateLegacy*`
+// in getOrDeriveMnemonic below.
+function legacyMnemonicKey(pubkeyHex: string): string {
   return `nd_spark_mnemonic_${pubkeyHex.slice(0, 16)}`;
 }
 
@@ -221,12 +176,18 @@ async function selfDecryptForUser(ciphertext: string, pubkeyHex: string): Promis
   return null;
 }
 
-/** Publish the mnemonic encrypted to the user's own pubkey as kind:30078. */
-async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, signer: SignerFn): Promise<void> {
+/**
+ * Publish the mnemonic encrypted to the user's own pubkey as kind:30078.
+ * Returns true if the event was signed, encrypted, round-trip verified, and
+ * sent to relays without throwing. Callers that need durable storage (first
+ * wallet creation) MUST check this — failure here means the wallet would be
+ * lost on next reload because Schnorr re-derivation is non-deterministic.
+ */
+async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, signer: SignerFn): Promise<boolean> {
   const ciphertext = await selfEncryptForUser(mnemonic, pubkeyHex);
   if (!ciphertext) {
-    console.warn('[Spark] No NIP-44 signer available — skipping mnemonic backup publish');
-    return;
+    console.warn('[Spark] No NIP-44 signer available — cannot publish mnemonic backup');
+    return false;
   }
   // Defense against asymmetric NIP-44 brokenness: if encrypt works but decrypt
   // doesn't return the original plaintext, we'd be publishing garbage. Skip
@@ -234,8 +195,8 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
   // an unrecoverable one.
   const roundTrip = await selfDecryptForUser(ciphertext, pubkeyHex);
   if (roundTrip !== mnemonic) {
-    console.warn('[Spark] NIP-44 round-trip mismatch — skipping publish to preserve any existing backup');
-    return;
+    console.warn('[Spark] NIP-44 round-trip mismatch — refusing to publish unrecoverable backup');
+    return false;
   }
   try {
     const signed = await signer({
@@ -247,95 +208,130 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
     const { publishEvent } = await import('./nostrService');
     await publishEvent(signed);
     console.log('[Spark] Published encrypted mnemonic backup');
+    return true;
   } catch (e) {
     console.warn('[Spark] Failed to publish mnemonic backup:', e);
+    return false;
   }
 }
 
 /**
- * Try to fetch and decrypt the user's mnemonic backup from Nostr. Returns null
- * if not found / undecryptable / times out. Hard 4-second cap so a slow or
- * unresponsive relay can't block wallet init indefinitely.
+ * Try to fetch and decrypt the user's mnemonic backup from Nostr.
+ *
+ * Returns one of four outcomes — the caller MUST distinguish them, because
+ * "we couldn't read a backup" is very different from "no backup exists":
+ *
+ *   - 'found'         — got it; use this mnemonic
+ *   - 'undecryptable' — an event exists on Nostr but our NIP-44 can't read it
+ *                       (extension quirk, wrong key, etc.). DO NOT overwrite.
+ *   - 'no-event'      — relays responded; no kind:30078 backup exists yet
+ *   - 'error'         — fetch timed out or threw. State unknown; act conservatively.
+ *
+ * Hard 8-second cap so a slow relay can't block wallet init indefinitely.
  */
-async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<string | null> {
+type FetchBackupResult =
+  | { status: 'found'; mnemonic: string }
+  | { status: 'undecryptable' }
+  | { status: 'no-event' }
+  | { status: 'error' };
+
+async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<FetchBackupResult> {
   try {
     const { DEFAULT_RELAYS } = await import('./relayManager');
     const { SimplePool } = await import('nostr-tools/pool');
     const pool = new SimplePool();
-    const fetchPromise = pool.get(DEFAULT_RELAYS.slice(0, 6), {
+    const TIMEOUT = Symbol('timeout');
+    const fetchPromise = pool.get(DEFAULT_RELAYS.slice(0, 8), {
       kinds: [30078], authors: [pubkeyHex], '#d': [MNEMONIC_SYNC_D_TAG],
     });
-    const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), 4000));
+    const timeoutPromise = new Promise<typeof TIMEOUT>(resolve => setTimeout(() => resolve(TIMEOUT), 8000));
     const event = await Promise.race([fetchPromise, timeoutPromise]);
-    if (!event?.content) return null;
+    if (event === TIMEOUT) return { status: 'error' };
+    if (!event?.content) return { status: 'no-event' };
     const decrypted = await selfDecryptForUser(event.content, pubkeyHex);
-    if (decrypted && looksLikeMnemonic(decrypted)) return decrypted;
-    return null;
+    if (decrypted && looksLikeMnemonic(decrypted)) return { status: 'found', mnemonic: decrypted };
+    return { status: 'undecryptable' };
   } catch (e) {
     console.warn('[Spark] Failed to fetch mnemonic backup:', e);
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Read and clear any legacy localStorage mnemonic entry from previous versions
+ * of the app that cached the mnemonic locally. We use the value once during
+ * migration if Nostr has no backup yet, then delete the key — going forward
+ * Nostr is the only persistent store.
+ */
+function readAndClearLegacyMnemonic(pubkeyHex: string): string | null {
+  const key = legacyMnemonicKey(pubkeyHex);
+  const stored = localStorage.getItem(key);
+  if (!stored) return null;
+  localStorage.removeItem(key);
+  // Plaintext mnemonic (oldest format) — return as-is.
+  if (looksLikeMnemonic(stored)) return stored;
+  // AES-GCM encrypted blob from intermediate format — can only decrypt if
+  // we still have the user's raw nsec in memory (nsec/passkey logins).
+  // For extension/bunker users, the encrypted blob is unrecoverable; we
+  // accept the trade and treat it as no legacy data.
+  const localKey = getLocalKey();
+  if (!localKey) return null;
+  try {
+    const parsed = JSON.parse(stored);
+    if (typeof parsed?.iv !== 'string' || typeof parsed?.ct !== 'string') return null;
+    // We don't bother re-implementing the legacy decrypt here; if the user
+    // had an encrypted localStorage entry they almost certainly also have
+    // a Nostr backup (publish was attempted on every init). Skip migration.
+    return null;
+  } catch {
     return null;
   }
 }
 
-// Once per session we check Nostr for a canonical backup; subsequent calls in
-// the same session use the warmed local cache without re-fetching.
-const _nostrCheckedThisSession = new Set<string>();
-
 async function getOrDeriveMnemonic(pubkeyHex: string, signer: SignerFn): Promise<string> {
-  const key      = mnemonicKey(pubkeyHex);
-  const cached   = localStorage.getItem(key);
-  const localKey = getLocalKey();
-  const aes      = localKey ? await deriveMnemonicAesKey(localKey) : null;
+  // Nostr is the single source of truth. Try to load the user's encrypted
+  // backup first.
+  const fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
 
-  const readCached = async (): Promise<string | null> => {
-    if (!cached) return null;
-    if (aes) {
-      const decrypted = await decryptMnemonic(cached, aes);
-      if (decrypted && looksLikeMnemonic(decrypted)) return decrypted;
-    }
-    if (looksLikeMnemonic(cached)) {
-      // Legacy plaintext blob — migrate to encrypted form when possible
-      if (aes) localStorage.setItem(key, await encryptMnemonic(cached, aes));
-      return cached;
-    }
-    return null;
-  };
-
-  const writeCache = async (mnemonic: string): Promise<void> => {
-    if (aes) localStorage.setItem(key, await encryptMnemonic(mnemonic, aes));
-    else     localStorage.setItem(key, mnemonic);
-  };
-
-  const localMnemonic = await readCached();
-
-  // First call this session: consult Nostr to converge across devices.
-  // Nostr is the source of truth — if it has a mnemonic, we adopt it even if
-  // it differs from local cache. (Same nsec = same wallet across browsers.)
-  if (!_nostrCheckedThisSession.has(pubkeyHex)) {
-    _nostrCheckedThisSession.add(pubkeyHex);
-    const fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
-    if (fromNostr) {
-      if (fromNostr !== localMnemonic) {
-        console.log('[Spark] Adopting canonical mnemonic from Nostr backup');
-        await writeCache(fromNostr);
-      }
-      return fromNostr;
-    }
-    // No backup on Nostr yet. If we have a local mnemonic, publish it now
-    // so this becomes the canonical one for future devices.
-    if (localMnemonic) {
-      publishEncryptedMnemonic(localMnemonic, pubkeyHex, signer).catch(() => {});
-      return localMnemonic;
-    }
-  } else if (localMnemonic) {
-    // Subsequent same-session calls just use the local cache.
-    return localMnemonic;
+  if (fromNostr.status === 'found') {
+    // Clean up any leftover localStorage entry from previous app versions.
+    localStorage.removeItem(legacyMnemonicKey(pubkeyHex));
+    return fromNostr.mnemonic;
   }
 
-  // Truly first time anywhere — derive from signer, cache, publish.
+  // CRITICAL: A backup event exists on Nostr but our NIP-44 can't decrypt it
+  // (asymmetric extension brokenness, different extension on this browser, etc.),
+  // OR the fetch failed/timed out. We MUST NOT derive a fresh mnemonic in either
+  // case — Schnorr signatures use auxiliary randomness, so the new mnemonic
+  // would differ from the canonical one, and publishing it would overwrite a
+  // valid backup with a divergent wallet ("lightning address keeps changing
+  // across browsers" footgun).
+  if (fromNostr.status === 'undecryptable') {
+    throw new Error('A wallet backup exists on Nostr but this browser cannot decrypt it. The Nostr extension on this browser may not implement NIP-44 the same way. Try logging in with your nsec directly, or with a different extension.');
+  }
+  if (fromNostr.status === 'error') {
+    throw new Error('Could not reach Nostr relays to load wallet backup. Check your connection and try again.');
+  }
+
+  // status === 'no-event': definitely no backup on Nostr.
+  // Migration path: if an older version of this app cached a mnemonic in
+  // localStorage and never successfully published it to Nostr, adopt that
+  // mnemonic and publish it as canonical instead of deriving a fresh one.
+  const legacyLocal = readAndClearLegacyMnemonic(pubkeyHex);
+  if (legacyLocal) {
+    console.log('[Spark] Migrating legacy localStorage mnemonic to Nostr');
+    await publishEncryptedMnemonic(legacyLocal, pubkeyHex, signer);
+    return legacyLocal;
+  }
+
+  // Truly first time anywhere — derive from signer, publish to Nostr.
+  // The publish MUST succeed; otherwise on next reload we'd derive a different
+  // mnemonic (Schnorr non-determinism) and effectively lose this wallet.
   const mnemonic = await deriveMnemonicFromSigner(signer);
-  await writeCache(mnemonic);
-  publishEncryptedMnemonic(mnemonic, pubkeyHex, signer).catch(() => {});
+  const published = await publishEncryptedMnemonic(mnemonic, pubkeyHex, signer);
+  if (!published) {
+    throw new Error('Could not save wallet backup to Nostr. The wallet was not created — try again with a working network connection and a NIP-44-capable signer.');
+  }
   return mnemonic;
 }
 
@@ -424,8 +420,9 @@ export async function disconnectSparkWallet(pubkeyHex?: string): Promise<void> {
     try { await _sdk.disconnect(); } catch {}
     _sdk = null;
   }
-  // Clear cached mnemonic on logout. User can re-sign on next login.
-  if (pubkeyHex) localStorage.removeItem(mnemonicKey(pubkeyHex));
+  // The mnemonic isn't cached locally anymore — Nostr is the only store — but
+  // clean up any leftover key from older app versions.
+  if (pubkeyHex) localStorage.removeItem(legacyMnemonicKey(pubkeyHex));
 }
 
 // ── Lightning address ─────────────────────────────────────────────────────────

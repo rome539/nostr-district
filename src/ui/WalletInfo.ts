@@ -68,12 +68,12 @@ export class WalletInfo {
 
         <section>
           <h3>Security</h3>
-          <p>Your wallet is only as secure as your nsec. Anyone with your nsec can derive this wallet — encrypted local storage or not. Protect your Nostr key.</p>
+          <p>Your wallet is only as secure as your nsec. Anyone with your nsec can decrypt this wallet and spend it. Protect your Nostr key.</p>
           <ul>
             <li>If you lose your nsec, you lose this wallet — there is no separate recovery phrase to write down.</li>
-            <li><strong>nsec / passkey login:</strong> your wallet mnemonic is stored encrypted in your browser, keyed to your Nostr private key. This protects against someone reading your local browser data without also having your nsec.</li>
-            <li><strong>Browser extension / bunker login:</strong> your mnemonic is stored unencrypted, because the app never has access to your private key to use as an encryption key. Anyone with access to your browser's local data can read it.</li>
-            <li>Either way: treat this as a hot wallet. Fine for in-game amounts, not for savings.</li>
+            <li>Your wallet seed is encrypted to your own Nostr pubkey (NIP-44) and stored on Nostr relays as a <code>kind:30078</code> event. Nothing is cached on this device — log in with the same nsec/extension on any browser and the same wallet loads.</li>
+            <li>Only you (or anyone with your nsec / signer) can decrypt the backup. Relays see ciphertext.</li>
+            <li>Treat this as a hot wallet. Fine for in-game amounts, not for savings.</li>
           </ul>
         </section>
 
