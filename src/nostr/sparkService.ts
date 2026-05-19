@@ -196,14 +196,55 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
       tags: [['d', MNEMONIC_SYNC_D_TAG], ['client', 'Nostr District']],
       content: ciphertext,
     });
-    const { publishEvent } = await import('./nostrService');
-    await publishEvent(signed);
-    console.log('[Spark] Published encrypted mnemonic backup');
+    // Publish to every relay we'll later query, so the round-trip is
+    // guaranteed symmetric. Require MIN_CONFIRMATIONS OKs to consider this
+    // durable — a single accept isn't enough to survive a relay losing its
+    // data or being unreachable on the next session.
+    const accepted = await publishToRelays(signed, MNEMONIC_BACKUP_RELAYS);
+    console.log(`[Spark] Published mnemonic backup to ${accepted}/${MNEMONIC_BACKUP_RELAYS.length} relays`);
+    if (accepted < MIN_CONFIRMATIONS) {
+      console.warn(`[Spark] Only ${accepted} relay(s) accepted — below MIN_CONFIRMATIONS (${MIN_CONFIRMATIONS}). Backup not durable.`);
+      return false;
+    }
     return true;
   } catch (e) {
     console.warn('[Spark] Failed to publish mnemonic backup:', e);
     return false;
   }
+}
+
+/**
+ * Publish a signed event to each relay via raw WebSocket and return the count
+ * of relays that returned an OK true response. Mirrors the relay set used by
+ * fetchEncryptedMnemonic for guaranteed symmetric publish/fetch.
+ */
+function publishToRelays(event: any, relays: string[]): Promise<number> {
+  const sendOne = (url: string): Promise<boolean> => new Promise((resolve) => {
+    let ws: WebSocket;
+    try { ws = new WebSocket(url); }
+    catch { resolve(false); return; }
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      try { ws.close(); } catch {}
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), 8000);
+    ws.onopen = () => { try { ws.send(JSON.stringify(['EVENT', event])); } catch { finish(false); } };
+    ws.onmessage = (msg) => {
+      try {
+        const d = JSON.parse(msg.data);
+        if (Array.isArray(d) && d[0] === 'OK' && d[1] === event.id) {
+          clearTimeout(timer);
+          finish(d[2] === true);
+        }
+      } catch {}
+    };
+    ws.onerror = () => finish(false);
+    ws.onclose = () => finish(false);
+  });
+  return Promise.all(relays.map(sendOne)).then(results => results.filter(Boolean).length);
 }
 
 /**
@@ -215,10 +256,16 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
  *   - 'found'         — got it; use this mnemonic
  *   - 'undecryptable' — an event exists on Nostr but our NIP-44 can't read it
  *                       (extension quirk, wrong key, etc.). DO NOT overwrite.
- *   - 'no-event'      — relays responded; no kind:30078 backup exists yet
- *   - 'error'         — fetch timed out or threw. State unknown; act conservatively.
+ *   - 'no-event'      — at least MIN_CONFIRMATIONS relays sent EOSE confirming
+ *                       no kind:30078 backup exists. Safe to create a new one.
+ *   - 'error'         — too few relays responded to confirm absence. State
+ *                       unknown; refuse to publish a fresh mnemonic.
  *
- * Hard 8-second cap so a slow relay can't block wallet init indefinitely.
+ * Uses raw WebSockets per-relay (same as publishEvent) for predictable
+ * behavior. We MUST get positive EOSE-no-event confirmation from at least
+ * MIN_CONFIRMATIONS relays before declaring no-event — otherwise a network
+ * race / dropped connection could fool us into overwriting a valid backup
+ * with a fresh divergent wallet.
  */
 type FetchBackupResult =
   | { status: 'found'; mnemonic: string }
@@ -226,26 +273,91 @@ type FetchBackupResult =
   | { status: 'no-event' }
   | { status: 'error' };
 
+const MNEMONIC_BACKUP_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://offchain.pub',
+  'wss://relay.nostr.band',
+  'wss://nostr.wine',
+  'wss://relay.0xchat.com',
+  'wss://nostr21.com',
+];
+const MIN_CONFIRMATIONS = 2;
+const PER_RELAY_TIMEOUT_MS = 12000;
+
+type RelayResponse =
+  | { kind: 'event'; event: any }
+  | { kind: 'eose-empty' }
+  | { kind: 'error' };
+
+function queryRelayForMnemonic(url: string, pubkeyHex: string): Promise<RelayResponse> {
+  return new Promise((resolve) => {
+    const subId = 'sm' + Math.random().toString(36).slice(2, 12);
+    let ws: WebSocket;
+    try { ws = new WebSocket(url); }
+    catch { resolve({ kind: 'error' }); return; }
+
+    let done = false;
+    let latest: any = null;
+    const finish = (resp: RelayResponse) => {
+      if (done) return;
+      done = true;
+      try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+      try { ws.close(); } catch {}
+      resolve(resp);
+    };
+    const timer = setTimeout(() => finish({ kind: 'error' }), PER_RELAY_TIMEOUT_MS);
+
+    ws.onopen = () => {
+      try {
+        ws.send(JSON.stringify(['REQ', subId, {
+          kinds: [30078], authors: [pubkeyHex], '#d': [MNEMONIC_SYNC_D_TAG],
+        }]));
+      } catch { finish({ kind: 'error' }); }
+    };
+    ws.onmessage = (msg) => {
+      try {
+        const d = JSON.parse(msg.data);
+        if (!Array.isArray(d) || d[1] !== subId) return;
+        if (d[0] === 'EVENT' && d[2]?.content) {
+          // Keep the newest if multiple come in (replaceable event semantics).
+          if (!latest || (d[2].created_at ?? 0) > (latest.created_at ?? 0)) latest = d[2];
+        } else if (d[0] === 'EOSE') {
+          clearTimeout(timer);
+          finish(latest ? { kind: 'event', event: latest } : { kind: 'eose-empty' });
+        }
+      } catch { /* ignore malformed */ }
+    };
+    ws.onerror = () => finish({ kind: 'error' });
+    ws.onclose = () => finish(latest ? { kind: 'event', event: latest } : { kind: 'error' });
+  });
+}
+
 async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<FetchBackupResult> {
-  try {
-    const { DEFAULT_RELAYS } = await import('./relayManager');
-    const { SimplePool } = await import('nostr-tools/pool');
-    const pool = new SimplePool();
-    const TIMEOUT = Symbol('timeout');
-    const fetchPromise = pool.get(DEFAULT_RELAYS.slice(0, 8), {
-      kinds: [30078], authors: [pubkeyHex], '#d': [MNEMONIC_SYNC_D_TAG],
-    });
-    const timeoutPromise = new Promise<typeof TIMEOUT>(resolve => setTimeout(() => resolve(TIMEOUT), 8000));
-    const event = await Promise.race([fetchPromise, timeoutPromise]);
-    if (event === TIMEOUT) return { status: 'error' };
-    if (!event?.content) return { status: 'no-event' };
-    const decrypted = await selfDecryptForUser(event.content, pubkeyHex);
+  console.log(`[Spark] Querying ${MNEMONIC_BACKUP_RELAYS.length} relays for mnemonic backup (pk=${pubkeyHex.slice(0, 8)})`);
+  const responses = await Promise.all(
+    MNEMONIC_BACKUP_RELAYS.map(url => queryRelayForMnemonic(url, pubkeyHex))
+  );
+
+  const events       = responses.filter(r => r.kind === 'event').map(r => (r as any).event);
+  const eoseEmpty    = responses.filter(r => r.kind === 'eose-empty').length;
+  const errors       = responses.filter(r => r.kind === 'error').length;
+  console.log(`[Spark] Relay responses: ${events.length} with event, ${eoseEmpty} confirmed empty, ${errors} errored`);
+
+  // Any relay returning the event wins — we take the newest by created_at.
+  if (events.length > 0) {
+    const latest = events.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
+    const decrypted = await selfDecryptForUser(latest.content, pubkeyHex);
     if (decrypted && looksLikeMnemonic(decrypted)) return { status: 'found', mnemonic: decrypted };
     return { status: 'undecryptable' };
-  } catch (e) {
-    console.warn('[Spark] Failed to fetch mnemonic backup:', e);
-    return { status: 'error' };
   }
+
+  // Only declare 'no-event' if MIN_CONFIRMATIONS relays positively confirmed
+  // (sent EOSE without ever sending the event). Anything less is a network
+  // race and we MUST NOT publish a fresh mnemonic over a possibly-existing one.
+  if (eoseEmpty >= MIN_CONFIRMATIONS) return { status: 'no-event' };
+  return { status: 'error' };
 }
 
 async function getOrDeriveMnemonic(pubkeyHex: string, signer: SignerFn): Promise<string> {
