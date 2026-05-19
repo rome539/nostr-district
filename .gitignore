@@ -3,6 +3,7 @@ node_modules/
 .env.local
 dist/
 .DS_Store
+.claude/
 *.docx
 *_orig.png
 *.aseprite
