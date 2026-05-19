@@ -22,7 +22,10 @@ function renderContent(text: string, emojis?: { code: string; url: string }[]): 
     return `<br><img src="${src}" style="max-width:200px;max-height:160px;border-radius:6px;margin-top:4px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${src}','_blank')">`;
   }
   if (/^https?:\/\/[^\s]+$/i.test(t)) {
-    const href = t.replace(/"/g, '%22');
+    // Escape both quote types in the URL to prevent attribute escape, matching
+    // gifSrcAttr's approach. Defense-in-depth — only `"` could actually break
+    // out of href="..." but the extra escapes are cheap.
+    const href = t.replace(/"/g, '%22').replace(/'/g, '%27');
     const label = escapeHtml(t.length > 55 ? t.slice(0, 52) + '…' : t);
     return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--nd-accent);opacity:0.8;font-size:12px;word-break:break-all;">${label}</a>`;
   }

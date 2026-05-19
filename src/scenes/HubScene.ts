@@ -828,7 +828,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   private tryEnter(): void {
     if (this.isLeavingScene) return;
     if (this.shouldBlockPanelKeys()) return; // full-screen panels (wallet, market, etc.)
-    if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay, #zap-modal, #sp-keys-modal')) return;
+    if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay, #zap-modal, #sp-keys-modal, #player-context-menu, #profile-modal')) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }

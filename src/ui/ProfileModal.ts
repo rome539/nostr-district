@@ -10,6 +10,7 @@ import { P } from '../config/game.config';
 import { fetchProfile, fetchContactList, signEvent, publishEvent, fetchUserNotes, UserNote } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { ZapModal } from './ZapModal';
+import { boltIcon } from './icons';
 import type { DMPanel } from './DMPanel';
 import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
@@ -274,7 +275,7 @@ export class ProfileModal {
               </div>
               ${!isSelf ? `
                 <button id="profile-dm" title="Send DM" style="background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);border-radius:6px;color:var(--nd-accent);font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">✉ DM</button>
-                <button id="profile-zap" title="Send Zap" style="background:rgba(0,0,0,0.50);border:1px solid rgba(240,176,64,0.55);border-radius:6px;color:#f0b040;font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">⚡ Zap</button>
+                <button id="profile-zap" title="Send Zap" style="background:rgba(0,0,0,0.50);border:1px solid rgba(240,176,64,0.55);border-radius:6px;color:#f0b040;font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;">${boltIcon(12)}<span>Zap</span></button>
               ` : ''}
             </div>
             ${playerStatus ? `<div style="color:var(--nd-accent);font-size:11px;font-style:italic;opacity:0.9;">\u25CF ${esc(playerStatus)}</div>` : ''}

@@ -21,6 +21,7 @@ import {
   onSparkPayment,
   type SparkPayment,
 } from '../nostr/sparkService';
+import { getCachedZapMessage, findCachedIncomingZap } from '../nostr/zapService';
 
 const PANEL_ID = 'wallet-panel';
 
@@ -55,6 +56,7 @@ export class WalletPanel {
   private static _invoice:    string | null = null;
   private static _history:    SparkPayment[] | null = null;
   private static _historyLoading: boolean = false;
+  private static _expandedRowId: string | null = null;
   private static _busy:       boolean = false;
   private static _toast:      string | null = null;
   private static _toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -280,18 +282,50 @@ export class WalletPanel {
       const color    = incoming
         ? 'var(--nd-accent)'
         : (p.status === 'failed' ? '#ff7070' : 'var(--nd-subtext)');
-      const ago      = WalletPanel._relativeTime(p.timestamp);
-      const feeNote  = (!incoming && p.fees > 0) ? ` · fee ${p.fees}` : '';
-      const status   = p.status === 'completed' ? '' : ` · ${p.status}`;
+      const ago        = WalletPanel._relativeTime(p.timestamp);
+      const feeNote    = (!incoming && p.fees > 0) ? ` · fee ${p.fees}` : '';
+      const status     = p.status === 'completed' ? '' : ` · ${p.status}`;
+      const expanded   = WalletPanel._expandedRowId === p.id;
+      // NIP-57 zaps put the comment in the kind:9734 (not in the bolt11),
+      // so the Breez payment record never has a readable description. Fall
+      // back to local caches:
+      //   - outgoing: keyed by Spark payment id (recorded at zap time).
+      //   - incoming: keyed by bolt11 / amount+timestamp (recorded when the
+      //     zap-receipt subscription saw the kind:9735 / 9734).
+      const cachedIn   = incoming ? findCachedIncomingZap(p.amount, p.timestamp, p.bolt11) : null;
+      const desc       = p.description
+                       || (incoming ? (cachedIn?.comment || '') : (getCachedZapMessage(p.id) || ''));
+      const descShort  = desc.length > 28 ? desc.slice(0, 26) + '…' : desc;
+
+      const detailsHtml = expanded ? `
+        <div style="
+          margin-top:8px;padding:8px 10px;border-radius:5px;
+          background:rgba(0,0,0,0.35);
+          border:1px solid color-mix(in srgb,var(--nd-accent) 14%,transparent);
+          color:var(--nd-subtext);font-size:10px;line-height:1.55;
+        ">
+          ${desc ? `<div style="color:var(--nd-text);margin-bottom:6px;word-break:break-word;">${esc(desc)}</div>` : `<div style="opacity:0.55;margin-bottom:6px;">No message attached.</div>`}
+          <div>${incoming ? 'Received' : 'Sent'} · ${esc(new Date(p.timestamp * 1000).toLocaleString())}</div>
+          ${p.fees > 0 ? `<div>Fee: ${p.fees} sats</div>` : ''}
+          <div>Status: ${esc(p.status)}</div>
+          ${p.id ? `<div style="margin-top:4px;opacity:0.6;word-break:break-all;">id: ${esc(p.id.slice(0, 32))}${p.id.length > 32 ? '…' : ''}</div>` : ''}
+        </div>
+      ` : '';
+
       return `
-        <div class="wp-hist-row">
+        <div class="wp-hist-row" data-wp-hist-id="${esc(p.id)}" style="cursor:pointer;">
           <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
             <div style="font-size:13px;color:${color};line-height:1;flex-shrink:0;">${arrow}</div>
             <div style="flex:1;min-width:0;">
-              <div style="color:var(--nd-text);font-size:11px;font-weight:bold;">${sign}${p.amount.toLocaleString()} sats</div>
+              <div style="display:flex;align-items:baseline;gap:8px;min-width:0;">
+                <div style="color:var(--nd-text);font-size:11px;font-weight:bold;flex-shrink:0;">${sign}${p.amount.toLocaleString()} sats</div>
+                ${descShort ? `<div style="color:var(--nd-subtext);font-size:10px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.85;" title="${esc(desc)}">${esc(descShort)}</div>` : ''}
+              </div>
               <div style="color:var(--nd-subtext);font-size:9px;margin-top:1px;">${esc(ago)}${esc(feeNote)}${esc(status)}</div>
             </div>
+            <div style="color:var(--nd-subtext);font-size:9px;opacity:0.6;flex-shrink:0;">${expanded ? '▾' : '▸'}</div>
           </div>
+          ${detailsHtml}
         </div>
       `;
     }).join('');
@@ -595,6 +629,15 @@ export class WalletPanel {
         navigator.clipboard.writeText(text)
           .then(() => WalletPanel._showToast('Copied'))
           .catch(() => WalletPanel._showToast('Copy failed'));
+      });
+    });
+
+    // History row expand/collapse to show description, full timestamp, etc.
+    document.querySelectorAll<HTMLElement>('#wallet-panel [data-wp-hist-id]').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.getAttribute('data-wp-hist-id') || '';
+        WalletPanel._expandedRowId = WalletPanel._expandedRowId === id ? null : id;
+        WalletPanel._render();
       });
     });
 

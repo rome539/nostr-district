@@ -395,10 +395,10 @@ export class DMPanel {
     toast.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
         <span style="color:var(--nd-accent);font-size:13px;">\u2709</span>
-        <span style="color:var(--nd-accent);font-size:12px;font-weight:bold;">${senderName.slice(0, 24)}</span>
+        <span style="color:var(--nd-accent);font-size:12px;font-weight:bold;">${this.escapeHtml(senderName.slice(0, 24))}</span>
         <button id="dm-toast-close" style="margin-left:auto;background:none;border:none;color:var(--nd-subtext);font-size:14px;cursor:pointer;padding:0;line-height:1;">\u2715</button>
       </div>
-      <div style="color:var(--nd-text);font-size:11px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${content.slice(0, 60)}</div>
+      <div style="color:var(--nd-text);font-size:11px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHtml(content.slice(0, 60))}</div>
     `;
 
     if (!document.getElementById('dm-toast-style')) {

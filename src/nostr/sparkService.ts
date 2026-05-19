@@ -574,25 +574,68 @@ export async function createSparkInvoice(amountSats: number, description: string
   }
 }
 
-export async function sendSparkPayment(bolt11: string): Promise<boolean> {
-  if (!_sdk) return false;
+export interface SparkPaymentResult {
+  ok: boolean;
+  paymentId?: string;
+}
+
+export async function sendSparkPayment(bolt11: string): Promise<SparkPaymentResult> {
+  if (!_sdk) return { ok: false };
   try {
     const prepared = await _sdk.prepareSendPayment({ paymentRequest: bolt11 });
-    await _sdk.sendPayment({ prepareResponse: prepared });
-    return true;
+    const resp     = await _sdk.sendPayment({ prepareResponse: prepared });
+    const id       = resp?.payment?.id ?? resp?.id;
+    return { ok: true, paymentId: id ? String(id) : undefined };
   } catch (e) {
     console.error('[Spark] Failed to send payment:', e);
-    return false;
+    return { ok: false };
   }
 }
 
 export interface SparkPayment {
-  id:        string;
-  type:      'send' | 'receive';
-  status:    'completed' | 'pending' | 'failed';
-  amount:    number;        // sats
-  fees:      number;        // sats
-  timestamp: number;        // unix seconds
+  id:          string;
+  type:        'send' | 'receive';
+  status:      'completed' | 'pending' | 'failed';
+  amount:      number;        // sats
+  fees:        number;        // sats
+  timestamp:   number;        // unix seconds
+  description: string;        // payee/payer note (LNURL comment, bolt11 memo, etc.)
+  bolt11?:     string;        // BOLT11 invoice, when available — used to correlate zap-receipt cache
+}
+
+/** Pull the most descriptive text we can find from a Breez payment object. */
+function extractPaymentDescription(p: any): string {
+  const candidates: any[] = [
+    p?.description,
+    p?.details?.description,
+    p?.details?.bolt11?.description,
+    p?.details?.invoice?.description,
+    p?.details?.lnurlPay?.comment,
+    p?.details?.lnurlPay?.metadata,
+    p?.metadata?.description,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) return c.trim();
+  }
+  return '';
+}
+
+/** Find the bolt11 invoice string on a Breez payment object across known shapes. */
+function extractPaymentBolt11(p: any): string | undefined {
+  const candidates: any[] = [
+    p?.details?.bolt11?.bolt11,
+    p?.details?.bolt11?.invoice,
+    p?.details?.invoice?.bolt11,
+    p?.details?.invoice?.invoice,
+    p?.details?.invoice,
+    p?.bolt11,
+    p?.invoice,
+    p?.paymentRequest,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.toLowerCase().startsWith('ln')) return c;
+  }
+  return undefined;
 }
 
 export async function getSparkHistory(limit: number = 30): Promise<SparkPayment[] | null> {
@@ -600,12 +643,14 @@ export async function getSparkHistory(limit: number = 30): Promise<SparkPayment[
   try {
     const resp = await _sdk.listPayments({ offset: 0, limit, sortAscending: false });
     return (resp?.payments ?? []).map((p: any): SparkPayment => ({
-      id:        String(p.id ?? ''),
-      type:      p.paymentType,
-      status:    p.status,
-      amount:    Number(p.amount ?? 0n),
-      fees:      Number(p.fees ?? 0n),
-      timestamp: Number(p.timestamp ?? 0),
+      id:          String(p.id ?? ''),
+      type:        p.paymentType,
+      status:      p.status,
+      amount:      Number(p.amount ?? 0n),
+      fees:        Number(p.fees ?? 0n),
+      timestamp:   Number(p.timestamp ?? 0),
+      description: extractPaymentDescription(p),
+      bolt11:      extractPaymentBolt11(p),
     }));
   } catch (e) {
     console.error('[Spark] Failed to fetch history:', e);

@@ -7,9 +7,129 @@
  */
 
 import { authStore } from '../stores/authStore';
-import { signEvent, fetchSparkAddress } from './nostrService';
+import { signEvent, fetchSparkAddress, publishEvent } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
 import { sendSparkPayment, sparkCanCover } from './sparkService';
+
+// ── Local zap-message cache ──────────────────────────────────────────────────
+// When the user sends a zap with an attached message, NIP-57 only includes the
+// message inside the kind:9734 zap request (sent via LNURL) — the bolt11 itself
+// uses a description_hash, so the Breez wallet sees no readable description on
+// the resulting payment. Cache the message locally keyed by the Spark payment
+// id so the sender can see what they wrote in their wallet history.
+const ZAP_MSG_CACHE_KEY = 'nd_zap_messages_v1';
+const ZAP_MSG_CACHE_MAX = 200;
+
+function readZapMsgCache(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(ZAP_MSG_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function writeZapMsgCache(map: Record<string, string>): void {
+  // Trim oldest entries (by insertion order — last 200 wins) if oversized.
+  const keys = Object.keys(map);
+  if (keys.length > ZAP_MSG_CACHE_MAX) {
+    const trimmed: Record<string, string> = {};
+    keys.slice(-ZAP_MSG_CACHE_MAX).forEach(k => { trimmed[k] = map[k]; });
+    map = trimmed;
+  }
+  try { localStorage.setItem(ZAP_MSG_CACHE_KEY, JSON.stringify(map)); } catch { /* quota */ }
+}
+
+function cacheZapMessage(paymentId: string, comment: string): void {
+  if (!paymentId || !comment.trim()) return;
+  const map = readZapMsgCache();
+  map[paymentId] = comment;
+  writeZapMsgCache(map);
+}
+
+export function getCachedZapMessage(paymentId: string): string | null {
+  if (!paymentId) return null;
+  return readZapMsgCache()[paymentId] || null;
+}
+
+// ── Incoming-zap cache ───────────────────────────────────────────────────────
+// For receives we don't know the local Spark payment id ahead of time, so we
+// cache zaps by whatever correlator we can grab at receive time (bolt11 from
+// the kind:9735, the zap-request event id) plus amount+timestamp as a fallback.
+// WalletPanel queries this when rendering incoming rows.
+
+interface IncomingZapInfo {
+  comment:      string;
+  senderPubkey: string;
+  amountSats:   number;
+  ts:           number;       // unix sec
+  bolt11?:      string;
+  zapReqId?:    string;
+}
+
+const ZAP_IN_CACHE_KEY = 'nd_zap_messages_in_v1';
+const ZAP_IN_CACHE_MAX = 200;
+const ZAP_IN_TS_WINDOW = 300; // seconds — amount+ts fallback match
+
+function readZapInCache(): IncomingZapInfo[] {
+  try {
+    const raw = localStorage.getItem(ZAP_IN_CACHE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function writeZapInCache(items: IncomingZapInfo[]): void {
+  if (items.length > ZAP_IN_CACHE_MAX) items = items.slice(-ZAP_IN_CACHE_MAX);
+  try { localStorage.setItem(ZAP_IN_CACHE_KEY, JSON.stringify(items)); } catch { /* quota */ }
+}
+
+function cacheIncomingZap(info: IncomingZapInfo): void {
+  // Skip empty-comment entries unless this is the first time we're hearing
+  // about this zap (we still want a placeholder so the bolt11 can match
+  // a wallet payment, even if no comment ever arrives).
+  const items = readZapInCache();
+
+  // Merge with any existing entry for the same zapReqId or bolt11.
+  for (let i = 0; i < items.length; i++) {
+    const e = items[i];
+    const sameReq    = info.zapReqId && e.zapReqId && e.zapReqId === info.zapReqId;
+    const sameBolt11 = info.bolt11   && e.bolt11   && e.bolt11   === info.bolt11;
+    if (sameReq || sameBolt11) {
+      // Prefer the non-empty comment.
+      items[i] = {
+        ...e,
+        ...info,
+        comment: (e.comment && e.comment.trim()) ? e.comment : info.comment,
+      };
+      writeZapInCache(items);
+      return;
+    }
+  }
+
+  items.push(info);
+  writeZapInCache(items);
+}
+
+/**
+ * Find a cached incoming-zap entry for a Spark payment. Tries bolt11 first
+ * (most reliable), then falls back to amount + timestamp window.
+ */
+export function findCachedIncomingZap(
+  amountSats: number,
+  paymentTs:  number,
+  bolt11?:    string,
+): IncomingZapInfo | null {
+  const items = readZapInCache();
+  if (bolt11) {
+    const exact = items.find(i => i.bolt11 === bolt11);
+    if (exact) return exact;
+  }
+  const candidates = items.filter(i =>
+    i.amountSats === amountSats &&
+    Math.abs((i.ts || 0) - paymentTs) <= ZAP_IN_TS_WINDOW &&
+    (i.comment || '').trim().length > 0,
+  );
+  return candidates.length > 0 ? candidates[candidates.length - 1] : null;
+}
 
 // ── LNURL helpers ─────────────────────────────────────────────────────────────
 
@@ -75,7 +195,7 @@ async function buildZapRequest(
   amountMsats: number,
   comment: string,
   lnurlCallbackUrl: string,
-): Promise<string | null> {
+): Promise<any | null> {
   const auth = authStore.getState();
   if (!auth.pubkey || auth.isGuest) return null;
 
@@ -92,10 +212,8 @@ async function buildZapRequest(
     ],
   };
 
-  try {
-    const signed = await signEvent(zapRequest);
-    return JSON.stringify(signed);
-  } catch { return null; }
+  try { return await signEvent(zapRequest); }
+  catch { return null; }
 }
 
 // ── Fetch Lightning invoice ───────────────────────────────────────────────────
@@ -183,7 +301,8 @@ export async function payLightningAddress(
   // Spark (in-game wallet) — preferred when it has the funds
   if (await sparkCanCover(amountSats)) {
     onStatus?.('Paying from in-game wallet…');
-    if (await sendSparkPayment(inv.pr)) return { status: 'paid' };
+    const r = await sendSparkPayment(inv.pr);
+    if (r.ok) return { status: 'paid' };
   }
 
   if (hasWebLN()) {
@@ -294,10 +413,11 @@ export async function zapUser(
   const supportsZap = lnurlData.allowsNostr && lnurlData.nostrPubkey;
 
   onStatus?.('Building zap…');
-  let zapRequestJson: string | null = null;
+  let signedZapRequest: any | null = null;
   if (supportsZap) {
-    zapRequestJson = await buildZapRequest(recipientPubkey, amountMsats, comment, lnurlData.callback);
+    signedZapRequest = await buildZapRequest(recipientPubkey, amountMsats, comment, lnurlData.callback);
   }
+  const zapRequestJson = signedZapRequest ? JSON.stringify(signedZapRequest) : null;
 
   onStatus?.('Requesting invoice…');
   const inv = await fetchInvoice(
@@ -310,14 +430,27 @@ export async function zapUser(
   // Spark (in-game wallet) — preferred when it has the funds
   if (await sparkCanCover(amountSats)) {
     onStatus?.('Paying from in-game wallet…');
-    if (await sendSparkPayment(inv.pr)) return { status: 'paid' };
+    const r = await sendSparkPayment(inv.pr);
+    if (r.ok) {
+      // Cache the comment locally so the sender can see it in wallet history
+      // (NIP-57 puts the comment in the zap request, not the bolt11 itself).
+      if (r.paymentId && comment.trim()) cacheZapMessage(r.paymentId, comment);
+      // Publish the signed zap request to relays so the recipient's client
+      // can surface the comment even if the LNURL provider doesn't publish
+      // a proper kind:9735 zap receipt.
+      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      return { status: 'paid' };
+    }
   }
 
   // Try WebLN first
   if (hasWebLN()) {
     onStatus?.('Paying via WebLN…');
     const result = await weblnPayInvoice(inv.pr);
-    if (result.preimage) return { status: 'paid' };
+    if (result.preimage) {
+      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      return { status: 'paid' };
+    }
     if (result.error && result.error !== 'No WebLN') {
       // User cancelled — fall through to QR
     }
@@ -327,7 +460,10 @@ export async function zapUser(
   if (hasNWC()) {
     onStatus?.('Paying via wallet…');
     const result = await nwcPayInvoice(inv.pr);
-    if (result.preimage) return { status: 'paid' };
+    if (result.preimage) {
+      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      return { status: 'paid' };
+    }
     if (result.error) return { status: 'error', error: result.error };
   }
 
@@ -404,7 +540,17 @@ export function watchForPurchaseReceipt(
 
 // ── Zap receipt subscription (kind 9735) ─────────────────────────────────────
 
-const _seenZapIds = new Set<string>();
+// Tracks kind:9734 zap-request event ids we've already surfaced — used to
+// dedupe across the two paths a single zap can arrive on (raw 9734 we
+// republish ourselves, and the canonical 9735 receipt from the LNURL provider
+// which embeds the same 9734 JSON in its `description` tag). When both arrive
+// we always prefer the raw 9734, because some LNURL providers (e.g.,
+// breez.tips) strip the comment from the embedded zap request — only the raw
+// 9734 reliably carries the sender's message in its `content`.
+const _seenZapRequestIds  = new Set<string>();
+const _seenReceiptIds     = new Set<string>();
+const _pendingReceiptToasts = new Map<string, ReturnType<typeof setTimeout>>();
+const RECEIPT_DEFER_MS    = 1500;
 
 const _zapReceiptSockets: WebSocket[] = [];
 
@@ -418,20 +564,26 @@ export function subscribeToZapReceipts(
 
   const since = Math.floor(Date.now() / 1000) - 30;
 
-  const handleEvent = (ev: any) => {
-    if (_seenZapIds.has(ev.id)) return;
-    _seenZapIds.add(ev.id);
+  const handleReceipt = (ev: any) => {
+    if (_seenReceiptIds.has(ev.id)) return;
+    _seenReceiptIds.add(ev.id);
 
     let amountMsats = 0;
     const amountTag = ev.tags?.find((t: string[]) => t[0] === 'amount');
     if (amountTag?.[1]) amountMsats = parseInt(amountTag[1], 10) || 0;
 
     let senderPubkey = ev.pubkey || '';
-    let comment = '';
-    const descTag = ev.tags?.find((t: string[]) => t[0] === 'description');
+    let comment      = '';
+    let zapReqId: string | null = null;
+
+    const descTag   = ev.tags?.find((t: string[]) => t[0] === 'description');
+    const bolt11Tag = ev.tags?.find((t: string[]) => t[0] === 'bolt11');
+    const bolt11    = bolt11Tag?.[1] || undefined;
+
     if (descTag?.[1]) {
       try {
         const zapReq = JSON.parse(descTag[1]);
+        zapReqId = zapReq.id || null;
         if (zapReq.pubkey) senderPubkey = zapReq.pubkey;
         if (zapReq.content) comment = zapReq.content;
         if (!amountMsats) {
@@ -439,6 +591,72 @@ export function subscribeToZapReceipts(
           if (amt?.[1]) amountMsats = parseInt(amt[1], 10) || 0;
         }
       } catch { /* */ }
+    }
+
+    if (amountMsats <= 0) return;
+
+    // Cache for the wallet history lookup. We do this BEFORE the dedupe check
+    // so the comment + bolt11 land in the cache even when a sibling 9734
+    // already fired the toast.
+    cacheIncomingZap({
+      comment,
+      senderPubkey,
+      amountSats: Math.floor(amountMsats / 1000),
+      ts:         Number(ev.created_at) || Math.floor(Date.now() / 1000),
+      bolt11,
+      zapReqId:   zapReqId || undefined,
+    });
+
+    // If a raw 9734 with the same id already fired (and carried the real
+    // sender comment), skip the receipt's toast.
+    if (zapReqId && _seenZapRequestIds.has(zapReqId)) return;
+
+    if (!zapReqId) {
+      onZap(senderPubkey, Math.floor(amountMsats / 1000), comment);
+      return;
+    }
+
+    // Defer the receipt-driven toast briefly. If the raw 9734 (which always
+    // carries the sender's comment) lands during this window, handleZapRequest
+    // will cancel the timer and fire its own toast instead.
+    const captured = { senderPubkey, amountMsats, comment };
+    const timer = setTimeout(() => {
+      _pendingReceiptToasts.delete(zapReqId!);
+      if (_seenZapRequestIds.has(zapReqId!)) return; // 9734 fired in the meantime
+      _seenZapRequestIds.add(zapReqId!);
+      onZap(captured.senderPubkey, Math.floor(captured.amountMsats / 1000), captured.comment);
+    }, RECEIPT_DEFER_MS);
+    _pendingReceiptToasts.set(zapReqId, timer);
+  };
+
+  const handleZapRequest = (ev: any) => {
+    // Raw kind:9734 — Nostr District republishes these so the receiver sees
+    // the message even when the LNURL provider strips it from the 9735.
+    if (_seenZapRequestIds.has(ev.id)) return;
+    _seenZapRequestIds.add(ev.id);
+
+    // Cancel any deferred 9735 toast for this same zap request — we always
+    // prefer the raw 9734 because it reliably carries the sender's comment.
+    const pending = _pendingReceiptToasts.get(ev.id);
+    if (pending) { clearTimeout(pending); _pendingReceiptToasts.delete(ev.id); }
+
+    let amountMsats = 0;
+    const amountTag = ev.tags?.find((t: string[]) => t[0] === 'amount');
+    if (amountTag?.[1]) amountMsats = parseInt(amountTag[1], 10) || 0;
+
+    const senderPubkey = ev.pubkey || '';
+    const comment      = typeof ev.content === 'string' ? ev.content : '';
+
+    // Cache for the wallet history lookup (no bolt11 on raw 9734 — the
+    // amount+timestamp fallback covers this case).
+    if (amountMsats > 0) {
+      cacheIncomingZap({
+        comment,
+        senderPubkey,
+        amountSats: Math.floor(amountMsats / 1000),
+        ts:         Number(ev.created_at) || Math.floor(Date.now() / 1000),
+        zapReqId:   ev.id,
+      });
     }
 
     if (amountMsats > 0) onZap(senderPubkey, Math.floor(amountMsats / 1000), comment);
@@ -449,14 +667,19 @@ export function subscribeToZapReceipts(
     try {
       const ws = new WebSocket(relayUrl);
       _zapReceiptSockets.push(ws);
-      const sub = 'zap_recv_' + Math.random().toString(36).slice(2, 8);
+      const subR = 'zap_recv_' + Math.random().toString(36).slice(2, 8);
+      const subQ = 'zap_req_'  + Math.random().toString(36).slice(2, 8);
       ws.onopen = () => {
-        ws.send(JSON.stringify(['REQ', sub, { kinds: [9735], '#p': [pubkey], since }]));
+        ws.send(JSON.stringify(['REQ', subR, { kinds: [9735], '#p': [pubkey], since }]));
+        ws.send(JSON.stringify(['REQ', subQ, { kinds: [9734], '#p': [pubkey], since }]));
       };
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data as string);
-          if (msg[0] === 'EVENT' && msg[2]?.kind === 9735) handleEvent(msg[2]);
+          if (msg[0] !== 'EVENT') return;
+          const ev = msg[2];
+          if (ev?.kind === 9735) handleReceipt(ev);
+          else if (ev?.kind === 9734) handleZapRequest(ev);
         } catch { /* */ }
       };
     } catch { /* */ }
