@@ -104,15 +104,6 @@ async function deriveMnemonicFromSigner(signer: SignerFn): Promise<string> {
   return entropyToMnemonic(new Uint8Array(bits), wordlist);
 }
 
-// Legacy localStorage key from when we cached the mnemonic locally. We now
-// store the mnemonic exclusively on Nostr (kind:30078, NIP-44 self-encrypted),
-// but on first load after upgrading we still read any existing localStorage
-// entry once so existing users don't lose their wallet — see `migrateLegacy*`
-// in getOrDeriveMnemonic below.
-function legacyMnemonicKey(pubkeyHex: string): string {
-  return `nd_spark_mnemonic_${pubkeyHex.slice(0, 16)}`;
-}
-
 function storageDirFor(pubkeyHex: string): string {
   return `nd-spark-${pubkeyHex.slice(0, 16)}`;
 }
@@ -257,76 +248,29 @@ async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<FetchBackupRes
   }
 }
 
-/**
- * Read and clear any legacy localStorage mnemonic entry from previous versions
- * of the app that cached the mnemonic locally. We use the value once during
- * migration if Nostr has no backup yet, then delete the key — going forward
- * Nostr is the only persistent store.
- */
-function readAndClearLegacyMnemonic(pubkeyHex: string): string | null {
-  const key = legacyMnemonicKey(pubkeyHex);
-  const stored = localStorage.getItem(key);
-  if (!stored) return null;
-  localStorage.removeItem(key);
-  // Plaintext mnemonic (oldest format) — return as-is.
-  if (looksLikeMnemonic(stored)) return stored;
-  // AES-GCM encrypted blob from intermediate format — can only decrypt if
-  // we still have the user's raw nsec in memory (nsec/passkey logins).
-  // For extension/bunker users, the encrypted blob is unrecoverable; we
-  // accept the trade and treat it as no legacy data.
-  const localKey = getLocalKey();
-  if (!localKey) return null;
-  try {
-    const parsed = JSON.parse(stored);
-    if (typeof parsed?.iv !== 'string' || typeof parsed?.ct !== 'string') return null;
-    // We don't bother re-implementing the legacy decrypt here; if the user
-    // had an encrypted localStorage entry they almost certainly also have
-    // a Nostr backup (publish was attempted on every init). Skip migration.
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 async function getOrDeriveMnemonic(pubkeyHex: string, signer: SignerFn): Promise<string> {
-  // Nostr is the single source of truth. Try to load the user's encrypted
-  // backup first.
+  // Nostr is the single source of truth — no localStorage caching ever.
   const fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
 
-  if (fromNostr.status === 'found') {
-    // Clean up any leftover localStorage entry from previous app versions.
-    localStorage.removeItem(legacyMnemonicKey(pubkeyHex));
-    return fromNostr.mnemonic;
-  }
+  if (fromNostr.status === 'found') return fromNostr.mnemonic;
 
-  // CRITICAL: A backup event exists on Nostr but our NIP-44 can't decrypt it
-  // (asymmetric extension brokenness, different extension on this browser, etc.),
-  // OR the fetch failed/timed out. We MUST NOT derive a fresh mnemonic in either
-  // case — Schnorr signatures use auxiliary randomness, so the new mnemonic
-  // would differ from the canonical one, and publishing it would overwrite a
-  // valid backup with a divergent wallet ("lightning address keeps changing
-  // across browsers" footgun).
+  // A backup event exists on Nostr but our NIP-44 can't decrypt it (asymmetric
+  // extension brokenness, different extension on this browser, etc.), OR the
+  // fetch failed/timed out. We MUST NOT derive a fresh mnemonic in either case
+  // — Schnorr signatures use auxiliary randomness, so the new mnemonic would
+  // differ from the canonical one, and publishing it would overwrite a valid
+  // backup with a divergent wallet ("lightning address keeps changing across
+  // browsers" footgun).
   if (fromNostr.status === 'undecryptable') {
-    throw new Error('A wallet backup exists on Nostr but this browser cannot decrypt it. The Nostr extension on this browser may not implement NIP-44 the same way. Try logging in with your nsec directly, or with a different extension.');
+    throw new Error('A wallet backup exists on Nostr but this browser cannot decrypt it. Try logging in with your nsec directly, or with a different extension.');
   }
   if (fromNostr.status === 'error') {
     throw new Error('Could not reach Nostr relays to load wallet backup. Check your connection and try again.');
   }
 
-  // status === 'no-event': definitely no backup on Nostr.
-  // Migration path: if an older version of this app cached a mnemonic in
-  // localStorage and never successfully published it to Nostr, adopt that
-  // mnemonic and publish it as canonical instead of deriving a fresh one.
-  const legacyLocal = readAndClearLegacyMnemonic(pubkeyHex);
-  if (legacyLocal) {
-    console.log('[Spark] Migrating legacy localStorage mnemonic to Nostr');
-    await publishEncryptedMnemonic(legacyLocal, pubkeyHex, signer);
-    return legacyLocal;
-  }
-
-  // Truly first time anywhere — derive from signer, publish to Nostr.
-  // The publish MUST succeed; otherwise on next reload we'd derive a different
-  // mnemonic (Schnorr non-determinism) and effectively lose this wallet.
+  // status === 'no-event': truly first time anywhere. Derive from signer,
+  // publish to Nostr. The publish MUST succeed; otherwise on next reload we'd
+  // derive a different mnemonic (Schnorr non-determinism) and lose this wallet.
   const mnemonic = await deriveMnemonicFromSigner(signer);
   const published = await publishEncryptedMnemonic(mnemonic, pubkeyHex, signer);
   if (!published) {
@@ -414,15 +358,12 @@ async function _doInit(pubkeyHex: string, signer: SignerFn): Promise<void> {
   }
 }
 
-export async function disconnectSparkWallet(pubkeyHex?: string): Promise<void> {
+export async function disconnectSparkWallet(_pubkeyHex?: string): Promise<void> {
   _initPromise = null;
   if (_sdk) {
     try { await _sdk.disconnect(); } catch {}
     _sdk = null;
   }
-  // The mnemonic isn't cached locally anymore — Nostr is the only store — but
-  // clean up any leftover key from older app versions.
-  if (pubkeyHex) localStorage.removeItem(legacyMnemonicKey(pubkeyHex));
 }
 
 // ── Lightning address ─────────────────────────────────────────────────────────
