@@ -16,6 +16,8 @@ import {
   sendSparkToLightningAddress,
   getSparkHistory,
   getSparkSdk,
+  getSparkInitError,
+  getSparkInitPromise,
   onSparkPayment,
   type SparkPayment,
 } from '../nostr/sparkService';
@@ -87,6 +89,18 @@ export class WalletPanel {
 
     WalletPanel._refresh();
     WalletPanel._refreshHistory();
+
+    // If the wallet is still initializing, re-render once it settles so the
+    // user doesn't see "initializing..." forever when init has actually failed.
+    const initP = getSparkInitPromise();
+    if (initP) {
+      initP.finally(() => {
+        if (document.getElementById(PANEL_ID)) {
+          WalletPanel._refresh();
+          WalletPanel._refreshHistory();
+        }
+      });
+    }
 
     // Live-update balance + history whenever a payment event fires
     WalletPanel.unsubPayment = onSparkPayment(() => {
@@ -163,9 +177,10 @@ export class WalletPanel {
       display:flex;flex-direction:column;overflow:hidden;
     `;
 
-    const sdk = getSparkSdk();
-    const ready = !!sdk;
-    const auth = authStore.getState();
+    const sdk      = getSparkSdk();
+    const initErr  = getSparkInitError();
+    const ready    = !!sdk;
+    const auth     = authStore.getState();
 
     panel.innerHTML = `
       <!-- Header -->
@@ -179,7 +194,7 @@ export class WalletPanel {
 
       ${ready ? WalletPanel._renderTabs() : ''}
 
-      ${!ready ? WalletPanel._renderNotReady(auth.isGuest) : WalletPanel._renderBody()}
+      ${!ready ? WalletPanel._renderNotReady(auth.isGuest, initErr) : WalletPanel._renderBody()}
 
       ${WalletPanel._toast ? `<div class="wp-toast">${esc(WalletPanel._toast)}</div>` : ''}
     `;
@@ -204,15 +219,37 @@ export class WalletPanel {
     `;
   }
 
-  private static _renderNotReady(isGuest: boolean): string {
-    const msg = isGuest
-      ? 'Guest accounts don\'t have a wallet.\nCreate an account to get one automatically.'
-      : 'Wallet is initializing...\nThis usually takes a few seconds.';
+  private static _renderNotReady(isGuest: boolean, initErr: string | null): string {
+    if (isGuest) {
+      return `
+        <div style="
+          padding:28px 12px;text-align:center;color:var(--nd-subtext);
+          font-size:11px;line-height:1.8;white-space:pre-line;
+        ">${esc('Guest accounts don\'t have a wallet.\nCreate an account to get one automatically.')}</div>
+      `;
+    }
+    if (initErr) {
+      return `
+        <div style="
+          margin:14px 4px 6px;padding:14px 14px 12px;
+          border:1px solid color-mix(in srgb,#f0b040 35%,transparent);
+          background:color-mix(in srgb,#f0b040 8%,transparent);
+          border-radius:8px;
+          color:var(--nd-text);font-size:11px;line-height:1.65;
+        ">
+          <div style="
+            color:#f0b040;font-weight:bold;letter-spacing:0.08em;
+            font-size:11px;margin-bottom:8px;
+          ">⚠ Wallet unavailable</div>
+          <div style="color:color-mix(in srgb,var(--nd-text) 85%,transparent);">${esc(initErr)}</div>
+        </div>
+      `;
+    }
     return `
       <div style="
         padding:28px 12px;text-align:center;color:var(--nd-subtext);
         font-size:11px;line-height:1.8;white-space:pre-line;
-      ">${esc(msg)}</div>
+      ">${esc('Wallet is initializing...\nThis usually takes a few seconds.')}</div>
     `;
   }
 

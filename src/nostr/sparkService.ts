@@ -397,6 +397,14 @@ export function getSparkSdk(): any {
   return _sdk;
 }
 
+// Last init error message (user-facing). Cleared on successful init / disconnect.
+let _initError: string | null = null;
+export function getSparkInitError(): string | null { return _initError; }
+
+// Returns the current in-flight init promise (if any) so the UI can re-render
+// when it settles. Returns null if init hasn't been kicked off yet or is done.
+export function getSparkInitPromise(): Promise<void> | null { return _initPromise; }
+
 export function initSparkWallet(pubkeyHex: string, signer: SignerFn): Promise<void> {
   console.log('[Spark] initSparkWallet called');
   if (_initPromise) { console.log('[Spark] already initializing'); return _initPromise; }
@@ -405,9 +413,11 @@ export function initSparkWallet(pubkeyHex: string, signer: SignerFn): Promise<vo
 }
 
 async function _doInit(pubkeyHex: string, signer: SignerFn): Promise<void> {
+  _initError = null;
   console.log('[Spark] API key present:', !!BREEZ_API_KEY, 'length:', BREEZ_API_KEY?.length ?? 0);
   if (!BREEZ_API_KEY) {
     console.warn('[Spark] VITE_BREEZ_API_KEY not set — skipping wallet init');
+    _initError = 'Wallet is unavailable in this build (no API key configured).';
     return;
   }
   try {
@@ -466,12 +476,14 @@ async function _doInit(pubkeyHex: string, signer: SignerFn): Promise<void> {
     console.log('[Spark] Wallet connected');
   } catch (e) {
     _initPromise = null; // allow retry on next login
+    _initError = (e as Error)?.message || String(e) || 'Wallet failed to initialize.';
     console.error('[Spark] Failed to init wallet:', e);
   }
 }
 
 export async function disconnectSparkWallet(_pubkeyHex?: string): Promise<void> {
   _initPromise = null;
+  _initError = null;
   if (_sdk) {
     try { await _sdk.disconnect(); } catch {}
     _sdk = null;
