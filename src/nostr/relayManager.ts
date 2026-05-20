@@ -18,15 +18,18 @@
 /**
  * Base URL for the relay proxy, or null for direct connections.
  *
- * Set VITE_RELAY_PROXY="" (empty string) in Cloudflare Pages environment
- * variables to enable the /api/relay Worker proxy.
- * Leave unset (or any non-empty value) for direct relay connections.
+ * Enable the /api/relay Worker proxy by setting `VITE_RELAY_PROXY` to any
+ * truthy value (e.g. "1", "true", "on") in your Cloudflare Pages production
+ * environment. Leave the variable unset, or set to "0" / "false" / "off"
+ * to keep direct relay connections (the same behavior every other Nostr
+ * web client uses by default).
  */
 const RELAY_PROXY_BASE: string | null = (() => {
   if (!import.meta.env.PROD) return null;
-  const env = import.meta.env.VITE_RELAY_PROXY as string | undefined;
-  if (env !== '') return null; // unset or non-empty → direct
-  // Empty string → Cloudflare Pages mode: use /api/relay on this host
+  const raw = (import.meta.env.VITE_RELAY_PROXY as string | undefined) ?? '';
+  const flag = raw.trim().toLowerCase();
+  const enabled = flag === '1' || flag === 'true' || flag === 'on' || flag === 'yes';
+  if (!enabled) return null;
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}`;
 })();
