@@ -46,7 +46,6 @@ export const DM_RELAYS = [
   'wss://relay.primal.net',
   'wss://offchain.pub',
   'wss://relay.0xchat.com',
-  'wss://nostr21.com',
 ];
 
 export const DEFAULT_RELAYS = [
@@ -69,6 +68,12 @@ export const DEFAULT_RELAYS = [
   'wss://relay.fountain.fm',
 ];
 
+// If a proxied relay opens then closes within this window, treat it as a
+// proxy-side rejection (some operators block Cloudflare egress IPs after
+// accepting the handshake) and fall back to a direct connection for the
+// rest of the session.
+const PROXY_FLAP_WINDOW_MS = 3000;
+
 interface ManagedRelay {
   url: string;
   ws: WebSocket | null;
@@ -77,6 +82,7 @@ interface ManagedRelay {
   keepaliveTimer: ReturnType<typeof setInterval> | null;
   isDMRelay: boolean;
   useDirect: boolean; // true after proxy fails — use direct connection
+  openedAt?: number;  // timestamp of last successful onopen (for flap detection)
   pingSubId?: string;
   pingStart?: number;
   latencyMs?: number;
@@ -181,6 +187,7 @@ export class RelayManager {
     relay.ws.onopen = () => {
       console.log(`[Relay] Connected: ${relay.url}`);
       relay.backoff = 1000; // reset backoff on successful connection
+      relay.openedAt = Date.now();
       this.updateConnectedCount();
 
       // Start keepalive ping every 30s
@@ -279,6 +286,20 @@ export class RelayManager {
         clearInterval(relay.keepaliveTimer);
         relay.keepaliveTimer = null;
       }
+
+      // Proxy flap detection: if we connected via the proxy and the socket
+      // closed almost immediately after opening, the upstream relay is
+      // likely rejecting our Cloudflare egress IP. Drop to a direct
+      // connection on the next attempt instead of looping forever.
+      const wasProxied = !relay.useDirect && RELAY_PROXY_BASE !== null;
+      const openMs = relay.openedAt ? Date.now() - relay.openedAt : Infinity;
+      if (wasProxied && openMs < PROXY_FLAP_WINDOW_MS) {
+        console.log(`[Relay] Proxy flap for ${relay.url} (${openMs}ms) — falling back to direct`);
+        relay.useDirect = true;
+        relay.backoff = 1000; // retry direct immediately, don't punish with backoff
+      }
+
+      relay.openedAt = undefined;
       relay.ws = null;
       this.updateConnectedCount();
       this.scheduleReconnect(relay);
