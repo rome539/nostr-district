@@ -435,6 +435,25 @@ export async function zapUser(
       // Cache the comment locally so the sender can see it in wallet history
       // (NIP-57 puts the comment in the zap request, not the bolt11 itself).
       if (r.paymentId && comment.trim()) cacheZapMessage(r.paymentId, comment);
+      // FUTURE: encrypt the zap comment before relay publish.
+      // Currently the kind:9734 we publish to relays carries the comment in
+      // plaintext, so anyone watching the sender's events can read it. This
+      // matches every other Nostr zap client today, but we could do better:
+      //   1. Keep the LNURL-POSTed 9734 plaintext (NIP-57 compliance — breez.tips
+      //      uses its content for description_hash and may include it in 9735).
+      //   2. Build a SECOND 9734 with content = NIP-44(comment, recipientPubkey)
+      //      and tags += [['encrypted','nip44'], ['bolt11', inv.pr]]. Publish
+      //      that one to relays instead of the plaintext copy.
+      //   3. Receiver's handleZapRequest checks for the encrypted tag and
+      //      decrypts via signer; falls back to plaintext for external senders.
+      //   4. Switch dedupe primary key to bolt11 (the 9735 receipt has the
+      //      same bolt11 tag, so cross-correlation still works even though the
+      //      encrypted 9734's event id differs from the LNURL-POSTed one).
+      // Partial privacy only — if breez.tips publishes the 9735 with the
+      // plaintext 9734 embedded in `description`, the comment leaks via that
+      // path regardless of what we do here. Worth shipping when we have data
+      // on actual zap traffic / message sensitivity.
+      //
       // Publish the signed zap request to relays so the recipient's client
       // can surface the comment even if the LNURL provider doesn't publish
       // a proper kind:9735 zap receipt.

@@ -67,8 +67,17 @@ let lastSentX = 0;
 let lastSentY = 0;
 let currentRoom = 'hub';
 let presenceReady = false; // true once the server's initial players list arrives
+// Track consecutive failed connects so we can swap the loading overlay for a
+// clear outage notice after the first failure or two — instead of leaving the
+// user staring at "CONNECTING…" forever during a presence-server outage.
+let consecutiveFailures = 0;
+let connectTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectTimer:      ReturnType<typeof setTimeout> | null = null;
+const CONNECT_TIMEOUT_MS = 10000;     // give up on a connect attempt after this
+const OUTAGE_AFTER_FAILURES = 2;       // show outage UI once we've failed this many times
 
 function showLoadingOverlay(): void {
+  hideOutageOverlay();
   let el = document.getElementById('ps-loading');
   if (!el) {
     el = document.createElement('div');
@@ -110,6 +119,66 @@ function hideLoadingOverlay(): void {
   el.style.display = 'none';
 }
 
+function showOutageOverlay(): void {
+  hideLoadingOverlay();
+  let el = document.getElementById('ps-outage');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ps-outage';
+    // Non-blocking: pointer-events:none on the wrapper so the user can still
+    // access wallet/DM/settings panels underneath if they want. The card
+    // itself re-enables pointer events so its (future) close button works.
+    el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:none;';
+    el.innerHTML = `
+      <div style="
+        background:linear-gradient(180deg,#0a0a14 0%,#0f1024 100%);
+        border:1px solid color-mix(in srgb,#f0b040 35%,transparent);
+        box-shadow:0 12px 40px rgba(0,0,0,0.7), 0 0 24px color-mix(in srgb,#f0b040 18%,transparent);
+        border-radius:10px;
+        padding:18px 22px 16px;
+        font-family:'Courier New',monospace;
+        color:#f0e8d4;
+        font-size:11.5px;line-height:1.65;
+        width:min(420px,94vw);
+        pointer-events:auto;
+      ">
+        <div style="
+          color:#f0b040;font-weight:bold;letter-spacing:0.12em;text-transform:uppercase;
+          font-size:11px;margin-bottom:10px;display:flex;align-items:center;gap:8px;
+        ">
+          <span id="ps-outage-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#f0b040;"></span>
+          District Server Unreachable
+        </div>
+        <div style="margin-bottom:8px;">
+          The game world can't be reached right now. This is an issue with the presence server — <strong>not your wallet, identity, or Nostr data</strong>, all of which are unaffected.
+        </div>
+        <div style="color:color-mix(in srgb,#f0e8d4 65%,transparent);font-size:10.5px;">
+          Auto-retrying in the background. This page will load automatically when the server comes back. You can leave the tab open.
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    let bright = true;
+    (el as any)._pulse = setInterval(() => {
+      const dot = document.getElementById('ps-outage-dot');
+      if (dot) { dot.style.opacity = bright ? '1' : '0.25'; bright = !bright; }
+    }, 600);
+  }
+  el.style.display = 'flex';
+}
+
+function hideOutageOverlay(): void {
+  const el = document.getElementById('ps-outage') as any;
+  if (!el) return;
+  if (el._pulse) { clearInterval(el._pulse); el._pulse = null; }
+  el.style.display = 'none';
+}
+
+function backoffDelayMs(failures: number): number {
+  // 3s, 6s, 12s, 24s, capped at 30s
+  const base = 3000 * Math.pow(2, Math.max(0, failures - 1));
+  return Math.min(base, 30000);
+}
+
 export function getCurrentRoom(): string { return currentRoom; }
 export function isPresenceReady(): boolean { return presenceReady; }
 
@@ -121,23 +190,53 @@ export function connectPresence(cb: PresenceCallback): void {
     }
     ws = null;
   }
+  if (reconnectTimer)      { clearTimeout(reconnectTimer);      reconnectTimer      = null; }
+  if (connectTimeoutTimer) { clearTimeout(connectTimeoutTimer); connectTimeoutTimer = null; }
 
   callbacks = cb;
   presenceReady = false;
-  showLoadingOverlay();
+
+  // Once we've already failed enough times to be confident this is an outage
+  // (not a brief network blip), keep the outage card up across retries instead
+  // of flickering back to the CONNECTING spinner.
+  if (consecutiveFailures >= OUTAGE_AFTER_FAILURES) showOutageOverlay();
+  else                                              showLoadingOverlay();
+
+  // Mark this attempt as failed if we don't successfully open within the timeout.
+  // Without this, a presence server that accepts but never responds (or a DNS
+  // black hole) would leave the user staring at "CONNECTING" forever.
+  let opened = false;
+  const fail = () => {
+    if (opened) return;
+    consecutiveFailures++;
+    console.warn(`[Presence] Connect attempt failed (${consecutiveFailures})`);
+    if (consecutiveFailures >= OUTAGE_AFTER_FAILURES) showOutageOverlay();
+    try { ws?.close(); } catch { /* */ }
+    ws = null;
+    const delay = backoffDelayMs(consecutiveFailures);
+    reconnectTimer = setTimeout(() => {
+      if (callbacks) connectPresence(callbacks);
+    }, delay);
+  };
+  connectTimeoutTimer = setTimeout(fail, CONNECT_TIMEOUT_MS);
 
   try {
     ws = new WebSocket(
-  import.meta.env.PROD
-    ? 'wss://relay.thedistrict.online'
-    : 'ws://localhost:3100'
-);
+      import.meta.env.PROD
+        ? 'wss://relay.thedistrict.online'
+        : 'ws://localhost:3100'
+    );
   } catch (e) {
-    console.warn('[Presence] Could not connect to server');
+    console.warn('[Presence] Could not construct WebSocket', e);
+    fail();
     return;
   }
 
   ws.onopen = () => {
+    opened = true;
+    consecutiveFailures = 0;
+    if (connectTimeoutTimer) { clearTimeout(connectTimeoutTimer); connectTimeoutTimer = null; }
+    hideOutageOverlay();
     console.log('[Presence] Connected');
     presenceReady = false;
     const state = authStore.getState();
@@ -193,13 +292,29 @@ export function connectPresence(cb: PresenceCallback): void {
     } catch (e) {}
   };
 
+  ws.onerror = () => {
+    // onerror always precedes onclose; let onclose drive the recovery logic.
+    console.warn('[Presence] WebSocket error');
+  };
+
   ws.onclose = () => {
     console.log('[Presence] Disconnected');
+    if (connectTimeoutTimer) { clearTimeout(connectTimeoutTimer); connectTimeoutTimer = null; }
+    if (!opened) {
+      // Closed before we ever opened — count as a failed connect and back off.
+      fail();
+      return;
+    }
+    // Was connected, then dropped. Treat as a fresh failure cycle for backoff,
+    // but only show the outage UI after we miss multiple reconnects in a row.
     if (callbacks) {
       callbacks.onDisconnect?.();
-      setTimeout(() => {
+      consecutiveFailures++;
+      if (consecutiveFailures >= OUTAGE_AFTER_FAILURES) showOutageOverlay();
+      const delay = backoffDelayMs(consecutiveFailures);
+      reconnectTimer = setTimeout(() => {
         if (callbacks) connectPresence(callbacks);
-      }, 3000);
+      }, delay);
     }
   };
 }
