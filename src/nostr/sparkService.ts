@@ -70,6 +70,43 @@ function _emitPayment(e: SparkPaymentEvent): void {
   _paymentListeners.forEach(cb => { try { cb(e); } catch { /* ignore */ } });
 }
 
+// ── Spark reachability ────────────────────────────────────────────────────────
+// Flips to false when an SDK call fails in a way that looks like a Spark
+// network outage (CORS preflight 403 on Lightspark, auth-service errors,
+// generic fetch "Load failed"). Flips back to true on the next successful
+// SDK call. The wallet UI subscribes to this so it can show "Lightning
+// network temporarily unavailable" instead of letting users hit Send and
+// wait for a cryptic SDK error.
+
+let _sparkReachable = true;
+const _reachabilityListeners = new Set<(reachable: boolean) => void>();
+
+export function isSparkReachable(): boolean { return _sparkReachable; }
+
+export function onSparkReachabilityChange(cb: (reachable: boolean) => void): () => void {
+  _reachabilityListeners.add(cb);
+  return () => { _reachabilityListeners.delete(cb); };
+}
+
+function _setReachable(next: boolean): void {
+  if (next === _sparkReachable) return;
+  _sparkReachable = next;
+  _reachabilityListeners.forEach(cb => { try { cb(next); } catch { /* ignore */ } });
+}
+
+/** Heuristic: does this thrown error look like a Spark-network outage? */
+function _looksLikeOutage(e: any): boolean {
+  const msg = String(e?.message ?? e ?? '').toLowerCase();
+  return (
+    msg.includes('service provider error') ||
+    msg.includes('authentication error')   ||
+    msg.includes('network error')          ||
+    msg.includes('load failed')            ||
+    msg.includes('access control')         ||
+    msg.includes('cors')
+  );
+}
+
 // ── Byte helpers ──────────────────────────────────────────────────────────────
 
 function hexToBytes(h: string): Uint8Array {
@@ -555,8 +592,10 @@ export async function getSparkBalance(): Promise<number | null> {
   if (!_sdk) return null;
   try {
     const info = await _sdk.getInfo({});
+    _setReachable(true);
     return info?.balanceSats ?? null;
-  } catch {
+  } catch (e) {
+    if (_looksLikeOutage(e)) _setReachable(false);
     return null;
   }
 }
@@ -567,8 +606,10 @@ export async function createSparkInvoice(amountSats: number, description: string
     const paymentMethod: any = { type: 'bolt11Invoice', description };
     if (amountSats > 0) paymentMethod.amountSats = amountSats;
     const result = await _sdk.receivePayment({ paymentMethod });
+    _setReachable(true);
     return result?.paymentRequest ?? null;
   } catch (e) {
+    if (_looksLikeOutage(e)) _setReachable(false);
     console.error('[Spark] Failed to create invoice:', e);
     return null;
   }
@@ -584,9 +625,11 @@ export async function sendSparkPayment(bolt11: string): Promise<SparkPaymentResu
   try {
     const prepared = await _sdk.prepareSendPayment({ paymentRequest: bolt11 });
     const resp     = await _sdk.sendPayment({ prepareResponse: prepared });
+    _setReachable(true);
     const id       = resp?.payment?.id ?? resp?.id;
     return { ok: true, paymentId: id ? String(id) : undefined };
   } catch (e) {
+    if (_looksLikeOutage(e)) _setReachable(false);
     console.error('[Spark] Failed to send payment:', e);
     return { ok: false };
   }
@@ -642,6 +685,7 @@ export async function getSparkHistory(limit: number = 30): Promise<SparkPayment[
   if (!_sdk) return null;
   try {
     const resp = await _sdk.listPayments({ offset: 0, limit, sortAscending: false });
+    _setReachable(true);
     return (resp?.payments ?? []).map((p: any): SparkPayment => ({
       id:          String(p.id ?? ''),
       type:        p.paymentType,
@@ -653,6 +697,7 @@ export async function getSparkHistory(limit: number = 30): Promise<SparkPayment[
       bolt11:      extractPaymentBolt11(p),
     }));
   } catch (e) {
+    if (_looksLikeOutage(e)) _setReachable(false);
     console.error('[Spark] Failed to fetch history:', e);
     return null;
   }
@@ -741,9 +786,11 @@ export async function sendSparkToLightningAddress(
 
   try {
     const resp = await _sdk.sendPayment({ prepareResponse: prepared });
+    _setReachable(true);
     const id   = resp?.payment?.id ?? resp?.id;
     return { ok: true, feeSats, paymentId: id ? String(id) : undefined };
   } catch (e: any) {
+    if (_looksLikeOutage(e)) _setReachable(false);
     console.error('[Spark] sendPayment failed:', e);
     return { ok: false, error: e?.message || 'Payment failed' };
   }

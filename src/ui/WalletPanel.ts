@@ -19,6 +19,8 @@ import {
   getSparkInitError,
   getSparkInitPromise,
   onSparkPayment,
+  isSparkReachable,
+  onSparkReachabilityChange,
   type SparkPayment,
 } from '../nostr/sparkService';
 import { getCachedZapMessage, findCachedIncomingZap, cacheZapMessage } from '../nostr/zapService';
@@ -50,6 +52,7 @@ function makeQrSvg(data: string): string {
 export class WalletPanel {
   private static escHandler:  ((e: KeyboardEvent) => void) | null = null;
   private static unsubPayment: (() => void) | null = null;
+  private static unsubReachability: (() => void) | null = null;
   private static _tab:        Tab = 'balance';
   private static _balance:    number | null = null;
   private static _lnAddress:  string | null = null;
@@ -110,6 +113,13 @@ export class WalletPanel {
       WalletPanel._refresh();
       WalletPanel._refreshHistory();
     });
+
+    // Toggle the outage banner + send-button enabled state in place when
+    // reachability flips, so the user sees the status without losing
+    // whatever they were typing into the send form.
+    WalletPanel.unsubReachability = onSparkReachabilityChange(() => {
+      WalletPanel._applyReachability();
+    });
   }
 
   static destroy(): void {
@@ -122,6 +132,10 @@ export class WalletPanel {
     if (WalletPanel.unsubPayment) {
       WalletPanel.unsubPayment();
       WalletPanel.unsubPayment = null;
+    }
+    if (WalletPanel.unsubReachability) {
+      WalletPanel.unsubReachability();
+      WalletPanel.unsubReachability = null;
     }
     if (WalletPanel._toastTimer) { clearTimeout(WalletPanel._toastTimer); WalletPanel._toastTimer = null; }
   }
@@ -202,9 +216,16 @@ export class WalletPanel {
         <button id="wp-close" class="wp-close-btn">×</button>
       </div>
 
-      ${ready ? WalletPanel._renderTabs() : ''}
+      ${ready ? WalletPanel._renderOutageBanner() : ''}
 
-      ${!ready ? WalletPanel._renderNotReady(auth.isGuest, initErr) : WalletPanel._renderBody()}
+      <!-- Everything below the banner gets greyed out + click-blocked when
+           Spark is unreachable, so users can see the panel state at a glance
+           and don't bounce off random buttons that will silently fail. -->
+      <div id="wp-content" style="${WalletPanel._contentInlineStyle()}">
+        ${ready ? WalletPanel._renderTabs() : ''}
+
+        ${!ready ? WalletPanel._renderNotReady(auth.isGuest, initErr) : WalletPanel._renderBody()}
+      </div>
 
       ${WalletPanel._toast
           ? (WalletPanel._toastWithBolt
@@ -215,6 +236,53 @@ export class WalletPanel {
 
     document.body.appendChild(panel);
     WalletPanel._bindEvents();
+  }
+
+  /**
+   * Slim banner shown above the tabs when Spark looks unreachable. Always
+   * present in the DOM (with display toggled via `_applyReachability`) so we
+   * can update it in place without re-rendering the whole panel and wiping
+   * what the user is typing into the send form.
+   */
+  private static _renderOutageBanner(): string {
+    const offline = !isSparkReachable();
+    return `
+      <div id="wp-outage-banner" style="
+        display:${offline ? 'block' : 'none'};
+        margin-bottom:10px;flex-shrink:0;
+        background:color-mix(in srgb,#ff7070 12%,transparent);
+        border:1px solid color-mix(in srgb,#ff7070 40%,transparent);
+        border-radius:6px;padding:8px 10px;
+        font-size:10px;line-height:1.45;color:#ffb3b3;
+      ">
+        Lightning network temporarily unreachable. Your sats are safe — try again in a moment.
+      </div>
+    `;
+  }
+
+  /** Inline style for `#wp-content` — greyed + click-blocked when offline. */
+  private static _contentInlineStyle(): string {
+    const offline = !isSparkReachable();
+    return offline
+      ? 'opacity:0.4;pointer-events:none;filter:saturate(0.5);transition:opacity 0.15s ease;'
+      : 'opacity:1;pointer-events:auto;filter:none;transition:opacity 0.15s ease;';
+  }
+
+  /**
+   * Toggle the outage banner + content-greyout state in place. Called whenever
+   * reachability flips; avoids a full re-render so the user keeps anything
+   * they were typing into the send form.
+   */
+  private static _applyReachability(): void {
+    const offline = !isSparkReachable();
+    const banner = document.getElementById('wp-outage-banner');
+    if (banner) banner.style.display = offline ? 'block' : 'none';
+
+    const content = document.getElementById('wp-content');
+    if (content) content.setAttribute('style', WalletPanel._contentInlineStyle());
+
+    const sendBtn = document.getElementById('wp-send-go') as HTMLButtonElement | null;
+    if (sendBtn && !WalletPanel._busy) sendBtn.disabled = offline;
   }
 
   private static _renderTabs(): string {
@@ -393,7 +461,7 @@ export class WalletPanel {
             Sent to the recipient if their Lightning provider supports comments.
           </div>
         </div>
-        <button id="wp-send-go" class="wp-btn wp-btn-accent" ${WalletPanel._busy ? 'disabled' : ''} style="padding:10px;font-size:11px;">
+        <button id="wp-send-go" class="wp-btn wp-btn-accent" ${(WalletPanel._busy || !isSparkReachable()) ? 'disabled' : ''} style="padding:10px;font-size:11px;">
           ${WalletPanel._busy ? 'SENDING...' : 'SEND PAYMENT'}
         </button>
       </div>
