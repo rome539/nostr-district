@@ -20,7 +20,9 @@ const SUPPORTED_PROTOCOLS = new Set(['ws:', 'wss:']);
 
 const httpResponse = (body, status) => new Response(body, { status });
 
-export async function onRequest({ request }) {
+export async function onRequest(context) {
+  const { request } = context;
+
   // Browsers must announce a WebSocket upgrade. Anything else is the
   // wrong endpoint and gets a clear 426 instead of a confusing 200.
   const upgrade = (request.headers.get('Upgrade') || '').toLowerCase();
@@ -47,7 +49,14 @@ export async function onRequest({ request }) {
   // Wire up bidirectional forwarding. The first few client frames can
   // arrive before the upstream handshake completes, so we hold them in
   // a small outbox and flush as soon as we're connected.
-  bridgeSockets(inward, upstream);
+  //
+  // `context.waitUntil` keeps the Worker alive until both sockets are
+  // closed. Without this, Cloudflare can recycle the isolate after the
+  // 101 response is returned, and long-lived subscriptions on quiet
+  // relays (e.g. relay.coinos.io) get their forwarding handlers killed
+  // mid-flight — which is what the flapping symptom in production was.
+  const bridgeLifetime = bridgeSockets(inward, upstream);
+  if (context.waitUntil) context.waitUntil(bridgeLifetime);
 
   return new Response(null, { status: 101, webSocket: outward });
 }
@@ -82,53 +91,64 @@ function resolveUpstreamTarget(incomingUrl) {
  * Pump frames between the browser-facing socket and the upstream relay
  * socket. Handles the pre-open buffering of client → upstream frames and
  * propagates close / error events symmetrically.
+ *
+ * Returns a Promise that resolves once the bridge has fully torn down.
+ * Hand this to `context.waitUntil` so the Worker isolate is kept alive
+ * for the whole WebSocket lifetime rather than only until the 101.
  */
 function bridgeSockets(local, remote) {
-  const queuedBeforeOpen = [];
-  let remoteReady = false;
+  return new Promise((resolve) => {
+    const queuedBeforeOpen = [];
+    let remoteReady = false;
+    let settled = false;
 
-  // Close helpers — Workers throws if you call close() on an already-closed
-  // socket, so we always wrap in try/catch.
-  const safeClose = (sock, code, reason) => {
-    try { sock.close(code, reason); } catch { /* already gone */ }
-  };
-  const tearDown = (code, reason) => {
-    safeClose(local,  code, reason);
-    safeClose(remote, code, reason);
-  };
+    // Close helpers — Workers throws if you call close() on an already-closed
+    // socket, so we always wrap in try/catch.
+    const safeClose = (sock, code, reason) => {
+      try { sock.close(code, reason); } catch { /* already gone */ }
+    };
+    const tearDown = (code, reason) => {
+      safeClose(local,  code, reason);
+      safeClose(remote, code, reason);
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
 
-  // Local → Remote. Buffer until the upstream handshake completes,
-  // then drain in arrival order on 'open'.
-  local.addEventListener('message', (e) => {
-    if (remoteReady && remote.readyState === WebSocket.OPEN) {
-      try { remote.send(e.data); } catch { /* remote dropped */ }
-    } else {
-      queuedBeforeOpen.push(e.data);
-    }
+    // Local → Remote. Buffer until the upstream handshake completes,
+    // then drain in arrival order on 'open'.
+    local.addEventListener('message', (e) => {
+      if (remoteReady && remote.readyState === WebSocket.OPEN) {
+        try { remote.send(e.data); } catch { /* remote dropped */ }
+      } else {
+        queuedBeforeOpen.push(e.data);
+      }
+    });
+
+    remote.addEventListener('open', () => {
+      remoteReady = true;
+      while (queuedBeforeOpen.length > 0) {
+        const next = queuedBeforeOpen.shift();
+        try { remote.send(next); } catch { /* remote dropped mid-flush */ break; }
+      }
+    });
+
+    // Remote → Local. No buffering needed — `local.accept()` has already
+    // run, so it's ready to receive immediately.
+    remote.addEventListener('message', (e) => {
+      if (local.readyState === WebSocket.OPEN) {
+        try { local.send(e.data); } catch { /* local dropped */ }
+      }
+    });
+
+    // Mirror close events both ways so neither side is left dangling.
+    local.addEventListener('close',  (e) => tearDown(e.code, e.reason));
+    remote.addEventListener('close', (e) => tearDown(e.code, e.reason));
+
+    // Errors on either side terminate the bridge with an "internal error"
+    // close code so the other side can decide whether to retry.
+    local.addEventListener('error',  () => tearDown(1011, 'Browser-side socket error'));
+    remote.addEventListener('error', () => tearDown(1011, 'Upstream relay socket error'));
   });
-
-  remote.addEventListener('open', () => {
-    remoteReady = true;
-    while (queuedBeforeOpen.length > 0) {
-      const next = queuedBeforeOpen.shift();
-      try { remote.send(next); } catch { /* remote dropped mid-flush */ break; }
-    }
-  });
-
-  // Remote → Local. No buffering needed — `local.accept()` has already
-  // run, so it's ready to receive immediately.
-  remote.addEventListener('message', (e) => {
-    if (local.readyState === WebSocket.OPEN) {
-      try { local.send(e.data); } catch { /* local dropped */ }
-    }
-  });
-
-  // Mirror close events both ways so neither side is left dangling.
-  local.addEventListener('close',  (e) => tearDown(e.code, e.reason));
-  remote.addEventListener('close', (e) => tearDown(e.code, e.reason));
-
-  // Errors on either side terminate the bridge with an "internal error"
-  // close code so the other side can decide whether to retry.
-  local.addEventListener('error',  () => tearDown(1011, 'Browser-side socket error'));
-  remote.addEventListener('error', () => tearDown(1011, 'Upstream relay socket error'));
 }
