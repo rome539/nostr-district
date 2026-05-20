@@ -1,9 +1,15 @@
 /**
  * dmService.ts — NIP-17 Encrypted Direct Messages
  *
- * Built from scratch using NYM's proven architecture:
+ * Independent implementation of NIP-17 / NIP-59 DM delivery. Some operational
+ * patterns (DM relay set, retry queue, reconnect catch-up) are inspired by
+ * conventions used in other Nostr clients including NYM
+ * (https://github.com/Spl0itable/NYM); none of this file's code is derived
+ * from theirs.
+ *
+ * Capabilities:
  * - Manual NIP-44 encrypt/decrypt for seal + gift-wrap layers
- *   (skips nostr-tools' unreliable nip17 module — uses nip44 directly)
+ *   (skips nostr-tools' nip17 module — uses nip44 directly for reliability)
  * - Self-wrapping so sender can retrieve own sent messages
  * - Retry queue: 3 attempts at 5s intervals, with manual retry on failure
  * - Reconnect catch-up: re-subscribes for missed gift wraps
@@ -58,7 +64,8 @@ export function onDMHistoryLoading(cb: (loading: boolean) => void): () => void {
   return () => { _loadingListeners = _loadingListeners.filter(l => l !== cb); };
 }
 
-// Retry queue (modeled on NYM's pendingDMs)
+// Outbound retry queue — re-publishes gift wraps until at least one relay
+// confirms acceptance, with a per-event attempt cap.
 interface PendingDM {
   wrappedEvents: any[];     // The actual gift-wrap events to re-publish
   recipientPubkey: string;
@@ -122,7 +129,7 @@ export function startDMSubscription(): void {
 
   // Subscribe for gift wraps addressed to us
   const pubkey = state.pubkey;
-  const since = Math.floor(Date.now() / 1000) - 604800; // 7 days back (same as NYM)
+  const since = Math.floor(Date.now() / 1000) - 604800; // 7 days back
 
   let preEoseBuffer: any[] = [];
   let eoseFired = false;
@@ -500,7 +507,10 @@ async function handleGiftWrap(event: any): Promise<void> {
   }
 }
 
-// ── NIP-59 Wrapping (identical to NYM's nip59WrapEvent) ──
+// ── NIP-59 gift-wrap construction ──
+// Two-layer wrap per the spec: seal (kind:13) signed by the sender, then
+// re-encrypted under an ephemeral keypair as the outer kind:1059. The
+// algorithm is dictated by NIP-59; only the variable naming is ours.
 
 function nip59Wrap(NT: any, rumor: any, senderPrivateKey: Uint8Array, recipientPubkey: string): any {
   // Seal (kind 13) — encrypt rumor with sender→recipient conversation key
@@ -530,7 +540,10 @@ function nip59Wrap(NT: any, rumor: any, senderPrivateKey: Uint8Array, recipientP
   return NT.finalizeEvent(wrapUnsigned, ephSk);
 }
 
-// ── Retry Logic (modeled on NYM's retryPendingDMs) ──
+// ── Retry loop ──
+// Periodically re-publishes any pending gift wraps whose last attempt is
+// older than RETRY_CHECK_MS, up to maxAttempts per event. Stops the
+// interval once the queue is empty.
 
 function retryPendingDMs(): void {
   if (pendingDMs.size === 0) {

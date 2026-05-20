@@ -353,7 +353,17 @@ export class RoomScene extends BaseScene {
     notifyGamePlayerLeft(pk);
   }
 
-  protected override handleSceneChatCommand(pk: string, _name: string, text: string, _isMe: boolean): boolean {
+  protected override handleSceneChatCommand(pk: string, _name: string, text: string, isMe: boolean): boolean {
+    // Intercept zap effect commands (same behavior as HubScene): render a
+    // bubble above the sender's sprite and suppress the raw "/zap:N" chat line.
+    if (text.startsWith('/zap:')) {
+      const sats = parseInt(text.slice(5), 10);
+      if (!isNaN(sats)) {
+        const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite;
+        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000);
+      }
+      return true;
+    }
     return this.myRoom.onChatCommand(pk, text);
   }
   protected override handleSceneEsc(): boolean {

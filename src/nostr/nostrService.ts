@@ -776,6 +776,9 @@ export function logout(): void {
   // Clear crew chat-key cache (in-memory) — localStorage is per-pubkey so other accounts on the same browser keep theirs
   import('./crewKeyCache').then(({ clearAllCrewKeys }) => clearAllCrewKeys()).catch(() => {});
   import('./crewSkCache').then(({ clearAllCrewSks }) => clearAllCrewSks()).catch(() => {});
+  // Tear down the global zap-toast subscription so a different user logging in
+  // on the same tab doesn't see toasts addressed to the previous account.
+  import('./zapService').then(({ stopGlobalZapToasts }) => stopGlobalZapToasts()).catch(() => {});
   clearNWCCache();
   disconnectSparkWallet(pkBeforeLogout).catch(() => {});
   if (bunkerClient) {

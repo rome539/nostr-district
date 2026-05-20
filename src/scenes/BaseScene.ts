@@ -76,6 +76,7 @@ import {
 } from '../nostr/presenceService';
 import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords, shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
+import { registerSenderNameHint } from '../nostr/zapService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { getRainbowColor, isAnimatedColor, getAnimatedColor } from '../stores/marketStore';
@@ -518,6 +519,10 @@ export abstract class BaseScene extends Phaser.Scene {
       clickZone: cz,
       ...(cfg.useFadeIn ? { joinTime: Date.now(), shown: false } : {}),
     });
+
+    // Feed the global zap-toast subscription a name hint so an incoming zap
+    // from this player renders as "Alice" instead of "5069ea44…".
+    registerSenderNameHint(pk, name);
 
     this.afterAddOtherPlayer(pk, name);
   }

@@ -666,13 +666,15 @@ export async function sparkCanCover(amountSats: number): Promise<boolean> {
 
 export interface SparkSendResult {
   ok: boolean;
-  error?: string;
-  feeSats?: number;
+  error?:     string;
+  feeSats?:   number;
+  paymentId?: string;
 }
 
 export async function sendSparkToLightningAddress(
   lud16: string,
   amountSats: number,
+  comment: string = '',
 ): Promise<SparkSendResult> {
   if (!_sdk) return { ok: false, error: 'Wallet not ready' };
   if (amountSats < 1) return { ok: false, error: 'Amount must be at least 1 sat' };
@@ -698,9 +700,20 @@ export async function sendSparkToLightningAddress(
     return { ok: false, error: `Amount must be between ${Math.ceil(min / 1000)} and ${Math.floor(max / 1000)} sats` };
   }
 
+  // Pass the comment via LUD-12 (`?comment=` param) when the recipient's LNURL
+  // service advertises support. `commentAllowed` is the max character count;
+  // we trim the comment to that length to avoid the server rejecting it.
+  const trimmedComment = comment.trim();
+  const commentMax     = Number(lnurlData.commentAllowed ?? 0);
+  const sendComment    = trimmedComment && commentMax > 0
+    ? trimmedComment.slice(0, commentMax)
+    : '';
+
   let bolt11: string;
   try {
-    const r = await fetch(`${lnurlData.callback}?amount=${amountMsats}`);
+    const params = new URLSearchParams({ amount: String(amountMsats) });
+    if (sendComment) params.set('comment', sendComment);
+    const r = await fetch(`${lnurlData.callback}?${params.toString()}`);
     const data = await r.json();
     if (!data?.pr) return { ok: false, error: 'Recipient did not return an invoice' };
     bolt11 = data.pr;
@@ -727,8 +740,9 @@ export async function sendSparkToLightningAddress(
   }
 
   try {
-    await _sdk.sendPayment({ prepareResponse: prepared });
-    return { ok: true, feeSats };
+    const resp = await _sdk.sendPayment({ prepareResponse: prepared });
+    const id   = resp?.payment?.id ?? resp?.id;
+    return { ok: true, feeSats, paymentId: id ? String(id) : undefined };
   } catch (e: any) {
     console.error('[Spark] sendPayment failed:', e);
     return { ok: false, error: e?.message || 'Payment failed' };

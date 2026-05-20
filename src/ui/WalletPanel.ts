@@ -21,7 +21,7 @@ import {
   onSparkPayment,
   type SparkPayment,
 } from '../nostr/sparkService';
-import { getCachedZapMessage, findCachedIncomingZap } from '../nostr/zapService';
+import { getCachedZapMessage, findCachedIncomingZap, cacheZapMessage } from '../nostr/zapService';
 
 const PANEL_ID = 'wallet-panel';
 
@@ -60,6 +60,7 @@ export class WalletPanel {
   private static _busy:       boolean = false;
   private static _toast:      string | null = null;
   private static _toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private static _toastWithBolt: boolean = false;
 
   static isOpen(): boolean { return !!document.getElementById(PANEL_ID); }
 
@@ -139,8 +140,9 @@ export class WalletPanel {
     WalletPanel._render();
   }
 
-  private static _showToast(msg: string): void {
+  private static _showToast(msg: string, opts: { withBolt?: boolean } = {}): void {
     WalletPanel._toast = msg;
+    WalletPanel._toastWithBolt = !!opts.withBolt;
     if (WalletPanel._toastTimer) clearTimeout(WalletPanel._toastTimer);
 
     // Update toast in-place (don't re-render the whole panel — that wipes input fields)
@@ -152,11 +154,17 @@ export class WalletPanel {
         toastEl.className = 'wp-toast';
         panel.appendChild(toastEl);
       }
-      toastEl.textContent = msg;
+      if (opts.withBolt) {
+        // boltIcon output is from our own helper, msg is escaped — safe to use innerHTML.
+        toastEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(11)}<span>${esc(msg)}</span></span>`;
+      } else {
+        toastEl.textContent = msg;
+      }
     }
 
     WalletPanel._toastTimer = setTimeout(() => {
       WalletPanel._toast = null;
+      WalletPanel._toastWithBolt = false;
       const p = document.getElementById(PANEL_ID);
       p?.querySelector('.wp-toast')?.remove();
     }, 2500);
@@ -198,7 +206,11 @@ export class WalletPanel {
 
       ${!ready ? WalletPanel._renderNotReady(auth.isGuest, initErr) : WalletPanel._renderBody()}
 
-      ${WalletPanel._toast ? `<div class="wp-toast">${esc(WalletPanel._toast)}</div>` : ''}
+      ${WalletPanel._toast
+          ? (WalletPanel._toastWithBolt
+              ? `<div class="wp-toast"><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(11)}<span>${esc(WalletPanel._toast)}</span></span></div>`
+              : `<div class="wp-toast">${esc(WalletPanel._toast)}</div>`)
+          : ''}
     `;
 
     document.body.appendChild(panel);
@@ -372,6 +384,13 @@ export class WalletPanel {
           </div>
           <div style="font-size:9px;color:var(--nd-subtext);margin-top:5px;opacity:0.7;line-height:1.4;">
             Lightning fees vary by route — usually 0–5 sats. Network fee is added on top of your amount.
+          </div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">MESSAGE (OPTIONAL)</div>
+          <input id="wp-send-msg" type="text" maxlength="140" placeholder="say something nice…" autocomplete="off" class="wp-input" style="width:100%;" />
+          <div style="font-size:9px;color:var(--nd-subtext);margin-top:5px;opacity:0.7;line-height:1.4;">
+            Sent to the recipient if their Lightning provider supports comments.
           </div>
         </div>
         <button id="wp-send-go" class="wp-btn wp-btn-accent" ${WalletPanel._busy ? 'disabled' : ''} style="padding:10px;font-size:11px;">
@@ -709,19 +728,25 @@ export class WalletPanel {
     const trySend = async () => {
       const addrEl = document.getElementById('wp-send-addr') as HTMLInputElement | null;
       const amtEl  = document.getElementById('wp-send-amt')  as HTMLInputElement | null;
+      const msgEl  = document.getElementById('wp-send-msg')  as HTMLInputElement | null;
       const addr   = (addrEl?.value || '').trim().toLowerCase();
       const amt    = Math.floor(Number(amtEl?.value || 0));
+      const msg    = (msgEl?.value || '').trim();
 
       if (!addr.includes('@')) { WalletPanel._showToast('Enter a Lightning address'); return; }
       if (!amt || amt < 1) { WalletPanel._showToast('Enter an amount'); return; }
 
       WalletPanel._busy = true;
       WalletPanel._render();
-      const result = await sendSparkToLightningAddress(addr, amt);
+      const result = await sendSparkToLightningAddress(addr, amt, msg);
       WalletPanel._busy = false;
       if (result.ok) {
+        // Cache the message locally so the sender sees it in wallet history.
+        // The recipient gets it via LUD-12 (?comment=) when their provider
+        // supports it; if not, it's still visible on our side.
+        if (result.paymentId && msg) cacheZapMessage(result.paymentId, msg);
         const feeMsg = (result.feeSats ?? 0) > 0 ? ` (fee: ${result.feeSats!.toLocaleString()} sats)` : '';
-        WalletPanel._showToast(`Sent ${amt.toLocaleString()} sats ⚡${feeMsg}`);
+        WalletPanel._showToast(`Sent ${amt.toLocaleString()} sats${feeMsg}`, { withBolt: true });
         WalletPanel._tab = 'balance';
         WalletPanel._balance = null;
         WalletPanel._render();

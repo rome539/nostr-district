@@ -1,11 +1,15 @@
 /**
- * channelService.ts — NIP-28 Room Chat (kind:20000)
+ * channelService.ts — Ephemeral room chat over kind:20000
  *
- * Uses NYM's channel message format for interoperability:
+ * Wire format — kept compatible with NYM's channel events so users can
+ * interop between clients without bridging:
  * - kind: 20000 (ephemeral channel message)
  * - 'g' tag: channel identifier (e.g. 'nostr-district:relay')
  * - 'n' tag: sender nickname
  * - 'client' tag: 'nostr-district'
+ *
+ * Tag conventions are facts about the wire protocol, not derived code.
+ * Implementation in this file is independent.
  *
  * Subscribes to a room channel on enter, unsubscribes on leave.
  * Uses the existing relay connections from the DM relay manager.

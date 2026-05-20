@@ -18,8 +18,7 @@ import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { loadNostrTheme } from '../nostr/nostrThemeService';
 import { initEmojiService } from '../nostr/emojiService';
-import { subscribeToZapReceipts } from '../nostr/zapService';
-import { showZapToast } from '../ui/ZapToast';
+import { startGlobalZapToasts } from '../nostr/zapService';
 import { LoginScreen } from '../ui/LoginScreen';
 import {
   loginWithExtension, loginWithNsec, loginAsGuest,
@@ -231,18 +230,10 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
     this.setupProfileSubscription();
 
-    // ── Zap receipt subscription ──
-    const zapAuth = authStore.getState();
-    if (zapAuth.pubkey && !zapAuth.isGuest) {
-      const unsubZap = subscribeToZapReceipts(zapAuth.pubkey, (senderPubkey, amountSats, comment) => {
-        // Resolve sender name from known players
-        const senderName = this.otherPlayers.get(senderPubkey)?.name
-          || this.playerNames?.get(senderPubkey)
-          || senderPubkey.slice(0, 8) + '…';
-        showZapToast(senderName, amountSats, comment || undefined, 'incoming');
-      });
-      this.events.once('shutdown', unsubZap);
-    }
+    // Start (or no-op if already running) the global incoming-zap toast
+    // subscription. Module-scoped so it persists across scene changes —
+    // a player inside a Room still gets toasts for incoming zaps.
+    startGlobalZapToasts();
 
     this.chatUI = new ChatUI();
     this.chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));

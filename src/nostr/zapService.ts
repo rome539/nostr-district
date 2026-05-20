@@ -38,7 +38,10 @@ function writeZapMsgCache(map: Record<string, string>): void {
   try { localStorage.setItem(ZAP_MSG_CACHE_KEY, JSON.stringify(map)); } catch { /* quota */ }
 }
 
-function cacheZapMessage(paymentId: string, comment: string): void {
+/** Cache an outgoing payment's message so the sender's wallet history can show
+ *  it. Exposed so the WalletPanel SEND tab can record manual-LNURL-pay comments
+ *  alongside zaps initiated from ZapModal. */
+export function cacheZapMessage(paymentId: string, comment: string): void {
   if (!paymentId || !comment.trim()) return;
   const map = readZapMsgCache();
   map[paymentId] = comment;
@@ -708,4 +711,68 @@ export function subscribeToZapReceipts(
     _zapReceiptSockets.forEach(s => { try { s.close(); } catch { /* */ } });
     _zapReceiptSockets.length = 0;
   };
+}
+
+// ── Global zap-toast subscription ────────────────────────────────────────────
+// The zap-receipt subscription used to be wired up inside HubScene, which
+// meant players inside a Room (RoomScene) never saw incoming-zap toasts. Lift
+// it to module scope so it runs for the whole logged-in session regardless of
+// which scene is active.
+
+let _globalZapUnsub: (() => void) | null = null;
+let _globalZapPubkey: string | null     = null;
+
+// Scenes that already know players' display names (from the presence server)
+// register them here so a zap toast can show "Alice" instead of "5069ea44…".
+// Cleared on logout.
+const _senderNameHints = new Map<string, string>();
+
+export function registerSenderNameHint(pubkey: string, name: string): void {
+  if (!pubkey || !name) return;
+  _senderNameHints.set(pubkey, name);
+}
+
+async function resolveSenderName(pubkey: string): Promise<string> {
+  const hint = _senderNameHints.get(pubkey);
+  if (hint) return hint;
+  try {
+    const profile = await fetchKind0(pubkey);
+    const name = profile?.display_name || profile?.name;
+    if (typeof name === 'string' && name.trim()) {
+      const trimmed = name.trim().slice(0, 30);
+      _senderNameHints.set(pubkey, trimmed); // cache for subsequent zaps
+      return trimmed;
+    }
+  } catch { /* fall through */ }
+  return pubkey.slice(0, 8) + '…';
+}
+
+/**
+ * Start the global incoming-zap toast subscription for the currently
+ * logged-in user. Idempotent — safe to call from any scene's create() and
+ * any number of times. The subscription persists across scene changes;
+ * it's only torn down on logout via `stopGlobalZapToasts`.
+ */
+export function startGlobalZapToasts(): void {
+  const auth = authStore.getState();
+  const pubkey = auth.pubkey;
+  if (!pubkey || auth.isGuest) return;
+  if (_globalZapUnsub && _globalZapPubkey === pubkey) return; // already running for this pubkey
+
+  // Different pubkey (or restart) — tear down the previous one first.
+  if (_globalZapUnsub) { _globalZapUnsub(); _globalZapUnsub = null; }
+  _globalZapPubkey = pubkey;
+
+  _globalZapUnsub = subscribeToZapReceipts(pubkey, async (senderPubkey, amountSats, comment) => {
+    const name = await resolveSenderName(senderPubkey);
+    // Late import to avoid a circular dependency through the UI layer.
+    const { showZapToast } = await import('../ui/ZapToast');
+    showZapToast(name, amountSats, comment || undefined, 'incoming');
+  });
+}
+
+export function stopGlobalZapToasts(): void {
+  if (_globalZapUnsub) { _globalZapUnsub(); _globalZapUnsub = null; }
+  _globalZapPubkey = null;
+  _senderNameHints.clear();
 }

@@ -1,8 +1,9 @@
 /**
  * relayManager.ts — Raw WebSocket relay pool for NIP-17 gift wraps
  *
- * Modeled on NYM's relay architecture:
- * - Dedicated DM relay list (the same relays NYM uses for reliable delivery)
+ * Architectural patterns here are inspired by NYM (https://github.com/Spl0itable/NYM);
+ * the implementation in this file is independent and original. Capabilities:
+ * - Dedicated DM relay list for reliable gift-wrap delivery
  * - Fan-out publishing: send to DM relays first, then all other connected relays
  * - Auto-reconnect with exponential backoff
  * - 30s keepalive pings to prevent idle disconnects
@@ -35,7 +36,7 @@ function proxyUrl(relayWss: string): string {
   return `${RELAY_PROXY_BASE}/api/relay?relay=${encodeURIComponent(relayWss)}`;
 }
 
-// ── The relay lists NYM uses for reliable DM delivery ──
+// ── Dedicated relay list for reliable DM (NIP-17 gift-wrap) delivery ──
 export const DM_RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
@@ -341,7 +342,7 @@ export class RelayManager {
   }
 
   // ════════════════════════════════════════════
-  // PUBLISHING — NYM-style fan-out
+  // PUBLISHING — DM-priority fan-out
   // ════════════════════════════════════════════
 
   /**
@@ -374,7 +375,8 @@ export class RelayManager {
 
   /**
    * Publish multiple events with staggered delays (150ms apart)
-   * to avoid relay rate limiting. NYM does this for gift wraps.
+   * to avoid relay rate limiting — especially relevant when fanning
+   * out a batch of gift wraps.
    */
   async publishStaggered(events: any[]): Promise<number> {
     let totalSent = 0;
@@ -388,8 +390,9 @@ export class RelayManager {
   }
 
   /**
-   * Catch-up subscription for missed gift wraps after reconnection.
-   * NYM does this on every relay reconnect.
+   * Catch-up subscription for missed gift wraps after reconnection —
+   * re-queries each relay for events since the last successful read,
+   * with a 5-minute overlap to absorb clock skew.
    */
   catchUpGiftWraps(pubkey: string, sinceTimestamp: number): void {
     const since = Math.max(
