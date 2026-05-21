@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "채팅",
   "wardrobe.slot.rod": "막대",
   "wardrobe.slot.anim": "애님",
-  "wardrobe.slot.aura": "영기"
+  "wardrobe.slot.aura": "영기",
+  "room.title": "객실 맞춤화",
+  "room.preview": "시사",
+  "room.save": "구하다",
+  "room.section.walls": "벽",
+  "room.section.floor": "바닥",
+  "room.section.lights": "허파",
+  "room.section.furniture": "가구",
+  "room.section.posters": "포스터",
+  "room.section.pets": "애완동물",
+  "room.section.music": "음악",
+  "room.wall_theme": "벽 테마",
+  "room.floor_style": "바닥 스타일",
+  "room.lighting_mood": "조명 분위기"
 }

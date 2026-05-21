@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "チャット",
   "wardrobe.slot.rod": "ロッド",
   "wardrobe.slot.anim": "アニム",
-  "wardrobe.slot.aura": "オーラ"
+  "wardrobe.slot.aura": "オーラ",
+  "room.title": "部屋のカスタマイズ",
+  "room.preview": "プレビュー",
+  "room.save": "保存",
+  "room.section.walls": "壁",
+  "room.section.floor": "床",
+  "room.section.lights": "ライト",
+  "room.section.furniture": "家具",
+  "room.section.posters": "ポスター",
+  "room.section.pets": "ペット",
+  "room.section.music": "音楽",
+  "room.wall_theme": "壁のテーマ",
+  "room.floor_style": "フロアスタイル",
+  "room.lighting_mood": "照明の雰囲気"
 }

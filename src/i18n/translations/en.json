@@ -439,5 +439,19 @@
   "wardrobe.slot.chat_color": "Chat",
   "wardrobe.slot.rod":        "Rod",
   "wardrobe.slot.anim":       "Anim",
-  "wardrobe.slot.aura":       "Aura"
+  "wardrobe.slot.aura":       "Aura",
+
+  "room.title":             "ROOM CUSTOMIZATION",
+  "room.preview":           "Preview",
+  "room.save":              "Save",
+  "room.section.walls":     "Walls",
+  "room.section.floor":     "Floor",
+  "room.section.lights":    "Lights",
+  "room.section.furniture": "Furniture",
+  "room.section.posters":   "Posters",
+  "room.section.pets":      "Pets",
+  "room.section.music":     "Music",
+  "room.wall_theme":        "Wall Theme",
+  "room.floor_style":       "Floor Style",
+  "room.lighting_mood":     "Lighting Mood"
 }

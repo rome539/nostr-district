@@ -13,6 +13,7 @@ import { drawForegroundItems } from '../../rooms/roomForeground';
 import { getPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../../stores/petStore';
 import { authStore } from '../../stores/authStore';
 import { publishRoomConfig } from '../../nostr/nostrService';
+import { t as ti18n } from '../../i18n/i18n';
 import { SoundEngine, MYROOM_TRACKS, MyRoomTrackId } from '../../audio/SoundEngine';
 import type { TabCtx } from './types';
 
@@ -300,7 +301,7 @@ export class RoomTab {
 
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">ROOM CUSTOMIZATION</span>
+        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">${ti18n('room.title')}</span>
         <div style="display:flex;gap:6px;">
           <button id="room-preview-btn" style="
             padding:5px 12px;border-radius:4px;cursor:pointer;
@@ -308,14 +309,14 @@ export class RoomTab {
             background:color-mix(in srgb,var(--nd-accent) 10%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-accent) 35%,transparent);
             color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">Preview</button>
+          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 10%,transparent)'">${ti18n('room.preview')}</button>
           <button id="room-save-btn" style="
             padding:5px 12px;border-radius:4px;cursor:pointer;
             font-family:'Courier New',monospace;font-size:11px;
             background:color-mix(in srgb,var(--nd-accent) 20%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);
             color:var(--nd-accent);white-space:nowrap;transition:all 0.12s;
-          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">Save</button>
+          " onmouseover="this.style.background='color-mix(in srgb,var(--nd-accent) 30%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--nd-accent) 20%,transparent)'">${ti18n('room.save')}</button>
         </div>
       </div>
       <div id="room-section-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;"></div>
@@ -388,13 +389,13 @@ export class RoomTab {
     if (!container) return;
 
     const sections = [
-      { key: 'walls',     label: 'Walls' },
-      { key: 'floor',     label: 'Floor' },
-      { key: 'lighting',  label: 'Lights' },
-      { key: 'furniture', label: 'Furniture' },
-      { key: 'posters',   label: 'Posters' },
-      { key: 'pets',      label: 'Pets' },
-      { key: 'music',     label: 'Music' },
+      { key: 'walls',     label: ti18n('room.section.walls')     },
+      { key: 'floor',     label: ti18n('room.section.floor')     },
+      { key: 'lighting',  label: ti18n('room.section.lights')    },
+      { key: 'furniture', label: ti18n('room.section.furniture') },
+      { key: 'posters',   label: ti18n('room.section.posters')   },
+      { key: 'pets',      label: ti18n('room.section.pets')      },
+      { key: 'music',     label: ti18n('room.section.music')     },
     ];
 
     container.innerHTML = sections.map(s => `
@@ -446,7 +447,7 @@ export class RoomTab {
     const page = all.slice(this._wallPage * PER, this._wallPage * PER + PER);
 
     container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Wall Theme</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">${ti18n('room.wall_theme')}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${page.map(([key, theme]) => {
           const active = cfg.wallTheme === key;
@@ -517,7 +518,7 @@ export class RoomTab {
     };
 
     container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Floor Style</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">${ti18n('room.floor_style')}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${floors.map(([key, style]) => {
           const active = cfg.floorStyle === key;
@@ -562,7 +563,7 @@ export class RoomTab {
     const moods = all.slice(this._lightPage * PER, this._lightPage * PER + PER);
 
     container.innerHTML = `
-      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Lighting Mood</div>
+      <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">${ti18n('room.lighting_mood')}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
         ${moods.map(([key, mood]) => {
           const active = cfg.lighting === key;

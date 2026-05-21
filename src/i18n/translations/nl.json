@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Chatten",
   "wardrobe.slot.rod": "Hengel",
   "wardrobe.slot.anim": "Animatie",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "AANPASSING VAN DE KAMER",
+  "room.preview": "Voorbeeld",
+  "room.save": "Redden",
+  "room.section.walls": "Muren",
+  "room.section.floor": "Vloer",
+  "room.section.lights": "Lichten",
+  "room.section.furniture": "Meubilair",
+  "room.section.posters": "Affiches",
+  "room.section.pets": "Huisdieren",
+  "room.section.music": "Muziek",
+  "room.wall_theme": "Muur Thema",
+  "room.floor_style": "Vloerstijl",
+  "room.lighting_mood": "Verlichting sfeer"
 }

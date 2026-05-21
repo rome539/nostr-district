@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Chatten",
   "wardrobe.slot.rod": "Stange",
   "wardrobe.slot.anim": "Anim",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "RAUMINDIVIDUELLE ANPASSUNG",
+  "room.preview": "Vorschau",
+  "room.save": "Speichern",
+  "room.section.walls": "Wände",
+  "room.section.floor": "Boden",
+  "room.section.lights": "Lichter",
+  "room.section.furniture": "Möbel",
+  "room.section.posters": "Poster",
+  "room.section.pets": "Haustiere",
+  "room.section.music": "Musik",
+  "room.wall_theme": "Wandthema",
+  "room.floor_style": "Bodenstil",
+  "room.lighting_mood": "Lichtstimmung"
 }

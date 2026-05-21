@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Bater papo",
   "wardrobe.slot.rod": "Haste",
   "wardrobe.slot.anim": "animação",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "PERSONALIZAÇÃO DA SALA",
+  "room.preview": "Visualização",
+  "room.save": "Salvar",
+  "room.section.walls": "Paredes",
+  "room.section.floor": "Chão",
+  "room.section.lights": "Luzes",
+  "room.section.furniture": "Mobília",
+  "room.section.posters": "Cartazes",
+  "room.section.pets": "Animais de estimação",
+  "room.section.music": "Música",
+  "room.wall_theme": "Tema de parede",
+  "room.floor_style": "Estilo de piso",
+  "room.lighting_mood": "Humor de iluminação"
 }

@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "聊天",
   "wardrobe.slot.rod": "杆",
   "wardrobe.slot.anim": "动画",
-  "wardrobe.slot.aura": "光环"
+  "wardrobe.slot.aura": "光环",
+  "room.title": "房间定制",
+  "room.preview": "预览",
+  "room.save": "节省",
+  "room.section.walls": "墙壁",
+  "room.section.floor": "地面",
+  "room.section.lights": "灯",
+  "room.section.furniture": "家具",
+  "room.section.posters": "海报",
+  "room.section.pets": "宠物",
+  "room.section.music": "音乐",
+  "room.wall_theme": "墙主题",
+  "room.floor_style": "地板款式",
+  "room.lighting_mood": "照明心情"
 }

@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "محادثة",
   "wardrobe.slot.rod": "عصا",
   "wardrobe.slot.anim": "أنيم",
-  "wardrobe.slot.aura": "هالة"
+  "wardrobe.slot.aura": "هالة",
+  "room.title": "تخصيص الغرفة",
+  "room.preview": "معاينة",
+  "room.save": "يحفظ",
+  "room.section.walls": "الجدران",
+  "room.section.floor": "أرضية",
+  "room.section.lights": "أضواء",
+  "room.section.furniture": "أثاث",
+  "room.section.posters": "الملصقات",
+  "room.section.pets": "حيوانات أليفة",
+  "room.section.music": "موسيقى",
+  "room.wall_theme": "موضوع الجدار",
+  "room.floor_style": "نمط الكلمة",
+  "room.lighting_mood": "مزاج الإضاءة"
 }

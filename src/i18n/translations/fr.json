@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Chat",
   "wardrobe.slot.rod": "Tige",
   "wardrobe.slot.anim": "Animation",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "PERSONNALISATION DE LA CHAMBRE",
+  "room.preview": "Aperçu",
+  "room.save": "Sauvegarder",
+  "room.section.walls": "Murs",
+  "room.section.floor": "Sol",
+  "room.section.lights": "Lumières",
+  "room.section.furniture": "Meubles",
+  "room.section.posters": "Affiches",
+  "room.section.pets": "Animaux de compagnie",
+  "room.section.music": "Musique",
+  "room.wall_theme": "Thème mural",
+  "room.floor_style": "Style de sol",
+  "room.lighting_mood": "Ambiance lumineuse"
 }

@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Chiacchierata",
   "wardrobe.slot.rod": "Asta",
   "wardrobe.slot.anim": "Anima",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "PERSONALIZZAZIONE DELLA CAMERA",
+  "room.preview": "Anteprima",
+  "room.save": "Salva",
+  "room.section.walls": "Muri",
+  "room.section.floor": "Pavimento",
+  "room.section.lights": "Luci",
+  "room.section.furniture": "Mobilia",
+  "room.section.posters": "Manifesti",
+  "room.section.pets": "Animali domestici",
+  "room.section.music": "Musica",
+  "room.wall_theme": "Tema della parete",
+  "room.floor_style": "Stile del pavimento",
+  "room.lighting_mood": "Atmosfera luminosa"
 }

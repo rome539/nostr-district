@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Charlar",
   "wardrobe.slot.rod": "Vara",
   "wardrobe.slot.anim": "animado",
-  "wardrobe.slot.aura": "Aura"
+  "wardrobe.slot.aura": "Aura",
+  "room.title": "PERSONALIZACIÓN DE LA HABITACIÓN",
+  "room.preview": "Avance",
+  "room.save": "Ahorrar",
+  "room.section.walls": "Paredes",
+  "room.section.floor": "Piso",
+  "room.section.lights": "Luces",
+  "room.section.furniture": "Muebles",
+  "room.section.posters": "Pósters",
+  "room.section.pets": "Mascotas",
+  "room.section.music": "Música",
+  "room.wall_theme": "Tema de la pared",
+  "room.floor_style": "Estilo de piso",
+  "room.lighting_mood": "Estado de ánimo de iluminación"
 }

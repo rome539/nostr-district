@@ -389,5 +389,18 @@
   "wardrobe.slot.chat_color": "Чат",
   "wardrobe.slot.rod": "Стержень",
   "wardrobe.slot.anim": "Аним",
-  "wardrobe.slot.aura": "Аура"
+  "wardrobe.slot.aura": "Аура",
+  "room.title": "ПЕРСОНАЛИЗАЦИЯ КОМНАТЫ",
+  "room.preview": "Предварительный просмотр",
+  "room.save": "Сохранять",
+  "room.section.walls": "Стены",
+  "room.section.floor": "Пол",
+  "room.section.lights": "Свет",
+  "room.section.furniture": "Мебель",
+  "room.section.posters": "Плакаты",
+  "room.section.pets": "Домашние животные",
+  "room.section.music": "Музыка",
+  "room.wall_theme": "Стенная тема",
+  "room.floor_style": "Стиль пола",
+  "room.lighting_mood": "Освещение Настроение"
 }
