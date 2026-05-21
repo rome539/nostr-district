@@ -6,6 +6,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { t as ti18n } from '../i18n/i18n';
+import { maybeTranslate } from '../i18n/translator';
 
 type Suit = 'major' | 'wands' | 'cups' | 'swords' | 'pentacles';
 
@@ -422,7 +423,11 @@ export const TarotModal = {
 
       cardsRow.appendChild(slot);
 
-      setTimeout(() => typewrite(meaning, reversed ? card.reversed : card.upright, 20), 700 + i * 200);
+      const source = reversed ? card.reversed : card.upright;
+      setTimeout(async () => {
+        const translated = (await maybeTranslate(source))?.translated ?? source;
+        if (meaning.isConnected) typewrite(meaning, translated, 20);
+      }, 700 + i * 200);
     });
 
     box.appendChild(cardsRow);

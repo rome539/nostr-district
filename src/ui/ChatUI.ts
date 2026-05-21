@@ -152,7 +152,7 @@ export class ChatUI {
     const nameHtml = (pubkey && this.onNameClick)
       ? `<span style="color:${color};font-weight:bold;cursor:pointer;${neonGlow}" data-pk="${pubkey}">${escapeHtml(name)}</span>`
       : `<span style="color:${color};font-weight:bold;${neonGlow}">${escapeHtml(name)}</span>`;
-    msg.innerHTML = `${nameHtml}: ${renderContent(text, emojis)}`;
+    msg.innerHTML = `${nameHtml}: <span class="cu-msg-body">${renderContent(text, emojis)}</span>`;
     if (pubkey && this.onNameClick) {
       msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));
     }
@@ -161,6 +161,17 @@ export class ChatUI {
     while (this.log.children.length > 50) this.log.removeChild(this.log.firstChild!);
     this.showLog();
     this.scheduleHide(12000);
+
+    // Opportunistic translation — same path as the floating bubble. Re-renders
+    // the message body in-place with italic styling once the translator returns.
+    // Skipped for short system messages; emojis stay as-is (renderContent re-runs).
+    maybeTranslate(text).then((res) => {
+      if (!res || !msg.isConnected) return;
+      const body = msg.querySelector('.cu-msg-body') as HTMLElement | null;
+      if (!body) return;
+      body.innerHTML = renderContent(res.translated, emojis);
+      body.style.fontStyle = 'italic';
+    }).catch(() => { /* never throws */ });
   }
 
   /** Add an RPS challenge row with inline accept buttons */

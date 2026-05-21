@@ -7,6 +7,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { t as ti18n } from '../i18n/i18n';
+import { maybeTranslate } from '../i18n/translator';
 
 const FORTUNES = [
   "A change is coming. You will not see it until it has already arrived.",
@@ -266,14 +267,17 @@ export const FortuneTellerModal = {
     document.body.appendChild(overlay);
     document.head.appendChild(style);
 
-    // After coin lands, reveal fortune
-    setTimeout(() => {
+    // After coin lands, reveal fortune. Run translation in the same beat as
+    // the coin-drop wait so the user doesn't notice the extra latency.
+    setTimeout(async () => {
+      const translated = (await maybeTranslate(fortune))?.translated ?? fortune;
+      if (!overlay) return;
       status.style.animation = '';
       status.style.color = '#d0b8ff';
       status.style.fontSize = '11px';
       status.style.letterSpacing = '0.5px';
-      typewrite(status, `"${fortune}"`, 28);
-      setTimeout(() => { if (overlay) SoundEngine.get().stopFileSounds(); }, (fortune.length + 2) * 28 + 2000);
+      typewrite(status, `"${translated}"`, 28);
+      setTimeout(() => { if (overlay) SoundEngine.get().stopFileSounds(); }, (translated.length + 2) * 28 + 2000);
     }, 1300);
   },
 

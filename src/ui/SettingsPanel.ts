@@ -18,17 +18,8 @@ import {
 import { NostrThemeBrowser } from './NostrThemeBrowser';
 import { EmojiPackBrowser } from './EmojiPackBrowser';
 import { HotkeyModal } from './HotkeyModal';
-import { LanguageModal } from './LanguageModal';
 import { getEmojiCount, getStoredEmojiPacks } from '../nostr/emojiService';
-import { t, getCurrentLang, onLangChange } from '../i18n/i18n';
-
-// Display label for each supported language code — kept in sync with the
-// LanguageModal grid so the SettingsPanel row shows the user's current pick.
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: 'English', es: 'Español', pt: 'Português', fr: 'Français',
-  de: 'Deutsch', it: 'Italiano', nl: 'Nederlands', ru: 'Русский',
-  ja: '日本語',  ko: '한국어',  zh: '中文',     ar: 'العربية',
-};
+import { t, onLangChange } from '../i18n/i18n';
 
 const GEAR_ID = 'settings-gear';
 const PANEL_ID = 'settings-panel';
@@ -46,7 +37,6 @@ export class SettingsPanel {
   private themeBrowser     = new NostrThemeBrowser();
   private emojiPackBrowser = new EmojiPackBrowser();
   private hotkeyModal      = new HotkeyModal();
-  private languageModal    = new LanguageModal();
 
   create(): void {
     this.destroy();
@@ -139,13 +129,6 @@ export class SettingsPanel {
       </div>
     `;
 
-    // ── Language row ──
-    // Just shows the current language with a "Change" button — the actual
-    // 12-language picker lives in `LanguageModal`. Keeps the panel compact
-    // and matches the Hotkeys & Commands row style.
-    const currentLang     = getCurrentLang();
-    const currentLangName = LANGUAGE_LABELS[currentLang] ?? currentLang;
-
     const activeId = themeStore.current.id;
     const themeSwatches = THEMES.map(theme => {
       const isActive = !ntEnabled && theme.id === activeId;
@@ -184,21 +167,6 @@ export class SettingsPanel {
       <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
         ${themeSwatches}
       </div>
-
-      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.language'))}</div>
-      <button id="sp-language-row" style="
-        width:100%;padding:8px 10px;margin-bottom:10px;
-        background:var(--nd-navy);
-        border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
-        border-radius:5px;cursor:pointer;
-        color:var(--nd-text);font-family:'Courier New',monospace;font-size:11px;
-        text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;
-        transition:border-color 0.15s,color 0.15s;
-      ">
-        <span style="color:var(--nd-text);">${esc(currentLangName)}</span>
-        <span style="color:var(--nd-subtext);opacity:0.7;font-size:10px;">${esc(t('settings.change'))} ↗</span>
-      </button>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
       <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.nostr_theme'))}</div>
@@ -380,25 +348,6 @@ export class SettingsPanel {
     keysBtn.addEventListener('mouseenter', () => keysBtn.style.color = 'var(--nd-accent)');
     keysBtn.addEventListener('mouseleave', () => keysBtn.style.color = 'var(--nd-subtext)');
     keysBtn.addEventListener('click', () => this.showKeysModal(npub, nsec));
-
-    // Language row — opens the full-screen LanguageModal picker. Modal handles
-    // the actual setLang call; the langchange subscription further below
-    // re-renders this panel to reflect the new active language.
-    const langRow = this.panelEl.querySelector('#sp-language-row') as HTMLElement | null;
-    if (langRow) {
-      langRow.addEventListener('mouseenter', () => {
-        langRow.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 44%,transparent)';
-        langRow.style.color = 'var(--nd-accent)';
-      });
-      langRow.addEventListener('mouseleave', () => {
-        langRow.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 22%,transparent)';
-        langRow.style.color = 'var(--nd-text)';
-      });
-      langRow.addEventListener('click', () => {
-        this.closePanel();
-        this.languageModal.show();
-      });
-    }
 
     // Theme swatches
     this.panelEl.querySelectorAll('.sp-theme-swatch').forEach(el => {
