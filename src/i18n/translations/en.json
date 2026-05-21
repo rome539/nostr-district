@@ -416,5 +416,28 @@
   "gofish.ask_cpu":    "Ask CPU for:",
   "gofish.new_game":   "New Game",
 
-  "woods.coming_soon": "COMING SOON"
+  "woods.coming_soon": "COMING SOON",
+
+  "settings.nwc.connected":      "Wallet connected",
+  "settings.nwc.disconnect":     "Disconnect",
+  "settings.nwc.webln_detected": "Browser wallet detected",
+  "settings.nwc.storage_nsec":   "Your NWC connection URI is encrypted with a key derived from your nsec before being stored locally — useless without your key.",
+  "settings.nwc.storage_other":  "Your NWC connection URI is stored in browser storage (encryption requires an nsec login).",
+  "settings.nwc.spending_hint":  "Set a spending limit in your wallet for extra safety.",
+  "settings.nwc.ack":            "I understand, I have a spending limit set",
+  "settings.nwc.connect":        "Connect",
+  "settings.nwc.invalid_uri":    "Invalid URI",
+
+  "wardrobe.title":           "WARDROBE",
+  "wardrobe.slot.hair":       "Hair",
+  "wardrobe.slot.top":        "Top",
+  "wardrobe.slot.bottom":     "Bottom",
+  "wardrobe.slot.hat":        "Hat",
+  "wardrobe.slot.acc":        "Acc",
+  "wardrobe.slot.eyes":       "Eyes",
+  "wardrobe.slot.name_color": "Name",
+  "wardrobe.slot.chat_color": "Chat",
+  "wardrobe.slot.rod":        "Rod",
+  "wardrobe.slot.anim":       "Anim",
+  "wardrobe.slot.aura":       "Aura"
 }

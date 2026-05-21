@@ -308,12 +308,12 @@ export class SettingsPanel {
           <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
             background:color-mix(in srgb,var(--nd-accent) 8%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-accent) 22%,transparent);">
-            <span style="color:var(--nd-accent);font-size:11px;flex:1;">✓ Wallet connected</span>
+            <span style="color:var(--nd-accent);font-size:11px;flex:1;">✓ ${t('settings.nwc.connected')}</span>
             <button id="sp-wallet-disconnect" style="padding:3px 8px;border-radius:4px;
               font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
               background:color-mix(in srgb,${P.red} 14%,transparent);
               border:1px solid color-mix(in srgb,${P.red} 33%,transparent);
-              color:${P.red};">Disconnect</button>
+              color:${P.red};">${t('settings.nwc.disconnect')}</button>
           </div>`;
         walletRow.querySelector('#sp-wallet-disconnect')?.addEventListener('click', async () => {
           await setNWCUri(''); renderWalletRow();
@@ -323,19 +323,19 @@ export class SettingsPanel {
           <div style="padding:6px 8px;border-radius:5px;
             background:color-mix(in srgb,var(--nd-accent) 8%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-accent) 22%,transparent);
-            color:var(--nd-accent);font-size:11px;">✓ Browser wallet detected</div>`;
+            color:var(--nd-accent);font-size:11px;">✓ ${t('settings.nwc.webln_detected')}</div>`;
       } else {
         const method = authStore.getState().loginMethod;
         const storageCopy = method === 'nsec'
-          ? 'Your NWC connection URI is encrypted with a key derived from your nsec before being stored locally — useless without your key.'
-          : 'Your NWC connection URI is stored in browser storage (encryption requires an nsec login).';
+          ? t('settings.nwc.storage_nsec')
+          : t('settings.nwc.storage_other');
         walletRow.innerHTML = `
           <div style="color:var(--nd-subtext);font-size:10px;line-height:1.5;margin-bottom:6px;opacity:0.7;">
-            ${storageCopy} Set a spending limit in your wallet for extra safety.
+            ${storageCopy} ${t('settings.nwc.spending_hint')}
           </div>
           <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;">
             <input id="sp-nwc-ack" type="checkbox" style="accent-color:var(--nd-accent);cursor:pointer;">
-            <span style="color:var(--nd-subtext);font-size:10px;">I understand, I have a spending limit set</span>
+            <span style="color:var(--nd-subtext);font-size:10px;">${t('settings.nwc.ack')}</span>
           </label>
           <div id="sp-nwc-form" style="display:none;">
             <div style="display:flex;gap:5px;">
@@ -348,9 +348,9 @@ export class SettingsPanel {
                 font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
                 background:color-mix(in srgb,var(--nd-accent) 13%,transparent);
                 border:1px solid color-mix(in srgb,var(--nd-accent) 33%,transparent);
-                color:var(--nd-accent);">Connect</button>
+                color:var(--nd-accent);">${t('settings.nwc.connect')}</button>
             </div>
-            <div id="sp-nwc-err" style="color:#f0b040;font-size:10px;margin-top:4px;display:none;">Invalid URI</div>
+            <div id="sp-nwc-err" style="color:#f0b040;font-size:10px;margin-top:4px;display:none;">${t('settings.nwc.invalid_uri')}</div>
           </div>`;
 
         const ack = walletRow.querySelector('#sp-nwc-ack') as HTMLInputElement;

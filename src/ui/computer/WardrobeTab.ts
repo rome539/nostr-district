@@ -4,6 +4,7 @@ import { renderRoomSprite } from '../../entities/AvatarRenderer';
 import { authStore } from '../../stores/authStore';
 import { publishOutfits, publishAvatar } from '../../nostr/nostrService';
 import type { TabCtx } from './types';
+import { t as ti18n } from '../../i18n/i18n';
 
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -28,7 +29,7 @@ export class WardrobeTab {
 
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">WARDROBE</span>
+        <span style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;opacity:0.55;">${ti18n('wardrobe.title')}</span>
         <button id="ward-nostr-sync" style="
           padding:5px 12px;border-radius:4px;cursor:pointer;
           font-family:'Courier New',monospace;font-size:11px;
@@ -128,13 +129,13 @@ export class WardrobeTab {
     const container = body.querySelector('#ward-slots');
     if (!container) return;
     const slots = [
-      { key: 'hair', label: 'Hair' },
-      { key: 'top', label: 'Top' }, { key: 'bottom', label: 'Bottom' },
-      { key: 'hat', label: 'Hat' }, { key: 'accessory', label: 'Acc' },
-      { key: 'eyes', label: 'Eyes' },
-      { key: 'nameColor', label: 'Name' }, { key: 'chatColor', label: 'Chat' },
-      { key: 'rodSkin', label: 'Rod' }, { key: 'nameAnim', label: 'Anim' },
-      { key: 'aura', label: 'Aura' },
+      { key: 'hair',      label: ti18n('wardrobe.slot.hair')       },
+      { key: 'top',       label: ti18n('wardrobe.slot.top')        }, { key: 'bottom',    label: ti18n('wardrobe.slot.bottom') },
+      { key: 'hat',       label: ti18n('wardrobe.slot.hat')        }, { key: 'accessory', label: ti18n('wardrobe.slot.acc')    },
+      { key: 'eyes',      label: ti18n('wardrobe.slot.eyes')       },
+      { key: 'nameColor', label: ti18n('wardrobe.slot.name_color') }, { key: 'chatColor', label: ti18n('wardrobe.slot.chat_color') },
+      { key: 'rodSkin',   label: ti18n('wardrobe.slot.rod')        }, { key: 'nameAnim',  label: ti18n('wardrobe.slot.anim')   },
+      { key: 'aura',      label: ti18n('wardrobe.slot.aura')       },
     ];
     container.innerHTML = slots.map(s => `
       <button class="ws" data-slot="${s.key}" style="
