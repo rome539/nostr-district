@@ -18,11 +18,21 @@
 
 const USER_LANG_KEY = 'nd-user-lang';
 
-/** Min confidence from the LanguageDetector before we trust its guess. */
-const MIN_DETECT_CONFIDENCE = 0.7;
+/**
+ * Min confidence from the LanguageDetector before we trust its guess. Tuned
+ * down from 0.7 because single-word chat messages ("olá", "hola", "merci")
+ * rarely score that high — the detector needs context. Short text that still
+ * fails this threshold falls through to the remote proxy, which uses Google's
+ * more robust auto-detect.
+ */
+const MIN_DETECT_CONFIDENCE = 0.45;
 
-/** Skip detection on very short strings — too noisy to classify reliably. */
-const MIN_TEXT_LENGTH = 3;
+/** Lower confidence floor for very short strings — single foreign words still translate. */
+const SHORT_TEXT_LENGTH        = 10;
+const MIN_CONFIDENCE_SHORT     = 0.25;
+
+/** Skip strings that are too short to translate meaningfully (emoji, "ok", "lol"…). */
+const MIN_TEXT_LENGTH = 2;
 
 /** Soft cap on the in-memory translation cache so chat history doesn't grow forever. */
 const CACHE_MAX_ENTRIES = 500;
@@ -235,7 +245,8 @@ async function translateViaNative(text: string, userLang: string): Promise<Trans
   } catch {
     return undefined;
   }
-  if (!detected || detected.confidence < MIN_DETECT_CONFIDENCE) return undefined;
+  const floor = text.length < SHORT_TEXT_LENGTH ? MIN_CONFIDENCE_SHORT : MIN_DETECT_CONFIDENCE;
+  if (!detected || detected.confidence < floor) return undefined;
 
   const src = detected.detectedLanguage.toLowerCase();
   if (src === userLang) return null;
