@@ -1,4 +1,5 @@
 import { Card, Suit, SUITS, mkDeck, shuffle, rl, GameOptions, CardGame } from './cardTypes';
+import { t as ti18n } from '../../i18n/i18n';
 
 interface GfState {
   myHand: Card[];
@@ -60,25 +61,25 @@ function rerender() {
   let h = `
     <div style="display:flex;justify-content:space-between;margin-bottom:12px;padding:0 4px;">
       <div style="text-align:center;">
-        <div style="color:rgba(240,230,208,0.5);font-size:9px;">CPU HAND</div>
-        <div style="color:#f0e6d0;font-size:18px;">${s.aiHand.length} cards</div>
-        <div style="color:rgba(240,230,208,0.5);font-size:9px;">Books: ${s.aiBooks}</div>
+        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${ti18n('gofish.cpu_hand')}</div>
+        <div style="color:#f0e6d0;font-size:18px;">${ti18n('gofish.cards', { n: s.aiHand.length })}</div>
+        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${ti18n('gofish.books', { n: s.aiBooks })}</div>
       </div>
       <div style="text-align:center;">
-        <div style="color:rgba(240,230,208,0.5);font-size:9px;">DECK</div>
+        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${ti18n('gofish.deck')}</div>
         <div style="color:#f0e6d0;font-size:18px;">${s.deck.length}</div>
       </div>
       <div style="text-align:center;">
-        <div style="color:rgba(240,230,208,0.5);font-size:9px;">YOUR BOOKS</div>
+        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${ti18n('gofish.your_books')}</div>
         <div style="color:#5dcaa5;font-size:18px;">${s.myBooks}</div>
-        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${s.myHand.length} cards</div>
+        <div style="color:rgba(240,230,208,0.5);font-size:9px;">${ti18n('gofish.cards', { n: s.myHand.length })}</div>
       </div>
     </div>
     <div style="text-align:center;color:${msgColor};font-size:13px;min-height:36px;margin-bottom:14px;padding:0 8px;">${s.message}</div>
   `;
 
   if (s.phase === 'myTurn' && ranks.length > 0) {
-    h += `<div style="color:rgba(240,230,208,0.5);font-size:10px;text-align:center;margin-bottom:8px;">Ask CPU for:</div>`;
+    h += `<div style="color:rgba(240,230,208,0.5);font-size:10px;text-align:center;margin-bottom:8px;">${ti18n('gofish.ask_cpu')}</div>`;
     h += `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:16px;" id="ct-rank-btns">`;
     for (const rank of ranks) {
       h += `<button class="ct-btn gf-ask" data-rank="${rank}" style="padding:8px 14px;border-radius:5px;cursor:pointer;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;min-width:44px;">${rl(rank)}</button>`;
@@ -87,7 +88,7 @@ function rerender() {
   }
 
   h += `<div style="margin-top:8px;">
-    <div style="color:rgba(240,230,208,0.5);font-size:9px;text-align:center;margin-bottom:6px;">YOUR HAND</div>
+    <div style="color:rgba(240,230,208,0.5);font-size:9px;text-align:center;margin-bottom:6px;">${ti18n('gofish.your_hand')}</div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">
   `;
   for (const c of s.myHand) {
@@ -98,7 +99,7 @@ function rerender() {
   h += `</div></div>`;
 
   if (s.phase === 'done') {
-    const newBtn = `<div style="text-align:center;margin-top:16px;"><button class="ct-btn" id="ct-gf-new" style="padding:9px 20px;border-radius:5px;cursor:pointer;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;">New Game</button></div>`;
+    const newBtn = `<div style="text-align:center;margin-top:16px;"><button class="ct-btn" id="ct-gf-new" style="padding:9px 20px;border-radius:5px;cursor:pointer;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;">${ti18n('gofish.new_game')}</button></div>`;
     h += newBtn;
   }
 

@@ -12,6 +12,7 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
+import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
@@ -282,7 +283,7 @@ export class WoodsScene extends BaseScene {
     this.boatPromptBg = this.add.graphics().setDepth(50).setVisible(false);
     this.boatPromptBg.fillStyle(0x020c0a, 0.92); this.boatPromptBg.fillRoundedRect(0, 0, 148, 28, 5);
     this.boatPromptBg.lineStyle(1, 0x2a5040, 0.7); this.boatPromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.boatPromptText = this.add.text(0, 0, 'COMING SOON', {
+    this.boatPromptText = this.add.text(0, 0, ti18n('woods.coming_soon'), {
       fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#5dcaa5', fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.boatPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#5dcaa5' }).setOrigin(0.5).setDepth(51).setVisible(false);

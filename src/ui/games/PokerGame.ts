@@ -1,4 +1,5 @@
 import { Card, CW, CH, cardUrl, imgStyle, mkDeck, shuffle, rl, GameOptions, CardGame, getCardBackUrl } from './cardTypes';
+import { t as ti18n } from '../../i18n/i18n';
 
 interface HandResult { rank: number; name: string; key: number[]; }
 
@@ -174,14 +175,14 @@ function rerender() {
     const drawBtn = document.createElement('button');
     drawBtn.className = 'ct-btn';
     const cnt = s.discardMask.filter(Boolean).length;
-    drawBtn.textContent = cnt > 0 ? `Discard ${cnt} & Draw` : 'Keep Hand & Draw';
+    drawBtn.textContent = cnt > 0 ? ti18n('poker.discard_draw', { n: cnt }) : ti18n('poker.keep_draw');
     drawBtn.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
     drawBtn.addEventListener('click', doDiscard);
     btnRow.appendChild(drawBtn);
   } else {
     const newBtn = document.createElement('button');
     newBtn.className = 'ct-btn';
-    newBtn.textContent = 'New Hand';
+    newBtn.textContent = ti18n('poker.new_hand');
     newBtn.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
     newBtn.addEventListener('click', () => { _state = newHand(); rerender(); });
     btnRow.appendChild(newBtn);

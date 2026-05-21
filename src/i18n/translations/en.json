@@ -371,5 +371,50 @@
   "sys.dm.opening":      "Opening DM…",
   "sys.not_found":       "\"{name}\" not found",
   "sys.muted":           "Muted",
-  "sys.unmuted":         "Unmuted"
+  "sys.unmuted":         "Unmuted",
+
+  "blackjack.dealer":    "DEALER",
+  "blackjack.you_suffix":"(you)",
+  "blackjack.win":       "WIN",
+  "blackjack.lose":      "LOSE",
+  "blackjack.push":      "PUSH",
+  "blackjack.bust":      "BUST",
+  "blackjack.blackjack": "BLACKJACK",
+  "blackjack.stood":     "STOOD",
+  "blackjack.new_hand":  "New Hand",
+  "blackjack.hit":       "Hit",
+  "blackjack.stand":     "Stand",
+  "blackjack.waiting":   "Waiting for {name}...",
+
+  "war.opponent":      "Opponent",
+  "war.cpu":           "CPU",
+  "war.you":           "You",
+  "war.pot":           "POT",
+  "war.round":         "Round {n}",
+  "war.new_game":      "New Game",
+  "war.waiting_host":  "Waiting for host to start a new game...",
+  "war.flip":          "Flip!",
+  "war.no_cards":      "No cards left",
+  "war.waiting_flip":  "Waiting for {name} to flip...",
+  "war.opp_flipped":   "{name} flipped! ⚔️ Your turn!",
+
+  "poker.discard_draw": "Discard {n} & Draw",
+  "poker.keep_draw":    "Keep Hand & Draw",
+  "poker.new_hand":     "New Hand",
+
+  "solitaire.moves":       "Moves: {n}",
+  "solitaire.moves_total": "{n} moves",
+  "solitaire.you_win":     "YOU WIN!",
+  "solitaire.new_game":    "New Game",
+
+  "gofish.cpu_hand":   "CPU HAND",
+  "gofish.deck":       "DECK",
+  "gofish.your_books": "YOUR BOOKS",
+  "gofish.your_hand":  "YOUR HAND",
+  "gofish.cards":      "{n} cards",
+  "gofish.books":      "Books: {n}",
+  "gofish.ask_cpu":    "Ask CPU for:",
+  "gofish.new_game":   "New Game",
+
+  "woods.coming_soon": "COMING SOON"
 }

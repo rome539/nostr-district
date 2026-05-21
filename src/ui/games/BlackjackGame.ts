@@ -1,4 +1,5 @@
 import { Card, Suit, CW, CH, cardUrl, imgStyle, mkDeck, shuffle, rl, GameOptions, CardGame, getCardBackUrl } from './cardTypes';
+import { t as ti18n } from '../../i18n/i18n';
 
 // ── Card compact encoding (3 chars each: rank + suit + face) ─────────────────
 // Rank chars: A 2 3 4 5 6 7 8 9 T J Q K
@@ -143,9 +144,9 @@ function renderCards(cards: Card[], highlight = false): string {
 
 function renderState(s: BjState, myPubkey: string): string {
   const dv = s.phase === 'done' ? handVal(s.dealer) : handVal(s.dealer.filter(c => c.up));
-  const dLabel = s.phase === 'done' ? `${dv}${dv > 21 ? ' BUST' : ''}` : `${dv}+?`;
+  const dLabel = s.phase === 'done' ? `${dv}${dv > 21 ? ' ' + ti18n('blackjack.bust') : ''}` : `${dv}+?`;
   let h = `<div style="text-align:center;margin-bottom:20px;">
-    <div style="color:rgba(240,230,208,0.7);font-size:11px;margin-bottom:8px;">DEALER — ${dLabel}</div>
+    <div style="color:rgba(240,230,208,0.7);font-size:11px;margin-bottom:8px;">${ti18n('blackjack.dealer')} — ${dLabel}</div>
     ${renderCards(s.dealer)}
   </div>`;
   h += `<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">`;
@@ -153,9 +154,15 @@ function renderState(s: BjState, myPubkey: string): string {
     const isMe = p.pubkey === myPubkey;
     const pv = handVal(p.hand);
     const statusColor = p.result === 'win' ? '#5dcaa5' : p.result === 'lose' ? '#ff7070' : p.result === 'push' ? '#f0e6d0' : 'rgba(240,230,208,0.7)';
-    const label = p.result === 'win' ? 'WIN' : p.result === 'lose' ? 'LOSE' : p.result === 'push' ? 'PUSH' : p.status === 'bust' ? 'BUST' : p.status === 'blackjack' ? 'BLACKJACK' : p.status === 'stood' ? `STOOD: ${pv}` : `${pv}`;
+    const label = p.result === 'win' ? ti18n('blackjack.win')
+                : p.result === 'lose' ? ti18n('blackjack.lose')
+                : p.result === 'push' ? ti18n('blackjack.push')
+                : p.status === 'bust' ? ti18n('blackjack.bust')
+                : p.status === 'blackjack' ? ti18n('blackjack.blackjack')
+                : p.status === 'stood' ? `${ti18n('blackjack.stood')}: ${pv}`
+                : `${pv}`;
     h += `<div style="text-align:center;">
-      <div style="color:${statusColor};font-size:10px;margin-bottom:6px;">${isMe ? '▶ ' : ''}${p.name}${isMe ? ' (you)' : ''} — ${label}</div>
+      <div style="color:${statusColor};font-size:10px;margin-bottom:6px;">${isMe ? '▶ ' : ''}${p.name}${isMe ? ' ' + ti18n('blackjack.you_suffix') : ''} — ${label}</div>
       ${renderCards(p.hand, isMe && s.players[s.currentIdx]?.pubkey === myPubkey && s.phase === 'playing')}
     </div>`;
   }
@@ -183,20 +190,20 @@ function rerender() {
   if (s.phase === 'done') {
     const newBtn = document.createElement('button');
     newBtn.className = 'ct-btn';
-    newBtn.textContent = 'New Hand';
+    newBtn.textContent = ti18n('blackjack.new_hand');
     newBtn.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
     newBtn.addEventListener('click', () => startRound());
     btnRow.appendChild(newBtn);
   } else if (isMyTurn) {
     const hit = document.createElement('button');
     hit.className = 'ct-btn';
-    hit.textContent = 'Hit';
+    hit.textContent = ti18n('blackjack.hit');
     hit.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
     hit.addEventListener('click', doHit);
 
     const stand = document.createElement('button');
     stand.className = 'ct-btn';
-    stand.textContent = 'Stand';
+    stand.textContent = ti18n('blackjack.stand');
     stand.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.7);';
     stand.addEventListener('click', doStand);
 
@@ -205,7 +212,7 @@ function rerender() {
   } else if (s.phase === 'playing') {
     const w = document.createElement('div');
     w.style.cssText = 'color:rgba(255,255,255,0.4);font-size:11px;text-align:center;margin-top:8px;';
-    w.textContent = `Waiting for ${s.players[s.currentIdx]?.name ?? ''}...`;
+    w.textContent = ti18n('blackjack.waiting', { name: s.players[s.currentIdx]?.name ?? '' });
     _el.appendChild(w);
   }
 

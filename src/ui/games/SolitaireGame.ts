@@ -1,4 +1,5 @@
 import { Card, Suit, SUITS, SYM, CW, CH, cardUrl, imgStyle, mkDeck, shuffle, GameOptions, CardGame, getCardBackUrl } from './cardTypes';
+import { t as ti18n } from '../../i18n/i18n';
 
 const GAP = 10;
 const FD = 18;
@@ -161,9 +162,9 @@ let _opts: GameOptions | null = null;
 function rerender() {
   if (!_el || !_gs) return;
   const mv = _el.parentElement?.querySelector('#ct-moves') as HTMLElement | null;
-  if (mv) mv.textContent = `Moves: ${_gs.moves}`;
+  if (mv) mv.textContent = ti18n('solitaire.moves', { n: _gs.moves });
   if (_gs.won) {
-    _el.innerHTML = `<div style="text-align:center;color:#5dcaa5;font-size:24px;padding:60px 0;letter-spacing:0.06em;">YOU WIN!<br><br><span style="font-size:14px;color:rgba(255,255,255,0.55);">${_gs.moves} moves</span></div>`;
+    _el.innerHTML = `<div style="text-align:center;color:#5dcaa5;font-size:24px;padding:60px 0;letter-spacing:0.06em;">${ti18n('solitaire.you_win')}<br><br><span style="font-size:14px;color:rgba(255,255,255,0.55);">${ti18n('solitaire.moves_total', { n: _gs.moves })}</span></div>`;
     return;
   }
   _el.innerHTML = renderHTML(_gs);
@@ -221,7 +222,7 @@ export const SolitaireGame: CardGame = {
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
-    header.innerHTML = `<span id="ct-moves" style="color:rgba(240,230,208,0.55);font-size:10px;">Moves: 0</span><button id="ct-new" class="ct-btn" style="padding:5px 12px;border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;font-size:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.7);">New Game</button>`;
+    header.innerHTML = `<span id="ct-moves" style="color:rgba(240,230,208,0.55);font-size:10px;">${ti18n('solitaire.moves', { n: 0 })}</span><button id="ct-new" class="ct-btn" style="padding:5px 12px;border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;font-size:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.7);">${ti18n('solitaire.new_game')}</button>`;
     opts.container.before(header);
 
     rerender();

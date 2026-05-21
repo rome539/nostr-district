@@ -1,4 +1,5 @@
 import { Card, Suit, CW, CH, cardUrl, imgStyle, mkDeck, shuffle, rl, GameOptions, CardGame, getCardBackUrl } from './cardTypes';
+import { t as ti18n } from '../../i18n/i18n';
 
 interface WarState {
   myPile:    Card[];
@@ -206,22 +207,22 @@ function rerender() {
   if (!_el || !_state || !_opts) return;
   const s       = _state;
   const isMP    = _opts.multiplayer;
-  const oppName = isMP ? (_opts.players.find(p => p.pubkey !== _opts!.myPubkey)?.name ?? 'Opponent') : 'CPU';
+  const oppName = isMP ? (_opts.players.find(p => p.pubkey !== _opts!.myPubkey)?.name ?? ti18n('war.opponent')) : ti18n('war.cpu');
 
-  let h = `<div style="text-align:center;margin-bottom:4px;color:rgba(240,230,208,0.5);font-size:10px;">Round ${s.round}</div>`;
+  let h = `<div style="text-align:center;margin-bottom:4px;color:rgba(240,230,208,0.5);font-size:10px;">${ti18n('war.round', { n: s.round })}</div>`;
 
   // Pile counts
   h += `<div style="display:flex;justify-content:space-around;align-items:center;gap:12px;margin-bottom:20px;">`;
   h += faceDownPile(s.oppPile.length, oppName);
-  h += `<div style="text-align:center;color:rgba(240,230,208,0.4);font-size:10px;">POT<br>${s.pot.length}</div>`;
-  h += faceDownPile(s.myPile.length, 'You');
+  h += `<div style="text-align:center;color:rgba(240,230,208,0.4);font-size:10px;">${ti18n('war.pot')}<br>${s.pot.length}</div>`;
+  h += faceDownPile(s.myPile.length, ti18n('war.you'));
   h += `</div>`;
 
   // Battle cards — always present so height stays fixed
   h += `<div style="display:flex;justify-content:space-around;align-items:center;gap:20px;margin-bottom:20px;">`;
   h += renderPileCard(s.oppFlipped, oppName);
   h += `<div style="font-size:28px;color:rgba(240,230,208,0.25);">VS</div>`;
-  h += renderPileCard(s.myFlipped,  'You');
+  h += renderPileCard(s.myFlipped,  ti18n('war.you'));
   h += `</div>`;
 
   const msgColor = s.message.includes('WIN') || s.message.includes('🎉') ? '#5dcaa5'
@@ -238,20 +239,20 @@ function rerender() {
     if (!isMP || _opts.isHost) {
       const btn = document.createElement('button');
       btn.className = 'ct-btn';
-      btn.textContent = 'New Game';
+      btn.textContent = ti18n('war.new_game');
       btn.style.cssText = 'padding:9px 20px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:11px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
       btn.addEventListener('click', restartGame);
       btnRow.appendChild(btn);
     } else {
       const msg = document.createElement('div');
       msg.style.cssText = 'color:rgba(255,255,255,0.4);font-size:11px;';
-      msg.textContent = 'Waiting for host to start a new game...';
+      msg.textContent = ti18n('war.waiting_host');
       btnRow.appendChild(msg);
     }
   } else if (s.phase === 'flip' && !s.myReady) {
     const btn = document.createElement('button');
     btn.className = 'ct-btn';
-    btn.textContent = s.myPile.length ? '⚔️ Flip!' : 'No cards left';
+    btn.textContent = s.myPile.length ? '⚔️ ' + ti18n('war.flip') : ti18n('war.no_cards');
     btn.disabled = !s.myPile.length;
     btn.style.cssText = 'padding:11px 28px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:13px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.42);color:#d8fff0;';
     btn.addEventListener('click', doFlip);
@@ -259,12 +260,12 @@ function rerender() {
   } else if (s.myReady && !s.oppReady) {
     const msg = document.createElement('div');
     msg.style.cssText = 'color:rgba(255,255,255,0.4);font-size:11px;';
-    msg.textContent = `Waiting for ${oppName} to flip...`;
+    msg.textContent = ti18n('war.waiting_flip', { name: oppName });
     btnRow.appendChild(msg);
   } else if (!s.myReady && s.oppReady) {
     const btn = document.createElement('button');
     btn.className = 'ct-btn';
-    btn.textContent = `${oppName} flipped! ⚔️ Your turn!`;
+    btn.textContent = ti18n('war.opp_flipped', { name: oppName });
     btn.style.cssText = 'padding:11px 28px;border-radius:5px;cursor:pointer;font-family:"Courier New",monospace;font-size:13px;font-weight:bold;background:rgba(0,0,0,0.35);border:1px solid rgba(93,202,165,0.52);color:#ffd700;';
     btn.addEventListener('click', doFlip);
     btnRow.appendChild(btn);
