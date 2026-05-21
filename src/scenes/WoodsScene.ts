@@ -16,7 +16,7 @@ import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
-import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
+import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange,
   requestOnlinePlayers, setOnlinePlayersHandler,
@@ -235,11 +235,9 @@ export class WoodsScene extends BaseScene {
 
     // Cabin door prompt
     this.cabinPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.cabinPromptBg.fillStyle(0x080502, 0.9); this.cabinPromptBg.fillRoundedRect(0, 0, 128, 28, 5);
-    this.cabinPromptBg.lineStyle(1, 0x6a3c10, 0.6); this.cabinPromptBg.strokeRoundedRect(0, 0, 128, 28, 5);
-    this.cabinPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Enter CABIN' : '[E] Enter CABIN', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#f0a030', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.cabinPromptText = this.add.text(0, 0, `${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${ti18n('prompt.enter', { name: 'CABIN' })}`, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#f0a030', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.cabinPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#f0a030' }).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.cabinPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 128, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.cabinPromptBg, this.cabinPromptText, { minWidth: 128, fill: 0x080502, fillAlpha: 0.9, stroke: 0x6a3c10, strokeAlpha: 0.6 });
     this.cabinPromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); }
@@ -254,11 +252,9 @@ export class WoodsScene extends BaseScene {
 
     // Telescope prompt
     this.telescopePromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.telescopePromptBg.fillStyle(0x050510, 0.92); this.telescopePromptBg.fillRoundedRect(0, 0, 120, 28, 5);
-    this.telescopePromptBg.lineStyle(1, 0x334488, 0.7); this.telescopePromptBg.strokeRoundedRect(0, 0, 120, 28, 5);
-    this.telescopePromptText = this.add.text(0, 0, '[E] Look Up', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#8ab4ff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.telescopePromptText = this.add.text(0, 0, `[E] ${ti18n('prompt.look_up')}`, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#8ab4ff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.telescopePromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#8ab4ff' }).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.telescopePromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 120, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.telescopePromptBg, this.telescopePromptText, { minWidth: 120, fill: 0x050510, fillAlpha: 0.92, stroke: 0x334488, strokeAlpha: 0.7 });
     this.telescopePromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearTelescope) this.openTelescopeView();
@@ -267,13 +263,11 @@ export class WoodsScene extends BaseScene {
     // Dock / fishing prompt
     this.fishingLineGraphics = this.add.graphics().setDepth(2);
     this.dockPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.dockPromptBg.fillStyle(0x020c0a, 0.92); this.dockPromptBg.fillRoundedRect(0, 0, 116, 28, 5);
-    this.dockPromptBg.lineStyle(1, 0x1a5040, 0.7); this.dockPromptBg.strokeRoundedRect(0, 0, 116, 28, 5);
-    this.dockPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Cast Line' : '[E] Cast Line', {
+    this.dockPromptText = this.add.text(0, 0, `${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${ti18n('prompt.cast_line')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#5dcaa5', fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.dockPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#5dcaa5' }).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.dockPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 116, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.dockPromptBg, this.dockPromptText, { minWidth: 116, fill: 0x020c0a, fillAlpha: 0.92, stroke: 0x1a5040, strokeAlpha: 0.7 });
     this.dockPromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearDockTip) this.handleFishingPress();
@@ -281,12 +275,11 @@ export class WoodsScene extends BaseScene {
 
     // Boat prompt
     this.boatPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.boatPromptBg.fillStyle(0x020c0a, 0.92); this.boatPromptBg.fillRoundedRect(0, 0, 148, 28, 5);
-    this.boatPromptBg.lineStyle(1, 0x2a5040, 0.7); this.boatPromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
     this.boatPromptText = this.add.text(0, 0, ti18n('woods.coming_soon'), {
       fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#5dcaa5', fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.boatPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: '#5dcaa5' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.boatPromptBg, this.boatPromptText, { minWidth: 148, fill: 0x020c0a, fillAlpha: 0.92, stroke: 0x2a5040, strokeAlpha: 0.7 });
 
     this.setupPresenceCallbacks(myPubkey);
     sendRoomChange('woods', this.spawnX, this.playerY);
@@ -1289,7 +1282,7 @@ export class WoodsScene extends BaseScene {
     this.boatPromptArrow.setVisible(near);
     if (near) {
       const px = boatCenterX, py = FLOOR_Y - 70;
-      this.boatPromptBg.setPosition(px - 74, py - 2);
+      positionPromptBubble(this.boatPromptBg, px, py - 2);
       this.boatPromptText.setPosition(px, py + 8);
       this.boatPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.boatPromptArrow)) {
@@ -1359,7 +1352,7 @@ export class WoodsScene extends BaseScene {
     this.dockPromptArrow.setVisible(showPrompt);
     if (showPrompt) {
       const px = DOCK_X + 12, py = FLOOR_Y - 90;
-      this.dockPromptBg.setPosition(px - 58, py - 2);
+      positionPromptBubble(this.dockPromptBg, px, py - 2);
       this.dockPromptText.setPosition(px, py + 8);
       this.dockPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.dockPromptArrow)) {
@@ -1432,12 +1425,13 @@ export class WoodsScene extends BaseScene {
     // Bite state: show prompt + timeout check
     if (isBite) {
       const px = DOCK_X + 12, py = FLOOR_Y - 90;
-      this.dockPromptText.setText(this.sys.game.device.input.touch ? '[TAP] Reel In!' : '[E] Reel In!');
+      this.dockPromptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${ti18n('prompt.reel_in')}`);
       this.dockPromptText.setColor('#ff8888');
+      fitPromptBubble(this.dockPromptBg, this.dockPromptText, { minWidth: 116, fill: 0x020c0a, fillAlpha: 0.92, stroke: 0x1a5040, strokeAlpha: 0.7 });
       this.dockPromptBg.setVisible(true);
       this.dockPromptText.setVisible(true);
       this.dockPromptArrow.setVisible(true);
-      this.dockPromptBg.setPosition(px - 58, py - 2);
+      positionPromptBubble(this.dockPromptBg, px, py - 2);
       this.dockPromptText.setPosition(px, py + 8);
       this.dockPromptArrow.setPosition(px, py + 22);
       this.fishingTimer += delta;
@@ -1626,8 +1620,9 @@ export class WoodsScene extends BaseScene {
     this.fishingState = 'idle';
     this.fishingTimer = 0;
     this.fishingLineGraphics.clear();
-    this.dockPromptText.setText(this.sys.game.device.input.touch ? '[TAP] Cast Line' : '[E] Cast Line');
+    this.dockPromptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${ti18n('prompt.cast_line')}`);
     this.dockPromptText.setColor('#5dcaa5');
+    fitPromptBubble(this.dockPromptBg, this.dockPromptText, { minWidth: 116, fill: 0x020c0a, fillAlpha: 0.92, stroke: 0x1a5040, strokeAlpha: 0.7 });
     this.tweens.killTweensOf(this.dockPromptArrow);
   }
 
@@ -1673,7 +1668,7 @@ export class WoodsScene extends BaseScene {
     }
     if (near) {
       const px = TELESCOPE_X, py = FLOOR_Y - 90;
-      this.telescopePromptBg.setPosition(px - 60, py - 2);
+      positionPromptBubble(this.telescopePromptBg, px, py - 2);
       this.telescopePromptText.setPosition(px, py + 8);
       this.telescopePromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.telescopePromptArrow)) {
@@ -2031,7 +2026,7 @@ export class WoodsScene extends BaseScene {
     }
     if (near) {
       const px = CABIN_DOOR_X, py = FLOOR_Y - 96;
-      this.cabinPromptBg.setPosition(px - 64, py - 2);
+      positionPromptBubble(this.cabinPromptBg, px, py - 2);
       this.cabinPromptText.setPosition(px, py + 8);
       this.cabinPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.cabinPromptArrow)) {

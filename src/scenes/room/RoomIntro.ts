@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, P } from '../../config/game.config';
 import { markSetupComplete } from '../../stores/roomStore';
+import { t as ti18n } from '../../i18n/i18n';
 
 export interface RoomIntroCallbacks {
   addSystemMessage: (msg: string, color: string) => void;
@@ -24,12 +25,12 @@ export class RoomIntro {
       align: 'center', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(501).setAlpha(0);
 
-    this.mainText.setText('Welcome home.');
+    this.mainText.setText(ti18n('room.intro.welcome'));
     scene.tweens.add({
       targets: this.mainText, alpha: 1, duration: 1200, ease: 'Quad.easeOut',
       onComplete: () => {
         scene.time.delayedCall(1500, () => {
-          const subtitle = scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10, "Let's make this place yours.", {
+          const subtitle = scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10, ti18n('room.intro.subtitle'), {
             fontFamily: '"Courier New", monospace', fontSize: '12px', color: P.lpurp, align: 'center',
           }).setOrigin(0.5).setDepth(501).setAlpha(0);
 
@@ -46,7 +47,7 @@ export class RoomIntro {
                     subtitle.destroy();
                     this.isActive = false;
                     markSetupComplete();
-                    callbacks.addSystemMessage('Terminal opened — customize your room!', P.teal);
+                    callbacks.addSystemMessage(ti18n('room.intro.terminal_opened'), P.teal);
                     callbacks.openTerminal();
                   },
                 });

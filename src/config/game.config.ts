@@ -1,3 +1,5 @@
+import Phaser from 'phaser';
+
 // Klipy GIF search API key
 export const KLIPY_API_KEY = 'BjnOnMJtNNSil2lyQmBZEMlwcoQM4iu97gnxno5Ihwu8zVNixEgRWLOPpLKcbeQ7';
 
@@ -104,4 +106,29 @@ export function hexToNum(hex: string): number {
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const n = hexToNum(hex);
   return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+}
+
+/**
+ * Redraw a Phaser graphics bubble so its width fits the text inside.
+ * Used for prompt bubbles whose label changes by translation length.
+ */
+export function fitPromptBubble(
+  bg: Phaser.GameObjects.Graphics,
+  text: Phaser.GameObjects.Text,
+  opts: { minWidth: number; height?: number; fill: number; fillAlpha: number; stroke: number; strokeAlpha: number },
+): number {
+  const h = opts.height ?? 28;
+  const w = Math.max(opts.minWidth, Math.ceil(text.width) + 24);
+  bg.clear();
+  bg.fillStyle(opts.fill, opts.fillAlpha); bg.fillRoundedRect(0, 0, w, h, 5);
+  bg.lineStyle(1, opts.stroke, opts.strokeAlpha); bg.strokeRoundedRect(0, 0, w, h, 5);
+  bg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+  bg.setData('bubbleWidth', w);
+  return w;
+}
+
+/** Center a prompt bubble bg horizontally on `px`, using the width stored by fitPromptBubble. */
+export function positionPromptBubble(bg: Phaser.GameObjects.Graphics, px: number, py: number): void {
+  const w = (bg.getData('bubbleWidth') as number) || 128;
+  bg.setPosition(px - w / 2, py);
 }

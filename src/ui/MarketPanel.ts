@@ -25,12 +25,12 @@ import { t as ti18n } from '../i18n/i18n';
 const PANEL_ID    = 'market-panel';
 const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
 
-const SLOT_LABEL: Record<string, string> = {
-  hair:      'HAIR', top:       'TOP',   bottom:    'BOT',
-  hat:       'HAT',  accessory: 'ACC',   nameColor: 'COLOR',
-  chatColor: 'COLOR', rodSkin:  'ROD',   nameAnim:  'ANIM',
-  aura:      'AURA', eyes:      'EYES',  furniture: 'ROOM',
-  wallTheme: 'WALL',
+const SLOT_LABEL_KEY: Record<string, string> = {
+  hair:      'market.slot.hair', top:       'market.slot.top',   bottom:    'market.slot.bot',
+  hat:       'market.slot.hat',  accessory: 'market.slot.acc',   nameColor: 'market.slot.color',
+  chatColor: 'market.slot.color', rodSkin:  'market.slot.rod',   nameAnim:  'market.slot.anim',
+  aura:      'market.slot.aura', eyes:      'market.slot.eyes',  furniture: 'market.slot.room',
+  wallTheme: 'market.slot.wall',
 };
 const SLOT_BADGE = `color:var(--nd-subtext);background:color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);`;
 
@@ -43,27 +43,27 @@ const GROUP_SLOTS: Record<string, string[]> = {
   room:      ['furniture', 'wallTheme', 'floorStyle'],
 };
 
-const SUB_CATEGORIES: Record<string, { key: Category; label: string }[]> = {
+const SUB_CATEGORIES: Record<string, { key: Category; labelKey: string }[]> = {
   clothes: [
-    { key: 'hair',      label: 'HAIR'   },
-    { key: 'top',       label: 'TOPS'   },
-    { key: 'bottom',    label: 'BOTS'   },
-    { key: 'hat',       label: 'HATS'   },
-    { key: 'accessory', label: 'ACC'    },
-    { key: 'eyes',      label: 'EYES'   },
+    { key: 'hair',      labelKey: 'market.sub.hair' },
+    { key: 'top',       labelKey: 'market.sub.tops' },
+    { key: 'bottom',    labelKey: 'market.sub.bots' },
+    { key: 'hat',       labelKey: 'market.sub.hats' },
+    { key: 'accessory', labelKey: 'market.sub.acc'  },
+    { key: 'eyes',      labelKey: 'market.sub.eyes' },
   ],
   cosmetics: [
-    { key: 'nameColor', label: 'COLORS' },
-    { key: 'rodSkin',   label: 'ROD'    },
-    { key: 'nameAnim',  label: 'ANIM'   },
-    { key: 'aura',      label: 'AURA'   },
+    { key: 'nameColor', labelKey: 'market.sub.colors' },
+    { key: 'rodSkin',   labelKey: 'market.sub.rod'    },
+    { key: 'nameAnim',  labelKey: 'market.sub.anim'   },
+    { key: 'aura',      labelKey: 'market.sub.aura'   },
   ],
   room: [
-    { key: 'lounge',    label: 'LOUNGE'  },
-    { key: 'decor',     label: 'DECOR'   },
-    { key: 'tech',      label: 'TECH'    },
-    { key: 'wallTheme',  label: 'WALLS'  },
-    { key: 'floorStyle', label: 'FLOORS' },
+    { key: 'lounge',     labelKey: 'market.sub.lounge' },
+    { key: 'decor',      labelKey: 'market.sub.decor'  },
+    { key: 'tech',       labelKey: 'market.sub.tech'   },
+    { key: 'wallTheme',  labelKey: 'market.sub.walls'  },
+    { key: 'floorStyle', labelKey: 'market.sub.floors' },
   ],
 };
 
@@ -314,11 +314,11 @@ export class MarketPanel {
       ">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-            <span style="font-size:9px;font-weight:bold;letter-spacing:0.08em;color:#5dcaa5;">🏷 DEAL OF THE WEEK</span>
-            <span style="font-size:8px;color:color-mix(in srgb,#5dcaa5 60%,transparent);">${days}d left</span>
+            <span style="font-size:9px;font-weight:bold;letter-spacing:0.08em;color:#5dcaa5;">🏷 ${ti18n('market.deal_of_week')}</span>
+            <span style="font-size:8px;color:color-mix(in srgb,#5dcaa5 60%,transparent);">${ti18n('market.days_left', { n: days })}</span>
           </div>
           <div style="color:var(--nd-text);font-size:12px;font-weight:bold;">${esc(item.name)}</div>
-          <span style="font-size:9px;padding:1px 5px;border-radius:2px;letter-spacing:0.05em;display:inline-block;margin-top:2px;${SLOT_BADGE}">${SLOT_LABEL[item.slot] ?? item.slot}</span>
+          <span style="font-size:9px;padding:1px 5px;border-radius:2px;letter-spacing:0.05em;display:inline-block;margin-top:2px;${SLOT_BADGE}">${SLOT_LABEL_KEY[item.slot] ? ti18n(SLOT_LABEL_KEY[item.slot]) : item.slot}</span>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
           <div style="display:flex;align-items:center;gap:5px;">
@@ -331,7 +331,7 @@ export class MarketPanel {
             background:color-mix(in srgb,#5dcaa5 20%,transparent);
             border:1px solid color-mix(in srgb,#5dcaa5 50%,transparent);
             color:#5dcaa5;opacity:${canBuy ? '1' : '0.5'};
-          " ${canBuy ? '' : 'disabled'}>BUY</button>
+          " ${canBuy ? '' : 'disabled'}>${ti18n('market.buy')}</button>
         </div>
       </div>
     `;
@@ -391,14 +391,14 @@ export class MarketPanel {
 
     container.innerHTML = `
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:${subs.length ? '6px' : '0'};">
-        <button class="mp-group" data-group="all"       style="${primaryStyle(MarketPanel._group === 'all')}">ALL</button>
-        <button class="mp-group" data-group="clothes"   style="${primaryStyle(MarketPanel._group === 'clothes')}">CLOTHES</button>
-        <button class="mp-group" data-group="cosmetics" style="${primaryStyle(MarketPanel._group === 'cosmetics')}">COSMETICS</button>
-        <button class="mp-group" data-group="room"      style="${primaryStyle(MarketPanel._group === 'room')}">ROOM</button>
+        <button class="mp-group" data-group="all"       style="${primaryStyle(MarketPanel._group === 'all')}">${ti18n('market.group.all')}</button>
+        <button class="mp-group" data-group="clothes"   style="${primaryStyle(MarketPanel._group === 'clothes')}">${ti18n('market.group.clothes')}</button>
+        <button class="mp-group" data-group="cosmetics" style="${primaryStyle(MarketPanel._group === 'cosmetics')}">${ti18n('market.group.cosmetics')}</button>
+        <button class="mp-group" data-group="room"      style="${primaryStyle(MarketPanel._group === 'room')}">${ti18n('market.group.room')}</button>
       </div>
       ${subs.length ? `
         <div style="display:flex;gap:3px;flex-wrap:wrap;">
-          ${subs.map(s => `<button class="mp-sub" data-sub="${s.key}" style="${subStyle(MarketPanel._category === s.key)}">${s.label}</button>`).join('')}
+          ${subs.map(s => `<button class="mp-sub" data-sub="${s.key}" style="${subStyle(MarketPanel._category === s.key)}">${ti18n(s.labelKey)}</button>`).join('')}
         </div>` : ''}
     `;
 
@@ -537,7 +537,7 @@ export class MarketPanel {
       row.innerHTML = `
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="color:var(--nd-text);font-size:12px;font-weight:bold;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${colorSwatch}${esc(item.name)}</div>
-          <span style="font-size:10px;padding:1px 5px;border-radius:2px;letter-spacing:0.05em;display:inline-block;margin-top:3px;${SLOT_BADGE}">${SLOT_LABEL[item.slot] ?? item.slot}</span>
+          <span style="font-size:10px;padding:1px 5px;border-radius:2px;letter-spacing:0.05em;display:inline-block;margin-top:3px;${SLOT_BADGE}">${SLOT_LABEL_KEY[item.slot] ? ti18n(SLOT_LABEL_KEY[item.slot]) : item.slot}</span>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0;gap:2px;">
           ${earnRight ??
@@ -561,7 +561,7 @@ export class MarketPanel {
                    background:color-mix(in srgb,var(--nd-amber,#f0b040) 18%,transparent);
                    border:1px solid color-mix(in srgb,var(--nd-amber,#f0b040) 45%,transparent);
                    color:var(--nd-amber,#f0b040);opacity:${canBuy ? '1' : '0.5'};
-                 " ${canBuy ? '' : 'disabled'}>BUY</button>`
+                 " ${canBuy ? '' : 'disabled'}>${ti18n('market.buy')}</button>`
             )
           }
         </div>

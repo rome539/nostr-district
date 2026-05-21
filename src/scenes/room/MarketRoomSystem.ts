@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, P, hexToNum } from '../../config/game.config';
+import { GAME_WIDTH, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../../config/game.config';
 import { MarketPanel } from '../../ui/MarketPanel';
+import { t as ti18n } from '../../i18n/i18n';
 
 export class MarketRoomSystem {
   private shopPrompt!: Phaser.GameObjects.Text;
@@ -9,13 +10,10 @@ export class MarketRoomSystem {
 
   setup(scene: Phaser.Scene): void {
     this.shopPromptBg = scene.add.graphics().setDepth(50).setVisible(false);
-    this.shopPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.shopPromptBg.fillRoundedRect(0, 0, 128, 28, 5);
-    this.shopPromptBg.lineStyle(1, hexToNum(P.amber), 0.3);
-    this.shopPromptBg.strokeRoundedRect(0, 0, 128, 28, 5);
-    this.shopPrompt = scene.add.text(0, 0, '[E] Browse Shop', {
+    this.shopPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.browse_shop')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.amber, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.shopPromptBg, this.shopPrompt, { minWidth: 128, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.amber), strokeAlpha: 0.3 });
     this.shopPrompt.setInteractive();
     this.shopPrompt.on('pointerdown', () => { if (this.nearShop) MarketPanel.open(); });
 
@@ -28,8 +26,8 @@ export class MarketRoomSystem {
     this.shopPrompt.setVisible(visible);
     this.shopPromptBg.setVisible(visible);
     if (visible) {
-      this.shopPromptBg.setPosition(GAME_WIDTH / 2 - 64, 200);
       this.shopPrompt.setPosition(GAME_WIDTH / 2, 214);
+      positionPromptBubble(this.shopPromptBg, GAME_WIDTH / 2, 200);
     }
   }
 

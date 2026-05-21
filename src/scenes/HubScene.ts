@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
-import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb } from '../config/game.config';
+import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble } from '../config/game.config';
 import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendAvatarUpdate,
@@ -650,13 +650,18 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.player.setFlipX(!this.facingRight);
   }
   private showPrompt(px: number, py: number, label: string, color: string): void {
+    this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${label}`);
+    this.promptText.setColor(color);
+
+    const w = fitPromptBubble(this.promptBg, this.promptText, {
+      minWidth: 124, fill: hexToNum(P.bg), fillAlpha: 0.88, stroke: hexToNum(P.dpurp), strokeAlpha: 0.4,
+    });
+
     this.promptBg.setVisible(true);
     this.promptText.setVisible(true);
     this.promptArrow.setVisible(true);
-    this.promptBg.setPosition(px - 62, py - 2);
+    this.promptBg.setPosition(px - w / 2, py - 2);
     this.promptText.setPosition(px, py + 8);
-    this.promptText.setText(`${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${label}`);
-    this.promptText.setColor(color);
     this.promptArrow.setPosition(px, py + 22);
     this.promptArrow.setColor(color);
     this.tweens.add({
@@ -677,7 +682,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     const wasNearCrew = this.nearCrewBoard;
     this.nearCrewBoard = cdist < 52;
     if (this.nearCrewBoard !== wasNearCrew) {
-      if (this.nearCrewBoard) this.showPrompt(this.CREW_BOARD_X, GROUND_Y - 75, 'Crews', P.teal);
+      if (this.nearCrewBoard) this.showPrompt(this.CREW_BOARD_X, GROUND_Y - 75, ti18n('prompt.crews'), P.teal);
       else this.hidePrompt();
     }
     if (this.nearCrewBoard) return;
@@ -687,7 +692,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.nearBulletinBoard = bdist < 52;
     if (this.nearBulletinBoard !== wasNearBoard) {
       if (this.nearBulletinBoard) {
-        this.showPrompt(this.BULLETIN_X, GROUND_Y - 75, 'View Polls', P.amber);
+        this.showPrompt(this.BULLETIN_X, GROUND_Y - 75, ti18n('prompt.view_polls'), P.amber);
         this.nearBuilding = null;
         return;
       } else {
@@ -705,7 +710,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     const f = fi >= 0 ? ENTERABLE[fi] : null;
     if (f !== this.nearBuilding) {
       this.nearBuilding = f;
-      if (f) this.showPrompt(f.doorX, GROUND_Y - 75, `Enter ${f.name}`, f.neonColor);
+      if (f) this.showPrompt(f.doorX, GROUND_Y - 75, ti18n('prompt.enter', { name: ti18n(`hub.building.${f.id}`) }), f.neonColor);
       else this.hidePrompt();
     }
   }

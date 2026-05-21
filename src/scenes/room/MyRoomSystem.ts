@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, P, hexToNum } from '../../config/game.config';
+import { GAME_WIDTH, GAME_HEIGHT, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../../config/game.config';
 import {
   getRoomConfig, setRoomConfig, isFirstVisit, RoomConfig, FurnitureId,
   getDefaultPos, getFurnitureColor,
@@ -17,6 +17,7 @@ import { sendAvatarUpdate, sendNameUpdate, sendChat, setRoomRequestHandler, clea
 import { SoundEngine } from '../../audio/SoundEngine';
 import { RoomIntro } from './RoomIntro';
 import { RoomRequestToast } from './RoomRequestToast';
+import { t as ti18n } from '../../i18n/i18n';
 
 export interface MyRoomCtx {
   scene: Phaser.Scene;
@@ -182,13 +183,10 @@ export class MyRoomSystem {
 
     // Computer interaction prompt
     this.computerPromptBg = scene.add.graphics().setDepth(900).setVisible(false);
-    this.computerPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.computerPromptBg.fillRoundedRect(0, 0, 130, 28, 5);
-    this.computerPromptBg.lineStyle(1, hexToNum(P.teal), 0.3);
-    this.computerPromptBg.strokeRoundedRect(0, 0, 130, 28, 5);
-    this.computerPrompt = scene.add.text(0, 0, '[E] Use Computer', {
+    this.computerPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.use_computer')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    fitPromptBubble(this.computerPromptBg, this.computerPrompt, { minWidth: 130, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.teal), strokeAlpha: 0.3 });
     this.computerPrompt.setInteractive();
     this.computerPrompt.on('pointerdown', () => {
       if (!this.intro.isActive && this.nearComputerField && isOwner) this.openComputer();
@@ -196,13 +194,10 @@ export class MyRoomSystem {
 
     // Bookcase interaction prompt
     this.bookcasePromptBg = scene.add.graphics().setDepth(900).setVisible(false);
-    this.bookcasePromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.bookcasePromptBg.fillRoundedRect(0, 0, 148, 28, 5);
-    this.bookcasePromptBg.lineStyle(1, hexToNum(P.purp), 0.3);
-    this.bookcasePromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.bookcasePrompt = scene.add.text(0, 0, '[E] Sign the bookcase', {
+    this.bookcasePrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.sign_bookcase')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.purp, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    fitPromptBubble(this.bookcasePromptBg, this.bookcasePrompt, { minWidth: 148, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.purp), strokeAlpha: 0.3 });
     this.bookcasePrompt.setInteractive();
     this.bookcasePrompt.on('pointerdown', () => {
       if (!this.intro.isActive && this.nearBookcaseField) this.openBookcase();
@@ -210,13 +205,10 @@ export class MyRoomSystem {
 
     // Card deck interaction prompt
     this.cardPromptBg = scene.add.graphics().setDepth(900).setVisible(false);
-    this.cardPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.cardPromptBg.fillRoundedRect(0, 0, 112, 28, 5);
-    this.cardPromptBg.lineStyle(1, hexToNum(P.teal), 0.3);
-    this.cardPromptBg.strokeRoundedRect(0, 0, 112, 28, 5);
-    this.cardPrompt = scene.add.text(0, 0, '[E] Play Cards', {
+    this.cardPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.play_cards')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    fitPromptBubble(this.cardPromptBg, this.cardPrompt, { minWidth: 112, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.teal), strokeAlpha: 0.3 });
     this.cardPrompt.setInteractive();
     this.cardPrompt.on('pointerdown', () => {
       if (!this.intro.isActive && this.nearCardDeckField) this.openCardTable();
@@ -526,8 +518,8 @@ export class MyRoomSystem {
     this.computerPrompt.setVisible(visible);
     this.computerPromptBg.setVisible(visible);
     if (visible) {
-      this.computerPromptBg.setPosition(595, 260);
       this.computerPrompt.setPosition(660, 274);
+      positionPromptBubble(this.computerPromptBg, 660, 260);
     }
   }
 
@@ -535,8 +527,8 @@ export class MyRoomSystem {
     this.bookcasePrompt.setVisible(visible);
     this.bookcasePromptBg.setVisible(visible);
     if (visible) {
-      this.bookcasePromptBg.setPosition(634, 318);
       this.bookcasePrompt.setPosition(708, 332);
+      positionPromptBubble(this.bookcasePromptBg, 708, 318);
     }
   }
 
@@ -549,8 +541,8 @@ export class MyRoomSystem {
       const bounds = getFurnitureBounds(this.ctx.scene, 'carddeck') ?? { w: 44, h: 21 };
       const x = Math.round(pos.x + bounds.w / 2);
       const y = Math.max(30, Math.round(pos.y - 38));
-      this.cardPromptBg.setPosition(x - 56, y - 14);
       this.cardPrompt.setPosition(x, y);
+      positionPromptBubble(this.cardPromptBg, x, y - 14);
     }
   }
 

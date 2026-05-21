@@ -11,10 +11,11 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
-import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
+import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
 } from '../nostr/presenceService';
+import { t as ti18n } from '../i18n/i18n';
 
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
@@ -102,11 +103,9 @@ export class CabinScene extends BaseScene {
 
     // Door exit prompt
     this.doorPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.doorPromptBg.fillStyle(0x080502, 0.9); this.doorPromptBg.fillRoundedRect(0, 0, 138, 28, 5);
-    this.doorPromptBg.lineStyle(1, 0x6a3c10, 0.6); this.doorPromptBg.strokeRoundedRect(0, 0, 138, 28, 5);
-    this.doorPromptText = this.add.text(0, 0, this.sys.game.device.input.touch ? '[TAP] Back to Woods' : '[E] Back to Woods', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.doorPromptText = this.add.text(0, 0, `${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} ${ti18n('prompt.back_to_woods')}`, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.doorPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
-    this.doorPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 138, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.doorPromptBg, this.doorPromptText, { minWidth: 138, fill: 0x080502, fillAlpha: 0.9, stroke: 0x6a3c10, strokeAlpha: 0.6 });
     this.doorPromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); }
@@ -114,17 +113,15 @@ export class CabinScene extends BaseScene {
 
     // Fireplace prompt
     this.fireplacePromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.fireplacePromptBg.fillStyle(0x080302, 0.9); this.fireplacePromptBg.fillRoundedRect(0, 0, 138, 28, 5);
-    this.fireplacePromptBg.lineStyle(1, 0x6a3010, 0.6); this.fireplacePromptBg.strokeRoundedRect(0, 0, 138, 28, 5);
-    this.fireplacePromptText = this.add.text(0, 0, '[E] Stoke the fire', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.fireplacePromptText = this.add.text(0, 0, `[E] ${ti18n('prompt.stoke_fire')}`, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.fireplacePromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.fireplacePromptBg, this.fireplacePromptText, { minWidth: 138, fill: 0x080302, fillAlpha: 0.9, stroke: 0x6a3010, strokeAlpha: 0.6 });
 
     // Bookshelf prompt
     this.bookshelfPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.bookshelfPromptBg.fillStyle(0x080302, 0.9); this.bookshelfPromptBg.fillRoundedRect(0, 0, 138, 28, 5);
-    this.bookshelfPromptBg.lineStyle(1, 0x3a2010, 0.6); this.bookshelfPromptBg.strokeRoundedRect(0, 0, 138, 28, 5);
-    this.bookshelfPromptText = this.add.text(0, 0, '[E] Read a book', { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.bookshelfPromptText = this.add.text(0, 0, `[E] ${ti18n('prompt.read_book')}`, { fontFamily: '"Courier New", monospace', fontSize: '10px', color: CABIN_ACCENT, fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setDepth(51).setVisible(false);
     this.bookshelfPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.bookshelfPromptBg, this.bookshelfPromptText, { minWidth: 138, fill: 0x080302, fillAlpha: 0.9, stroke: 0x3a2010, strokeAlpha: 0.6 });
 
     this.input.keyboard?.on('keydown-E', () => {
       if (document.activeElement === this.chatInput) return;
@@ -511,7 +508,7 @@ export class CabinScene extends BaseScene {
     }
     if (near) {
       const px = DOOR_X, py = FLOOR_Y - 120;
-      this.doorPromptBg.setPosition(px - 69, py - 2);
+      positionPromptBubble(this.doorPromptBg, px, py - 2);
       this.doorPromptText.setPosition(px, py + 8);
       this.doorPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.doorPromptArrow)) {
@@ -539,7 +536,7 @@ export class CabinScene extends BaseScene {
     }
     if (showPrompt) {
       const px = FP_X, py = FLOOR_Y - 120;
-      this.fireplacePromptBg.setPosition(px - 69, py - 2);
+      positionPromptBubble(this.fireplacePromptBg, px, py - 2);
       this.fireplacePromptText.setPosition(px, py + 8);
       this.fireplacePromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.fireplacePromptArrow)) {
@@ -561,7 +558,7 @@ export class CabinScene extends BaseScene {
     }
     if (near) {
       const px = shCX, py = FLOOR_Y - 120;
-      this.bookshelfPromptBg.setPosition(px - 69, py - 2);
+      positionPromptBubble(this.bookshelfPromptBg, px, py - 2);
       this.bookshelfPromptText.setPosition(px, py + 8);
       this.bookshelfPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.bookshelfPromptArrow)) {

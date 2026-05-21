@@ -12,7 +12,7 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
-import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum } from '../config/game.config';
+import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
 } from '../nostr/presenceService';
@@ -25,6 +25,7 @@ import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
 import { TarotModal } from '../ui/TarotModal';
+import { t as ti18n } from '../i18n/i18n';
 
 const ALLEY_ACCENT   = P.dpurp;
 const W              = 1000;
@@ -127,46 +128,35 @@ export class AlleyScene extends BaseScene {
     // Tarot machine prompt
     const isTouch = this.sys.game.device.input.touch;
     this.tarotPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
-    this.tarotPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.tarotPromptBg.fillRoundedRect(0, 0, 148, 28, 5);
-    this.tarotPromptBg.lineStyle(1, 0x4488cc, 0.6);
-    this.tarotPromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.tarotPromptText = this.add.text(0, 0, isTouch ? '[TAP] Draw a Card' : '[E] Draw a Card',
+    this.tarotPromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.draw_card')}`,
       { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#70b8ee', fontStyle: 'bold', align: 'center' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.tarotPromptArrow = this.add.text(0, 0, '▼',
       { fontFamily: 'monospace', fontSize: '9px', color: '#4488cc' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
-    this.tarotPromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 148, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.tarotPromptBg, this.tarotPromptText, { minWidth: 148, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0x4488cc, strokeAlpha: 0.6 });
     this.tarotPromptBg.on('pointerdown', () => { if (this.nearTarot && !TarotModal.isOpen()) TarotModal.show(); });
 
     // Fortune teller prompt
     this.fortunePromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
-    this.fortunePromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.fortunePromptBg.fillRoundedRect(0, 0, 148, 28, 5);
-    this.fortunePromptBg.lineStyle(1, 0x9966cc, 0.6);
-    this.fortunePromptBg.strokeRoundedRect(0, 0, 148, 28, 5);
-    this.fortunePromptText = this.add.text(0, 0, isTouch ? '[TAP] Ask Your Fortune' : '[E] Ask Your Fortune',
+    this.fortunePromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.ask_fortune')}`,
       { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#c0a0ff', fontStyle: 'bold', align: 'center' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.fortunePromptArrow = this.add.text(0, 0, '▼',
       { fontFamily: 'monospace', fontSize: '9px', color: '#9966cc' }
     ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
-    this.fortunePromptBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, 148, 28), Phaser.Geom.Rectangle.Contains);
+    fitPromptBubble(this.fortunePromptBg, this.fortunePromptText, { minWidth: 148, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0x9966cc, strokeAlpha: 0.6 });
     this.fortunePromptBg.on('pointerdown', () => { if (this.nearFortune && !FortuneTellerModal.isOpen()) FortuneTellerModal.show(); });
 
     // Subway prompt (right end — closed)
     this.subwayPromptBg = this.add.graphics().setDepth(50).setVisible(false);
-    this.subwayPromptBg.fillStyle(hexToNum(P.bg), 0.9);
-    this.subwayPromptBg.fillRoundedRect(0, 0, 168, 28, 5);
-    this.subwayPromptBg.lineStyle(1, hexToNum(P.dpurp), 0.4);
-    this.subwayPromptBg.strokeRoundedRect(0, 0, 168, 28, 5);
-    this.subwayPromptText = this.add.text(0, 0, 'COMING SOON',
+    this.subwayPromptText = this.add.text(0, 0, ti18n('prompt.coming_soon'),
       { fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.dpurp, align: 'center' }
     ).setOrigin(0.5).setDepth(51).setVisible(false);
     this.subwayPromptArrow = this.add.text(0, 0, '▼',
       { fontFamily: 'monospace', fontSize: '9px', color: P.dpurp }
     ).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.subwayPromptBg, this.subwayPromptText, { minWidth: 168, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.dpurp), strokeAlpha: 0.4 });
 
     this.input.keyboard?.on('keydown-E', () => {
       if (document.activeElement === this.chatInput) return;
@@ -876,7 +866,7 @@ export class AlleyScene extends BaseScene {
       const zoom = this.cameras.main.zoom;
       const sx = TAROT_X - this.cameras.main.scrollX;
       const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
-      this.tarotPromptBg.setPosition(sx - 74, sy - 2);
+      positionPromptBubble(this.tarotPromptBg, sx, sy - 2);
       this.tarotPromptText.setPosition(sx, sy + 12);
       this.tarotPromptArrow.setPosition(sx, sy + 24);
       if (!this.tweens.isTweening(this.tarotPromptArrow)) {
@@ -899,7 +889,7 @@ export class AlleyScene extends BaseScene {
       const zoom = this.cameras.main.zoom;
       const sx = FORTUNE_X - this.cameras.main.scrollX;
       const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
-      this.fortunePromptBg.setPosition(sx - 74, sy - 2);
+      positionPromptBubble(this.fortunePromptBg, sx, sy - 2);
       this.fortunePromptText.setPosition(sx, sy + 12);
       this.fortunePromptArrow.setPosition(sx, sy + 24);
       if (!this.tweens.isTweening(this.fortunePromptArrow)) {
@@ -921,7 +911,7 @@ export class AlleyScene extends BaseScene {
     }
     if (near) {
       const px = SUBWAY_X, py = this.player.y - 130;
-      this.subwayPromptBg.setPosition(px - 84, py - 2);
+      positionPromptBubble(this.subwayPromptBg, px, py - 2);
       this.subwayPromptText.setPosition(px, py + 8);
       this.subwayPromptArrow.setPosition(px, py + 22);
       if (!this.tweens.isTweening(this.subwayPromptArrow)) {
