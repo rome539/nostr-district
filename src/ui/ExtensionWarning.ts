@@ -9,6 +9,7 @@
 
 import { authStore } from '../stores/authStore';
 import { isTutorialDone } from './TutorialOverlay';
+import { t as ti18n } from '../i18n/i18n';
 
 const MODAL_ID = 'ext-warning';
 const DISMISS_KEY_PREFIX = 'nd_ext_warn_dismissed_';
@@ -57,24 +58,12 @@ export class ExtensionWarning {
     modal.id = MODAL_ID;
     modal.innerHTML = `
       <div class="ew-header">
-        <div class="ew-title">⚠ Limited extension support</div>
+        <div class="ew-title">${ti18n('ext_warning.title')}</div>
       </div>
-      <div class="ew-body">
-        <p>Your Nostr extension can sign events, but its <strong>encryption support is missing or broken</strong>. This means:</p>
-        <ul>
-          <li>You won't receive <strong>direct messages</strong></li>
-          <li><strong>Closed crew chat</strong> will appear empty</li>
-          <li>You can't accept join requests or be promoted to admin</li>
-          <li><strong>Crew posts</strong> won't decrypt</li>
-        </ul>
-        <p>This is a limitation of the extension itself — it doesn't fully implement NIP-44/NIP-17 encryption — not something Nostr District can fix from this side.</p>
-        <div class="ew-suggest">
-          <strong>Recommended fix:</strong> log out and sign in with your <code>nsec</code> directly, or use a fully-featured extension like <a href="https://getalby.com" target="_blank" rel="noopener noreferrer">Alby</a> or <a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener noreferrer">nos2x</a>.
-        </div>
-      </div>
+      <div class="ew-body">${ti18n('ext_warning.body')}</div>
       <div class="ew-footer">
-        <label class="ew-dismiss"><input type="checkbox" id="ew-dontshow" /> Don't show again</label>
-        <button id="ew-close" class="ew-close-btn">Got it</button>
+        <label class="ew-dismiss"><input type="checkbox" id="ew-dontshow" /> ${ti18n('ext_warning.dont_show')}</label>
+        <button id="ew-close" class="ew-close-btn">${ti18n('ext_warning.got_it')}</button>
       </div>
     `;
     document.body.appendChild(modal);

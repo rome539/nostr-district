@@ -19,6 +19,7 @@ import {
   resolveNames, getCachedName,
 } from '../nostr/crewService';
 import { authStore } from '../stores/authStore';
+import { t, onLangChange } from '../i18n/i18n';
 import { requestOnlinePlayers, setOnlinePlayersHandler } from '../nostr/presenceService';
 import { sendDirectMessage } from '../nostr/dmService';
 import { SoundEngine } from '../audio/SoundEngine';
@@ -85,12 +86,37 @@ export class CrewPanel {
   // Unread
   private unreadCount = 0;
 
+  private langUnsub: (() => void) | null = null;
+
   constructor() {
     this.injectStyles();
     window.addEventListener('nd-panel-open', (e: Event) => {
       if ((e as CustomEvent).detail !== 'crew' && this.isOpen) this.close();
     });
     onCrewJoinRequest(req => this.showJoinReqToast(req));
+
+    // Re-render on language change so tab labels + empty states + error
+    // copy switch to the new language without requiring a close/reopen.
+    this.langUnsub = onLangChange(() => {
+      if (!this.container) return;
+      const wasOpen = this.isOpen;
+      const prevTab = this.activeTab;
+      this.container.remove();
+      this.container = null;
+      this.bodyEl    = null;
+      this.buildDOM();
+      this.activeTab = prevTab;
+      if (wasOpen) {
+        this.container!.classList.add('cp-open');
+        const mineBtn = this.container!.querySelector('.cp-tab-mine');
+        const findBtn = this.container!.querySelector('.cp-tab-find');
+        mineBtn?.classList.toggle('active', prevTab === 'mine');
+        findBtn?.classList.toggle('active', prevTab === 'find');
+        // Re-render the visible list of crews
+        if (this.activeTab === 'mine') this.renderCrewList();
+        else this.renderFindCrew();
+      }
+    });
   }
 
   private async showJoinReqToast(req: { crewId: string; crewName: string; requesterPubkey: string; createdAt: number }): Promise<void> {
@@ -200,8 +226,8 @@ export class CrewPanel {
     this.container.innerHTML = `
       <div class="cp-header">
         <div class="cp-tabs">
-          <button class="cp-tab cp-tab-mine active" data-tab="mine"><span class="cp-tab-label">Crews</span>${refreshSvg}</button>
-          <button class="cp-tab cp-tab-find" data-tab="find"><span class="cp-tab-label">Find a Crew</span>${refreshSvg}</button>
+          <button class="cp-tab cp-tab-mine active" data-tab="mine"><span class="cp-tab-label">${t('crews.tab.mine')}</span>${refreshSvg}</button>
+          <button class="cp-tab cp-tab-find" data-tab="find"><span class="cp-tab-label">${t('crews.tab.find')}</span>${refreshSvg}</button>
         </div>
         <button class="cp-create-btn" title="Create crew">＋</button>
         <button class="cp-close-btn" title="Close">✕</button>
@@ -307,8 +333,8 @@ export class CrewPanel {
       if (visibleCrews.length === 0) {
         this.bodyEl.innerHTML = `
           <div class="cp-body-scroll"><div class="cp-empty">
-            <div style="color:var(--nd-text);font-weight:bold;margin-bottom:6px">No crew yet</div>
-            <div style="color:var(--nd-subtext);font-size:12px">Find a crew to join,<br>or create your own.</div>
+            <div style="color:var(--nd-text);font-weight:bold;margin-bottom:6px">${t('crews.empty.title')}</div>
+            <div style="color:var(--nd-subtext);font-size:12px">${t('crews.empty.subtitle')}</div>
           </div></div>
         `;
         return;
@@ -319,7 +345,7 @@ export class CrewPanel {
       this.bodyEl.innerHTML = '';
       this.bodyEl.appendChild(scroll);
     }).catch(() => {
-      if (this.bodyEl) this.bodyEl.innerHTML = `<div class="cp-body-scroll"><div class="cp-empty"><div style="color:var(--nd-subtext);font-size:12px">Couldn't load crews.</div></div></div>`;
+      if (this.bodyEl) this.bodyEl.innerHTML = `<div class="cp-body-scroll"><div class="cp-empty"><div style="color:var(--nd-subtext);font-size:12px">${t('crews.error.load')}</div></div></div>`;
     });
   }
 
@@ -362,7 +388,7 @@ export class CrewPanel {
   private renderCrewList(): void {
     if (!this.bodyEl) return;
     if (this.allCrews.length === 0) {
-      this.bodyEl.innerHTML = '<div class="cp-body-scroll"><div class="cp-empty">No crews found yet.<br>Be the first to create one!</div></div>';
+      this.bodyEl.innerHTML = `<div class="cp-body-scroll"><div class="cp-empty">${t('crews.no_crews')}</div></div>`;
       return;
     }
     const scroll = document.createElement('div');

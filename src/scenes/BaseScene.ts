@@ -50,6 +50,7 @@
 
 import Phaser from 'phaser';
 import { ChatUI } from '../ui/ChatUI';
+import { t as ti18n } from '../i18n/i18n';
 import { DMPanel } from '../ui/DMPanel';
 import { CrewPanel } from '../ui/CrewPanel';
 import { FollowsPanel } from '../ui/FollowsPanel';
@@ -1493,7 +1494,7 @@ export abstract class BaseScene extends Phaser.Scene {
         },
         (opk) => {
           sendRoomChange(opk);
-          this.chatUI.addMessage('system', 'Requesting access...', ac);
+          this.chatUI.addMessage('system', ti18n('sys.room.requesting'), ac);
         },
       );
       return;
@@ -1572,7 +1573,7 @@ export abstract class BaseScene extends Phaser.Scene {
         }
         const rid = BaseScene.ROOM_ALIASES[arg.toLowerCase().replace(/\s+/g, '')];
         if (!rid) {
-          this.chatUI.addMessage('system', `Unknown room "${arg}"`, P.amber);
+          this.chatUI.addMessage('system', ti18n('sys.room.unknown', { name: arg }), P.amber);
           return true;
         }
         this.teleportToRoom(rid);
@@ -1606,7 +1607,7 @@ export abstract class BaseScene extends Phaser.Scene {
       case 'crew': case 'crews':
         this.dmPanel.close(); this.crewPanel.toggle(); return true;
       case 'dm': case 'dms': case 'messages': case 'msg': {
-        if (!canUseDMs()) { this.chatUI.addMessage('system', 'DMs require a Nostr key', P.amber); return true; }
+        if (!canUseDMs()) { this.chatUI.addMessage('system', ti18n('sys.dm.need_key'), P.amber); return true; }
         if (!arg) { this.crewPanel.close(); this.dmPanel.toggle(); return true; }
         // /dm <name> — find matching player in scene and open conversation
         let target: string | null = null;
@@ -1614,15 +1615,15 @@ export abstract class BaseScene extends Phaser.Scene {
           const name = (o.name ?? o.nameText?.text ?? '').toLowerCase();
           if (name.includes(arg.toLowerCase())) target = pk;
         });
-        if (target) { this.dmPanel.open(target); this.chatUI.addMessage('system', 'Opening DM…', ac); }
-        else this.chatUI.addMessage('system', `"${arg}" not found`, P.amber);
+        if (target) { this.dmPanel.open(target); this.chatUI.addMessage('system', ti18n('sys.dm.opening'), ac); }
+        else this.chatUI.addMessage('system', ti18n('sys.not_found', { name: arg }), P.amber);
         return true;
       }
 
       // ── Moderation ────────────────────────────────────────────────────────
       case 'mute': {
         const s = toggleMute();
-        this.chatUI.addMessage('system', s ? 'Muted' : 'Unmuted', s ? P.amber : ac);
+        this.chatUI.addMessage('system', s ? ti18n('sys.muted') : ti18n('sys.unmuted'), s ? P.amber : ac);
         return true;
       }
       case 'mutelist': case 'mutes': case 'blocked':

@@ -24,6 +24,7 @@ import {
   type SparkPayment,
 } from '../nostr/sparkService';
 import { getCachedZapMessage, findCachedIncomingZap, cacheZapMessage } from '../nostr/zapService';
+import { t as ti18n, onLangChange } from '../i18n/i18n';
 
 const PANEL_ID = 'wallet-panel';
 
@@ -53,6 +54,7 @@ export class WalletPanel {
   private static escHandler:  ((e: KeyboardEvent) => void) | null = null;
   private static unsubPayment: (() => void) | null = null;
   private static unsubReachability: (() => void) | null = null;
+  private static unsubLang: (() => void) | null = null;
   private static _tab:        Tab = 'balance';
   private static _balance:    number | null = null;
   private static _lnAddress:  string | null = null;
@@ -120,6 +122,13 @@ export class WalletPanel {
     WalletPanel.unsubReachability = onSparkReachabilityChange(() => {
       WalletPanel._applyReachability();
     });
+
+    // Re-render on language change so labels/buttons/tabs pick up the new
+    // translations. Full re-render is fine here since the wallet panel
+    // doesn't carry critical typed-in state across language switches.
+    WalletPanel.unsubLang = onLangChange(() => {
+      if (WalletPanel.isOpen()) WalletPanel._render();
+    });
   }
 
   static destroy(): void {
@@ -136,6 +145,10 @@ export class WalletPanel {
     if (WalletPanel.unsubReachability) {
       WalletPanel.unsubReachability();
       WalletPanel.unsubReachability = null;
+    }
+    if (WalletPanel.unsubLang) {
+      WalletPanel.unsubLang();
+      WalletPanel.unsubLang = null;
     }
     if (WalletPanel._toastTimer) { clearTimeout(WalletPanel._toastTimer); WalletPanel._toastTimer = null; }
   }
@@ -210,7 +223,7 @@ export class WalletPanel {
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0;">
         <span style="color:var(--nd-accent);display:inline-flex;align-items:center;">${boltIcon(15)}</span>
-        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;letter-spacing:0.12em;">WALLET</div>
+        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;letter-spacing:0.12em;">${ti18n('wallet.title')}</div>
         <button id="wp-info" class="wp-icon-btn" title="About this wallet" aria-label="About this wallet">ⓘ</button>
         <div style="flex:1;"></div>
         <button id="wp-close" class="wp-close-btn">×</button>
@@ -255,7 +268,7 @@ export class WalletPanel {
         border-radius:6px;padding:8px 10px;
         font-size:10px;line-height:1.45;color:#ffb3b3;
       ">
-        Lightning network temporarily unreachable. Your sats are safe — try again in a moment.
+        ${ti18n('wallet.outage')}
       </div>
     `;
   }
@@ -287,9 +300,9 @@ export class WalletPanel {
 
   private static _renderTabs(): string {
     const tabs: { key: Tab; label: string }[] = [
-      { key: 'balance', label: 'BALANCE' },
-      { key: 'receive', label: 'RECEIVE' },
-      { key: 'send',    label: 'SEND'    },
+      { key: 'balance', label: ti18n('wallet.tab.balance') },
+      { key: 'receive', label: ti18n('wallet.tab.receive') },
+      { key: 'send',    label: ti18n('wallet.tab.send')    },
     ];
     return `
       <div style="display:flex;gap:6px;margin-bottom:14px;flex-shrink:0;">
@@ -345,14 +358,14 @@ export class WalletPanel {
     const items = WalletPanel._history;
 
     if (items === null) {
-      const msg = WalletPanel._historyLoading ? 'Loading...' : '';
+      const msg = WalletPanel._historyLoading ? ti18n('wallet.history.loading') : '';
       return msg
         ? `<div style="text-align:center;padding:12px;color:var(--nd-subtext);font-size:10px;opacity:0.6;">${esc(msg)}</div>`
         : '';
     }
 
     if (items.length === 0) {
-      return `<div style="text-align:center;padding:12px;color:var(--nd-subtext);font-size:10px;opacity:0.6;">No activity yet</div>`;
+      return `<div style="text-align:center;padding:12px;color:var(--nd-subtext);font-size:10px;opacity:0.6;">${ti18n('wallet.history.empty')}</div>`;
     }
 
     return items.slice(0, 6).map(p => {
@@ -384,10 +397,10 @@ export class WalletPanel {
           border:1px solid color-mix(in srgb,var(--nd-accent) 14%,transparent);
           color:var(--nd-subtext);font-size:10px;line-height:1.55;
         ">
-          ${desc ? `<div style="color:var(--nd-text);margin-bottom:6px;word-break:break-word;">${esc(desc)}</div>` : `<div style="opacity:0.55;margin-bottom:6px;">No message attached.</div>`}
-          <div>${incoming ? 'Received' : 'Sent'} · ${esc(new Date(p.timestamp * 1000).toLocaleString())}</div>
-          ${p.fees > 0 ? `<div>Fee: ${p.fees} sats</div>` : ''}
-          <div>Status: ${esc(p.status)}</div>
+          ${desc ? `<div style="color:var(--nd-text);margin-bottom:6px;word-break:break-word;">${esc(desc)}</div>` : `<div style="opacity:0.55;margin-bottom:6px;">${ti18n('wallet.history.no_msg')}</div>`}
+          <div>${incoming ? ti18n('wallet.history.received') : ti18n('wallet.history.sent')} · ${esc(new Date(p.timestamp * 1000).toLocaleString())}</div>
+          ${p.fees > 0 ? `<div>${ti18n('wallet.history.fee', { n: p.fees })}</div>` : ''}
+          <div>${ti18n('wallet.history.status', { s: p.status })}</div>
           ${p.id ? `<div style="margin-top:4px;opacity:0.6;word-break:break-all;">id: ${esc(p.id.slice(0, 32))}${p.id.length > 32 ? '…' : ''}</div>` : ''}
         </div>
       ` : '';
@@ -414,10 +427,10 @@ export class WalletPanel {
   private static _relativeTime(unixSec: number): string {
     if (!unixSec) return '';
     const diff = Date.now() / 1000 - unixSec;
-    if (diff < 60)        return 'just now';
-    if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
+    if (diff < 60)        return ti18n('time.just_now');
+    if (diff < 3600)      return ti18n('time.minutes_ago', { n: Math.floor(diff / 60) });
+    if (diff < 86400)     return ti18n('time.hours_ago',   { n: Math.floor(diff / 3600) });
+    if (diff < 86400 * 7) return ti18n('time.days_ago',    { n: Math.floor(diff / 86400) });
     const d = new Date(unixSec * 1000);
     return `${d.getMonth() + 1}/${d.getDate()}`;
   }
@@ -438,31 +451,31 @@ export class WalletPanel {
     return `
       <div style="display:flex;flex-direction:column;gap:12px;padding:6px 2px;">
         <div>
-          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">LIGHTNING ADDRESS</div>
+          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">${ti18n('wallet.send.address_label')}</div>
           <input id="wp-send-addr" type="text" placeholder="name@domain.com" autocomplete="off" autocapitalize="off" spellcheck="false" class="wp-input" style="width:100%;" />
         </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;">AMOUNT (SATS)</div>
-            <div style="font-size:9px;color:var(--nd-subtext);">balance: ${esc(balLabel)}</div>
+            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;">${ti18n('wallet.send.amount_label')}</div>
+            <div style="font-size:9px;color:var(--nd-subtext);">${ti18n('wallet.balance_label')}: ${esc(balLabel)}</div>
           </div>
           <div style="display:flex;gap:6px;">
             <input id="wp-send-amt" type="number" min="1" placeholder="100" class="wp-input" style="flex:1;min-width:0;text-align:center;" />
-            <button id="wp-send-max" class="wp-btn" style="flex:0 0 auto;padding:6px 12px;">MAX</button>
+            <button id="wp-send-max" class="wp-btn" style="flex:0 0 auto;padding:6px 12px;">${ti18n('wallet.send.max')}</button>
           </div>
           <div style="font-size:9px;color:var(--nd-subtext);margin-top:5px;opacity:0.7;line-height:1.4;">
-            Lightning fees vary by route — usually 0–5 sats. Network fee is added on top of your amount.
+            ${ti18n('wallet.send.fee_note')}
           </div>
         </div>
         <div>
-          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">MESSAGE (OPTIONAL)</div>
-          <input id="wp-send-msg" type="text" maxlength="140" placeholder="say something nice…" autocomplete="off" class="wp-input" style="width:100%;" />
+          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">${ti18n('wallet.send.message_label')}</div>
+          <input id="wp-send-msg" type="text" maxlength="140" placeholder="${ti18n('wallet.send.message_placeholder')}" autocomplete="off" class="wp-input" style="width:100%;" />
           <div style="font-size:9px;color:var(--nd-subtext);margin-top:5px;opacity:0.7;line-height:1.4;">
-            Sent to the recipient if their Lightning provider supports comments.
+            ${ti18n('wallet.send.message_hint')}
           </div>
         </div>
         <button id="wp-send-go" class="wp-btn wp-btn-accent" ${(WalletPanel._busy || !isSparkReachable()) ? 'disabled' : ''} style="padding:10px;font-size:11px;">
-          ${WalletPanel._busy ? 'SENDING...' : 'SEND PAYMENT'}
+          ${WalletPanel._busy ? ti18n('wallet.send.sending') : ti18n('wallet.send.button')}
         </button>
       </div>
     `;
@@ -484,30 +497,30 @@ export class WalletPanel {
             margin-top:5px;font-size:10px;color:var(--nd-subtext);
             letter-spacing:0.18em;display:inline-flex;align-items:center;gap:8px;
           ">
-            SATS
-            <button id="wp-balance-refresh" class="wp-balance-refresh-btn" title="Refresh balance" aria-label="Refresh balance">↻</button>
+            ${ti18n('wallet.sats')}
+            <button id="wp-balance-refresh" class="wp-balance-refresh-btn" title="${ti18n('wallet.refresh_balance')}" aria-label="${ti18n('wallet.refresh_balance')}">↻</button>
           </div>
         </div>
 
         <!-- Lightning address -->
         ${addr ? `
           <div>
-            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;text-align:center;">LIGHTNING ADDRESS</div>
+            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;text-align:center;">${ti18n('wallet.lightning_address')}</div>
             <div style="display:flex;gap:6px;align-items:stretch;">
               <div class="wp-pill" style="flex:1;min-width:0;font-size:12px;display:flex;align-items:center;justify-content:center;">${esc(addr)}</div>
-              <button class="wp-btn wp-btn-accent" data-wp-copy="${esc(addr)}" style="flex:0 0 auto;padding:6px 12px;">COPY</button>
+              <button class="wp-btn wp-btn-accent" data-wp-copy="${esc(addr)}" style="flex:0 0 auto;padding:6px 12px;">${ti18n('wallet.copy')}</button>
             </div>
           </div>
         ` : `
           <div style="text-align:center;color:var(--nd-subtext);font-size:11px;padding:4px 0;">
-            Lightning address loading...
+            ${ti18n('wallet.lightning_address_loading')}
           </div>
         `}
 
         <!-- Recent activity -->
         <div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;">RECENT ACTIVITY</div>
+            <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;">${ti18n('wallet.recent_activity')}</div>
             <div style="flex:1;height:1px;background:color-mix(in srgb,var(--nd-subtext) 15%,transparent);"></div>
             <button id="wp-refresh" style="
               background:none;border:none;cursor:pointer;
@@ -515,7 +528,7 @@ export class WalletPanel {
               font-size:10px;letter-spacing:0.08em;padding:6px 8px;opacity:0.6;
               transition:opacity 0.15s, color 0.15s;
               min-height:32px;
-            " onmouseover="this.style.opacity='1';this.style.color='var(--nd-accent)';" onmouseout="this.style.opacity='0.6';this.style.color='var(--nd-subtext)';">↻ REFRESH</button>
+            " onmouseover="this.style.opacity='1';this.style.color='var(--nd-accent)';" onmouseout="this.style.opacity='0.6';this.style.color='var(--nd-subtext)';">↻ ${ti18n('wallet.refresh')}</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px;">
             ${WalletPanel._renderHistoryRows()}
@@ -537,8 +550,8 @@ export class WalletPanel {
           </div>
           <div class="wp-pill" style="font-size:10px;max-height:60px;overflow-y:auto;word-break:break-all;">${esc(inv)}</div>
           <div style="display:flex;gap:6px;">
-            <button class="wp-btn wp-btn-accent" data-wp-copy="${esc(inv)}" style="flex:1;">COPY INVOICE</button>
-            <button class="wp-btn" id="wp-new-inv" style="flex:0 0 auto;">NEW</button>
+            <button class="wp-btn wp-btn-accent" data-wp-copy="${esc(inv)}" style="flex:1;">${ti18n('wallet.receive.copy_invoice')}</button>
+            <button class="wp-btn" id="wp-new-inv" style="flex:0 0 auto;">${ti18n('wallet.receive.new')}</button>
           </div>
         </div>
       `;
@@ -547,15 +560,15 @@ export class WalletPanel {
     return `
       <div style="display:flex;flex-direction:column;gap:12px;padding:6px 2px;">
         <div>
-          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">AMOUNT (OPTIONAL)</div>
-          <input id="wp-amt" type="number" min="1" placeholder="leave empty for any amount" class="wp-input" style="width:100%;text-align:center;" />
+          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">${ti18n('wallet.receive.amount_label')}</div>
+          <input id="wp-amt" type="number" min="1" placeholder="${ti18n('wallet.receive.amount_placeholder')}" class="wp-input" style="width:100%;text-align:center;" />
         </div>
         <div>
-          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">DESCRIPTION (OPTIONAL)</div>
-          <input id="wp-desc" type="text" maxlength="200" placeholder="what's this for?" class="wp-input" style="width:100%;" />
+          <div style="font-size:9px;color:var(--nd-subtext);letter-spacing:0.12em;margin-bottom:5px;">${ti18n('wallet.receive.desc_label')}</div>
+          <input id="wp-desc" type="text" maxlength="200" placeholder="${ti18n('wallet.receive.desc_placeholder')}" class="wp-input" style="width:100%;" />
         </div>
         <button id="wp-make" class="wp-btn wp-btn-accent" ${WalletPanel._busy ? 'disabled' : ''} style="padding:10px;font-size:11px;margin-top:4px;">
-          ${WalletPanel._busy ? 'CREATING...' : 'GENERATE INVOICE'}
+          ${WalletPanel._busy ? ti18n('wallet.receive.creating') : ti18n('wallet.receive.generate')}
         </button>
       </div>
     `;

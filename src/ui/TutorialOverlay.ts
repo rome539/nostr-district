@@ -4,6 +4,8 @@
  * Completion is persisted to localStorage so it never shows again.
  */
 
+import { t as ti18n } from '../i18n/i18n';
+
 const STORAGE_KEY = 'nd_tutorial_done';
 
 export function isTutorialDone(): boolean {
@@ -19,60 +21,26 @@ export function markTutorialDone(): void {
 }
 
 interface Step {
-  title: string;
-  body: string;
+  titleKey: string;
+  bodyKey:  string;
   key?: string;
   img?: string;
 }
 
+// Each step references i18n keys instead of literal strings so the tutorial
+// translates with the rest of the UI. Title + body content lives in
+// `src/i18n/translations/en.json` under `tutorial.<step>.title|body`.
 const STEPS: Step[] = [
-  {
-    title: 'Welcome to The District',
-    body: 'A pixel city living on the Nostr protocol. Everything here — chat, rooms, crews — is decentralized and owned by you.',
-  },
-  {
-    title: 'Moving Around',
-    body: 'Use the <b>Arrow Keys</b> or <b>click anywhere</b> on the ground to walk. You can explore the entire district from the hub.',
-    key: '← →',
-  },
-  {
-    title: 'Chat',
-    body: 'Press <b>Enter</b> to focus the chat bar and talk with everyone in the district. Type <b>/help</b> to see all available commands.',
-    key: 'Enter',
-  },
-  {
-    title: 'Entering Buildings',
-    body: 'Walk up to a building door and press <b>E</b> or <b>Space</b> to enter. You\'ll see a prompt appear when you\'re close enough. Press <b>Esc</b> to leave and return to the district.',
-    key: 'E',
-  },
-  {
-    title: 'Your Room',
-    body: 'Head to <b>MY ROOM</b> — it\'s yours to customize. Change the walls, floors, add furniture, and hang art. Open the terminal with <b>T</b>.',
-    key: 'T',
-  },
-  {
-    title: 'Panels & Hotkeys',
-    body: '<b>G</b> — Crews &nbsp;&nbsp; <b>M</b> — DMs &nbsp;&nbsp; <b>F</b> — Follows<br><b>S</b> — Settings &nbsp;&nbsp; <b>B</b> — Polls &nbsp;&nbsp; <b>T</b> — Terminal<br><b>W</b> — Wallet &nbsp;&nbsp; <b>Tab</b> — World map<br><br>Press <b>?</b> anytime to see all hotkeys. Type <b>/tutorial</b> to reopen this guide.',
-  },
-  {
-    title: 'Settings',
-    body: 'Press <b>S</b> to open Settings. From there you can browse and apply community <b>Nostr themes</b>, load custom <b>emoji packs</b>, connect an external Lightning wallet via <b>NWC</b>, view your <b>npub / nsec</b>, and pull up the full hotkeys & commands reference.',
-    key: 'S',
-  },
-  {
-    title: 'The Shop',
-    body: 'Type <b>/shop</b> in chat to open the item shop. Buy clothes, accessories, name colors, animations, and more — paid with Bitcoin over Lightning.',
-    img: 'assets/shop.png',
-  },
-  {
-    title: 'Your Wallet',
-    body: 'You have a built-in Lightning wallet — press <b>W</b> to open it. Your <b>Lightning address</b> lets anyone send you sats from any wallet. Spend them in the shop or zap other players.',
-    key: 'W',
-  },
-  {
-    title: 'You\'re ready.',
-    body: 'The district is yours. Explore, meet people, build your room, start a crew.<br><br>Everything is on Nostr — your identity travels with you.',
-  },
+  { titleKey: 'tutorial.welcome.title',     bodyKey: 'tutorial.welcome.body'                                 },
+  { titleKey: 'tutorial.moving.title',      bodyKey: 'tutorial.moving.body',      key: '← →'                 },
+  { titleKey: 'tutorial.chat.title',        bodyKey: 'tutorial.chat.body',        key: 'Enter'               },
+  { titleKey: 'tutorial.buildings.title',   bodyKey: 'tutorial.buildings.body',   key: 'E'                   },
+  { titleKey: 'tutorial.room.title',        bodyKey: 'tutorial.room.body',        key: 'T'                   },
+  { titleKey: 'tutorial.hotkeys.title',     bodyKey: 'tutorial.hotkeys.body'                                 },
+  { titleKey: 'tutorial.settings.title',    bodyKey: 'tutorial.settings.body',    key: 'S'                   },
+  { titleKey: 'tutorial.shop.title',        bodyKey: 'tutorial.shop.body',        img: 'assets/shop.png'     },
+  { titleKey: 'tutorial.wallet.title',      bodyKey: 'tutorial.wallet.body',      key: 'W'                   },
+  { titleKey: 'tutorial.ready.title',       bodyKey: 'tutorial.ready.body'                                   },
 ];
 
 export class TutorialOverlay {
@@ -110,14 +78,14 @@ export class TutorialOverlay {
     card.innerHTML = `
       <div class="nd-tut-progress">${dots}</div>
       ${step.key ? `<div class="nd-tut-key">${step.key}</div>` : ''}
-      <div class="nd-tut-title">${step.title}</div>
-      <div class="nd-tut-body">${step.body}</div>
-      ${step.img ? `<img src="${step.img}" class="nd-tut-img" alt="Shop preview">` : ''}
+      <div class="nd-tut-title">${ti18n(step.titleKey)}</div>
+      <div class="nd-tut-body">${ti18n(step.bodyKey)}</div>
+      ${step.img ? `<img src="${step.img}" class="nd-tut-img" alt="${ti18n('tutorial.shop_alt')}">` : ''}
       <div class="nd-tut-actions">
-        <button class="nd-tut-skip">Skip tutorial</button>
+        <button class="nd-tut-skip">${ti18n('tutorial.skip')}</button>
         <div class="nd-tut-nav">
-          ${this.stepIndex > 0 ? `<button class="nd-tut-back">← Back</button>` : ''}
-          <button class="nd-tut-next">${isLast ? 'Let\'s go →' : 'Next →'}</button>
+          ${this.stepIndex > 0 ? `<button class="nd-tut-back">${ti18n('tutorial.back')}</button>` : ''}
+          <button class="nd-tut-next">${isLast ? ti18n('tutorial.lets_go') : ti18n('tutorial.next')}</button>
         </div>
       </div>
     `;

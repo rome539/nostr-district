@@ -6,6 +6,7 @@
 import { SoundEngine } from '../audio/SoundEngine';
 import { signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
+import { t as ti18n } from '../i18n/i18n';
 
 const FORTUNES = [
   "A change is coming. You will not see it until it has already arrived.",
@@ -154,7 +155,7 @@ export const FortuneTellerModal = {
 
     // Title
     const title = document.createElement('div');
-    title.textContent = '✦ MADAME ZARA ✦';
+    title.textContent = `✦ ${ti18n('fortune.title')} ✦`;
     title.style.cssText = 'color:#c0a0ff;font-size:11px;letter-spacing:3px;margin-bottom:6px;opacity:0.8;';
     box.appendChild(title);
 
@@ -255,7 +256,7 @@ export const FortuneTellerModal = {
 
     // Dismiss hint
     const hint = document.createElement('div');
-    hint.textContent = '[ESC] or click to close';
+    hint.textContent = ti18n('fortune.close_hint');
     hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
     hint.onclick = () => FortuneTellerModal.destroy();
     box.appendChild(hint);

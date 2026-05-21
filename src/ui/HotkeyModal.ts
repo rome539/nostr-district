@@ -2,6 +2,8 @@
  * HotkeyModal.ts — Hotkeys & commands reference overlay.
  */
 
+import { t as ti18n, onLangChange } from '../i18n/i18n';
+
 export class HotkeyModal {
   private el: HTMLDivElement | null = null;
   private open = false;
@@ -10,8 +12,22 @@ export class HotkeyModal {
 
   show(): void {
     if (!this.el) this.build();
+    else this.rebuild(); // refresh in case language changed since last open
     this.el!.style.display = 'flex';
     this.open = true;
+    if (!this._unsubLang) {
+      this._unsubLang = onLangChange(() => {
+        if (this.open) this.rebuild();
+      });
+    }
+  }
+
+  private _unsubLang: (() => void) | null = null;
+
+  private rebuild(): void {
+    this.el?.remove();
+    this.el = null;
+    this.build();
   }
 
   close(): void {
@@ -29,63 +45,63 @@ export class HotkeyModal {
     this.el.id = 'hk-overlay';
 
     const hotkeys: [string, string][] = [
-      ['E / Space', 'Enter room / interact'],
-      ['Tab',       'World map'],
-      ['M',         'Messages (DMs)'],
-      ['G',         'Crews'],
-      ['F',         'Follows list'],
-      ['T',         'Terminal / avatar editor'],
-      ['B',         'Polls board'],
-      ['U',         'Mute list'],
-      ['W',         'Wallet'],
-      ['S',         'Settings'],
-      ['Enter',     'Focus chat'],
-      ['Esc',       'Back / close'],
+      ['E / Space', ti18n('hk.enter_room')],
+      ['Tab',       ti18n('hk.world_map')],
+      ['M',         ti18n('hk.messages')],
+      ['G',         ti18n('hk.crews')],
+      ['F',         ti18n('hk.follows_list')],
+      ['T',         ti18n('hk.terminal')],
+      ['B',         ti18n('hk.polls_board')],
+      ['U',         ti18n('hk.mute_list')],
+      ['W',         ti18n('hk.wallet')],
+      ['S',         ti18n('hk.settings')],
+      ['Enter',     ti18n('hk.focus_chat')],
+      ['Esc',       ti18n('hk.back_close')],
     ];
 
     const navCmds: [string, string][] = [
-      ['/map',          'World map'],
-      ['/shop',         'Open the item shop'],
-      ['/wallet',       'Open your Lightning wallet'],
-      ['/tp <room>',    'Teleport to a room'],
-      ['/dm <name>',    'Open direct message'],
-      ['/crew',         'Open crews panel'],
-      ['/visit <name>', "Visit player's room"],
-      ['/zap <name>',   'Send a lightning zap'],
-      ['/players',      'Who\'s online'],
-      ['/follows',      'Open follows list'],
-      ['/polls',        'Open polls board'],
+      ['/map',          ti18n('hk.world_map')],
+      ['/shop',         ti18n('hk.cmd.shop')],
+      ['/wallet',       ti18n('hk.cmd.wallet')],
+      ['/tp <room>',    ti18n('hk.cmd.tp')],
+      ['/dm <name>',    ti18n('hk.cmd.dm')],
+      ['/crew',         ti18n('hk.cmd.crew')],
+      ['/visit <name>', ti18n('hk.cmd.visit')],
+      ['/zap <name>',   ti18n('hk.cmd.zap')],
+      ['/players',      ti18n('hk.cmd.players')],
+      ['/follows',      ti18n('hk.cmd.follows')],
+      ['/polls',        ti18n('hk.cmd.polls')],
 
-      ['/tutorial',     'Reopen the tutorial'],
-      ['/status',       'Show your status'],
-      ['/mute',         'Mute all chat'],
-      ['/mutelist',     'View muted players'],
-      ['/filter <w>',   'Filter a word from chat'],
-      ['/unfilter <w>', 'Remove a word filter'],
+      ['/tutorial',     ti18n('hk.cmd.tutorial')],
+      ['/status',       ti18n('hk.cmd.status')],
+      ['/mute',         ti18n('hk.cmd.mute')],
+      ['/mutelist',     ti18n('hk.cmd.mutelist')],
+      ['/filter <w>',   ti18n('hk.cmd.filter')],
+      ['/unfilter <w>', ti18n('hk.cmd.unfilter')],
     ];
 
     const socialCmds: [string, string][] = [
-      ['/smoke',    'Light a cigarette'],
-      ['/coffee',   'Sip some coffee'],
-      ['/music',    'Hum a tune'],
-      ['/zzz',      'Fall asleep (AFK)'],
-      ['/think',    'Show thought bubble'],
-      ['/hearts',   'Float hearts'],
-      ['/angry',    'Steam with rage'],
-      ['/sweat',    'Nervous sweat drops'],
-      ['/sparkle',  'Orbit sparkles'],
-      ['/confetti', 'Celebrate with confetti'],
-      ['/fire',     'Set yourself on fire'],
-      ['/ghost',    'Spooky orbs'],
-      ['/rain',     'Personal rain cloud'],
+      ['/smoke',    ti18n('hk.cmd.smoke')],
+      ['/coffee',   ti18n('hk.cmd.coffee')],
+      ['/music',    ti18n('hk.cmd.music')],
+      ['/zzz',      ti18n('hk.cmd.zzz')],
+      ['/think',    ti18n('hk.cmd.think')],
+      ['/hearts',   ti18n('hk.cmd.hearts')],
+      ['/angry',    ti18n('hk.cmd.angry')],
+      ['/sweat',    ti18n('hk.cmd.sweat')],
+      ['/sparkle',  ti18n('hk.cmd.sparkle')],
+      ['/confetti', ti18n('hk.cmd.confetti')],
+      ['/fire',     ti18n('hk.cmd.fire')],
+      ['/ghost',    ti18n('hk.cmd.ghost')],
+      ['/rain',     ti18n('hk.cmd.rain')],
     ];
 
     const gameCmds: [string, string][] = [
-      ['/flip',             'Flip a coin'],
-      ['/8ball <q>',        'Ask the magic 8-ball'],
-      ['/slots',            'Spin the slot machine'],
-      ['/ship <n1> <n2>',  'Compatibility %'],
-      ['/rps <choice>',    'Challenge to RPS'],
+      ['/flip',           ti18n('hk.cmd.flip')],
+      ['/8ball <q>',      ti18n('hk.cmd.8ball')],
+      ['/slots',          ti18n('hk.cmd.slots')],
+      ['/ship <n1> <n2>', ti18n('hk.cmd.ship')],
+      ['/rps <choice>',   ti18n('hk.cmd.rps')],
     ];
 
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -109,18 +125,18 @@ export class HotkeyModal {
     this.el.innerHTML = `
       <div class="hk-panel">
         <div class="hk-header">
-          <span class="hk-title">Hotkeys & Commands</span>
+          <span class="hk-title">${ti18n('hk.title')}</span>
           <button class="hk-close" id="hk-close">✕</button>
         </div>
         <div class="hk-body">
           <div class="hk-col hk-col-full">
-            ${section('HOTKEYS', hotkeys.map(kRow).join(''), true)}
-            ${section('NAVIGATION', navCmds.map(cRow).join(''))}
+            ${section(ti18n('hk.section.hotkeys'),    hotkeys.map(kRow).join(''), true)}
+            ${section(ti18n('hk.section.navigation'), navCmds.map(cRow).join(''))}
           </div>
           <div class="hk-divider"></div>
           <div class="hk-col">
-            ${section('SOCIAL', socialCmds.map(cRow).join(''), true)}
-            ${section('GAMES', gameCmds.map(cRow).join(''))}
+            ${section(ti18n('hk.section.social'), socialCmds.map(cRow).join(''), true)}
+            ${section(ti18n('hk.section.games'),  gameCmds.map(cRow).join(''))}
           </div>
         </div>
       </div>`;

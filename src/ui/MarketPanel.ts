@@ -20,6 +20,7 @@ import { usdToSats, getBtcUsdPrice } from '../stores/priceService';
 import { MarketPreview } from './market/MarketPreview';
 import { showInvoiceModal } from './market/MarketInvoice';
 import { boltIcon } from './icons';
+import { t as ti18n } from '../i18n/i18n';
 
 const PANEL_ID    = 'market-panel';
 const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
@@ -176,14 +177,14 @@ export class MarketPanel {
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">
         ${boltIcon(15)}
-        <div style="flex:1;color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">MARKET</div>
-        <button id="mp-hide-owned" title="Hide already-purchased items" style="
+        <div style="flex:1;color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">${ti18n('market.title')}</div>
+        <button id="mp-hide-owned" title="${ti18n('market.hide_owned_tooltip')}" style="
           padding:3px 8px;border-radius:4px;cursor:pointer;
           font-family:'Courier New',monospace;font-size:9px;font-weight:bold;letter-spacing:0.05em;
           background:${MarketPanel._hideOwned ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 18%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 18%,transparent)'};
           border:1px solid ${MarketPanel._hideOwned ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 40%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)'};
           color:${MarketPanel._hideOwned ? 'var(--nd-amber,#f0b040)' : 'var(--nd-subtext)'};
-        ">${MarketPanel._hideOwned ? '✓ HIDE OWNED' : 'HIDE OWNED'}</button>
+        ">${MarketPanel._hideOwned ? '✓ ' + ti18n('market.hide_owned') : ti18n('market.hide_owned')}</button>
         <button id="mp-unit-toggle" style="
           padding:3px 8px;border-radius:4px;cursor:pointer;
           font-family:'Courier New',monospace;font-size:9px;font-weight:bold;letter-spacing:0.05em;

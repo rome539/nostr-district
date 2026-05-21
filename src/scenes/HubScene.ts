@@ -20,6 +20,7 @@ import { loadNostrTheme } from '../nostr/nostrThemeService';
 import { initEmojiService } from '../nostr/emojiService';
 import { startGlobalZapToasts } from '../nostr/zapService';
 import { LoginScreen } from '../ui/LoginScreen';
+import { t as ti18n } from '../i18n/i18n';
 import {
   loginWithExtension, loginWithNsec, loginAsGuest,
   startBunkerFlow, loginWithBunkerUrl, cancelBunkerFlow,
@@ -236,7 +237,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     startGlobalZapToasts();
 
     this.chatUI = new ChatUI();
-    this.chatInput = this.chatUI.create('Chat or /terminal /dm /help...', P.teal, (cmd) => this.handleCommand(cmd));
+    this.chatInput = this.chatUI.create(ti18n('chat.placeholder'), P.teal, (cmd) => this.handleCommand(cmd));
     this.chatUI.setNameClickHandler((pubkey, name) => {
       const op = this.otherPlayers.get(pubkey);
       ProfileModal.show(pubkey, name, op?.avatar, op?.status);
@@ -319,9 +320,9 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   // ── Room Requests ──
   protected override setupRoomRequestHandlers(): void {
     setRoomRequestHandler((rp, rn) => this.showRoomRequestToast(rp, rn));
-    setRoomGrantedHandler((op, on, room, roomConfig) => { this.waitingForAccess = false; this.chatUI.addMessage('system', `${on} accepted!`, P.teal); this.enterRoom(room, `${on}'s Room`, P.teal, op, roomConfig); });
-    setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); });
-    setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || 'Removed from room', P.amber); });
+    setRoomGrantedHandler((op, on, room, roomConfig) => { this.waitingForAccess = false; this.chatUI.addMessage('system', ti18n('sys.room.accepted', { name: on }), P.teal); this.enterRoom(room, ti18n('sys.room.label', { name: on }), P.teal, op, roomConfig); });
+    setRoomDeniedHandler((r) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || ti18n('sys.room.denied'), P.amber); });
+    setRoomKickHandler((r) => { this.chatUI.addMessage('system', r || ti18n('sys.room.kicked'), P.amber); });
   }
   // ── Player Picker ──
   private showPlayerPicker(): void {
@@ -334,13 +335,13 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
 
   private requestRoomAccess(op: string): void {
-    this.chatUI.addMessage('system', `Requesting access...`, P.teal);
+    this.chatUI.addMessage('system', ti18n('sys.room.requesting'), P.teal);
     this.waitingForAccess = true;
     sendRoomRequest(op);
     setTimeout(() => {
       if (this.waitingForAccess) {
         this.waitingForAccess = false;
-        this.chatUI.addMessage('system', 'Timed out', P.amber);
+        this.chatUI.addMessage('system', ti18n('sys.timed_out'), P.amber);
       }
     }, 30000);
   }
@@ -408,7 +409,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       return;
     }
     if (roomId === 'hub') {
-      this.chatUI.addMessage('system', 'Already in the hub!', P.teal);
+      this.chatUI.addMessage('system', ti18n('sys.already_in_hub'), P.teal);
       return;
     }
     if (roomId === 'cabin') {
@@ -421,7 +422,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   private notifyWoodsClosed(): void {
     if (this.lastWoodsClosedNotice !== 0) return;
     this.lastWoodsClosedNotice = Date.now();
-    this.chatUI.addMessage('system', 'The woods are temporarily closed.', P.amber);
+    this.chatUI.addMessage('system', ti18n('sys.woods_closed'), P.amber);
   }
 
   // ── Presence ──
@@ -866,7 +867,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     switch (cmd) {
       default: {
         if (!this.handleCommonCommand(cmd, arg))
-          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+          this.chatUI.addMessage('system', ti18n('sys.unknown_cmd', { cmd }), P.amber);
         break;
       }
     }

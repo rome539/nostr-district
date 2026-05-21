@@ -10,6 +10,7 @@ import { authStore } from '../stores/authStore';
 import { getSparkBalance, onSparkPayment, getSparkSdk } from '../nostr/sparkService';
 import { WalletPanel } from './WalletPanel';
 import { boltIcon } from './icons';
+import { t as ti18n } from '../i18n/i18n';
 
 const HUD_ID = 'wallet-hud';
 
@@ -43,11 +44,11 @@ export class WalletHUD {
 
     const el = document.createElement('div');
     el.id = HUD_ID;
-    el.title = 'Open wallet (W)';
+    el.title = ti18n('hud.open_wallet');
     el.innerHTML = `
       <span class="wh-bolt">${boltIcon(13)}</span>
       <span class="wh-amt">—</span>
-      <span class="wh-unit">sats</span>
+      <span class="wh-unit">${ti18n('hud.sats')}</span>
     `;
     el.addEventListener('click', () => WalletPanel.toggle());
     document.body.appendChild(el);

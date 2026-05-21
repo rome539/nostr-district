@@ -5,6 +5,7 @@
 
 import { sendChat } from '../nostr/presenceService';
 import type { ChatUI } from './ChatUI';
+import { t as ti18n } from '../i18n/i18n';
 
 type Choice = 'rock' | 'paper' | 'scissors';
 const EMOJI: Record<Choice, string> = { rock: '🪨', paper: '📄', scissors: '✂️' };
@@ -58,11 +59,11 @@ export class RpsGame {
         const myChoice = this.pending.choice;
         this.pending = null;
         const result = beats(myChoice, acceptorChoice)
-          ? `${myName} wins! 🏆`
+          ? ti18n('rps.wins', { name: myName })
           : beats(acceptorChoice, myChoice)
-          ? `${fromName} wins! 🏆`
-          : "It's a tie! 🤝";
-        const msg = `🎮 RPS: ${myName} ${EMOJI[myChoice]} vs ${fromName} ${EMOJI[acceptorChoice]} — ${result}`;
+          ? ti18n('rps.wins', { name: fromName })
+          : ti18n('rps.tie');
+        const msg = `🎮 ${ti18n('rps.label')}: ${myName} ${EMOJI[myChoice]} vs ${fromName} ${EMOJI[acceptorChoice]} — ${result}`;
         postResult(msg);
         sendChat(msg);
       }

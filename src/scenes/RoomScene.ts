@@ -11,6 +11,7 @@ import {
   sendAvatarUpdate, isPresenceReady,
 } from '../nostr/presenceService';
 import { ChatUI } from '../ui/ChatUI';
+import { t as ti18n } from '../i18n/i18n';
 import { showPlayerMenu } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RoomRenderer } from '../rooms/RoomRenderer';
@@ -38,13 +39,13 @@ export class RoomScene extends BaseScene {
   private roomRenderer = new RoomRenderer();
   private roomBgImage!: Phaser.GameObjects.Image;
 
-  private readonly roomKickHandler = (r: string) => { this.chatUI.addMessage('system', r || 'Owner left', P.amber); setTimeout(() => this.leaveRoom(), 1500); };
+  private readonly roomKickHandler = (r: string) => { this.chatUI.addMessage('system', r || ti18n('sys.owner_left'), P.amber); setTimeout(() => this.leaveRoom(), 1500); };
   private readonly roomGrantedHandler = (op: string, on: string, room: string, roomConfig?: string) => {
     this.waitingForAccess = false;
-    this.chatUI.addMessage('system', `${on} accepted!`, P.teal);
+    this.chatUI.addMessage('system', ti18n('sys.room.accepted', { name: on }), P.teal);
     this.scene.start('RoomScene', { id: room, name: `${on}'s Room`, neonColor: P.teal, ownerPubkey: op, ownerRoomConfig: roomConfig });
   };
-  private readonly roomDeniedHandler = (r: string) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || 'Denied', P.amber); };
+  private readonly roomDeniedHandler = (r: string) => { this.waitingForAccess = false; this.chatUI.addMessage('system', r || ti18n('sys.room.denied'), P.amber); };
 
   // Walk animation
   private walkTimer = 0;
@@ -540,11 +541,11 @@ export class RoomScene extends BaseScene {
           this.scene.start('RoomScene', { id: `myroom:${pk}`, name: `${n}'s Room`, neonColor: P.teal, ownerPubkey: pk });
         },
         (opk) => {
-          this.chatUI.addMessage('system', 'Requesting access...', P.teal);
+          this.chatUI.addMessage('system', ti18n('sys.room.requesting'), P.teal);
           this.waitingForAccess = true;
           sendRoomRequest(opk);
           setTimeout(() => {
-            if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', 'Request timed out', P.amber); }
+            if (this.waitingForAccess) { this.waitingForAccess = false; this.chatUI.addMessage('system', ti18n('sys.request_timed_out'), P.amber); }
           }, 30000);
         },
       );
@@ -595,7 +596,7 @@ export class RoomScene extends BaseScene {
     switch (cmd) {
       default: {
         if (!this.handleCommonCommand(cmd, arg))
-          this.chatUI.addMessage('system', `Unknown: /${cmd}`, P.amber);
+          this.chatUI.addMessage('system', ti18n('sys.unknown_cmd', { cmd }), P.amber);
         break;
       }
     }

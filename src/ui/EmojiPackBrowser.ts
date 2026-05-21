@@ -4,6 +4,7 @@
  * Tabs: Browse | Added
  */
 
+import { t as ti18n } from '../i18n/i18n';
 import {
   StoredEmojiPack,
   getStoredEmojiPacks,
@@ -164,7 +165,7 @@ export class EmojiPackBrowser {
     el.innerHTML = `
       <div style="display:flex;align-items:center;padding:10px 14px 0;flex-shrink:0;
         border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
-        <span style="color:var(--nd-text);font-size:12px;letter-spacing:0.08em;flex:1;">EMOJI PACK BROWSER</span>
+        <span style="color:var(--nd-text);font-size:12px;letter-spacing:0.08em;flex:1;">${ti18n('emoji_browser.title')}</span>
         <button id="epb-close" style="background:none;border:none;color:var(--nd-subtext);
           cursor:pointer;font-size:18px;padding:0 0 6px;line-height:1;opacity:0.6;">×</button>
       </div>
@@ -172,10 +173,10 @@ export class EmojiPackBrowser {
         border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
         <button id="epb-tab-browse" style="flex:1;padding:8px 0;background:none;border:none;
           font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;">Browse</button>
+          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;">${ti18n('emoji_browser.tab.browse')}</button>
         <button id="epb-tab-added" style="flex:1;padding:8px 0;background:none;border:none;
           font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;">Added</button>
+          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;">${ti18n('emoji_browser.tab.added')}</button>
       </div>
       <div id="epb-content" style="flex:1;overflow-y:auto;padding:8px;
         scrollbar-width:thin;
@@ -224,7 +225,7 @@ export class EmojiPackBrowser {
     container.innerHTML = `
       <div style="display:flex;gap:5px;margin-bottom:8px;">
         <input id="epb-search" type="text"
-          placeholder="Search packs by name…"
+          placeholder="${ti18n('emoji_browser.search_placeholder')}"
           style="flex:1;min-width:0;
             background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);

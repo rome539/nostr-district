@@ -16,6 +16,7 @@ import { deserializeAvatar, getDefaultAvatar } from '../stores/avatarStore';
 import { renderRoomSprite } from '../entities/AvatarRenderer';
 import { notifyFollowChange } from './FollowsPanel';
 import { fetchKind16767, NostrTheme } from '../nostr/nostrThemeService';
+import { t as ti18n } from '../i18n/i18n';
 
 // ── Minimal colour helpers (scoped to this file) ──────────────────────────────
 function _hexToRgb(hex: string): [number, number, number] {
@@ -241,7 +242,7 @@ export class ProfileModal {
             ? `background:rgba(0,0,0,0.50);border:1px solid #e8545488;color:#e85454;`
             : `background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);color:var(--nd-accent);`
           }
-        ">${isFollowing ? 'Unfollow' : 'Follow'}</button>
+        ">${isFollowing ? ti18n('profile.unfollow') : ti18n('profile.follow')}</button>
       ` : '';
 
       const npubUnder = npub.length > 10 ? npub.slice(0, 7) + '..' + npub.slice(-4) : npub;
@@ -263,7 +264,7 @@ export class ProfileModal {
               padding:2px 5px;border-radius:3px;
               background:rgba(0,0,0,0.30);
               transition:opacity 0.15s;
-            " title="Click to copy npub">${npubUnder}</div>
+            " title="${ti18n('profile.click_copy_npub')}">${npubUnder}</div>
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;padding-top:4px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -274,8 +275,8 @@ export class ProfileModal {
                 ${scoreInlineHtml}
               </div>
               ${!isSelf ? `
-                <button id="profile-dm" title="Send DM" style="background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);border-radius:6px;color:var(--nd-accent);font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">✉ DM</button>
-                <button id="profile-zap" title="Send Zap" style="background:rgba(0,0,0,0.50);border:1px solid rgba(240,176,64,0.55);border-radius:6px;color:#f0b040;font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;">${boltIcon(12)}<span>Zap</span></button>
+                <button id="profile-dm" title="${ti18n('profile.send_dm')}" style="background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-accent) 55%,transparent);border-radius:6px;color:var(--nd-accent);font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;">✉ ${ti18n('profile.dm')}</button>
+                <button id="profile-zap" title="${ti18n('profile.send_zap')}" style="background:rgba(0,0,0,0.50);border:1px solid rgba(240,176,64,0.55);border-radius:6px;color:#f0b040;font-size:12px;font-family:'Courier New',monospace;padding:5px 9px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;">${boltIcon(12)}<span>${ti18n('profile.zap')}</span></button>
               ` : ''}
             </div>
             ${playerStatus ? `<div style="color:var(--nd-accent);font-size:11px;font-style:italic;opacity:0.9;">\u25CF ${esc(playerStatus)}</div>` : ''}
@@ -288,8 +289,8 @@ export class ProfileModal {
           ${about ? `<div style="color:var(--nd-text);font-size:12px;line-height:1.5;opacity:0.8;margin-bottom:14px;max-height:80px;overflow-y:auto;text-shadow:0 1px 4px rgba(0,0,0,0.8);">${esc(about.slice(0, 300))}</div>` : ''}
           <div style="display:flex;gap:8px;">
             ${followBtnHtml}
-            ${!isGuest ? `<button id="profile-notes-btn" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:6px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;">Notes ▾</button>` : ''}
-            <button id="profile-close" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">Close</button>
+            ${!isGuest ? `<button id="profile-notes-btn" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:6px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;">${ti18n('profile.notes')} ▾</button>` : ''}
+            <button id="profile-close" style="flex:1;padding:8px;background:rgba(0,0,0,0.50);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--nd-text);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">${ti18n('profile.close')}</button>
           </div>
           <div id="profile-notes-feed" style="display:none;margin-top:12px;max-height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-dpurp) 33%,transparent) transparent;"></div>
         </div>
@@ -378,11 +379,11 @@ export class ProfileModal {
           notesBtn.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 44%,transparent)';
           if (loaded) return;
           loaded = true;
-          notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">Loading notes…</div>`;
+          notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">${ti18n('profile.loading_notes')}</div>`;
           const notes = await fetchUserNotes(pubkey, 20);
           if (!document.getElementById(MODAL_ID)) return;
           if (!notes.length) {
-            notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">No notes found.</div>`;
+            notesFeed.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;padding:10px;opacity:0.5;text-align:center;">${ti18n('profile.no_notes')}</div>`;
             return;
           }
           notesFeed.innerHTML = notes.map(n => {

@@ -5,6 +5,8 @@
  * and how to use it responsibly. Opened via the ⓘ button in WalletPanel.
  */
 
+import { t as ti18n } from '../i18n/i18n';
+
 const MODAL_ID = 'wallet-info';
 
 export class WalletInfo {
@@ -27,75 +29,10 @@ export class WalletInfo {
     modal.id = MODAL_ID;
     modal.innerHTML = `
       <div class="wi-header">
-        <div class="wi-title">About your wallet</div>
+        <div class="wi-title">${ti18n('wallet_info.title')}</div>
         <button id="wi-close" class="wi-close" aria-label="Close">×</button>
       </div>
-      <div class="wi-body">
-        <section>
-          <h3>How it works</h3>
-          <p>Your wallet is generated automatically from your Nostr private key (nsec). The same nsec always produces the same wallet, so you don't need a separate backup — as long as you keep your Nostr key, you keep your wallet.</p>
-          <p>It's powered by the <strong>Spark protocol</strong>, a Lightning-compatible Bitcoin layer-2.</p>
-        </section>
-
-        <section>
-          <h3>No separate seed phrase</h3>
-          <p>Your wallet is bound to your Nostr key — there's nothing extra to back up. Keep your nsec safe and your wallet is safe. If you lose access to your nsec, you lose access to this wallet.</p>
-        </section>
-
-        <section>
-          <h3>Self-custodial — with nuance</h3>
-          <p>Your sats are <strong>not held by Nostr District</strong>. No one in this app can move your funds, freeze your account, or see your balance.</p>
-          <p>However, this wallet is <strong>not the same as cold storage or a hardware wallet</strong>. The Spark protocol relies on a network of operators to keep funds liquid and accessible. Your keys stay yours, but day-to-day access assumes the Spark network is online.</p>
-          <p>Think of it like cash in your pocket — convenient and yours, but not the place for your life savings.</p>
-        </section>
-
-        <section>
-          <h3>Recommended use</h3>
-          <ul>
-            <li>Receive and send <strong>zaps</strong></li>
-            <li>Buy items in the <strong>shop</strong></li>
-            <li>Tip other players</li>
-            <li>Hold small, everyday amounts</li>
-          </ul>
-          <p class="wi-warn">For larger amounts, withdraw to a dedicated wallet or cold storage.</p>
-        </section>
-
-        <section>
-          <h3>Where in-game zaps go</h3>
-          <p>When someone zaps you <strong>inside Nostr District</strong>, sats land in this in-game wallet — even if you have a different Lightning address on your Nostr profile.</p>
-          <p>Zaps from <strong>other Nostr clients</strong> (Damus, Amethyst, Primal, etc.) still go to whatever's set in your Nostr profile (<code>kind:0</code>). To receive external zaps here too, set this wallet as your Lightning address on your profile.</p>
-        </section>
-
-        <section>
-          <h3>Security</h3>
-          <p>Your wallet is only as secure as your nsec. Anyone with your nsec can decrypt this wallet and spend it. Protect your Nostr key.</p>
-          <ul>
-            <li>If you lose your nsec, you lose this wallet — there is no separate recovery phrase to write down.</li>
-            <li>Your wallet seed is encrypted to your own Nostr pubkey (NIP-44) and stored on Nostr relays as a <code>kind:30078</code> event. Nothing is cached on this device — log in with the same nsec/extension on any browser and the same wallet loads.</li>
-            <li>Only you (or anyone with your nsec / signer) can decrypt the backup. Relays see ciphertext.</li>
-            <li>Treat this as a hot wallet. Fine for in-game amounts, not for savings.</li>
-          </ul>
-        </section>
-
-        <section>
-          <h3>Wallet not loading?</h3>
-          <p>If your balance shows <code>0</code> or never finishes loading, the wallet's connection to the Spark network is likely being blocked. Common causes:</p>
-          <ul>
-            <li><strong>VPN</strong> — many VPNs block the Lightning service or rewrite headers in ways that fail authentication. Try disabling it.</li>
-            <li><strong>Ad blocker / privacy extension</strong> — some block <code>lightspark.com</code> by default.</li>
-            <li><strong>Corporate or school network</strong> — firewalls often block crypto/Lightning endpoints.</li>
-            <li><strong>Lightspark outage</strong> — rare, but possible. Try again in a few minutes.</li>
-          </ul>
-          <p class="wi-warn">If you see CORS or 403 errors in the browser console mentioning <code>spark.lightspark.com</code>, this is almost always one of the above — not lost sats. Your balance is safe; the app just can't reach the network to display it.</p>
-        </section>
-
-        <section>
-          <h3>Learn more</h3>
-          <p>
-            <a href="https://breez.technology/sdk" target="_blank" rel="noopener noreferrer">Breez SDK</a>
-          </p>
-        </section>
-      </div>
+      <div class="wi-body">${ti18n('wallet_info.body')}</div>
     `;
     document.body.appendChild(modal);
 

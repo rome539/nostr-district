@@ -6,6 +6,7 @@
 import { fetchRoomQuotes, publishRoomQuote, deleteRoomQuote, resolveQuoteNames, RoomQuote } from '../nostr/roomQuoteService';
 import { authStore } from '../stores/authStore';
 import { ProfileModal } from './ProfileModal';
+import { t as ti18n } from '../i18n/i18n';
 
 const MAX_CHARS = 280;
 
@@ -46,12 +47,12 @@ export const BookcaseModal = {
 
     // ── Title ──────────────────────────────────────────────────────────────────
     const title = document.createElement('div');
-    title.textContent = '✦ THE BOOKCASE ✦';
+    title.textContent = `✦ ${ti18n('bookcase.title')} ✦`;
     title.style.cssText = 'color:#d4a853;font-size:10px;letter-spacing:3px;text-align:center;margin-bottom:4px;opacity:0.9;';
     box.appendChild(title);
 
     const sub = document.createElement('div');
-    sub.textContent = 'visitors leave their mark here';
+    sub.textContent = ti18n('bookcase.subtitle');
     sub.style.cssText = 'color:#7a4a20;font-size:8px;letter-spacing:1px;text-align:center;margin-bottom:16px;';
     box.appendChild(sub);
 
@@ -63,7 +64,7 @@ export const BookcaseModal = {
     `;
 
     const loading = document.createElement('div');
-    loading.textContent = 'opening the pages...';
+    loading.textContent = ti18n('bookcase.loading');
     loading.style.cssText = 'color:#7a4a2088;font-size:9px;text-align:center;padding:24px 0;letter-spacing:1px;';
     listWrap.appendChild(loading);
     box.appendChild(listWrap);
@@ -80,7 +81,7 @@ export const BookcaseModal = {
 
     if (canWrite) {
       const writeLabel = document.createElement('div');
-      writeLabel.textContent = 'leave your quote';
+      writeLabel.textContent = ti18n('bookcase.leave_quote');
       writeLabel.style.cssText = 'color:#8a5a28;font-size:8px;letter-spacing:1px;margin-bottom:6px;';
       box.appendChild(writeLabel);
 
@@ -117,7 +118,7 @@ export const BookcaseModal = {
       });
 
       submitBtn = document.createElement('button');
-      submitBtn.textContent = '✦ Submit quote';
+      submitBtn.textContent = `✦ ${ti18n('bookcase.submit')}`;
       submitBtn.style.cssText = `
         background:transparent; border:1px solid #6b3a1f88; border-radius:6px;
         color:#c07830; font-family:"Courier New",monospace; font-size:9px;
@@ -155,7 +156,7 @@ export const BookcaseModal = {
 
     // ── Close ─────────────────────────────────────────────────────────────────
     const hint = document.createElement('div');
-    hint.textContent = '[ESC] or click to close';
+    hint.textContent = ti18n('bookcase.close_hint');
     hint.style.cssText = 'color:#8a6040;font-size:9px;letter-spacing:1px;cursor:pointer;text-align:center;margin-top:4px;';
     hint.onclick = () => BookcaseModal.destroy();
     box.appendChild(hint);
@@ -172,7 +173,7 @@ export const BookcaseModal = {
 
     const appendLoadMore = () => {
       const b = document.createElement('button');
-      b.textContent = '↓ load more';
+      b.textContent = `↓ ${ti18n('bookcase.load_more')}`;
       b.style.cssText = `display:block;width:100%;background:transparent;border:1px solid #6b3a1f44;border-radius:6px;color:#8a5a28;font-family:"Courier New",monospace;font-size:8px;letter-spacing:1px;cursor:pointer;padding:6px;margin-top:4px;transition:border-color 0.2s,color 0.2s;`;
       b.onmouseenter = () => { b.style.borderColor = '#c07830'; b.style.color = '#c07830'; };
       b.onmouseleave = () => { b.style.borderColor = '#6b3a1f44'; b.style.color = '#8a5a28'; };

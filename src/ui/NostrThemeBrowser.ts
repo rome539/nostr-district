@@ -9,6 +9,7 @@ import {
   getNostrTheme, isNostrThemeEnabled, FALLBACK_RELAYS,
 } from '../nostr/nostrThemeService';
 import { authStore } from '../stores/authStore';
+import { t as ti18n } from '../i18n/i18n';
 
 const DITTO_RELAY = 'wss://relay.ditto.pub';
 
@@ -232,7 +233,7 @@ export class NostrThemeBrowser {
     el.innerHTML = `
       <div style="display:flex;align-items:center;padding:10px 14px 0;flex-shrink:0;
         border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
-        <span style="color:var(--nd-text);font-size:12px;letter-spacing:0.08em;flex:1;">THEME BROWSER</span>
+        <span style="color:var(--nd-text);font-size:12px;letter-spacing:0.08em;flex:1;">${ti18n('theme_browser.title')}</span>
         <button id="ntb-close" style="background:none;border:none;color:var(--nd-subtext);
           cursor:pointer;font-size:18px;padding:0 0 6px;line-height:1;opacity:0.6;">×</button>
       </div>
@@ -240,13 +241,13 @@ export class NostrThemeBrowser {
         border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
         <button id="ntb-tab-mine" style="flex:1;padding:8px 0;background:none;border:none;
           font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">Mine</button>
+          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">${ti18n('theme_browser.tab.mine')}</button>
         <button id="ntb-tab-global" style="flex:1;padding:8px 0;background:none;border:none;
           font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">Global</button>
+          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">${ti18n('theme_browser.tab.global')}</button>
         <button id="ntb-tab-favorites" style="flex:1;padding:8px 0;background:none;border:none;
           font-family:'Courier New',monospace;font-size:11px;cursor:pointer;
-          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">Favorites</button>
+          border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,opacity 0.15s;">${ti18n('theme_browser.tab.favorites')}</button>
       </div>
       <div id="ntb-content" style="flex:1;overflow-y:auto;padding:8px;
         scrollbar-width:thin;
@@ -299,7 +300,7 @@ export class NostrThemeBrowser {
   private buildMineUI(container: HTMLElement): void {
     const auth = authStore.getState();
     if (!auth.pubkey) {
-      container.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;text-align:center;padding:28px;opacity:0.45;">Not logged in</div>`;
+      container.innerHTML = `<div style="color:var(--nd-subtext);font-size:11px;text-align:center;padding:28px;opacity:0.45;">${ti18n('theme_browser.not_logged_in')}</div>`;
       return;
     }
 
@@ -345,7 +346,7 @@ export class NostrThemeBrowser {
     container.innerHTML = `
       <div style="display:flex;gap:5px;margin-bottom:8px;">
         <input id="ntb-gsearch" type="text"
-          placeholder="Search or paste npub1…"
+          placeholder="${ti18n('theme_browser.search_placeholder')}"
           style="flex:1;min-width:0;
             background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);

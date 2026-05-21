@@ -1,4 +1,6 @@
 import { P } from '../config/game.config';
+import { t, getCurrentLang, setLang, onLangChange } from '../i18n/i18n';
+import { LoginInfo } from './LoginInfo';
 
 interface LoginBuilding {
   x: number; y: number; w: number; h: number; shade: string;
@@ -81,6 +83,139 @@ export class LoginScreen {
     document.body.appendChild(this.container);
     this.bindEvents();
     this.initSkyline();
+
+    // Re-render the whole login screen when the language changes so every
+    // translated string updates in one pass. We re-bind events too because
+    // the new innerHTML drops all the existing listeners.
+    this.unsubLang = onLangChange(() => this.rerender());
+  }
+
+  private unsubLang: (() => void) | null = null;
+
+  /**
+   * Surgical re-render on language change. We only swap the `.login-wrapper`
+   * subtree (the part with translated strings) and update the dropdown's
+   * label + active option in place. Canvas, skyline animation, and the
+   * dropdown's own event listeners are preserved — otherwise every language
+   * switch would restart the city-skyline animation and look like a page
+   * reload.
+   */
+  private rerender(): void {
+    // Build a fresh HTML tree and lift just the new login-wrapper out of it.
+    const tmp = document.createElement('div');
+    tmp.innerHTML = this.getHTML();
+    const newWrapper = tmp.querySelector('.login-wrapper');
+    const oldWrapper = this.container.querySelector('.login-wrapper');
+    if (newWrapper && oldWrapper) {
+      oldWrapper.replaceWith(newWrapper);
+      this._bindLoginBoxEvents();
+    }
+
+    // Reflect the new active language in the dropdown without rebuilding it
+    // (which would also discard our outside-click listener and the open/closed
+    // state).
+    this._refreshLangDropdownState();
+  }
+
+  /**
+   * Wire click + keyboard activation on info glyphs inside a dynamically-built
+   * subtree (e.g. a passkey row injected after init). The main `getHTML()`
+   * pass is covered by `_bindLoginBoxEvents` — this helper handles the
+   * after-the-fact insertions.
+   */
+  private _wireGlyph(root: Element): void {
+    root.querySelectorAll<HTMLElement>('.btn-info-glyph').forEach(glyph => {
+      glyph.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const topic = glyph.dataset.info as Parameters<typeof LoginInfo.open>[0] | undefined;
+        if (topic) LoginInfo.open(topic);
+      });
+      glyph.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          const topic = glyph.dataset.info as Parameters<typeof LoginInfo.open>[0] | undefined;
+          if (topic) LoginInfo.open(topic);
+        }
+      });
+    });
+  }
+
+  /** Update the language dropdown's current label + active option in place. */
+  private _refreshLangDropdownState(): void {
+    const known = LoginScreen.LANGUAGES.find(l => l.code === getCurrentLang())
+                ?? LoginScreen.LANGUAGES[0];
+    const label = this.container.querySelector<HTMLElement>('#login-lang-current');
+    if (label) label.textContent = known.label;
+
+    this.container.querySelectorAll<HTMLLIElement>('.login-lang-opt').forEach(opt => {
+      const active = opt.dataset.lang === known.code;
+      opt.classList.toggle('is-active', active);
+      opt.setAttribute('aria-selected', String(active));
+    });
+  }
+
+  /**
+   * Wire up the custom language dropdown. Builds the option list from
+   * `LANGUAGES`, marks the active one, and handles open/close + selection.
+   */
+  private _bindLangDropdown(): void {
+    const wrap   = this.container.querySelector<HTMLElement>('#login-lang-wrap');
+    const btn    = this.container.querySelector<HTMLButtonElement>('#login-lang-btn');
+    const list   = this.container.querySelector<HTMLUListElement>('#login-lang-list');
+    const label  = this.container.querySelector<HTMLElement>('#login-lang-current');
+    if (!wrap || !btn || !list || !label) return;
+
+    const current = getCurrentLang();
+    const known   = LoginScreen.LANGUAGES.find(l => l.code === current) ?? LoginScreen.LANGUAGES[0];
+    label.textContent = known.label;
+
+    // Populate options
+    list.innerHTML = LoginScreen.LANGUAGES.map(l => `
+      <li role="option" data-lang="${l.code}" class="login-lang-opt ${l.code === current ? 'is-active' : ''}" aria-selected="${l.code === current}">
+        ${this.esc(l.label)}
+      </li>
+    `).join('');
+
+    const close = () => {
+      list.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      wrap.classList.remove('is-open');
+    };
+
+    const open = () => {
+      list.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      wrap.classList.add('is-open');
+    };
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (list.hidden) open();
+      else close();
+    });
+
+    list.querySelectorAll<HTMLLIElement>('.login-lang-opt').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const code = opt.dataset.lang;
+        if (!code) return;
+        setLang(code); // triggers onLangChange → full rerender (which rebuilds this dropdown too)
+        close();
+      });
+    });
+
+    // Outside-click to dismiss. Stored on `this` so `rerender()` can detach it.
+    this._langDocClickHandler = (e) => {
+      if (!list.hidden && !wrap.contains(e.target as Node)) close();
+    };
+    document.addEventListener('click', this._langDocClickHandler);
+
+    // Escape closes
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { close(); btn.focus(); }
+    });
   }
 
   // ─── HTML ──────────────────────────────────────────────────────────────────
@@ -91,21 +226,24 @@ export class LoginScreen {
 
   private getHTML(): string {
     const primaryPk = this.storedPasskeys.find(p => p.credentialId === this._primaryPasskeyId) ?? this.storedPasskeys[0];
+    const infoGlyph = (topic: string, label: string) =>
+      `<span class="btn-info-glyph" data-info="${this.esc(topic)}" role="button" tabindex="0" aria-label="${this.esc(label)}"><svg viewBox="0 0 16 16" width="100%" height="100%" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.4" r="0.95" fill="currentColor"/><rect x="7.05" y="6.6" width="1.9" height="5.6" rx="0.6" fill="currentColor"/></svg></span>`;
+
     const passkeyBtn = primaryPk ? `
       <div class="passkey-row" id="primary-passkey-row">
         <button class="login-btn login-btn-passkey login-passkey-btn" data-cid="${this.esc(primaryPk.credentialId)}">
-          <span class="btn-label">Continue as ${this.esc(primaryPk.displayName)}</span>
-          <span class="btn-sub">Authenticate with your device passkey</span>
+          <span class="btn-label">${this.esc(t('login.passkey.continue_as', { name: primaryPk.displayName }))}${infoGlyph('passkey', 'About passkey login')}</span>
+          <span class="btn-sub">${this.esc(t('login.passkey.continue_desc'))}</span>
         </button>
-        <button class="passkey-manage-trigger" title="Manage passkeys">⋮</button>
+        <button class="passkey-manage-trigger" title="${this.esc(t('login.passkey.manage_title'))}">⋮</button>
       </div>
     ` : `
       <div class="passkey-row" id="primary-passkey-row">
         <button id="login-passkey-setup" class="login-btn login-btn-passkey" style="flex:1;text-align:left;">
-          <span class="btn-label">Save with Passkey</span>
-          <span class="btn-sub">Create a new account secured by your device</span>
+          <span class="btn-label">${this.esc(t('login.passkey.save'))}${infoGlyph('passkey', 'About passkey login')}</span>
+          <span class="btn-sub">${this.esc(t('login.passkey.save_desc'))}</span>
         </button>
-        <button class="passkey-manage-trigger" title="Manage passkeys">⋮</button>
+        <button class="passkey-manage-trigger" title="${this.esc(t('login.passkey.manage_title'))}">⋮</button>
       </div>
     `;
 
@@ -114,45 +252,46 @@ export class LoginScreen {
       <div class="login-wrapper">
       <div class="login-box">
         <h1 class="login-title">NOSTR DISTRICT</h1>
-        <p class="login-subtitle">a pixel art social world</p>
+        <p class="login-subtitle">${this.esc(t('login.subtitle'))}</p>
+        <button id="login-what-is-nostr" class="login-what-is-nostr">What is Nostr?</button>
 
         <div id="login-main" class="login-methods">
           ${passkeyBtn}
           <button id="login-bunker" class="login-btn login-btn-create">
-            <span class="btn-label">Connect with Nostr</span>
-            <span class="btn-sub">Remote signer, browser extension, or private key</span>
+            <span class="btn-label">${this.esc(t('login.connect_nostr'))}${infoGlyph('connect', 'About connecting with Nostr')}</span>
+            <span class="btn-sub">${this.esc(t('login.connect_nostr_desc'))}</span>
           </button>
 
           <div id="login-bottom">
             <div class="login-divider"></div>
-            <button id="login-create" class="login-link">New to Nostr? Create a free account</button>
+            <button id="login-create" class="login-link">${this.esc(t('login.create_link'))} ${infoGlyph('create', 'About creating an account')}</button>
           </div>
         </div>
 
         <div id="login-bunker-view" class="hidden login-methods">
           <div id="bunker-options">
             <button id="login-bunker-start" class="login-btn login-btn-secondary">
-              <span class="btn-label">Remote Signer (NIP-46)</span>
-              <span class="btn-sub">Primal, Amber, nsec.app</span>
+              <span class="btn-label">${this.esc(t('login.bunker.remote_signer'))}${infoGlyph('signer', 'About Remote Signer')}</span>
+              <span class="btn-sub">${this.esc(t('login.bunker.remote_signer_desc'))}</span>
             </button>
 
             <button id="login-extension" class="login-btn login-btn-secondary">
-              <span class="btn-label">Browser Extension</span>
-              <span class="btn-sub">Alby, nos2x, or similar — Recommended</span>
+              <span class="btn-label">${this.esc(t('login.bunker.browser_extension'))}${infoGlyph('extension', 'About Browser Extension')}</span>
+              <span class="btn-sub">${this.esc(t('login.bunker.browser_extension_desc'))}</span>
             </button>
 
             <div id="nsec-section" class="nsec-section">
-              <button id="nsec-toggle" class="login-link">Use private key (nsec)</button>
+              <button id="nsec-toggle" class="login-link">${this.esc(t('login.bunker.use_nsec'))} ${infoGlyph('nsec', 'About private key login')}</button>
               <div id="nsec-form" class="nsec-form hidden">
                 <div class="nsec-warning">
                   <label class="warning-check">
                     <input type="checkbox" id="nsec-accept">
-                    <span>I understand my key will be held in memory. This is less secure than the options above.</span>
+                    <span>${this.esc(t('login.bunker.nsec_warning'))}</span>
                   </label>
                 </div>
                 <div id="nsec-input-wrap" class="nsec-input-wrap hidden">
-                  <input type="password" id="nsec-input" placeholder="nsec1..." class="nsec-input" autocomplete="off" spellcheck="false">
-                  <button id="nsec-submit" class="login-btn login-btn-nsec">Login</button>
+                  <input type="password" id="nsec-input" placeholder="${this.esc(t('login.bunker.nsec_placeholder'))}" class="nsec-input" autocomplete="off" spellcheck="false">
+                  <button id="nsec-submit" class="login-btn login-btn-nsec">${this.esc(t('login.bunker.nsec_login'))}</button>
                 </div>
               </div>
             </div>
@@ -160,32 +299,32 @@ export class LoginScreen {
 
           <div id="bunker-qr-panel" class="hidden">
             <div class="nostr-method-row">
-              <div class="nostr-method-label">Remote Signer <span class="nostr-method-hint">Primal, Amber, nsec.app</span></div>
+              <div class="nostr-method-label">${this.esc(t('login.bunker.remote_signer'))} <span class="nostr-method-hint">${this.esc(t('login.bunker.remote_signer_desc'))}</span></div>
               <div id="bunker-qr" class="bunker-qr-small">
                 <div class="bunker-qr-loading">Generating...</div>
               </div>
               <div id="bunker-uri-display" class="bunker-uri-row hidden">
                 <div id="bunker-uri-text" class="bunker-uri-text"></div>
-                <button id="bunker-uri-copy" class="bunker-uri-copy">Copy</button>
+                <button id="bunker-uri-copy" class="bunker-uri-copy">${this.esc(t('login.bunker.copy'))}</button>
               </div>
-              <div id="bunker-status" class="bunker-status-inline">Waiting for approval...</div>
+              <div id="bunker-status" class="bunker-status-inline">${this.esc(t('login.bunker.waiting'))}</div>
               <div class="bunker-url-row">
-                <input type="text" id="bunker-input" placeholder="or paste bunker:// URL" class="bunker-url-input" autocomplete="off">
-                <button id="bunker-url-submit" class="bunker-url-btn">Go</button>
+                <input type="text" id="bunker-input" placeholder="${this.esc(t('login.bunker.paste_url'))}" class="bunker-url-input" autocomplete="off">
+                <button id="bunker-url-submit" class="bunker-url-btn">${this.esc(t('login.bunker.go'))}</button>
               </div>
             </div>
           </div>
 
-          <button id="bunker-cancel" class="login-link bunker-cancel" style="margin-top:4px;">\u2190 Back</button>
+          <button id="bunker-cancel" class="login-link bunker-cancel" style="margin-top:4px;">${this.esc(t('login.bunker.back'))}</button>
         </div>
 
         <div id="login-create-view" class="hidden">
           <div id="create-step-1">
-            <p class="create-header">Create your Nostr identity</p>
-            <p class="create-desc">Pick a username and we'll generate your Nostr keys.</p>
-            <input type="text" id="create-username" placeholder="Username" class="nsec-input create-field" autocomplete="off" spellcheck="false" maxlength="32">
-            <button id="create-passkey" class="login-btn login-btn-primary create-generate-btn">Create Account</button>
-            <button id="create-guest" class="login-link guest-link" style="font-size:12px;padding:10px 8px;margin-top:14px;">or skip and enter as guest</button>
+            <p class="create-header">${this.esc(t('login.create.header'))}</p>
+            <p class="create-desc">${this.esc(t('login.create.desc'))}</p>
+            <input type="text" id="create-username" placeholder="${this.esc(t('login.create.username_placeholder'))}" class="nsec-input create-field" autocomplete="off" spellcheck="false" maxlength="32">
+            <button id="create-passkey" class="login-btn login-btn-primary create-generate-btn">${this.esc(t('login.create.button'))}</button>
+            <button id="create-guest" class="login-link guest-link" style="font-size:12px;padding:10px 8px;margin-top:14px;">${this.esc(t('login.create.guest_link'))}</button>
           </div>
 
           <div id="create-step-2" class="hidden">
@@ -202,20 +341,50 @@ export class LoginScreen {
             </div>
             <label class="warning-check create-saved-check">
               <input type="checkbox" id="create-saved">
-              <span>I've saved my private key somewhere safe</span>
+              <span>${this.esc(t('login.create.saved_check'))}</span>
             </label>
-            <button id="create-confirm" class="login-btn login-btn-primary" disabled>Enter Nostr District</button>
+            <button id="create-confirm" class="login-btn login-btn-primary" disabled>${this.esc(t('login.create.confirm'))}</button>
           </div>
 
-          <button id="create-back" class="login-link bunker-cancel">\u2190 Back</button>
+          <button id="create-back" class="login-link bunker-cancel">${this.esc(t('login.create.back'))}</button>
         </div>
 
         <div id="login-status" class="login-status"></div>
       </div>
-      <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" class="open-source-link">open source ↗</a>
+      <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" class="open-source-link">${this.esc(t('login.open_source'))}</a>
+      </div>
+
+      <!-- Language selector: pinned to the viewport's top-right. We use a
+           custom dropdown instead of a native <select> because at the top of
+           the page the native picker renders upward and the lower options
+           overflow off-screen. -->
+      <div class="login-lang-wrap" id="login-lang-wrap">
+        <button id="login-lang-btn" class="login-lang-btn" aria-haspopup="listbox" aria-expanded="false" title="${this.esc(t('login.lang_label'))}">
+          <span class="login-lang-icon" aria-hidden="true">🌐</span>
+          <span id="login-lang-current" class="login-lang-current">English</span>
+          <span class="login-lang-chevron" aria-hidden="true">▾</span>
+        </button>
+        <ul id="login-lang-list" class="login-lang-list" role="listbox" aria-label="${this.esc(t('login.lang_label'))}" hidden></ul>
       </div>
     `;
   }
+
+  private static readonly LANGUAGES: { code: string; label: string }[] = [
+    { code: 'en', label: 'English' },
+    { code: 'es', label: 'Español' },
+    { code: 'pt', label: 'Português' },
+    { code: 'fr', label: 'Français' },
+    { code: 'de', label: 'Deutsch' },
+    { code: 'it', label: 'Italiano' },
+    { code: 'nl', label: 'Nederlands' },
+    { code: 'ru', label: 'Русский' },
+    { code: 'ja', label: '日本語' },
+    { code: 'ko', label: '한국어' },
+    { code: 'zh', label: '中文' },
+    { code: 'ar', label: 'العربية' },
+  ];
+
+  private _langDocClickHandler: ((e: MouseEvent) => void) | null = null;
 
   // ─── Styles ────────────────────────────────────────────────────────────────
 
@@ -268,6 +437,78 @@ export class LoginScreen {
           0 0 30px var(--nd-accent),
           0 0 60px var(--nd-accent);
       }
+      .login-lang-wrap {
+        position: fixed; top: 16px; right: 18px; z-index: 50;
+      }
+      .login-lang-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 9px;
+        background: color-mix(in srgb, black 45%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 25%, transparent);
+        border-radius: 6px;
+        color: var(--nd-accent); font: inherit; font-size: 11px;
+        letter-spacing: 0.06em; cursor: pointer;
+        opacity: 0.75; transition: opacity 0.2s, border-color 0.2s;
+        backdrop-filter: blur(4px);
+        text-shadow:
+          0 0 4px var(--nd-accent),
+          0 0 10px var(--nd-accent);
+      }
+      .login-lang-btn:hover,
+      .login-lang-wrap.is-open .login-lang-btn {
+        opacity: 1;
+        border-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
+      }
+      .login-lang-icon { font-size: 11px; line-height: 1; opacity: 0.85; text-shadow: none; }
+      .login-lang-current { min-width: 56px; text-align: left; }
+      .login-lang-chevron {
+        font-size: 9px; opacity: 0.7; margin-left: 1px;
+        transition: transform 0.15s;
+      }
+      .login-lang-wrap.is-open .login-lang-chevron { transform: rotate(180deg); }
+
+      .login-lang-list {
+        position: absolute; top: calc(100% + 4px); right: 0;
+        margin: 0; padding: 4px;
+        list-style: none;
+        background: color-mix(in srgb, black 65%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 40%, transparent);
+        border-radius: 6px;
+        min-width: 140px;
+        max-height: min(60vh, 380px); overflow-y: auto;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.6),
+                    0 0 16px color-mix(in srgb, var(--nd-accent) 10%, transparent);
+        backdrop-filter: blur(8px);
+      }
+      .login-lang-list[hidden] { display: none; }
+      .login-lang-opt {
+        padding: 7px 10px; border-radius: 4px;
+        color: var(--nd-text); font-size: 12px;
+        cursor: pointer; transition: background 0.12s, color 0.12s;
+        letter-spacing: 0.02em;
+      }
+      .login-lang-opt:hover {
+        background: color-mix(in srgb, var(--nd-accent) 18%, transparent);
+        color: var(--nd-accent);
+      }
+      .login-lang-opt.is-active {
+        color: var(--nd-accent);
+        background: color-mix(in srgb, var(--nd-accent) 10%, transparent);
+      }
+      .login-lang-opt.is-active::before {
+        content: '✓'; margin-right: 6px; opacity: 0.7;
+      }
+      .login-lang-list::-webkit-scrollbar { width: 5px; }
+      .login-lang-list::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--nd-accent) 40%, transparent);
+        border-radius: 3px;
+      }
+      @media (max-width: 480px) {
+        .login-lang-wrap { top: 10px; right: 10px; }
+        .login-lang-btn { padding: 4px 7px; font-size: 10px; }
+        .login-lang-current { min-width: 48px; }
+        .login-lang-list { min-width: 130px; max-height: 50vh; }
+      }
       .login-title {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
         margin: 14px 0 6px 0; letter-spacing: 3px;
@@ -302,7 +543,8 @@ export class LoginScreen {
         background: var(--nd-navy); color: #f0b040;
         border: 1px solid var(--nd-dpurp); padding: 10px 18px; text-align: center;
       }
-      .btn-label { display: block; font-size: 14px; font-weight: bold; color: var(--nd-accent); }
+      .btn-label { display: flex; align-items: center; font-size: 14px; font-weight: bold; color: var(--nd-accent); }
+      .btn-label .btn-info-glyph { margin-left: auto; }
       .btn-sub { display: block; font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 3px; }
       .login-divider {
         height: 1px; background: var(--nd-dpurp); opacity: 0.3; margin: 6px 0;
@@ -481,6 +723,55 @@ export class LoginScreen {
       .login-box.view-create #create-back {
         position: absolute; top: 8px; right: 10px;
         margin: 0; padding: 6px 10px; font-size: 11px;
+      }
+
+      /* ── Inline per-method info glyph ──
+         Sits next to the button's title text inside the login button itself.
+         Low opacity so it reads as a hint, not a parallel CTA. Click is
+         caught before the parent button's handler via stopPropagation, so
+         tapping the glyph opens the explainer instead of triggering the
+         login flow. */
+      .btn-info-glyph {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 16px; height: 16px;
+        margin-left: 8px;
+        flex-shrink: 0;
+        vertical-align: middle;
+        color: inherit; opacity: 0.55;
+        cursor: pointer; user-select: none;
+        transition: opacity 0.15s, filter 0.15s;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      .btn-info-glyph svg { display: block; width: 100%; height: 100%; }
+      .btn-info-glyph:hover,
+      .btn-info-glyph:focus-visible {
+        opacity: 1; outline: none;
+        filter: drop-shadow(0 0 4px currentColor);
+      }
+      /* Touch devices: bigger tap target + brighter default since hover
+         doesn't exist. */
+      @media (pointer: coarse) {
+        .btn-info-glyph {
+          width: 28px; height: 28px;
+          opacity: 0.7;
+        }
+      }
+
+      /* ── "What is Nostr?" link ── */
+      .login-what-is-nostr {
+        background: none; border: none;
+        color: var(--nd-subtext); cursor: pointer;
+        font-family: 'Courier New', monospace; font-size: 11px;
+        letter-spacing: 0.06em;
+        padding: 4px 8px; margin: 0 auto 16px;
+        border-bottom: 1px dotted color-mix(in srgb, var(--nd-subtext) 35%, transparent);
+        opacity: 0.7; transition: color 0.15s, opacity 0.15s, border-color 0.15s;
+        display: block;
+      }
+      .login-what-is-nostr:hover {
+        color: var(--nd-accent); opacity: 1;
+        border-bottom-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
       }
 
       /* ── Passkey button ── */
@@ -889,7 +1180,48 @@ export class LoginScreen {
 
   // ─── Events ────────────────────────────────────────────────────────────────
 
+  /**
+   * Initial event binding from the constructor. Wires both the language
+   * dropdown (lives outside `.login-wrapper`, kept across rerenders) and the
+   * login-box content. `rerender()` only calls `_bindLoginBoxEvents()` — the
+   * dropdown's listeners persist.
+   */
   private bindEvents(): void {
+    this._bindLangDropdown();
+    this._bindLoginBoxEvents();
+  }
+
+  private _bindLoginBoxEvents(): void {
+    // "What is Nostr?" link at the top of the login box.
+    this.container.querySelector('#login-what-is-nostr')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      LoginInfo.open('nostr');
+    });
+
+    // Per-method info glyphs. Each ⓘ is a <span role="button"> living inside
+    // the parent login button. We stop propagation so the click opens the
+    // explainer without also firing the login flow. Keyboard activation
+    // (Enter / Space) is handled explicitly because spans don't get that for
+    // free.
+    const openTopic = (el: HTMLElement) => {
+      const topic = el.dataset.info as Parameters<typeof LoginInfo.open>[0] | undefined;
+      if (topic) LoginInfo.open(topic);
+    };
+    this.container.querySelectorAll<HTMLElement>('.btn-info-glyph').forEach(glyph => {
+      glyph.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openTopic(glyph);
+      });
+      glyph.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          openTopic(glyph);
+        }
+      });
+    });
+
     this.container.querySelectorAll<HTMLButtonElement>('.login-passkey-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const cid = btn.dataset.cid;
@@ -1134,10 +1466,11 @@ export class LoginScreen {
       row.className = 'passkey-row';
       row.innerHTML = `
         <button id="login-passkey-setup" class="login-btn login-btn-passkey" style="flex:1;text-align:left;">
-          <span class="btn-label">Save with Passkey</span>
-          <span class="btn-sub">Create a new account secured by your device</span>
+          <span class="btn-label">${this.esc(t('login.passkey.save'))}<span class="btn-info-glyph" data-info="passkey" role="button" tabindex="0" aria-label="About passkey login"><svg viewBox="0 0 16 16" width="100%" height="100%" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.4" r="0.95" fill="currentColor"/><rect x="7.05" y="6.6" width="1.9" height="5.6" rx="0.6" fill="currentColor"/></svg></span></span>
+          <span class="btn-sub">${this.esc(t('login.passkey.save_desc'))}</span>
         </button>
-        <button class="passkey-manage-trigger" title="Manage passkeys">⋮</button>`;
+        <button class="passkey-manage-trigger" title="${this.esc(t('login.passkey.manage_title'))}">⋮</button>`;
+      this._wireGlyph(row);
       row.querySelector('#login-passkey-setup')?.addEventListener('click', () => {
         this.el('login-main').classList.add('hidden');
         this.el('login-create-view').classList.remove('hidden');
@@ -1153,17 +1486,23 @@ export class LoginScreen {
       row.className = 'passkey-row';
       row.innerHTML = `
         <button class="login-btn login-btn-passkey login-passkey-btn" data-cid="${this.esc(pk.credentialId)}">
-          <span class="btn-label">Continue as ${this.esc(pk.displayName)}</span>
-          <span class="btn-sub">Authenticate with your device passkey</span>
+          <span class="btn-label">${this.esc(t('login.passkey.continue_as', { name: pk.displayName }))}<span class="btn-info-glyph" data-info="passkey" role="button" tabindex="0" aria-label="About passkey login"><svg viewBox="0 0 16 16" width="100%" height="100%" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.4" r="0.95" fill="currentColor"/><rect x="7.05" y="6.6" width="1.9" height="5.6" rx="0.6" fill="currentColor"/></svg></span></span>
+          <span class="btn-sub">${this.esc(t('login.passkey.continue_desc'))}</span>
         </button>
-        <button class="passkey-manage-trigger" title="Manage passkeys">⋮</button>`;
+        <button class="passkey-manage-trigger" title="${this.esc(t('login.passkey.manage_title'))}">⋮</button>`;
       row.querySelector<HTMLButtonElement>('.login-passkey-btn')!
         .addEventListener('click', () => { if (this.onPasskeyLogin) this.onPasskeyLogin(pk.credentialId); });
       row.querySelector<HTMLButtonElement>('.passkey-manage-trigger')!
         .addEventListener('click', () => this._showPasskeyManager());
+      this._wireGlyph(row);
     } else {
       existingLoginBtn.dataset.cid = pk.credentialId;
-      existingLoginBtn.querySelector('.btn-label')!.textContent = `Continue as ${pk.displayName}`;
+      // Update just the text node — preserve the trailing info glyph span.
+      const label = existingLoginBtn.querySelector('.btn-label');
+      const textNode = label?.firstChild;
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        textNode.textContent = t('login.passkey.continue_as', { name: pk.displayName });
+      }
     }
   }
 
@@ -1173,10 +1512,10 @@ export class LoginScreen {
     row.className = 'passkey-row';
     row.innerHTML = `
       <button class="login-btn login-btn-passkey login-passkey-btn" data-cid="${this.esc(pk.credentialId)}">
-        <span class="btn-label">Continue as ${this.esc(pk.displayName)}</span>
-        <span class="btn-sub">Authenticate with your device passkey</span>
+        <span class="btn-label">${this.esc(t('login.passkey.continue_as', { name: pk.displayName }))}<span class="btn-info-glyph" data-info="passkey" role="button" tabindex="0" aria-label="About passkey login"><svg viewBox="0 0 16 16" width="100%" height="100%" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.4" r="0.95" fill="currentColor"/><rect x="7.05" y="6.6" width="1.9" height="5.6" rx="0.6" fill="currentColor"/></svg></span></span>
+        <span class="btn-sub">${this.esc(t('login.passkey.continue_desc'))}</span>
       </button>
-      <button class="passkey-manage-trigger" title="Manage passkeys">⋮</button>
+      <button class="passkey-manage-trigger" title="${this.esc(t('login.passkey.manage_title'))}">⋮</button>
     `;
     const loginBtn = row.querySelector<HTMLButtonElement>('.login-passkey-btn')!;
     loginBtn.addEventListener('click', () => {
@@ -1184,6 +1523,7 @@ export class LoginScreen {
     });
     row.querySelector<HTMLButtonElement>('.passkey-manage-trigger')!
       .addEventListener('click', () => this._showPasskeyManager());
+    this._wireGlyph(row);
 
     // Insert before the "Connect with Nostr" button
     const bunker = this.container.querySelector('#login-bunker');
@@ -1367,6 +1707,11 @@ export class LoginScreen {
   destroy(): void {
     if (this.animFrameId !== null) cancelAnimationFrame(this.animFrameId);
     window.removeEventListener('resize', this.handleResize);
+    if (this.unsubLang) { this.unsubLang(); this.unsubLang = null; }
+    if (this._langDocClickHandler) {
+      document.removeEventListener('click', this._langDocClickHandler);
+      this._langDocClickHandler = null;
+    }
     this.container.remove();
   }
 

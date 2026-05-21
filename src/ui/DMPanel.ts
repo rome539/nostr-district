@@ -14,6 +14,8 @@ import { fetchProfile } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { maybeTranslate, isTranslatorSupported } from '../i18n/translator';
+import { t as ti18n, onLangChange } from '../i18n/i18n';
 import { ProfileModal } from './ProfileModal';
 import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 import { nip19 } from 'nostr-tools';
@@ -115,6 +117,28 @@ export class DMPanel {
     // Close when another panel opens
     window.addEventListener('nd-panel-open', (e: Event) => {
       if ((e as CustomEvent).detail !== 'dm' && this.isOpen) this.close();
+    });
+
+    // Re-render the panel when the user changes UI language so headers,
+    // placeholders and empty-state copy update without needing a close+reopen.
+    onLangChange(() => {
+      if (!this.container) return;
+      const wasOpen     = this.isOpen;
+      const activeOpen  = this.activePubkey;
+      this.container.remove();
+      this.container = null;
+      this.messagesEl = null;
+      this.convListEl = null;
+      this.inputEl    = null;
+      this.buildDOM();
+      if (wasOpen) {
+        this.container!.classList.add('dm-open');
+        this.renderConversationList();
+        if (activeOpen) {
+          this.activePubkey = activeOpen;
+          this.openConversation(activeOpen);
+        }
+      }
     });
 
     // Listen for incoming DMs
@@ -490,7 +514,7 @@ export class DMPanel {
     this.container.className = 'dm-panel';
     this.container.innerHTML = `
       <div class="dm-header">
-        <span class="dm-title">\u2709 Direct Messages</span>
+        <span class="dm-title">\u2709 ${ti18n('dm.title')}</span>
         <button class="dm-close">\u2715</button>
       </div>
       <div class="dm-body">
@@ -500,7 +524,7 @@ export class DMPanel {
           <div class="dm-messages"></div>
           <div id="dm-send-error" style="display:none;padding:6px 14px 0;font-family:'Courier New',monospace;font-size:11px;color:#e85454;"></div>
           <div class="dm-input-row">
-            <input type="text" class="dm-input" placeholder="Type a message..." maxlength="500" />
+            <input type="text" class="dm-input" placeholder="${ti18n('dm.input_placeholder')}" maxlength="500" />
             <button class="dm-gif-btn">GIF</button>
           </div>
         </div>
@@ -563,12 +587,12 @@ export class DMPanel {
     const hidden  = all.filter(c =>  this.hiddenConvs.has(c.pubkey));
 
     if (this.historyLoading) {
-      this.convListEl.innerHTML = `<div class="dm-empty">Loading messages…</div>`;
+      this.convListEl.innerHTML = `<div class="dm-empty">${ti18n('dm.loading')}</div>`;
       return;
     }
 
     if (all.length === 0) {
-      this.convListEl.innerHTML = `<div class="dm-empty">No conversations yet.<br/>Click a player to start a DM.</div>`;
+      this.convListEl.innerHTML = `<div class="dm-empty">${ti18n('dm.no_conversations')}</div>`;
       return;
     }
 
@@ -633,7 +657,7 @@ export class DMPanel {
     const msgs = this.messages.get(this.activePubkey) || [];
 
     if (msgs.length === 0) {
-      this.messagesEl.innerHTML = `<div class="dm-empty">No messages yet. Say hi!</div>`;
+      this.messagesEl.innerHTML = `<div class="dm-empty">${ti18n('dm.empty_thread')}</div>`;
       return;
     }
 
@@ -666,27 +690,36 @@ export class DMPanel {
           ? `<span class="dm-link-preview-slot" data-url="${t.replace(/"/g, '%22')}" data-own="${msg.isOwn ? '1' : '0'}"></span>`
           : inviteMatch
             ? `<div class="dm-invite-card">
-                <div class="dm-invite-label">Crew Invite</div>
+                <div class="dm-invite-label">${ti18n('dm.crew_invite')}</div>
                 <div class="dm-invite-name">${this.escapeHtml(inviteMatch[2])}</div>
                 ${msg.isOwn
-                  ? '<div class="dm-invite-sent">Invite sent</div>'
+                  ? `<div class="dm-invite-sent">${ti18n('dm.invite_sent')}</div>`
                   : !areConsumedTokensSynced()
                     ? '<div class="dm-invite-sent dm-invite-checking">…</div>'
                     : hasUsedInviteToken(inviteMatch[3])
-                      ? '<div class="dm-invite-sent">Invite used</div>'
-                      : `<button class="dm-invite-btn" data-crew-id="${this.escapeHtml(inviteMatch[1])}" data-crew-name="${this.escapeHtml(inviteMatch[2])}" data-token="${this.escapeHtml(inviteMatch[3])}">Accept</button>`}
+                      ? `<div class="dm-invite-sent">${ti18n('dm.invite_used')}</div>`
+                      : `<button class="dm-invite-btn" data-crew-id="${this.escapeHtml(inviteMatch[1])}" data-crew-name="${this.escapeHtml(inviteMatch[2])}" data-token="${this.escapeHtml(inviteMatch[3])}">${ti18n('dm.accept')}</button>`}
               </div>`
             : declineMatch
               ? `<div class="dm-invite-card dm-decline-card">
-                  <div class="dm-invite-label dm-decline-label">Crew Decline</div>
+                  <div class="dm-invite-label dm-decline-label">${ti18n('dm.crew_decline')}</div>
                   <div class="dm-invite-name">${this.escapeHtml(declineMatch[2])}</div>
-                  <div class="dm-invite-sent">${msg.isOwn ? 'Decline sent' : 'Your request was declined'}</div>
+                  <div class="dm-invite-sent">${msg.isOwn ? ti18n('dm.decline_sent') : ti18n('dm.decline_received')}</div>
                 </div>`
               : renderEmojis(this.escapeHtml(msg.content), msg.emojis);
 
+      // Mark plain-text messages as translation candidates. Skipped for GIFs
+      // (no text), links (auto-rendered as previews), and crew invite cards
+      // (structured, not freeform). Mid-rerender translation runs against
+      // these post-mount; see `_translateVisibleMessages` below.
+      const translatable = !isGif && !isLink && !isCrewCard;
+      const dataAttrs    = translatable
+        ? ` data-translatable="1" data-original="${this.escapeHtml(msg.content)}"`
+        : '';
+
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">
-          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${isCrewCard ? ' dm-msg-invite' : ''}">${contentHtml}</div>
+          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${isCrewCard ? ' dm-msg-invite' : ''}"${dataAttrs}>${contentHtml}</div>
           <div class="dm-msg-time">${timeStr}</div>
         </div>
       `;
@@ -705,6 +738,11 @@ export class DMPanel {
       const preview = renderLinkWithPreview(url, isOwn);
       slot.replaceWith(preview);
     });
+
+    // Fire off on-device translation for plain-text messages. Each call is
+    // cached by the translator module, so re-renders (load-older, new-msg)
+    // don't re-translate the same content.
+    this._translateVisibleMessages();
 
     if (preserveScroll && hasOlder) {
       this.messagesEl.scrollTop = prevScrollTop + (this.messagesEl.scrollHeight - prevScrollHeight);
@@ -725,7 +763,7 @@ export class DMPanel {
 
       btn.addEventListener('click', async () => {
         (btn as HTMLButtonElement).disabled = true;
-        (btn as HTMLElement).textContent = 'Joining…';
+        (btn as HTMLElement).textContent = ti18n('dm.joining');
         try {
           const { joinCrew } = await import('../nostr/crewService');
           clearKickedLocally(crewId);
@@ -734,9 +772,57 @@ export class DMPanel {
           this.renderMessages();
         } catch {
           (btn as HTMLButtonElement).disabled = false;
-          (btn as HTMLElement).textContent = 'Accept';
+          (btn as HTMLElement).textContent = ti18n('dm.accept');
         }
       });
+    });
+  }
+
+  /**
+   * Run opportunistic on-device translation against every `[data-translatable]`
+   * message currently in the DOM. Cached + feature-detected inside the
+   * translator module, so this is cheap to call on every re-render.
+   *
+   * On success: swaps the content to the translated text, italicizes it, and
+   * appends a tiny "original" toggle the user can click to flip back.
+   */
+  private _translateVisibleMessages(): void {
+    if (!this.messagesEl || !isTranslatorSupported()) return;
+
+    const candidates = this.messagesEl.querySelectorAll('.dm-msg-content[data-translatable="1"]');
+    candidates.forEach((node) => {
+      const el = node as HTMLElement;
+      // Avoid double-processing if the message already has a translation applied.
+      if (el.dataset.translated === '1') return;
+      const original = el.dataset.original;
+      if (!original) return;
+
+      maybeTranslate(original).then((res) => {
+        if (!res || !el.isConnected) return;
+        const translatedHtml = this.escapeHtml(res.translated);
+        const originalHtml   = this.escapeHtml(original);
+
+        el.dataset.translated = '1';
+        el.classList.add('dm-msg-translated');
+        el.innerHTML = `
+          <span class="dm-msg-body">${translatedHtml}</span>
+          <button class="dm-msg-tr-toggle" title="Show original" aria-label="Show original" data-showing="translated"
+                  data-orig="${originalHtml}" data-tr="${translatedHtml}">·</button>
+        `;
+        const btn = el.querySelector('.dm-msg-tr-toggle') as HTMLButtonElement | null;
+        const body = el.querySelector('.dm-msg-body') as HTMLElement | null;
+        if (btn && body) {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const showing = btn.dataset.showing;
+            const next = showing === 'translated' ? 'original' : 'translated';
+            body.textContent = next === 'translated' ? res.translated : original;
+            el.classList.toggle('dm-msg-translated', next === 'translated');
+            btn.dataset.showing = next;
+            btn.title = next === 'translated' ? 'Show original' : 'Show translation';
+          });
+        }
+      }).catch(() => { /* translator never throws, but belt-and-braces */ });
     });
   }
 
@@ -1011,6 +1097,15 @@ export class DMPanel {
         text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       }
       .dm-msg-time { font-size: 10px; color: var(--nd-subtext); margin-top: 3px; }
+      .dm-msg-translated .dm-msg-body { font-style: italic; }
+      .dm-msg-tr-toggle {
+        background: none; border: none; padding: 0 0 0 6px;
+        color: var(--nd-accent); cursor: pointer;
+        font: inherit; line-height: 1; opacity: 0.55;
+        vertical-align: super; font-size: 14px;
+        transition: opacity 0.15s;
+      }
+      .dm-msg-tr-toggle:hover { opacity: 1; }
       .dm-msg-invite { background: none !important; border: none !important; padding: 0 !important; }
       .dm-invite-card {
         border: 1px solid color-mix(in srgb,var(--nd-accent) 40%,transparent);

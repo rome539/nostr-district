@@ -7,6 +7,7 @@
 
 import { SoundEngine } from '../audio/SoundEngine';
 import { boltIcon } from './icons';
+import { t as ti18n } from '../i18n/i18n';
 
 const CONTAINER_ID = 'zap-toast-container';
 const TOAST_DURATION = 5000;
@@ -69,10 +70,10 @@ export function showZapToast(senderName: string, amountSats: number, comment?: s
   const sats = amountSats.toLocaleString();
   const icon = `<span style="color:#f0b040;display:inline-flex;vertical-align:middle;margin-right:4px;">${boltIcon(13)}</span>`;
   const label = direction === 'incoming'
-    ? `${icon}${esc(senderName)} zapped you <strong>${sats} sats</strong>!`
+    ? `${icon}${ti18n('zap_toast.incoming', { sender: esc(senderName), sats })}`
     : (senderName === 'Lightning' || !senderName
-        ? `${icon}Sent <strong>${sats} sats</strong>`
-        : `${icon}Zapped ${esc(senderName)} <strong>${sats} sats</strong>`);
+        ? `${icon}${ti18n('zap_toast.sent_lightning', { sats })}`
+        : `${icon}${ti18n('zap_toast.sent_to', { recipient: esc(senderName), sats })}`);
   toast.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">

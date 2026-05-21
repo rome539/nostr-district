@@ -5,6 +5,7 @@
  */
 
 import { zapUser, fetchKind0 } from '../nostr/zapService';
+import { t as ti18n } from '../i18n/i18n';
 import { authStore } from '../stores/authStore';
 import { sendChat } from '../nostr/presenceService';
 import { SoundEngine } from '../audio/SoundEngine';
@@ -47,20 +48,20 @@ export class ZapModal {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
         <span style="color:var(--nd-accent);display:inline-flex;align-items:center;">${boltIcon(20)}</span>
         <div style="flex:1;">
-          <div style="color:var(--nd-text);font-size:14px;font-weight:bold;">Zap ${esc(displayName)}</div>
-          <div id="zap-lnaddr" style="color:var(--nd-subtext);font-size:10px;opacity:0.6;">Send a lightning tip</div>
+          <div style="color:var(--nd-text);font-size:14px;font-weight:bold;">${ti18n('zap.title', { name: esc(displayName) })}</div>
+          <div id="zap-lnaddr" style="color:var(--nd-subtext);font-size:10px;opacity:0.6;">${ti18n('zap.subtitle')}</div>
         </div>
         <button id="zap-close" style="background:none;border:none;color:var(--nd-subtext);cursor:pointer;font-size:20px;line-height:1;padding:0;opacity:0.6;">×</button>
       </div>
 
       ${!canZap ? `
         <div style="color:var(--nd-subtext);font-size:12px;text-align:center;padding:16px 0;opacity:0.6;">
-          Log in with a key to send zaps
+          ${ti18n('zap.login_required')}
         </div>
       ` : `
         <div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;">AMOUNT (sats)</div>
+            <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;">${ti18n('zap.amount_label')}</div>
             <div id="zap-balance" style="color:var(--nd-subtext);font-size:9px;opacity:0.7;"></div>
           </div>
           <div id="zap-presets" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
@@ -74,7 +75,7 @@ export class ZapModal {
               ">${s.toLocaleString()}</button>
             `).join('')}
           </div>
-          <input id="zap-amount" type="number" min="1" placeholder="Custom amount…" style="
+          <input id="zap-amount" type="number" min="1" placeholder="${ti18n('zap.custom_amount')}" style="
             width:100%;box-sizing:border-box;
             background:color-mix(in srgb,var(--nd-dpurp) 14%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
@@ -82,7 +83,7 @@ export class ZapModal {
             font-family:'Courier New',monospace;font-size:12px;
             padding:8px 10px;outline:none;margin-bottom:10px;
           ">
-          <input id="zap-comment" type="text" maxlength="140" placeholder="Message (optional)" style="
+          <input id="zap-comment" type="text" maxlength="140" placeholder="${ti18n('zap.message_placeholder')}" style="
             width:100%;box-sizing:border-box;
             background:color-mix(in srgb,var(--nd-dpurp) 14%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
@@ -91,7 +92,7 @@ export class ZapModal {
             padding:8px 10px;outline:none;
           ">
           <div style="font-size:9px;color:var(--nd-subtext);margin-top:8px;opacity:0.7;line-height:1.4;">
-            Lightning fees vary by route — usually 0–5 sats. Network fee is added on top of your amount.
+            ${ti18n('zap.fee_note')}
           </div>
         </div>
 
@@ -104,14 +105,14 @@ export class ZapModal {
             background:color-mix(in srgb,#f0b040 18%,transparent);
             border:1px solid color-mix(in srgb,#f0b040 50%,transparent);
             color:#f0b040;transition:all 0.12s;
-          "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(13)} Open in Wallet</span></button>
+          "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(13)} ${ti18n('zap.open_wallet')}</span></button>
           <button id="zap-copy-invoice" style="
             width:100%;padding:8px;border-radius:5px;cursor:pointer;
             font-family:'Courier New',monospace;font-size:11px;
             background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
             border:1px solid color-mix(in srgb,var(--nd-dpurp) 40%,transparent);
             color:var(--nd-subtext);
-          ">Copy Invoice</button>
+          ">${ti18n('zap.copy_invoice')}</button>
         </div>
 
         <button id="zap-send" style="
@@ -120,7 +121,7 @@ export class ZapModal {
           background:color-mix(in srgb,var(--nd-accent) 18%,transparent);
           border:1px solid color-mix(in srgb,var(--nd-accent) 44%,transparent);
           color:var(--nd-accent);transition:all 0.12s;
-        "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(14)} Send Zap</span></button>
+        "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(14)} ${ti18n('zap.send')}</span></button>
       `}
     `;
 

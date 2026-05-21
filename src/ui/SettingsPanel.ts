@@ -18,7 +18,17 @@ import {
 import { NostrThemeBrowser } from './NostrThemeBrowser';
 import { EmojiPackBrowser } from './EmojiPackBrowser';
 import { HotkeyModal } from './HotkeyModal';
+import { LanguageModal } from './LanguageModal';
 import { getEmojiCount, getStoredEmojiPacks } from '../nostr/emojiService';
+import { t, getCurrentLang, onLangChange } from '../i18n/i18n';
+
+// Display label for each supported language code — kept in sync with the
+// LanguageModal grid so the SettingsPanel row shows the user's current pick.
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English', es: 'Español', pt: 'Português', fr: 'Français',
+  de: 'Deutsch', it: 'Italiano', nl: 'Nederlands', ru: 'Русский',
+  ja: '日本語',  ko: '한국어',  zh: '中文',     ar: 'العربية',
+};
 
 const GEAR_ID = 'settings-gear';
 const PANEL_ID = 'settings-panel';
@@ -32,9 +42,11 @@ export class SettingsPanel {
   private panelEl:         HTMLDivElement | null = null;
   private closeHandler:    ((e: MouseEvent) => void) | null = null;
   private nostrThemeUnsub: (() => void) | null = null;
-  private themeBrowser   = new NostrThemeBrowser();
+  private langUnsub:       (() => void) | null = null;
+  private themeBrowser     = new NostrThemeBrowser();
   private emojiPackBrowser = new EmojiPackBrowser();
-  private hotkeyModal    = new HotkeyModal();
+  private hotkeyModal      = new HotkeyModal();
+  private languageModal    = new LanguageModal();
 
   create(): void {
     this.destroy();
@@ -127,23 +139,30 @@ export class SettingsPanel {
       </div>
     `;
 
+    // ── Language row ──
+    // Just shows the current language with a "Change" button — the actual
+    // 12-language picker lives in `LanguageModal`. Keeps the panel compact
+    // and matches the Hotkeys & Commands row style.
+    const currentLang     = getCurrentLang();
+    const currentLangName = LANGUAGE_LABELS[currentLang] ?? currentLang;
+
     const activeId = themeStore.current.id;
-    const themeSwatches = THEMES.map(t => {
-      const isActive = !ntEnabled && t.id === activeId;
+    const themeSwatches = THEMES.map(theme => {
+      const isActive = !ntEnabled && theme.id === activeId;
       return `
-        <div class="sp-theme-swatch" data-tid="${t.id}" style="
+        <div class="sp-theme-swatch" data-tid="${theme.id}" style="
           display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;
-          border:1px solid ${isActive ? t.accent + '66' : 'transparent'};
-          background:${isActive ? t.accent + '11' : 'transparent'};
+          border:1px solid ${isActive ? theme.accent + '66' : 'transparent'};
+          background:${isActive ? theme.accent + '11' : 'transparent'};
           transition:background 0.15s,border-color 0.15s;
         ">
           <div style="display:flex;gap:3px;flex-shrink:0;">
-            <div style="width:10px;height:10px;border-radius:50%;background:${t.bg};border:1px solid ${t.dpurp}66;"></div>
-            <div style="width:10px;height:10px;border-radius:50%;background:${t.purp};"></div>
-            <div style="width:10px;height:10px;border-radius:50%;background:${t.accent};"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:${theme.bg};border:1px solid ${theme.dpurp}66;"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:${theme.purp};"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:${theme.accent};"></div>
           </div>
-          <span style="color:${isActive ? t.accent : 'var(--nd-subtext)'};font-size:12px;">${t.name}</span>
-          <span class="sp-active-tag" style="color:${t.accent};font-size:10px;margin-left:auto;opacity:0.7;display:${isActive ? 'inline' : 'none'};">active</span>
+          <span style="color:${isActive ? theme.accent : 'var(--nd-subtext)'};font-size:12px;">${theme.name}</span>
+          <span class="sp-active-tag" style="color:${theme.accent};font-size:10px;margin-left:auto;opacity:0.7;display:${isActive ? 'inline' : 'none'};">active</span>
         </div>
       `;
     }).join('');
@@ -161,18 +180,33 @@ export class SettingsPanel {
         ">Keys</button>
       </div>
 
-      <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">APPEARANCE</div>
+      <div id="sp-appearance-header" style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.appearance'))}</div>
       <div id="settings-themes" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px;${ntEnabled ? 'opacity:0.5;' : ''}">
         ${themeSwatches}
       </div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">NOSTR THEME</div>
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.language'))}</div>
+      <button id="sp-language-row" style="
+        width:100%;padding:8px 10px;margin-bottom:10px;
+        background:var(--nd-navy);
+        border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
+        border-radius:5px;cursor:pointer;
+        color:var(--nd-text);font-family:'Courier New',monospace;font-size:11px;
+        text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;
+        transition:border-color 0.15s,color 0.15s;
+      ">
+        <span style="color:var(--nd-text);">${esc(currentLangName)}</span>
+        <span style="color:var(--nd-subtext);opacity:0.7;font-size:10px;">${esc(t('settings.change'))} ↗</span>
+      </button>
+
+      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.nostr_theme'))}</div>
       <div style="margin-bottom:10px;">${nostrThemeHtml}</div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">CUSTOM EMOJIS</div>
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.custom_emojis'))}</div>
       <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
         background:var(--nd-navy);border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin-bottom:10px;">
         <div style="flex:1;min-width:0;">
@@ -189,7 +223,7 @@ export class SettingsPanel {
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">LIGHTNING WALLET</div>
+      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.lightning_wallet'))}</div>
       <div id="sp-wallet-row" style="margin-bottom:10px;"></div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
@@ -203,7 +237,7 @@ export class SettingsPanel {
         text-align:left;display:flex;align-items:center;justify-content:space-between;
         transition:border-color 0.15s,color 0.15s;
       ">
-        <span>Hotkeys & Commands</span>
+        <span>${esc(t('settings.hotkeys'))}</span>
         <span style="opacity:0.5;">↗</span>
       </button>
 
@@ -234,13 +268,13 @@ export class SettingsPanel {
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
       <div id="settings-logout" style="padding:10px 10px;color:${P.red};font-size:13px;cursor:pointer;border-radius:4px;transition:background 0.15s;">
-        \u23FB Logout
+        \u23FB ${esc(t('settings.logout'))}
       </div>
 
       <div id="settings-confirm" style="display:none;padding:10px;background:${P.red}11;border:1px solid ${P.red}33;border-radius:4px;margin-top:6px;">
         <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Are you sure?</div>
         <div style="display:flex;gap:8px;">
-          <button id="settings-confirm-yes" style="flex:1;padding:7px;background:${P.red}33;border:1px solid ${P.red}55;border-radius:4px;color:${P.red};font-family:'Courier New',monospace;font-size:12px;cursor:pointer;font-weight:bold;">Logout</button>
+          <button id="settings-confirm-yes" style="flex:1;padding:7px;background:${P.red}33;border:1px solid ${P.red}55;border-radius:4px;color:${P.red};font-family:'Courier New',monospace;font-size:12px;cursor:pointer;font-weight:bold;">${esc(t('settings.logout'))}</button>
           <button id="settings-confirm-no" style="flex:1;padding:7px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:4px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">Cancel</button>
         </div>
       </div>
@@ -347,6 +381,25 @@ export class SettingsPanel {
     keysBtn.addEventListener('mouseleave', () => keysBtn.style.color = 'var(--nd-subtext)');
     keysBtn.addEventListener('click', () => this.showKeysModal(npub, nsec));
 
+    // Language row — opens the full-screen LanguageModal picker. Modal handles
+    // the actual setLang call; the langchange subscription further below
+    // re-renders this panel to reflect the new active language.
+    const langRow = this.panelEl.querySelector('#sp-language-row') as HTMLElement | null;
+    if (langRow) {
+      langRow.addEventListener('mouseenter', () => {
+        langRow.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 44%,transparent)';
+        langRow.style.color = 'var(--nd-accent)';
+      });
+      langRow.addEventListener('mouseleave', () => {
+        langRow.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 22%,transparent)';
+        langRow.style.color = 'var(--nd-text)';
+      });
+      langRow.addEventListener('click', () => {
+        this.closePanel();
+        this.languageModal.show();
+      });
+    }
+
     // Theme swatches
     this.panelEl.querySelectorAll('.sp-theme-swatch').forEach(el => {
       const tid = (el as HTMLElement).dataset.tid!;
@@ -380,6 +433,15 @@ export class SettingsPanel {
     });
 
     // Re-render only the nostr theme row when theme changes (avoid destroying the browser)
+    // Re-open the panel whenever the language changes — simpler than
+    // surgically updating every translated string, and avoids stale handlers
+    // pointing at stripped DOM nodes.
+    this.langUnsub = onLangChange(() => {
+      if (!this.panelEl) return;
+      this.closePanel();
+      this.openPanel();
+    });
+
     this.nostrThemeUnsub = onNostrThemeChange(() => {
       if (!this.panelEl) return;
       const nt        = getNostrTheme();
@@ -609,6 +671,7 @@ export class SettingsPanel {
     if (this.panelEl) { this.panelEl.remove(); this.panelEl = null; }
     if (this.closeHandler) { document.removeEventListener('pointerdown', this.closeHandler); this.closeHandler = null; }
     if (this.nostrThemeUnsub) { this.nostrThemeUnsub(); this.nostrThemeUnsub = null; }
+    if (this.langUnsub)       { this.langUnsub();       this.langUnsub       = null; }
     if (this.gearEl) { this.gearEl.style.color = 'var(--nd-dpurp)'; this.gearEl.style.borderColor = `color-mix(in srgb, var(--nd-dpurp) 33%, transparent)`; }
   }
 

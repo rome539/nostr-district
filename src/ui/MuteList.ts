@@ -6,6 +6,7 @@
 import { mutedPlayers, mutedNames, unmutePlayer } from './PlayerMenu';
 import { ProfileModal } from './ProfileModal';
 import { fetchProfile } from '../nostr/nostrService';
+import { t as ti18n } from '../i18n/i18n';
 
 export class MuteList {
   private panel: HTMLDivElement | null = null;
@@ -54,15 +55,15 @@ export class MuteList {
 
     const muted = [...mutedPlayers];
     const rows = muted.length === 0
-      ? `<div class="ml-empty">No muted players.</div>`
+      ? `<div class="ml-empty">${ti18n('mute_list.empty')}</div>`
       : muted.map(pk => {
           const name = mutedNames.get(pk) || pk.slice(0, 16) + '…';
           return `
             <div class="ml-row" data-pk="${this.esc(pk)}">
               <span class="ml-name">${this.esc(name)}</span>
               <div class="ml-actions">
-                <button class="ml-profile-btn" data-pk="${this.esc(pk)}" data-name="${this.esc(name)}">Profile</button>
-                <button class="ml-unmute-btn" data-pk="${this.esc(pk)}" data-name="${this.esc(name)}">Unmute</button>
+                <button class="ml-profile-btn" data-pk="${this.esc(pk)}" data-name="${this.esc(name)}">${ti18n('mute_list.profile')}</button>
+                <button class="ml-unmute-btn" data-pk="${this.esc(pk)}" data-name="${this.esc(name)}">${ti18n('mute_list.unmute')}</button>
               </div>
             </div>`;
         }).join('');
@@ -70,7 +71,7 @@ export class MuteList {
     this.panel.innerHTML = `
       <div class="ml-panel">
         <div class="ml-header">
-          <span class="ml-title">MUTED PLAYERS</span>
+          <span class="ml-title">${ti18n('mute_list.title')}</span>
           <button class="ml-close" id="ml-close">✕</button>
         </div>
         <div class="ml-body">

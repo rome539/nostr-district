@@ -5,6 +5,7 @@
 import { SoundEngine } from '../audio/SoundEngine';
 import { signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
+import { t as ti18n } from '../i18n/i18n';
 
 type Suit = 'major' | 'wands' | 'cups' | 'swords' | 'pentacles';
 
@@ -332,7 +333,7 @@ export const TarotModal = {
 
     // Title
     const title = document.createElement('div');
-    title.textContent = '✦ THE CARDS SPEAK ✦';
+    title.textContent = `✦ ${ti18n('tarot.title')} ✦`;
     title.style.cssText = 'color:#c0a0ff;font-size:10px;letter-spacing:3px;margin-bottom:6px;opacity:0.8;';
     box.appendChild(title);
 
@@ -435,7 +436,7 @@ export const TarotModal = {
     const { isLoggedIn, isGuest } = authStore.getState();
     if (isLoggedIn && !isGuest) {
       const shareBtn = document.createElement('button');
-      shareBtn.textContent = '✦ Share reading to Nostr';
+      shareBtn.textContent = `✦ ${ti18n('tarot.share')}`;
       shareBtn.disabled = true;
       shareBtn.style.cssText = `
         background:transparent; border:1px solid #5533aa44; border-radius:6px;
@@ -455,13 +456,13 @@ export const TarotModal = {
       shareBtn.onclick = async () => {
         if (shareBtn.disabled) return;
         shareBtn.disabled = true;
-        shareBtn.textContent = '↑ uploading cards...';
+        shareBtn.textContent = `↑ ${ti18n('tarot.uploading')}`;
         try {
           // Upload all 3 cards in parallel (upscaled 4×, reversed cards rotated 180°)
           const imageUrls = await Promise.all(
             draw.map(d => uploadCard(d.card.file, d.reversed))
           );
-          shareBtn.textContent = '✦ publishing...';
+          shareBtn.textContent = `✦ ${ti18n('tarot.publishing')}`;
           const event = await signEvent({
             kind: 1,
             created_at: Math.floor(Date.now() / 1000),
@@ -478,7 +479,7 @@ export const TarotModal = {
           shareBtn.textContent = ok ? '✓ shared!' : '✗ relay error';
           shareBtn.style.color = ok ? '#80ee80' : '#ee8080';
         } catch {
-          shareBtn.textContent = '✗ failed';
+          shareBtn.textContent = `✗ ${ti18n('tarot.failed')}`;
           shareBtn.style.color = '#ee8080';
         }
       };
@@ -486,7 +487,7 @@ export const TarotModal = {
     }
 
     const hint = document.createElement('div');
-    hint.textContent = '[ESC] or click to close';
+    hint.textContent = ti18n('tarot.close_hint');
     hint.style.cssText = 'color:#8b78be;font-size:9px;letter-spacing:1px;cursor:pointer;margin-top:10px;';
     hint.onclick = () => TarotModal.destroy();
     box.appendChild(hint);

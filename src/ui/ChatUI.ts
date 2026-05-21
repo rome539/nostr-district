@@ -8,6 +8,7 @@ import { sendChat } from '../nostr/presenceService';
 import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { maybeTranslate } from '../i18n/translator';
 
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 
@@ -360,5 +361,15 @@ export class ChatUI {
         onComplete: () => { bubbleText.destroy(); },
       });
     });
+
+    // Opportunistic on-device translation. Renders the original immediately
+    // (above), then swaps the text + italicizes it once Chrome's Translator
+    // API returns. Safe on unsupported browsers — `maybeTranslate` no-ops.
+    maybeTranslate(truncated).then((res) => {
+      if (!res || !bubbleText.active) return;
+      const trCapped = res.translated.length > 80 ? res.translated.slice(0, 80) + '…' : res.translated;
+      bubbleText.setText(trCapped);
+      bubbleText.setFontStyle('italic');
+    }).catch(() => { /* never throws, but belt-and-braces */ });
   }
 }

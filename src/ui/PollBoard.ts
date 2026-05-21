@@ -8,6 +8,7 @@ import { fetchPolls, fetchVotes, createPoll, castVote, Poll, PollResults } from 
 import { authStore } from '../stores/authStore';
 import { fetchProfile } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
+import { t as ti18n } from '../i18n/i18n';
 
 type View = 'list' | 'detail' | 'create';
 
@@ -171,7 +172,7 @@ export class PollBoard {
     return `
       <div class="pb-panel">
         <div class="pb-header">
-          <span class="pb-title">POLLS BOARD</span>
+          <span class="pb-title">${ti18n('polls.title')}</span>
           <div class="pb-header-actions">
             ${canCreate ? `<button class="pb-btn-create" id="pb-open-create">+ New Poll</button>` : ''}
             <button class="pb-close" id="pb-close">✕</button>
@@ -255,8 +256,8 @@ export class PollBoard {
     return `
       <div class="pb-panel">
         <div class="pb-header">
-          <button class="pb-back" id="pb-back">← Back</button>
-          <span class="pb-title">POLL</span>
+          <button class="pb-back" id="pb-back">${ti18n('polls.back')}</button>
+          <span class="pb-title">${ti18n('polls.detail_title')}</span>
           <button class="pb-close" id="pb-close">✕</button>
         </div>
         <div class="pb-body pb-body-detail">
@@ -279,7 +280,7 @@ export class PollBoard {
               ${voteBtn}
             </div>
           ` : ''}
-          ${!canVote && !myVote && !expired ? `<div class="pb-hint-login">Log in with a key to vote.</div>` : ''}
+          ${!canVote && !myVote && !expired ? `<div class="pb-hint-login">${ti18n('polls.login_to_vote')}</div>` : ''}
         </div>
       </div>
     `;
@@ -302,28 +303,28 @@ export class PollBoard {
     return `
       <div class="pb-panel">
         <div class="pb-header">
-          <button class="pb-back" id="pb-back">← Back</button>
-          <span class="pb-title">CREATE POLL</span>
+          <button class="pb-back" id="pb-back">${ti18n('polls.back')}</button>
+          <span class="pb-title">${ti18n('polls.create_title')}</span>
           <button class="pb-close" id="pb-close">✕</button>
         </div>
         <div class="pb-body pb-body-create">
-          <label class="pb-label">Question</label>
-          <textarea id="pb-create-q" class="pb-create-q" placeholder="What do you want to ask?" maxlength="280">${this.esc(this.cQuestion)}</textarea>
+          <label class="pb-label">${ti18n('polls.question')}</label>
+          <textarea id="pb-create-q" class="pb-create-q" placeholder="${ti18n('polls.question_placeholder')}" maxlength="280">${this.esc(this.cQuestion)}</textarea>
 
-          <label class="pb-label">Options</label>
+          <label class="pb-label">${ti18n('polls.options')}</label>
           <div id="pb-opts-wrap">${optInputs}</div>
-          ${this.cOptions.length < 5 ? `<button class="pb-add-opt" id="pb-add-opt">+ Add option</button>` : ''}
+          ${this.cOptions.length < 5 ? `<button class="pb-add-opt" id="pb-add-opt">${ti18n('polls.add_option')}</button>` : ''}
 
-          <label class="pb-label">Type</label>
+          <label class="pb-label">${ti18n('polls.type')}</label>
           <div class="pb-type-row">
-            <button class="pb-type-btn ${this.cType === 'singlechoice' ? 'pb-type-active' : ''}" data-type="singlechoice">Single choice</button>
-            <button class="pb-type-btn ${this.cType === 'multiplechoice' ? 'pb-type-active' : ''}" data-type="multiplechoice">Multiple choice</button>
+            <button class="pb-type-btn ${this.cType === 'singlechoice' ? 'pb-type-active' : ''}" data-type="singlechoice">${ti18n('polls.type_single')}</button>
+            <button class="pb-type-btn ${this.cType === 'multiplechoice' ? 'pb-type-active' : ''}" data-type="multiplechoice">${ti18n('polls.type_multi')}</button>
           </div>
 
-          <label class="pb-label">Duration</label>
+          <label class="pb-label">${ti18n('polls.duration')}</label>
           <div class="pb-dur-row">${durBtns}</div>
 
-          <button class="pb-btn-post" id="pb-post-poll">Post Poll</button>
+          <button class="pb-btn-post" id="pb-post-poll">${ti18n('polls.post_btn')}</button>
           <div id="pb-create-err" class="pb-create-err"></div>
         </div>
       </div>

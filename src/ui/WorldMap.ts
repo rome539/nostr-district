@@ -10,6 +10,7 @@
  */
 
 import { getCurrentRoom, requestZoneCounts, setZoneCountsHandler, ZoneCounts } from '../nostr/presenceService';
+import { t as ti18n } from '../i18n/i18n';
 import { getThumb } from '../stores/sceneThumbs';
 
 export class WorldMap {
@@ -213,7 +214,7 @@ export class WorldMap {
         <div class="wm-frame-corner wm-fc-br"></div>
         <div class="wm-header">
           <span class="wm-header-dot"></span>
-          <span class="wm-header-title">DISTRICT MAP</span>
+          <span class="wm-header-title">${ti18n('worldmap.title')}</span>
           <span class="wm-header-meta">v1.0</span>
         </div>
         <div class="wm-svg-wrap">
@@ -221,8 +222,8 @@ export class WorldMap {
           <div class="wm-scanlines"></div>
         </div>
         <div class="wm-footer">
-          <span class="wm-footer-status">◉ LIVE</span>
-          <span class="wm-footer-hint">ESC / TAB to close</span>
+          <span class="wm-footer-status">◉ ${ti18n('worldmap.live')}</span>
+          <span class="wm-footer-hint">${ti18n('worldmap.close_hint')}</span>
         </div>
       </div>`;
 

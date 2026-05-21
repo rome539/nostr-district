@@ -13,6 +13,7 @@ import { fetchContactList, fetchProfile } from '../nostr/nostrService';
 import { requestOnlinePlayers, setOnlinePlayersHandler } from '../nostr/presenceService';
 import { authStore } from '../stores/authStore';
 import { ProfileModal } from './ProfileModal';
+import { t, onLangChange } from '../i18n/i18n';
 
 interface FollowEntry {
   pubkey: string;
@@ -57,8 +58,32 @@ export class FollowsPanel {
   private activeTab:    'follows' | 'online' = 'follows';
   private onlineProfileCache = new Map<string, string>(); // pubkey → picture url
   private pollTimer:    ReturnType<typeof setInterval> | null = null;
+  private langUnsub:    (() => void) | null = null;
 
-  constructor() { this.injectStyles(); _panelInstance = this; }
+  constructor() {
+    this.injectStyles();
+    _panelInstance = this;
+    // Re-render on language change so headers / placeholders / empty states
+    // pick up the new translation. We rebuild the DOM rather than just the
+    // body, since the header + tab labels live in the static frame.
+    this.langUnsub = onLangChange(() => {
+      if (!this.container) return;
+      const wasOpen = this.isOpen;
+      const prevTab = this.activeTab;
+      this.container.remove();
+      this.container = null;
+      this.buildDOM();
+      if (wasOpen) {
+        this.container!.classList.add('fp-open');
+        this.activeTab = prevTab;
+        const followsBtn = this.container!.querySelector('.fp-tab-follows');
+        const onlineBtn  = this.container!.querySelector('.fp-tab-online');
+        followsBtn?.classList.toggle('fp-tab-active', prevTab === 'follows');
+        onlineBtn?.classList.toggle('fp-tab-active', prevTab === 'online');
+      }
+      this.render();
+    });
+  }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -233,7 +258,7 @@ export class FollowsPanel {
 
   private renderOnlineTab(body: HTMLDivElement): void {
     if (this.onlinePlayers.length === 0) {
-      body.innerHTML = `<div class="fp-empty">No players online</div>`;
+      body.innerHTML = `<div class="fp-empty">${t('follows.no_online')}</div>`;
       return;
     }
 
@@ -243,7 +268,7 @@ export class FollowsPanel {
       ? this.onlinePlayers.filter(p => p.name.toLowerCase().includes(q) || p.pubkey.includes(q))
       : this.onlinePlayers;
 
-    let html = `<div class="fp-section-label" style="color:var(--nd-accent);">ACTIVE (${players.length})</div>`;
+    let html = `<div class="fp-section-label" style="color:var(--nd-accent);">${t('follows.section.active')} (${players.length})</div>`;
     for (const p of players) {
       const isSelf = p.pubkey === myPubkey;
       const pic = this.onlineProfileCache.get(p.pubkey);
@@ -303,13 +328,13 @@ export class FollowsPanel {
     const header = this.container?.querySelector('.fp-title') as HTMLElement | null;
 
     if (this.loading) {
-      body.innerHTML = `<div class="fp-empty">Loading follows…</div>`;
+      body.innerHTML = `<div class="fp-empty">${t('follows.loading')}</div>`;
       return;
     }
 
     const myPubkey = authStore.getState().pubkey;
     if (!myPubkey) {
-      body.innerHTML = `<div class="fp-empty">Log in to see your follows</div>`;
+      body.innerHTML = `<div class="fp-empty">${t('follows.login_needed')}</div>`;
       return;
     }
 
@@ -346,26 +371,26 @@ export class FollowsPanel {
     let html = '';
 
     if (online.length > 0) {
-      html += `<div class="fp-section-label" style="color:var(--nd-accent);">ONLINE (${online.length})</div>`;
+      html += `<div class="fp-section-label" style="color:var(--nd-accent);">${t('follows.section.online')} (${online.length})</div>`;
       html += online.map(f => row(f, true)).join('');
     }
 
     if (offlineVisible.length > 0 || online.length === 0) {
       const label = this.searchQuery
-        ? `RESULTS (${offline.length})`
+        ? `${t('follows.section.results')} (${offline.length})`
         : online.length > 0
-          ? `OFFLINE (${offline.length})`
-          : `ALL FOLLOWS (${offline.length})`;
+          ? `${t('follows.section.offline')} (${offline.length})`
+          : `${t('follows.section.all')} (${offline.length})`;
       html += `<div class="fp-section-label">${label}</div>`;
       html += offlineVisible.map(f => row(f, false)).join('');
     }
 
     if (hasMore) {
-      html += `<div id="fp-more" class="fp-load-more">Show more (${offline.length - offlineVisible.length} remaining)</div>`;
+      html += `<div id="fp-more" class="fp-load-more">${t('follows.show_more', { n: offline.length - offlineVisible.length })}</div>`;
     }
 
     if (this.follows.length === 0) {
-      html = `<div class="fp-empty">You're not following anyone yet</div>`;
+      html = `<div class="fp-empty">${t('follows.empty')}</div>`;
     }
 
     body.innerHTML = html;
@@ -393,15 +418,15 @@ export class FollowsPanel {
     this.container.className = 'fp-panel';
     this.container.innerHTML = `
       <div class="fp-header">
-        <span class="fp-title">FOLLOWS</span>
+        <span class="fp-title">${t('follows.title')}</span>
         <button class="fp-close">✕</button>
       </div>
       <div class="fp-tabs">
-        <button class="fp-tab fp-tab-follows fp-tab-active">Follows</button>
-        <button class="fp-tab fp-tab-online">Online</button>
+        <button class="fp-tab fp-tab-follows fp-tab-active">${t('follows.tab.follows')}</button>
+        <button class="fp-tab fp-tab-online">${t('follows.tab.online')}</button>
       </div>
       <div class="fp-search-wrap">
-        <input class="fp-search" type="text" placeholder="search…" autocomplete="off">
+        <input class="fp-search" type="text" placeholder="${t('follows.search_placeholder')}" autocomplete="off">
       </div>
       <div class="fp-body"></div>
     `;

@@ -2,6 +2,7 @@ import { WardrobeTab } from './computer/WardrobeTab';
 import { ProfileTab }  from './computer/ProfileTab';
 import { RoomTab }     from './computer/RoomTab';
 import type { TabCtx, OnAvatarChange, OnRoomChange, OnPetChange, OnStatusUpdate, OnMusicChange } from './computer/types';
+import { t as ti18n } from '../i18n/i18n';
 
 const PANEL_ID = 'computer-panel';
 
@@ -111,7 +112,7 @@ export class ComputerUI {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 20%,transparent);">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="color:var(--nd-accent);font-size:11px;">&#9679;</span>
-          <span style="color:var(--nd-text);font-size:14px;font-weight:bold;">TERMINAL</span>
+          <span style="color:var(--nd-text);font-size:14px;font-weight:bold;">${ti18n('computer.title')}</span>
         </div>
         <button id="comp-close" style="background:none;border:none;color:var(--nd-dpurp);font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
@@ -144,9 +145,9 @@ export class ComputerUI {
     if (!container) return;
 
     const tabs = [
-      { key: 'wardrobe', label: '👕 Wardrobe' },
-      { key: 'room',     label: '🏠 Room' },
-      { key: 'profile',  label: '👤 Profile' },
+      { key: 'wardrobe', label: '👕 ' + ti18n('computer.tab.wardrobe') },
+      { key: 'room',     label: '🏠 ' + ti18n('computer.tab.room')     },
+      { key: 'profile',  label: '👤 ' + ti18n('computer.tab.profile')  },
     ].filter(t => this.allowedTabs.includes(t.key as any));
 
     container.innerHTML = tabs.map(t => `

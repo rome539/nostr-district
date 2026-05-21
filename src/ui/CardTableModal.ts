@@ -1,4 +1,5 @@
 import { authStore } from '../stores/authStore';
+import { t as ti18n } from '../i18n/i18n';
 import { cardUrl, GameOptions, setCardBack, getCardBackName } from './games/cardTypes';
 import { SolitaireGame } from './games/SolitaireGame';
 import { BlackjackGame } from './games/BlackjackGame';
@@ -13,13 +14,13 @@ import {
 
 type Phase = 'pick' | 'lobby' | 'game';
 
-interface GameMeta { id: GameType; label: string; icon: string; desc: string; multiplayer: boolean; }
+interface GameMeta { id: GameType; labelKey: string; icon: string; descKey: string; multiplayer: boolean; }
 const GAMES: GameMeta[] = [
-  { id: 'solitaire', label: 'Solitaire', icon: '🃏', desc: 'Classic Klondike — solo', multiplayer: false },
-  { id: 'blackjack', label: 'Blackjack', icon: '🎲', desc: 'Beat the dealer — solo or vs room', multiplayer: true },
-  { id: 'war', label: 'War', icon: '⚔️', desc: 'High card wins — vs CPU or room', multiplayer: true },
-  { id: 'poker', label: 'Poker', icon: '♠️', desc: '5-card draw vs dealer AI', multiplayer: false },
-  { id: 'gofish', label: 'Go Fish', icon: '🐟', desc: 'Collect sets of 4 vs AI', multiplayer: false },
+  { id: 'solitaire', labelKey: 'cards.solitaire.label', icon: '🃏', descKey: 'cards.solitaire.desc', multiplayer: false },
+  { id: 'blackjack', labelKey: 'cards.blackjack.label', icon: '🎲', descKey: 'cards.blackjack.desc', multiplayer: true  },
+  { id: 'war',       labelKey: 'cards.war.label',       icon: '⚔️', descKey: 'cards.war.desc',       multiplayer: true  },
+  { id: 'poker',     labelKey: 'cards.poker.label',     icon: '♠️', descKey: 'cards.poker.desc',     multiplayer: false },
+  { id: 'gofish',    labelKey: 'cards.gofish.label',    icon: '🐟', descKey: 'cards.gofish.desc',    multiplayer: false },
 ];
 
 const GAME_MODULES = {
@@ -93,9 +94,9 @@ function renderPickScreen(): void {
           transition:border-color 0.15s,background 0.15s;
         ">
           <div style="font-size:28px;margin-bottom:8px;">${g.icon}</div>
-          <div style="color:var(--nd-text);font-size:13px;font-weight:bold;letter-spacing:0.03em;">${g.label}</div>
-          <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">${g.desc}</div>
-          ${g.multiplayer ? `<div style="color:var(--nd-accent);font-size:9px;margin-top:6px;opacity:0.75;">✦ multiplayer</div>` : ''}
+          <div style="color:var(--nd-text);font-size:13px;font-weight:bold;letter-spacing:0.03em;">${ti18n(g.labelKey)}</div>
+          <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">${ti18n(g.descKey)}</div>
+          ${g.multiplayer ? `<div style="color:var(--nd-accent);font-size:9px;margin-top:6px;opacity:0.75;">✦ ${ti18n('cards.multiplayer')}</div>` : ''}
         </div>
       `).join('')}
     </div>
@@ -123,18 +124,18 @@ function renderModeScreen(meta: GameMeta): void {
   content.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;">
       <button id="ct-back" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--nd-subtext);cursor:pointer;font-size:15px;padding:4px 10px;line-height:1;">←</button>
-      <div style="color:var(--nd-text);font-size:15px;font-weight:bold;letter-spacing:0.06em;">${meta.icon} ${meta.label}</div>
+      <div style="color:var(--nd-text);font-size:15px;font-weight:bold;letter-spacing:0.06em;">${meta.icon} ${ti18n(meta.labelKey)}</div>
     </div>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
       <div id="ct-solo-btn" style="padding:22px 32px;border-radius:10px;cursor:pointer;text-align:center;background:rgba(0,0,0,0.4);border:1px solid color-mix(in srgb,var(--nd-accent) 20%,transparent);transition:border-color 0.15s,background 0.15s;">
         <div style="font-size:28px;margin-bottom:10px;">🤖</div>
-        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;">Solo vs CPU</div>
-        <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">Just you and the dealer</div>
+        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;">${ti18n('cards.solo')}</div>
+        <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">${ti18n('cards.solo_sub')}</div>
       </div>
       <div id="ct-mp-btn" style="padding:22px 32px;border-radius:10px;cursor:pointer;text-align:center;background:rgba(0,0,0,0.4);border:1px solid color-mix(in srgb,var(--nd-accent) 20%,transparent);transition:border-color 0.15s,background 0.15s;">
         <div style="font-size:28px;margin-bottom:10px;">👥</div>
-        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;">Invite Room</div>
-        <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">Play with others here</div>
+        <div style="color:var(--nd-text);font-size:13px;font-weight:bold;">${ti18n('cards.invite_room')}</div>
+        <div style="color:var(--nd-subtext);font-size:10px;margin-top:5px;">${ti18n('cards.invite_room_sub')}</div>
       </div>
     </div>
   `;
@@ -178,7 +179,7 @@ function renderLobby(): void {
   const pendingPlayers = roomPlayers.filter(p => !lobbyPlayers.find(l => l.pubkey === p.pubkey));
 
   content.innerHTML = `
-    <div style="color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;text-align:center;margin-bottom:16px;">${meta.icon} ${meta.label} — Lobby</div>
+    <div style="color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;text-align:center;margin-bottom:16px;">${meta.icon} ${ti18n(meta.labelKey)} — Lobby</div>
 
     <div style="margin-bottom:14px;">
       <div style="color:var(--nd-subtext);font-size:9px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">In this game</div>
@@ -236,7 +237,7 @@ function startGame(gameType: GameType, multiplayer: boolean): void {
   content.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <button id="ct-back-game" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--nd-subtext);cursor:pointer;font-size:15px;padding:4px 10px;line-height:1;">←</button>
-      <div style="color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">${meta.icon} ${meta.label}</div>
+      <div style="color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">${meta.icon} ${ti18n(meta.labelKey)}</div>
       ${multiplayer ? '<div style="color:var(--nd-accent);font-size:9px;margin-left:auto;opacity:0.7;letter-spacing:0.06em;">● LIVE</div>' : ''}
     </div>
     <div id="ct-game"></div>
@@ -310,7 +311,7 @@ function joinGame(detail: { gameId: string; gameType: GameType; hostPubkey: stri
   const content = box.querySelector('#ct-content') as HTMLElement;
   const meta = GAMES.find(g => g.id === detail.gameType)!;
   content.innerHTML = `
-    <div style="color:var(--nd-text);font-size:15px;font-weight:bold;letter-spacing:0.06em;text-align:center;margin-bottom:10px;">${meta.icon} ${meta.label}</div>
+    <div style="color:var(--nd-text);font-size:15px;font-weight:bold;letter-spacing:0.06em;text-align:center;margin-bottom:10px;">${meta.icon} ${ti18n(meta.labelKey)}</div>
     <div style="color:var(--nd-subtext);font-size:11px;text-align:center;margin-bottom:10px;">Waiting for <b style="color:var(--nd-text);">${hostPlayer.name}</b> to start...</div>
     <div style="text-align:center;color:var(--nd-accent);font-size:11px;opacity:0.7;">● You joined</div>
   `;
