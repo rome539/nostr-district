@@ -429,7 +429,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   protected override setupPresenceCallbacks(myPubkey: string): void {
     const cb = this.buildPresenceCallbacks(myPubkey);
     if (!this.isReturning) connectPresence(cb);
-    else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on`))); }
+    else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on sync`))); }
     this.snd.setRoom('hub');
 
     // ── First-time tutorial ──

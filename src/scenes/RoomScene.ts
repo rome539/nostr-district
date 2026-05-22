@@ -182,7 +182,7 @@ export class RoomScene extends BaseScene {
     this.setupPresenceCallbacks(myPubkey);
     initCardGameService();
     sendRoomChange(this.roomConfig.id, GAME_WIDTH / 2, this.playerY);
-    const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on`)));
+    const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on sync`)));
     if (this.isOwner && this.roomConfig.id.startsWith('myroom:')) {
       this.time.delayedCall(500, () => sendChat(`/game:music:${SoundEngine.get().myRoomTrack}`));
     }

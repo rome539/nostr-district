@@ -1348,7 +1348,13 @@ export abstract class BaseScene extends Phaser.Scene {
         if (this.handleSceneChatCommand(pk, name, text, isMe)) return;
         if (text.startsWith('/emote ')) {
           if (!isMe) {
-            const payload = text.slice(7);
+            // Format: "/emote <name>_<on|off>" optionally followed by " sync".
+            // The sync suffix is appended by scene-transition replays so receivers
+            // can update the avatar emote without spamming the chat log with the
+            // flavor text every time the player walks into a new room.
+            let payload = text.slice(7);
+            const isSync = payload.endsWith(' sync');
+            if (isSync) payload = payload.slice(0, -5);
             const sep = payload.lastIndexOf('_');
             const emoteName = payload.slice(0, sep);
             const action    = payload.slice(sep + 1);
@@ -1363,7 +1369,7 @@ export abstract class BaseScene extends Phaser.Scene {
                   if (oa?.rodSkin !== undefined) o.emotes.setFishingSkin(oa.rodSkin);
                 }
                 const flavor = EMOTE_FLAVORS[emoteName];
-                if (flavor) {
+                if (flavor && !isSync) {
                   if (this.showEmoteAsBubble()) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + this.getBubbleYOffset(), flavor, P.lpurp);
                   if (!mutedPlayers.has(pk)) this.chatUI.addMessage(name, flavor, P.lpurp, pk);
                 }
