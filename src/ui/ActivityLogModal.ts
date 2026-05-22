@@ -13,16 +13,16 @@
 import { authStore } from '../stores/authStore';
 import { fetchUserActivity, UserActivityEntry } from '../nostr/nostrService';
 import { labelForKind, categoryForKind, EventCategory } from '../stores/signingLog';
-import { onLangChange } from '../i18n/i18n';
+import { t, onLangChange } from '../i18n/i18n';
 
-const FILTERS: { key: EventCategory; label: string }[] = [
-  { key: 'all',     label: 'All'      },
-  { key: 'profile', label: 'Profile'  },
-  { key: 'social',  label: 'Social'   },
-  { key: 'zap',     label: 'Zaps'     },
-  { key: 'message', label: 'Messages' },
-  { key: 'app',     label: 'App data' },
-  { key: 'other',   label: 'Other'    },
+const FILTERS: { key: EventCategory; labelKey: string }[] = [
+  { key: 'all',     labelKey: 'activity_log.filter.all'     },
+  { key: 'profile', labelKey: 'activity_log.filter.profile' },
+  { key: 'social',  labelKey: 'activity_log.filter.social'  },
+  { key: 'zap',     labelKey: 'activity_log.filter.zap'     },
+  { key: 'message', labelKey: 'activity_log.filter.message' },
+  { key: 'app',     labelKey: 'activity_log.filter.app'     },
+  { key: 'other',   labelKey: 'activity_log.filter.other'   },
 ];
 
 const FETCH_DAYS = 7;
@@ -34,10 +34,10 @@ function esc(s: string): string {
 
 function timeAgo(tsSec: number): string {
   const diff = Date.now() / 1000 - tsSec;
-  if (diff < 60)     return `${Math.round(diff)}s ago`;
-  if (diff < 3600)   return `${Math.round(diff / 60)}m ago`;
-  if (diff < 86400)  return `${Math.round(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.round(diff / 86400)}d ago`;
+  if (diff < 60)     return t('activity_log.time.seconds', { n: Math.round(diff) });
+  if (diff < 3600)   return t('activity_log.time.minutes', { n: Math.round(diff / 60) });
+  if (diff < 86400)  return t('activity_log.time.hours',   { n: Math.round(diff / 3600) });
+  if (diff < 604800) return t('activity_log.time.days',    { n: Math.round(diff / 86400) });
   return new Date(tsSec * 1000).toLocaleDateString();
 }
 
@@ -124,16 +124,16 @@ export class ActivityLogModal {
         ${this.filter === f.key
           ? 'background:color-mix(in srgb,var(--nd-accent) 18%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 50%,transparent);color:var(--nd-accent);'
           : 'background:transparent;border:1px solid color-mix(in srgb,var(--nd-dpurp) 25%,transparent);color:var(--nd-subtext);'}
-      ">${esc(f.label)}</button>
+      ">${esc(t(f.labelKey))}</button>
     `).join('');
 
     let bodyHtml: string;
     if (this.loading && this.entries.length === 0) {
-      bodyHtml = `<div class="al-empty">Fetching from relays…</div>`;
+      bodyHtml = `<div class="al-empty">${esc(t('activity_log.loading'))}</div>`;
     } else if (filtered.length === 0) {
       bodyHtml = `<div class="al-empty">${esc(this.entries.length === 0
-        ? `No events found in the last ${FETCH_DAYS} days.`
-        : 'No events match this filter.')}</div>`;
+        ? t('activity_log.empty', { n: FETCH_DAYS })
+        : t('activity_log.empty_filter'))}</div>`;
     } else {
       // idx passed to renderRow is the index within the current page slice —
       // matched on the .al-copy click handler against `pageEntries` below.
@@ -142,28 +142,33 @@ export class ActivityLogModal {
 
     const paginationHtml = pageCount > 1 ? `
       <div class="al-pagination">
-        <button id="al-prev" class="al-pagebtn" ${this.page === 0 ? 'disabled' : ''}>← Prev</button>
+        <button id="al-prev" class="al-pagebtn" ${this.page === 0 ? 'disabled' : ''}>${esc(t('activity_log.prev'))}</button>
         <span class="al-pageinfo">${this.page + 1} / ${pageCount}</span>
-        <button id="al-next" class="al-pagebtn" ${this.page >= pageCount - 1 ? 'disabled' : ''}>Next →</button>
+        <button id="al-next" class="al-pagebtn" ${this.page >= pageCount - 1 ? 'disabled' : ''}>${esc(t('activity_log.next'))}</button>
       </div>
     ` : '';
+
+    const countLabel = this.entries.length === 1
+      ? t('activity_log.count_one',  { n: this.entries.length })
+      : t('activity_log.count_many', { n: this.entries.length });
+    const shownSuffix = this.filter === 'all' ? '' : ` · ${t('activity_log.shown', { n: filtered.length })}`;
 
     this.el.innerHTML = `
       <div class="al-panel">
         <div class="al-header">
-          <div class="al-title">✦ Activity Log</div>
+          <div class="al-title">✦ ${esc(t('activity_log.title'))}</div>
           <div class="al-header-side">
-            <button id="al-refresh" class="al-refresh" title="Refetch from relays" ${this.loading ? 'disabled' : ''}>${this.loading ? '…' : '↻'}</button>
-            <button id="al-close" class="al-close" aria-label="Close">✕</button>
+            <button id="al-refresh" class="al-refresh" title="${esc(t('activity_log.refresh_title'))}" ${this.loading ? 'disabled' : ''}>${this.loading ? '…' : '↻'}</button>
+            <button id="al-close" class="al-close" aria-label="${esc(t('activity_log.close_label'))}">✕</button>
           </div>
         </div>
-        <div class="al-sub">Every Nostr event your account has published in the last ${FETCH_DAYS} days, fetched live from relays. Same view any other Nostr client can see.</div>
+        <div class="al-sub">${esc(t('activity_log.subtitle', { n: FETCH_DAYS }))}</div>
         <div class="al-filters">${filterChips}</div>
         <div class="al-body">${bodyHtml}</div>
         ${paginationHtml}
         <div class="al-footer">
-          <span class="al-count">${this.entries.length} event${this.entries.length === 1 ? '' : 's'}${this.filter === 'all' ? '' : ` · ${filtered.length} shown`}</span>
-          <span class="al-window">last ${FETCH_DAYS} days</span>
+          <span class="al-count">${esc(countLabel)}${esc(shownSuffix)}</span>
+          <span class="al-window">${esc(t('activity_log.window', { n: FETCH_DAYS }))}</span>
         </div>
       </div>
     `;
@@ -230,7 +235,7 @@ export class ActivityLogModal {
         </div>
         <div class="al-row-side">
           <span class="al-time">${esc(timeAgo(entry.createdAt))}</span>
-          <button class="al-copy" data-idx="${idx}" title="Copy JSON to clipboard">⧉</button>
+          <button class="al-copy" data-idx="${idx}" title="${esc(t('activity_log.copy_title'))}">⧉</button>
         </div>
       </div>
     `;
