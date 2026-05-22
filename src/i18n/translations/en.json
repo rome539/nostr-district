@@ -44,6 +44,7 @@
   "settings.custom_emojis":    "CUSTOM EMOJIS",
   "settings.lightning_wallet": "LIGHTNING WALLET",
   "settings.hotkeys":          "Hotkeys & Commands",
+  "settings.activity_log":     "Activity Log",
   "settings.logout":           "Logout",
   "settings.change":           "Change",
 

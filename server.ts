@@ -237,6 +237,20 @@ wss.on('connection', (ws) => {
         }
       }
 
+      // Room-owner pushes a new room config (furniture moved, walls swapped,
+      // posters changed, etc). Mirror the avatar_update flow: forward to every
+      // other player currently in the same room so they can re-render live.
+      // We trust the sender's own room state for routing — only myroom:<owner>
+      // events go to people in that room, so visitors only see updates from
+      // the actual owner.
+      if (msg.type === 'room_config_update' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (!player) return;
+        const roomConfig = String(msg.roomConfig || '').slice(0, 50000);
+        if (!roomConfig) return;
+        broadcastToRoom(player.room, { type: 'room_config_update', pubkey: myPubkey, roomConfig }, myPubkey);
+      }
+
       if (msg.type === 'status_update' && myPubkey) {
         const player = players.get(myPubkey);
         if (player) {

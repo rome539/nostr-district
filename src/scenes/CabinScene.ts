@@ -20,7 +20,7 @@ import { t as ti18n } from '../i18n/i18n';
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
-import { getAvatar } from '../stores/avatarStore';
+import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { incrementAuraProgress } from '../stores/auraUnlockStore';
 
 const CABIN_ACCENT = '#f0a030';
@@ -71,13 +71,16 @@ export class CabinScene extends BaseScene {
     this.emoteGraphics      = this.add.graphics().setDepth(15);
 
     this.createPlayer();
-    onNextAvatarSync(() => {
+    const rerenderPlayerSprite = () => {
       const av = getAvatar();
       for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
-    });
+    };
+    onNextAvatarSync(rerenderPlayerSprite);
+    const unsubLocalAvatar = onLocalAvatarChange(rerenderPlayerSprite);
+    this.events.once('shutdown', unsubLocalAvatar);
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);

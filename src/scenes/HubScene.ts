@@ -13,10 +13,11 @@ import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { renderHubSprite, renderRoomSprite, itemImagesReady } from '../entities/AvatarRenderer';
-import { getAvatar } from '../stores/avatarStore';
+import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { ComputerUI } from '../ui/ComputerUI';
 import { authStore } from '../stores/authStore';
 import { loadNostrTheme } from '../nostr/nostrThemeService';
+import { tryGrantPizzaHat } from '../stores/pizzaDayUnlockStore';
 import { initEmojiService } from '../nostr/emojiService';
 import { startGlobalZapToasts } from '../nostr/zapService';
 import { LoginScreen } from '../ui/LoginScreen';
@@ -91,6 +92,10 @@ export class HubScene extends BaseScene {
       this.showLoginScreen();
       return;
     }
+    // Already logged in (cached session) — still run the per-login grant check
+    // for Bitcoin Pizza Day. Idempotent so repeat boots on the same day are
+    // a no-op after the first toast.
+    if (auth.pubkey) tryGrantPizzaHat(auth.pubkey);
     this.startGame();
   }
 
@@ -188,6 +193,9 @@ export class HubScene extends BaseScene {
     if (auth.pubkey) {
       void loadNostrTheme(auth.pubkey);
       void initEmojiService(auth.pubkey);
+      // Bitcoin Pizza Day — grant the pizza hat if today is May 22.
+      // Idempotent + local-only, no Nostr publish needed.
+      tryGrantPizzaHat(auth.pubkey);
     }
     this.startGame();
   }
@@ -213,6 +221,17 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.player?.setTexture('player');
       sendAvatarUpdate();
     });
+    // Re-render the player sprite when the local user changes their outfit
+    // from any panel (shop equip, wardrobe save, outfit load). The wardrobe's
+    // own ComputerUI callback chain still fires too; this is the catch-all
+    // for panels that don't know which scene is active.
+    const unsubLocalAvatar = onLocalAvatarChange(() => {
+      this.generateWalkFrames(getAvatar());
+      if (this.textures.exists('player')) this.textures.remove('player');
+      this.textures.addCanvas('player', renderHubSprite(getAvatar()));
+      this.player?.setTexture('player');
+    });
+    this.events.once('shutdown', unsubLocalAvatar);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
@@ -444,7 +463,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   protected override handleSceneChatCommand(pk: string, _name: string, text: string, isMe: boolean): boolean {
     if (text.startsWith('/zap:')) {
       const sats = parseInt(text.slice(5), 10);
-      if (!isNaN(sats)) { const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite; if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000); }
+      if (!isNaN(sats)) { const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite; if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000, undefined, isMe); }
       return true;
     }
     return false;
@@ -890,7 +909,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.emoteSet.start(name);
       if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, ac);
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, ac, undefined, undefined, true);
       sendChat(`/emote ${name}_on`);
     }
   }

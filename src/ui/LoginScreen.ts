@@ -354,6 +354,43 @@ export class LoginScreen {
       <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" class="open-source-link">${this.esc(t('login.open_source'))}</a>
       </div>
 
+      <!-- Bitcoin Pizza Day banner: pinned top-left, commemorates 2010-05-22.
+           Date-gated (May 22 ± a couple days for timezone slop) so it only
+           appears in the week around the anniversary. -->
+      ${this.shouldShowPizzaDay() ? `
+        <div class="login-pizza-day" id="login-pizza-day">
+          <button class="login-pizza-trigger" id="login-pizza-trigger" aria-expanded="false" aria-controls="login-pizza-info" aria-label="Bitcoin Pizza Day — click for details">
+            <span class="login-pizza-emoji" aria-hidden="true">🍕</span>
+            <div class="login-pizza-text">
+              <div class="login-pizza-title">BITCOIN PIZZA DAY</div>
+              <div class="login-pizza-sub">May 22 · 10,000 BTC ↔ 2 🍕 · ${this.pizzaYears()} years</div>
+            </div>
+            <span class="login-pizza-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div id="login-pizza-info" class="login-pizza-info" hidden>
+            <p>
+              On <strong>May 22, 2010</strong>, programmer <strong>Laszlo Hanyecz</strong>
+              posted on the BitcoinTalk forum offering <strong>10,000 BTC</strong> for two
+              pizzas. Jeremy Sturdivant accepted, ordered two Papa John's pies (~$41 USD
+              at the time), and the first documented real-world Bitcoin transaction
+              was complete.
+            </p>
+            <p>
+              Today those 10,000 BTC would be worth hundreds of millions — a number that
+              shifts every market open. Bitcoiners celebrate the anniversary every May 22
+              as a reminder of where the currency started and how far it's traveled.
+            </p>
+            <p class="login-pizza-extra">
+              Happy ${this.pizzaYears()}th Pizza Day. Stay humble, stack sats,
+              and grab a slice today.
+            </p>
+            <a href="https://bitcointalk.org/index.php?topic=137.0" target="_blank" rel="noopener noreferrer" class="login-pizza-link">
+              Read the original forum thread ↗
+            </a>
+          </div>
+        </div>
+      ` : ''}
+
       <!-- Language selector: pinned to the viewport's top-right. We use a
            custom dropdown instead of a native <select> because at the top of
            the page the native picker renders upward and the lower options
@@ -367,6 +404,23 @@ export class LoginScreen {
         <ul id="login-lang-list" class="login-lang-list" role="listbox" aria-label="${this.esc(t('login.lang_label'))}" hidden></ul>
       </div>
     `;
+  }
+
+  /**
+   * Bitcoin Pizza Day window — show the banner from May 18 through May 25 each
+   * year so the celebration is visible for a few days around the anniversary
+   * (May 22, 2010 was the original 10,000-BTC-for-2-pizzas transaction).
+   */
+  private shouldShowPizzaDay(): boolean {
+    const now = new Date();
+    const month = now.getMonth() + 1; // 1-based
+    const day = now.getDate();
+    return month === 5 && day >= 18 && day <= 25;
+  }
+
+  /** Years since the original Pizza Day (2010-05-22). */
+  private pizzaYears(): number {
+    return new Date().getFullYear() - 2010;
   }
 
   private static readonly LANGUAGES: { code: string; label: string }[] = [
@@ -436,6 +490,87 @@ export class LoginScreen {
           0 0 12px var(--nd-accent),
           0 0 30px var(--nd-accent),
           0 0 60px var(--nd-accent);
+      }
+      .login-pizza-day {
+        position: fixed; top: 16px; left: 18px; z-index: 50;
+        font: inherit;
+      }
+      .login-pizza-trigger {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 11px 6px 9px;
+        background: color-mix(in srgb, black 55%, #f0a030);
+        border: 1px solid color-mix(in srgb, #f0b040 60%, transparent);
+        border-radius: 6px;
+        color: #ffd07a;
+        font: inherit; font-size: 9px;
+        letter-spacing: 0.08em; line-height: 1.3;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+        opacity: 0.85;
+        box-shadow:
+          0 0 12px color-mix(in srgb, #f0a030 25%, transparent),
+          inset 0 0 8px color-mix(in srgb, #f0a030 15%, transparent);
+        animation: pizza-pulse 4s ease-in-out infinite;
+        transition: opacity 0.15s, border-color 0.15s;
+      }
+      .login-pizza-trigger:hover,
+      .login-pizza-day.is-open .login-pizza-trigger {
+        opacity: 1;
+        border-color: color-mix(in srgb, #ffd07a 80%, transparent);
+      }
+      .login-pizza-emoji {
+        font-size: 22px; line-height: 1;
+        filter: drop-shadow(0 0 6px color-mix(in srgb, #f0a030 55%, transparent));
+      }
+      .login-pizza-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+      .login-pizza-title {
+        color: #ffe098; font-weight: bold; font-size: 10px;
+        text-shadow: 0 0 6px color-mix(in srgb, #f0a030 60%, transparent);
+      }
+      .login-pizza-sub {
+        color: #f4cb88; opacity: 0.85; font-size: 8px; letter-spacing: 0.04em;
+      }
+      .login-pizza-chevron {
+        color: #ffd07a; font-size: 10px; opacity: 0.8;
+        transition: transform 0.2s;
+      }
+      .login-pizza-day.is-open .login-pizza-chevron { transform: rotate(180deg); }
+      .login-pizza-info {
+        margin-top: 6px;
+        max-width: 320px;
+        padding: 12px 14px;
+        background: color-mix(in srgb, black 75%, #f0a030);
+        border: 1px solid color-mix(in srgb, #f0b040 50%, transparent);
+        border-radius: 6px;
+        color: #f4d5a0;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        line-height: 1.55;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.6),
+                    0 0 14px color-mix(in srgb, #f0a030 18%, transparent);
+        animation: pizza-info-in 0.25s ease-out;
+      }
+      .login-pizza-info[hidden] { display: none; }
+      .login-pizza-info p { margin: 0 0 8px 0; }
+      .login-pizza-info p:last-of-type { margin-bottom: 10px; }
+      .login-pizza-info strong { color: #ffe098; }
+      .login-pizza-extra { color: #ffc870; font-style: italic; }
+      .login-pizza-link {
+        display: inline-block; margin-top: 2px;
+        color: #ffd07a; font-size: 10px; letter-spacing: 0.06em;
+        text-decoration: none; opacity: 0.85;
+        text-shadow: 0 0 6px color-mix(in srgb, #f0a030 50%, transparent);
+        transition: opacity 0.15s;
+      }
+      .login-pizza-link:hover { opacity: 1; text-decoration: underline; }
+      @keyframes pizza-pulse {
+        0%, 100% { box-shadow: 0 0 12px color-mix(in srgb, #f0a030 25%, transparent), inset 0 0 8px color-mix(in srgb, #f0a030 15%, transparent); }
+        50%      { box-shadow: 0 0 20px color-mix(in srgb, #f0a030 45%, transparent), inset 0 0 10px color-mix(in srgb, #f0a030 22%, transparent); }
+      }
+      @keyframes pizza-info-in {
+        from { opacity: 0; transform: translateY(-4px); }
+        to   { opacity: 1; transform: translateY(0);    }
       }
       .login-lang-wrap {
         position: fixed; top: 16px; right: 18px; z-index: 50;
@@ -508,6 +643,13 @@ export class LoginScreen {
         .login-lang-btn { padding: 4px 7px; font-size: 10px; }
         .login-lang-current { min-width: 48px; }
         .login-lang-list { min-width: 130px; max-height: 50vh; }
+        .login-pizza-day { top: 10px; left: 10px; }
+        .login-pizza-trigger { padding: 4px 8px 4px 7px; gap: 6px; }
+        .login-pizza-emoji { font-size: 18px; }
+        .login-pizza-title { font-size: 9px; }
+        .login-pizza-sub { font-size: 7px; }
+        .login-pizza-info { max-width: calc(100vw - 24px); font-size: 10px; padding: 10px 12px; }
+        .login-pizza-link { font-size: 9px; }
       }
       .login-title {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
@@ -1188,7 +1330,53 @@ export class LoginScreen {
    */
   private bindEvents(): void {
     this._bindLangDropdown();
+    this._bindPizzaDay();
     this._bindLoginBoxEvents();
+  }
+
+  private _pizzaDocClickHandler: ((e: MouseEvent) => void) | null = null;
+  private _pizzaEscHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  /**
+   * Wire the Bitcoin Pizza Day badge → click-to-expand info panel. Mirrors
+   * `_bindLangDropdown`: click toggles, outside-click or Escape collapses.
+   */
+  private _bindPizzaDay(): void {
+    const wrap    = this.container.querySelector<HTMLElement>('#login-pizza-day');
+    const trigger = this.container.querySelector<HTMLButtonElement>('#login-pizza-trigger');
+    const info    = this.container.querySelector<HTMLElement>('#login-pizza-info');
+    if (!wrap || !trigger || !info) return;
+
+    // Detach any prior handlers from a previous rerender.
+    if (this._pizzaDocClickHandler) document.removeEventListener('click', this._pizzaDocClickHandler);
+    if (this._pizzaEscHandler)      document.removeEventListener('keydown', this._pizzaEscHandler);
+
+    const close = () => {
+      info.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      wrap.classList.remove('is-open');
+    };
+    const open = () => {
+      info.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      wrap.classList.add('is-open');
+    };
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (info.hidden) open();
+      else close();
+    });
+
+    this._pizzaDocClickHandler = (e) => {
+      if (!info.hidden && !wrap.contains(e.target as Node)) close();
+    };
+    document.addEventListener('click', this._pizzaDocClickHandler);
+
+    this._pizzaEscHandler = (e) => {
+      if (e.key === 'Escape' && !info.hidden) { close(); trigger.focus(); }
+    };
+    document.addEventListener('keydown', this._pizzaEscHandler);
   }
 
   private _bindLoginBoxEvents(): void {

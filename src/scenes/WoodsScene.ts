@@ -27,7 +27,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
-import { getAvatar } from '../stores/avatarStore';
+import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
 import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { incrementLegendaryCatch, incrementCoelacanth } from '../stores/fishingUnlockStore';
@@ -200,13 +200,16 @@ export class WoodsScene extends BaseScene {
     }
 
     this.createPlayer();
-    onNextAvatarSync(() => {
+    const rerenderPlayerSprite = () => {
       const av = getAvatar();
       for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
-    });
+    };
+    onNextAvatarSync(rerenderPlayerSprite);
+    const unsubLocalAvatar = onLocalAvatarChange(rerenderPlayerSprite);
+    this.events.once('shutdown', unsubLocalAvatar);
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
@@ -1463,7 +1466,7 @@ export class WoodsScene extends BaseScene {
       this.fishingBiteMs = 4000 + Math.random() * 12000;
       this.fishingBobPhase = 0;
       this.fishingCastDist = 30 + Math.random() * 80;  // 30–110px out from dock edge
-      ChatUI.showBubble(this, this.player.x, this.player.y - 48, '* casts a line...', WOODS_ACCENT, 3000);
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, '* casts a line...', WOODS_ACCENT, 3000, undefined, true);
       this.snd.fishingCast();
       sendChat('/emote fishing_on');
     } else if (this.fishingState === 'bite') {
@@ -2095,7 +2098,7 @@ export class WoodsScene extends BaseScene {
       this.emoteSet.start(name);
       if (name === 'smoke') this.snd.lighterFlick();
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
-      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, ac);
+      ChatUI.showBubble(this, this.player.x, this.player.y - 48, flavor, ac, undefined, undefined, true);
       sendChat(`/emote ${name}_on`);
     }
   }

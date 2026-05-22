@@ -1397,12 +1397,12 @@ export abstract class BaseScene extends Phaser.Scene {
             if (oa?.chatColor) senderChatColor = isAnimatedColor(oa.chatColor) ? getAnimatedColor(oa.chatColor, Date.now()) : oa.chatColor;
           }
         }
-        this.chatUI.addMessage(name, text, isMe ? myChatColor : senderChatColor, pk, emojis);
+        this.chatUI.addMessage(name, text, isMe ? myChatColor : senderChatColor, pk, emojis, isMe);
         if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
         const by = this.getBubbleYOffset();
         if (isMe) {
           const sp = this.getPlayerSprite();
-          ChatUI.showBubble(this, sp.x, sp.y + by, text, myChatColor, 4000, emojis);
+          ChatUI.showBubble(this, sp.x, sp.y + by, text, myChatColor, 4000, emojis, true);
         } else {
           const o = this.otherPlayers.get(pk);
           if (o) ChatUI.showBubble(this, o.sprite.x, o.sprite.y + by, text, senderChatColor, 4000, emojis);

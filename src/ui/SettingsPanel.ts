@@ -18,6 +18,7 @@ import {
 import { NostrThemeBrowser } from './NostrThemeBrowser';
 import { EmojiPackBrowser } from './EmojiPackBrowser';
 import { HotkeyModal } from './HotkeyModal';
+import { ActivityLogModal } from './ActivityLogModal';
 import { getEmojiCount, getStoredEmojiPacks } from '../nostr/emojiService';
 import { t, onLangChange } from '../i18n/i18n';
 
@@ -37,6 +38,7 @@ export class SettingsPanel {
   private themeBrowser     = new NostrThemeBrowser();
   private emojiPackBrowser = new EmojiPackBrowser();
   private hotkeyModal      = new HotkeyModal();
+  private activityLogModal = new ActivityLogModal();
 
   create(): void {
     this.destroy();
@@ -209,6 +211,19 @@ export class SettingsPanel {
         <span style="opacity:0.5;">↗</span>
       </button>
 
+      <button id="sp-activitylog-btn" style="
+        width:100%;padding:8px 10px;margin-bottom:8px;
+        background:color-mix(in srgb,var(--nd-dpurp) 12%,transparent);
+        border:1px solid color-mix(in srgb,var(--nd-dpurp) 28%,transparent);
+        border-radius:5px;cursor:pointer;
+        color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:11px;
+        text-align:left;display:flex;align-items:center;justify-content:space-between;
+        transition:border-color 0.15s,color 0.15s;
+      ">
+        <span>${esc(t('settings.activity_log'))}</span>
+        <span style="opacity:0.5;">↗</span>
+      </button>
+
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
       <a href="https://njump.me/npub12p5753xcjal8034w5czap3fcdvj9qj36h5873g73ea05emw2gznszr0ann" target="_blank" rel="noopener noreferrer" style="
@@ -257,6 +272,19 @@ export class SettingsPanel {
     hkBtn?.addEventListener('mouseenter', () => { hkBtn.style.color = 'var(--nd-text)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-accent) 35%,transparent)`; });
     hkBtn?.addEventListener('mouseleave', () => { hkBtn.style.color = 'var(--nd-subtext)'; hkBtn.style.borderColor = `color-mix(in srgb,var(--nd-dpurp) 28%,transparent)`; });
     hkBtn?.addEventListener('click', () => { this.closePanel(); this.hotkeyModal.show(); });
+
+    const alBtn = this.panelEl.querySelector('#sp-activitylog-btn') as HTMLElement | null;
+    if (alBtn) {
+      alBtn.addEventListener('mouseenter', () => {
+        alBtn.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 44%,transparent)';
+        alBtn.style.color = 'var(--nd-accent)';
+      });
+      alBtn.addEventListener('mouseleave', () => {
+        alBtn.style.borderColor = 'color-mix(in srgb,var(--nd-dpurp) 28%,transparent)';
+        alBtn.style.color = 'var(--nd-subtext)';
+      });
+      alBtn.addEventListener('click', () => { this.closePanel(); this.activityLogModal.show(); });
+    }
 
     // Emoji pack browser button (closes theme browser)
     this.panelEl.querySelector('#sp-emoji-browse')?.addEventListener('click', (e) => {

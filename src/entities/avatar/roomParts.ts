@@ -381,12 +381,16 @@ export function drawRoomAccessory(x: CanvasRenderingContext2D, acc: string, oY: 
       break;
     case 'bandana': {
       x.globalAlpha = 1;
-      // Main band across lower face (1px lower)
+      // Main band across lower face
       x.fillRect(5, oY + 7, 14, 4);
-      // Triangle point down
-      x.fillRect(8,  oY + 11, 8, 2);
-      x.fillRect(10, oY + 13, 4, 2);
-      x.fillRect(11, oY + 15, 2, 1);
+      // Triangle point down — proper V tapering 1px each side per row
+      // so the silhouette reads as a smooth V instead of stepped 2px tiers.
+      x.fillRect(6,  oY + 11, 12, 1);
+      x.fillRect(7,  oY + 12, 10, 1);
+      x.fillRect(8,  oY + 13,  8, 1);
+      x.fillRect(9,  oY + 14,  6, 1);
+      x.fillRect(10, oY + 15,  4, 1);
+      x.fillRect(11, oY + 16,  2, 1);
       // Top fold stripe
       x.fillStyle = lighten(savedColor, 22); x.globalAlpha = 0.5;
       x.fillRect(5, oY + 7, 14, 1);
@@ -731,6 +735,7 @@ export function drawRoomTop(
     tunic:        'top_tunic_room',
     skindress:    'top_skindress_room',
     knightchest:  'top_knightchest_room',
+    pizzashirt:   'top_pizzashirt_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;

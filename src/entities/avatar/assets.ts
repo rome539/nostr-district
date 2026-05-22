@@ -41,6 +41,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   crown_silver:       { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
   crown_bronze:       { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0, above: true, yGap: -4, hubYGap: 1, noTint: true, naturalSize: true },
   fishhat:            { anchor: 'headTop', widthRatio: 1.4, roomWidthRatio: 1.2, above: true, yGap: -6, hubYGap: 1, noTint: true, naturalSize: true },
+  pizzahat:           { anchor: 'headTop', widthRatio: 1.4, roomWidthRatio: 1.2, above: true, yGap: -6, hubYGap: -1, noTint: true, naturalSize: true },
   // ── Accessories (image-based) ──
   halo:               { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap:  2, hubYGap: 11 },
   catears:            { anchor: 'headTop', widthRatio: 1.0, roomWidthRatio: 1.0,  above: true, yGap: -5, hubYGap:  4 },
@@ -170,6 +171,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_tunic_hub',        'assets/tops/tunichub.png'),
   loadItemImg('top_skindress_hub',    'assets/tops/skindresshub.png'),
   loadItemImg('top_knightchest_hub',  'assets/bottoms/knightchesthub.png'),
+  loadItemImg('top_pizzashirt_hub',   'assets/tops/pizzashirthub.png'),
   loadItemImg('top_bomber_room',      'assets/tops/bomber.png'),
   loadItemImg('top_flannel_room',     'assets/tops/flanel.png'),
   loadItemImg('top_robe_room',        'assets/tops/wizardrobe.png'),
@@ -179,6 +181,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_tunic_room',       'assets/tops/tunic.png'),
   loadItemImg('top_skindress_room',   'assets/tops/skindress.png'),
   loadItemImg('top_knightchest_room', 'assets/bottoms/knightchest.png'),
+  loadItemImg('top_pizzashirt_room',  'assets/tops/pizzashirt.png'),
   // wings (drawn behind player)
   loadItemImg('acc_wings_hub',  'assets/accessories/wingshub.png'),
   loadItemImg('acc_wings_room', 'assets/accessories/wings.png'),
@@ -197,6 +200,9 @@ export const itemImagesReady = Promise.all([
   // fish hat
   loadItemImg('fishhat', 'assets/hats/fishhat.png'),
   loadItemImg('fishhat', 'assets/hats/fishhathub.png', hubImgCache),
+  // pizza hat (Bitcoin Pizza Day — May 22 login unlock)
+  loadItemImg('pizzahat', 'assets/hats/Pizzahat.png'),
+  loadItemImg('pizzahat', 'assets/hats/Pizzahathub.png', hubImgCache),
   // fish net bottoms (single static PNG per scale — all walk frames use same image)
   loadItemImg('bottom_fishnet_hub_1', 'assets/bottoms/fishnethub.png'),
   loadItemImg('bottom_fishnet_hub_2', 'assets/bottoms/fishnethub.png'),

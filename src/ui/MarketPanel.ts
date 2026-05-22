@@ -15,7 +15,7 @@ import { getAuraProgress } from '../stores/auraUnlockStore';
 import { payLightningAddress } from '../nostr/zapService';
 import { publishInventory, publishAvatar } from '../nostr/nostrService';
 import { sendAvatarUpdate } from '../nostr/presenceService';
-import { getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
+import { getAvatar, setAvatar, AvatarConfig, COLOR_PRESETS } from '../stores/avatarStore';
 import { usdToSats, getBtcUsdPrice } from '../stores/priceService';
 import { MarketPreview } from './market/MarketPreview';
 import { showInvoiceModal } from './market/MarketInvoice';
@@ -69,6 +69,21 @@ const SUB_CATEGORIES: Record<string, { key: Category; labelKey: string }[]> = {
 
 const COSMETIC_SLOTS = new Set<string>(['nameColor', 'chatColor', 'rodSkin', 'aura', 'nameAnim']);
 
+/**
+ * Clothing slots that have a tintable color companion field on AvatarConfig.
+ * Used to wire up the inline "Equip + color picker" UI on owned clothing items
+ * in the shop — same kind:30078 publish path as the wardrobe.
+ */
+const CLOTHING_COLOR_KEYS: Record<string, keyof AvatarConfig> = {
+  hair:      'hairColor',
+  top:       'topColor',
+  bottom:    'bottomColor',
+  hat:       'hatColor',
+  accessory: 'accessoryColor',
+  eyes:      'eyeColor',
+};
+const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
+
 /** Auto-equip nameColor/chatColor/rodSkin on purchase so they apply immediately. */
 function autoEquip(slot: string, value: string): void {
   if (!COSMETIC_SLOTS.has(slot)) return;
@@ -94,6 +109,8 @@ export class MarketPanel {
   private static _hideOwned:   boolean = localStorage.getItem('nd-market-hide-owned') === '1';
   private static _btcPrice:    number | null = null;
   private static _page:        number = 0;
+  /** Item id whose inline color-picker is currently expanded (or null). One at a time. */
+  private static _equipPickerOpenId: string | null = null;
 
   private static _isMobile(): boolean { return window.innerWidth < 380; }
 
@@ -499,8 +516,12 @@ export class MarketPanel {
     items.forEach(item => {
       const owned      = isOwned(item.slot, item.value);
       const isCosmetic = COSMETIC_SLOTS.has(item.slot);
+      const isClothing = CLOTHING_SLOTS.has(item.slot);
       const avatar     = getAvatar();
-      const isEquipped = isCosmetic && (avatar as any)[item.slot] === item.value;
+      const isEquipped = (isCosmetic || isClothing) && (avatar as any)[item.slot] === item.value;
+      const colorKey   = isClothing ? CLOTHING_COLOR_KEYS[item.slot] : null;
+      const currentColor = colorKey ? (avatar as any)[colorKey] as string : '';
+      const pickerOpen = isClothing && owned && MarketPanel._equipPickerOpenId === item.id;
       const onSale     = !owned && item.id === saleItem.id;
       const finalPrice = onSale ? getSalePrice(item) : item.price;
 
@@ -512,11 +533,33 @@ export class MarketPanel {
       row.className = 'mp-row';
       row.dataset.id = item.id;
       row.style.cssText = `
-        display:flex;align-items:center;gap:6px;padding:${rowPad};
+        display:flex;flex-direction:column;gap:6px;padding:${rowPad};
         border-radius:5px;cursor:default;
         background:${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 7%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 7%,transparent)'};
         border:1px solid ${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 28%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 15%,transparent)'};
       `;
+
+      // Touch-friendly swatch sizing: 28px on mobile (close to the 44pt Apple
+      // touch-target guideline once you count the visible border + padding gap)
+      // and 18px on desktop where precise pointers are fine.
+      const swatchSize = mobile ? 28 : 18;
+      const swatchGap  = mobile ? 5 : 3;
+      const colorPickerHtml = pickerOpen
+        ? `<div class="mp-color-picker" style="
+             display:flex;flex-wrap:wrap;gap:${swatchGap}px;padding:8px;
+             border-radius:4px;background:color-mix(in srgb,var(--nd-bg) 70%,transparent);
+             border:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);
+           ">
+             ${COLOR_PRESETS.map(c => `
+               <div class="mp-color-swatch" data-id="${esc(item.id)}" data-color="${c}" title="${c}" style="
+                 width:${swatchSize}px;height:${swatchSize}px;border-radius:4px;cursor:pointer;
+                 background:${c};
+                 border:2px solid ${currentColor === c ? '#fff' : 'rgba(255,255,255,0.1)'};
+                 box-sizing:border-box;flex-shrink:0;
+               "></div>
+             `).join('')}
+           </div>`
+        : '';
 
       const earnRight = (() => {
         if (!item.earn || owned) return null;
@@ -535,6 +578,7 @@ export class MarketPanel {
 
       const btnPad = mobile ? '8px 14px' : '6px 10px';
       row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;width:100%;">
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="color:var(--nd-text);font-size:12px;font-weight:bold;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${colorSwatch}${esc(item.name)}</div>
           <span style="font-size:10px;padding:1px 5px;border-radius:2px;letter-spacing:0.05em;display:inline-block;margin-top:3px;${SLOT_BADGE}">${SLOT_LABEL_KEY[item.slot] ? ti18n(SLOT_LABEL_KEY[item.slot]) : item.slot}</span>
@@ -550,7 +594,18 @@ export class MarketPanel {
                      border:1px solid ${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 50%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)'};
                      color:${isEquipped ? 'var(--nd-amber,#f0b040)' : 'var(--nd-subtext)'};
                    ">${isEquipped ? '✓ ON' : 'EQUIP'}</button>`
-                : `<span style="color:#5dcaa5;font-size:10px;font-weight:bold;">✓ OWNED</span>`
+                : isClothing && item.value !== 'none'
+                  ? `<button class="mp-equip-clothing" data-id="${esc(item.id)}" style="
+                       padding:${btnPad};border-radius:4px;cursor:pointer;
+                       font-family:'Courier New',monospace;font-size:10px;font-weight:bold;
+                       background:${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 22%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 18%,transparent)'};
+                       border:1px solid ${isEquipped ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 50%,transparent)' : 'color-mix(in srgb,var(--nd-dpurp) 35%,transparent)'};
+                       color:${isEquipped ? 'var(--nd-amber,#f0b040)' : 'var(--nd-subtext)'};
+                       display:flex;align-items:center;gap:5px;
+                     ">${isEquipped
+                          ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${esc(currentColor)};border:1px solid rgba(255,255,255,0.25);"></span>✓ ON`
+                          : 'EQUIP'}</button>`
+                  : `<span style="color:#5dcaa5;font-size:10px;font-weight:bold;">✓ OWNED</span>`
               : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
                    ${onSale ? `<span style="color:var(--nd-subtext);font-size:9px;text-decoration:line-through;opacity:0.5;">${priceLabel(item.price)}</span>` : ''}
                    <div style="color:${onSale ? '#5dcaa5' : 'var(--nd-amber,#f0b040)'};font-size:11px;font-weight:bold;">${priceLabel(finalPrice)}</div>
@@ -565,6 +620,8 @@ export class MarketPanel {
             )
           }
         </div>
+        </div>
+        ${colorPickerHtml}
       `;
 
       row.addEventListener('mouseenter', () => {
@@ -616,6 +673,38 @@ export class MarketPanel {
         sendAvatarUpdate();
         MarketPanel._renderItems(!!authStore.getState().pubkey && !authStore.getState().isGuest);
         MarketPreview.update(null, mobile);
+      });
+    });
+
+    // Clothing equip: clicking the button toggles an inline color picker. One
+    // picker open at a time across the whole list.
+    container.querySelectorAll('.mp-equip-clothing').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = (btn as HTMLElement).dataset.id || null;
+        MarketPanel._equipPickerOpenId = MarketPanel._equipPickerOpenId === id ? null : id;
+        MarketPanel._renderItems(!!authStore.getState().pubkey && !authStore.getState().isGuest);
+      });
+    });
+
+    // Color swatch click: equips the item AND sets the slot's color in a single
+    // setAvatar patch, then publishes kind:30078 + broadcasts to room players —
+    // same persistence path the Wardrobe uses, so the change syncs everywhere.
+    container.querySelectorAll('.mp-color-swatch').forEach(swatch => {
+      swatch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const el = swatch as HTMLElement;
+        const item = CATALOG.find(i => i.id === el.dataset.id);
+        const color = el.dataset.color;
+        if (!item || !color) return;
+        const colorKey = CLOTHING_COLOR_KEYS[item.slot];
+        if (!colorKey) return;
+        const patch: Partial<AvatarConfig> = { [item.slot]: item.value, [colorKey]: color } as any;
+        const updated = setAvatar(patch);
+        publishAvatar(updated);
+        sendAvatarUpdate();
+        MarketPanel._equipPickerOpenId = null;
+        MarketPanel._renderItems(!!authStore.getState().pubkey && !authStore.getState().isGuest);
       });
     });
   }

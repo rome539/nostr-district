@@ -20,7 +20,7 @@ import {
 import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
-import { getAvatar } from '../stores/avatarStore';
+import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
@@ -89,13 +89,16 @@ export class AlleyScene extends BaseScene {
 
     this.spawnParticles();
     this.createPlayer();
-    onNextAvatarSync(() => {
+    const rerenderPlayerSprite = () => {
       const av = getAvatar();
       for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
       this.player?.setTexture('player');
-    });
+    };
+    onNextAvatarSync(rerenderPlayerSprite);
+    const unsubLocalAvatar = onLocalAvatarChange(rerenderPlayerSprite);
+    this.events.once('shutdown', unsubLocalAvatar);
 
 
     this.cameras.main.setBounds(0, 0, W, GAME_HEIGHT);

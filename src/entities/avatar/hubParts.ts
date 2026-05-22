@@ -154,8 +154,13 @@ export function drawHubHat(x: CanvasRenderingContext2D, hat: string, cx: number,
   const pY = hy + s; // hat band sits at head top (matches hair level)
   switch (hat) {
     case 'cap':
-      x.fillRect(cx - 2 * s, pY - 2 * s, 4 * s, 1 * s);
-      x.fillRect(cx - 2 * s, pY - 1 * s, 2 * s, 0.5 * s);
+      // Dome — 1px wider each side + 1px taller down (matches room dome's
+      // full-head-width-and-1-above coverage).
+      x.fillRect(cx - 2 * s - 1, pY - 1 * s, 4 * s + 2, 1 * s + 1);
+      // Bill — sticks out the LEFT side of the face (forward-facing brim),
+      // not over the face itself. Mirror the room cap's "bill 3px past head
+      // edge" via 1s past the head left edge here.
+      x.fillRect(cx - 3 * s - 1, pY + 1,     3 * s,     0.5 * s);
       break;
     case 'beanie':
       x.fillRect(cx - 2 * s, pY - 3 * s + 1, 4 * s, 2 * s);
@@ -649,6 +654,7 @@ export function drawHubTop(
     tunic:       'top_tunic_hub',
     skindress:   'top_skindress_hub',
     knightchest: 'top_knightchest_hub',
+    pizzashirt:  'top_pizzashirt_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;

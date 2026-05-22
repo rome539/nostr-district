@@ -8,11 +8,11 @@ export interface AvatarConfig {
   skinColor: string;
   hair: 'none' | 'short' | 'mohawk' | 'long' | 'ponytail' | 'spiky' | 'buzz' | 'afro' | 'curtains' | 'mullet' | 'bun' | 'grease' | 'swept' | 'pigtails' | 'horseshoe' | 'part' | 'partbeard' | 'braid';
   hairColor: string;
-  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt' | 'camoshirt' | 'tunic' | 'skindress' | 'knightchest';
+  top: 'tshirt' | 'hoodie' | 'jacket' | 'tank' | 'dress' | 'vest' | 'trenchcoat' | 'croptop' | 'jersey' | 'longsleeve' | 'polo' | 'flannel' | 'bomber' | 'turtleneck' | 'robe' | 'bitcoinshirt' | 'ostrichshirt' | 'camoshirt' | 'tunic' | 'skindress' | 'knightchest' | 'pizzashirt';
   topColor: string;
   bottom: 'pants' | 'shorts' | 'skirt' | 'cargopants' | 'camopants' | 'overalls' | 'miniskirt' | 'jeans' | 'baggyjeans' | 'trousers' | 'utilitypants' | 'knightpants';
   bottomColor: string;
-  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'crown_purple' | 'crown_silver' | 'crown_bronze' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral' | 'knightsheadband';
+  hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'crown_purple' | 'crown_silver' | 'crown_bronze' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral' | 'knightsheadband' | 'pizzahat';
   hatColor: string;
   accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie' | 'ballon' | 'ballonbitcoin' | 'ballonostrich';
   accessoryColor: string;
@@ -51,9 +51,26 @@ let currentAvatar: AvatarConfig = { ...DEFAULT_AVATAR };
 
 export function getAvatar(): AvatarConfig { return { ...currentAvatar }; }
 
+const LOCAL_AVATAR_CHANGE_EVENT = 'nd-local-avatar-change';
+
 export function setAvatar(config: Partial<AvatarConfig>): AvatarConfig {
   currentAvatar = { ...currentAvatar, ...config };
+  try { window.dispatchEvent(new Event(LOCAL_AVATAR_CHANGE_EVENT)); } catch { /* SSR/test */ }
   return { ...currentAvatar };
+}
+
+/**
+ * Subscribe to changes to the local player's avatar (anything that calls
+ * `setAvatar` — wardrobe save, shop equip, outfit load, etc.). Returns an
+ * unsubscribe function; call it in scene shutdown to avoid stale handlers.
+ *
+ * Scenes use this to re-render the player sprite when the user changes their
+ * outfit from a panel that doesn't otherwise know which scene is active.
+ */
+export function onLocalAvatarChange(cb: () => void): () => void {
+  const handler = () => cb();
+  window.addEventListener(LOCAL_AVATAR_CHANGE_EVENT, handler);
+  return () => window.removeEventListener(LOCAL_AVATAR_CHANGE_EVENT, handler);
 }
 
 export function resetAvatar(): AvatarConfig {
@@ -87,7 +104,7 @@ export function deserializeAvatar(s: string): AvatarConfig | null {
 /** Available options for each slot */
 export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet', 'bun', 'grease', 'swept', 'pigtails', 'horseshoe', 'part', 'partbeard', 'braid'] as const,
-  top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'tunic', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe', 'skindress'] as const,
+  top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'tunic', 'pizzashirt', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe', 'skindress'] as const,
   bottom: ['pants', 'jeans', 'shorts', 'skirt', 'miniskirt', 'cargopants', 'camopants', 'overalls', 'baggyjeans', 'trousers', 'utilitypants'] as const,
   hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'crown', 'crown_purple', 'crown_silver', 'crown_bronze', 'wizard', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
   accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape', 'ostirchfloatie', 'ballon', 'ballonbitcoin', 'ballonostrich'] as const,

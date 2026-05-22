@@ -7,3 +7,4 @@ dist/
 *.docx
 *_orig.png
 *.aseprite
+vite.config.ts.timestamp-*

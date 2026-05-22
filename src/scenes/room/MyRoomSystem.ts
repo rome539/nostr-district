@@ -13,7 +13,7 @@ import { BookcaseModal } from '../../ui/BookcaseModal';
 import { CardTableModal } from '../../ui/CardTableModal';
 import { renderRoomSprite, renderHubSprite } from '../../entities/AvatarRenderer';
 import { getAvatar } from '../../stores/avatarStore';
-import { sendAvatarUpdate, sendNameUpdate, sendChat, setRoomRequestHandler, clearRoomRequestHandler } from '../../nostr/presenceService';
+import { sendAvatarUpdate, sendNameUpdate, sendChat, sendRoomConfigUpdate, setRoomRequestHandler, clearRoomRequestHandler } from '../../nostr/presenceService';
 import { SoundEngine } from '../../audio/SoundEngine';
 import { RoomIntro } from './RoomIntro';
 import { RoomRequestToast } from './RoomRequestToast';
@@ -572,7 +572,9 @@ export class MyRoomSystem {
       this.arrangeBtn?.setText('[Arrange]').setColor(P.teal);
       this.resetArrangeBtn?.setVisible(false);
       this.previewBtn?.setVisible(false);
-      publishRoomConfig(getRoomConfig());
+      const finalConfig = getRoomConfig();
+      publishRoomConfig(finalConfig);
+      sendRoomConfigUpdate(JSON.stringify(finalConfig));
       const cb = this.onArrangeExit;
       this.onArrangeExit = null;
       cb?.();
@@ -658,5 +660,39 @@ export class MyRoomSystem {
     if (sel.species === 'none') return;
     this.pet = new PetSprite();
     this.pet.create(this.ctx.scene, sel);
+  }
+
+  /**
+   * Apply a live room-config update from the owner (broadcast via the WS
+   * `room_config_update` channel) without restarting the scene. Owner side
+   * ignores this — they're already in sync via local commits.
+   *
+   * Re-renders the room background (walls / floor / lighting / ceiling),
+   * rebuilds furniture / posters, and swaps the pet if its species or breed
+   * changed (texture loading handled by `switchPet`).
+   */
+  applyRemoteRoomUpdate(json: string): void {
+    if (!this.ctx || this.ctx.isOwner) return;
+    let parsed: RoomConfig;
+    try { parsed = JSON.parse(json) as RoomConfig; }
+    catch (e) { console.warn('[MyRoomSystem] room_config_update parse failed:', e); return; }
+
+    const prev = this.parsedRoomConfig;
+    this.parsedRoomConfig = parsed;
+    this.hasBookcaseField = Array.isArray(parsed?.furniture) && parsed.furniture.includes('bookshelf');
+    if (!this.hasBookcaseField) this.setBookcasePromptVisible(false);
+    this.hasCardDeckField = Array.isArray(parsed?.furniture) && parsed.furniture.includes('carddeck');
+    if (!this.hasCardDeckField) this.setCardPromptVisible(false);
+
+    const { scene, roomId, neonColor, roomBgImage, roomRenderer } = this.ctx;
+    const texKey = roomRenderer.render(scene, roomId, neonColor, GAME_WIDTH, GAME_HEIGHT, parsed);
+    roomBgImage.setTexture(texKey);
+    this.buildForegroundImages(parsed);
+
+    const prevPet = prev?.pet ?? { species: 'none', breed: 1 };
+    const nextPet = parsed?.pet ?? { species: 'none', breed: 1 };
+    if (prevPet.species !== nextPet.species || prevPet.breed !== nextPet.breed) {
+      this.switchPet(nextPet);
+    }
   }
 }

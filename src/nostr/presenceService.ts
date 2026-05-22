@@ -19,6 +19,7 @@ export type PresenceCallback = {
   onCountUpdate: (count: number) => void;
   onChat: (pubkey: string, name: string, text: string, emojis?: { code: string; url: string }[]) => void;
   onAvatarUpdate?: (pubkey: string, avatar: string) => void;
+  onRoomConfigUpdate?: (pubkey: string, roomConfig: string) => void;
   onNameUpdate?: (pubkey: string, name: string) => void;
   onStatusUpdate?: (pubkey: string, status: string) => void;
   onOnlinePlayers?: (players: { pubkey: string; name: string; room: string }[]) => void;
@@ -278,6 +279,7 @@ export function connectPresence(cb: PresenceCallback): void {
         }
       }
       if (msg.type === 'avatar_update') callbacks?.onAvatarUpdate?.(msg.pubkey, msg.avatar);
+      if (msg.type === 'room_config_update') callbacks?.onRoomConfigUpdate?.(msg.pubkey, msg.roomConfig);
       if (msg.type === 'name_update') callbacks?.onNameUpdate?.(msg.pubkey, msg.name);
       if (msg.type === 'status_update') callbacks?.onStatusUpdate?.(msg.pubkey, msg.status);
 
@@ -400,6 +402,18 @@ export function sendRoomChange(room: string, x?: number, y?: number): void {
 export function sendAvatarUpdate(): void {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'avatar_update', avatar: serializeAvatar(getAvatar()) }));
+  }
+}
+
+/**
+ * Push the room owner's new RoomConfig JSON to every other player currently
+ * inside the owner's myroom. Server forwards via `room_config_update` and
+ * subscribers re-render furniture / walls / floors / pet without a scene
+ * restart. Fires from RoomTab Save and arrange-mode exit.
+ */
+export function sendRoomConfigUpdate(roomConfig: string): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'room_config_update', roomConfig }));
   }
 }
 

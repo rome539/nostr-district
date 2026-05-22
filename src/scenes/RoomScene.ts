@@ -16,7 +16,7 @@ import { showPlayerMenu } from '../ui/PlayerMenu';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RoomRenderer } from '../rooms/RoomRenderer';
 import { renderRoomSprite, renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
-import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, AvatarConfig } from '../stores/avatarStore';
+import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, onLocalAvatarChange, AvatarConfig } from '../stores/avatarStore';
 import { RoomConfig } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
 import { RoomFeedSystem } from './room/RoomFeedSystem';
@@ -121,15 +121,20 @@ export class RoomScene extends BaseScene {
     this.feedSystem.create(this, this.roomConfig.id);
 
     this.createPlayer();
-    onNextAvatarSync(() => {
+    const rerenderPlayerSprite = (broadcast = false) => {
       const av = getAvatar();
       if (this.textures.exists('player_room')) this.textures.remove('player_room');
       this.textures.addCanvas('player_room', renderRoomSprite(av));
       this.player?.setTexture('player_room');
       if (this.textures.exists('player')) this.textures.remove('player');
       this.textures.addCanvas('player', renderHubSprite(av));
-      sendAvatarUpdate();
-    });
+      if (broadcast) sendAvatarUpdate();
+    };
+    onNextAvatarSync(() => rerenderPlayerSprite(true));
+    // Shop-equip / outfit-load already call sendAvatarUpdate themselves, so the
+    // local-change handler only needs to refresh the sprite textures here.
+    const unsubLocalAvatar = onLocalAvatarChange(() => rerenderPlayerSprite(false));
+    this.events.once('shutdown', unsubLocalAvatar);
     this.createBackButton();
     this.createRoomLabel();
 
@@ -342,6 +347,22 @@ export class RoomScene extends BaseScene {
   protected override getBubbleYOffset(): number { return -135; }
   protected override clampPlayerMoveY(y: number): number { return Phaser.Math.Clamp(y, 320, 470); }
   protected override onPresenceCountUpdate(c: number): void { super.onPresenceCountUpdate(c); this.globalPlayerCount = c; }
+
+  /**
+   * Extend BaseScene's presence callbacks with a `onRoomConfigUpdate` handler
+   * so visitors see live changes when the room owner saves new furniture, wall
+   * theme, posters, lighting, pet, etc. without re-entering the room.
+   * Only accept updates from this room's actual owner — defense-in-depth on
+   * top of the server's room-scoped broadcast.
+   */
+  protected override buildPresenceCallbacks(myPubkey: string) {
+    const base = super.buildPresenceCallbacks(myPubkey);
+    base.onRoomConfigUpdate = (pk: string, roomConfig: string) => {
+      if (!this.roomConfig.ownerPubkey || pk !== this.roomConfig.ownerPubkey) return;
+      this.myRoom.applyRemoteRoomUpdate(roomConfig);
+    };
+    return base;
+  }
   protected override afterPlayerJoin(_p: { pubkey: string; [k: string]: unknown }): void {
     this.myRoom.onPlayerJoin();
     setRoomPlayers([...this.otherPlayers.entries()].map(([pk, o]) => ({ pubkey: pk, name: o.name })));
@@ -361,7 +382,7 @@ export class RoomScene extends BaseScene {
       const sats = parseInt(text.slice(5), 10);
       if (!isNaN(sats)) {
         const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite;
-        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000);
+        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000, undefined, isMe);
       }
       return true;
     }

@@ -13,6 +13,7 @@ import { drawForegroundItems } from '../../rooms/roomForeground';
 import { getPet, PetSelection, PetSpecies, DOG_BREEDS, CAT_BREEDS } from '../../stores/petStore';
 import { authStore } from '../../stores/authStore';
 import { publishRoomConfig } from '../../nostr/nostrService';
+import { sendRoomConfigUpdate } from '../../nostr/presenceService';
 import { t as ti18n } from '../../i18n/i18n';
 import { SoundEngine, MYROOM_TRACKS, MyRoomTrackId } from '../../audio/SoundEngine';
 import type { TabCtx } from './types';
@@ -335,6 +336,10 @@ export class RoomTab {
         this.ctx?.onRoomChange?.(committed);
         this.ctx?.onPetChange?.(this.draftRoom.pet);
         publishRoomConfig(committed);
+        // Live-broadcast to anyone currently visiting the room so they see the
+        // change without re-entering. Server only forwards to players in this
+        // owner's room (myroom:<owner>), so visitors elsewhere are unaffected.
+        sendRoomConfigUpdate(JSON.stringify(committed));
         this.previewSaved = true;
         this.previewBaseline = null;
         this.draftRoom = getRoomConfig();

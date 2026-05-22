@@ -145,7 +145,7 @@ export class ChatUI {
   }
 
   /** Add a message to the chat log */
-  addMessage(name: string, text: string, color: string, pubkey?: string, emojis?: { code: string; url: string }[]): void {
+  addMessage(name: string, text: string, color: string, pubkey?: string, emojis?: { code: string; url: string }[], isMe = false): void {
     const msg = document.createElement('div');
     msg.style.cssText = `margin-bottom:5px;line-height:1.4;padding:2px 0;`;
     const neonGlow = NEON_COLORS.has(color) ? `;text-shadow:0 0 6px ${color},0 0 12px ${color}88` : '';
@@ -162,9 +162,11 @@ export class ChatUI {
     this.showLog();
     this.scheduleHide(12000);
 
-    // Opportunistic translation — same path as the floating bubble. Re-renders
-    // the message body in-place with italic styling once the translator returns.
-    // Skipped for short system messages; emojis stay as-is (renderContent re-runs).
+    // Opportunistic translation — same path as the floating bubble. Skip when
+    // the message is from the local user: they typed it, they know what they
+    // meant, and auto-translating their own text (e.g. "OG" → some foreign
+    // word) makes it look like the chat is censoring or mangling them.
+    if (isMe) return;
     maybeTranslate(text).then((res) => {
       if (!res || !msg.isConnected) return;
       const body = msg.querySelector('.cu-msg-body') as HTMLElement | null;
@@ -257,7 +259,7 @@ export class ChatUI {
   }
 
   /** Create a speech bubble above a position in a Phaser scene */
-  static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000, emojis?: { code: string; url: string }[]): void {
+  static showBubble(scene: Phaser.Scene, bx: number, by: number, text: string, tint: string, lifetime = 4000, emojis?: { code: string; url: string }[], isMe = false): void {
     if (isGifUrl(text.trim())) {
       lifetime = 10000;
       // World coords fixed at moment of posting — bubble stays in place as player walks away
@@ -375,12 +377,16 @@ export class ChatUI {
 
     // Opportunistic on-device translation. Renders the original immediately
     // (above), then swaps the text + italicizes it once Chrome's Translator
-    // API returns. Safe on unsupported browsers — `maybeTranslate` no-ops.
-    maybeTranslate(truncated).then((res) => {
-      if (!res || !bubbleText.active) return;
-      const trCapped = res.translated.length > 80 ? res.translated.slice(0, 80) + '…' : res.translated;
-      bubbleText.setText(trCapped);
-      bubbleText.setFontStyle('italic');
-    }).catch(() => { /* never throws, but belt-and-braces */ });
+    // API returns. Skip for the local user — they typed it, no need to
+    // auto-translate their own bubble (and "OG"-style short tokens can get
+    // mistranslated into something unintended).
+    if (!isMe) {
+      maybeTranslate(truncated).then((res) => {
+        if (!res || !bubbleText.active) return;
+        const trCapped = res.translated.length > 80 ? res.translated.slice(0, 80) + '…' : res.translated;
+        bubbleText.setText(trCapped);
+        bubbleText.setFontStyle('italic');
+      }).catch(() => { /* never throws, but belt-and-braces */ });
+    }
   }
 }

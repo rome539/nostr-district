@@ -694,6 +694,57 @@ export interface UserNote {
  * Fetch a user's recent kind 1 notes, kind 6 reposts, and quote-reposts.
  * Returns up to `limit` events sorted newest-first.
  */
+/**
+ * Returned by `fetchUserActivity` — one entry per event the user has signed
+ * (or had signed on their behalf) in the recent window. Includes only public
+ * relay-stored data; encrypted DMs show up as their kind but content is opaque.
+ */
+export interface UserActivityEntry {
+  id:        string;
+  kind:      number;
+  content:   string;
+  tags:      string[][];
+  createdAt: number;
+}
+
+/**
+ * Fetch every event authored by `pubkey` within the last `days` days,
+ * across whatever kinds the relays return. Used by Settings → Activity Log
+ * to show the user what's actually been published with their key — the
+ * canonical view rather than a local cache.
+ *
+ * Relays may not return everything (rate limits, individual relays missing
+ * specific kinds), but across our default relay set this is usually within
+ * a few of complete for normal usage.
+ */
+export async function fetchUserActivity(pubkey: string, days = 7): Promise<UserActivityEntry[]> {
+  if (!pool) await loadNostrTools();
+  const since = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+  try {
+    const events: any[] = await pool.querySync(RELAYS, {
+      authors: [pubkey],
+      since,
+    });
+    // Deduplicate by event id (relays may return the same event multiple times)
+    const byId = new Map<string, any>();
+    for (const ev of events) {
+      if (ev?.id && !byId.has(ev.id)) byId.set(ev.id, ev);
+    }
+    return [...byId.values()]
+      .sort((a, b) => b.created_at - a.created_at)
+      .map((ev): UserActivityEntry => ({
+        id:        ev.id,
+        kind:      ev.kind,
+        content:   typeof ev.content === 'string' ? ev.content : '',
+        tags:      Array.isArray(ev.tags) ? ev.tags : [],
+        createdAt: ev.created_at,
+      }));
+  } catch (e) {
+    console.warn('[Nostr] fetchUserActivity failed:', e);
+    return [];
+  }
+}
+
 export async function fetchUserNotes(pubkey: string, limit = 20): Promise<UserNote[]> {
   if (!pool) await loadNostrTools();
   try {

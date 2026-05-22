@@ -8,6 +8,7 @@
 import { authStore } from './authStore';
 import { isAuraUnlocked, checkGoldUnlock } from './auraUnlockStore';
 import { isFishingItemUnlocked } from './fishingUnlockStore';
+import { isPizzaHatUnlocked } from './pizzaDayUnlockStore';
 
 const OWNER_PUBKEYS = new Set([
   '5069ea44d8977e77c6aea605d0c5386b24504a3abd0fe8a3d1cf5f4cedca40a7',
@@ -118,6 +119,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },
   { id: 'top_tunic',       name: 'Tunic',            slot: 'top',       value: 'tunic',          price: 0.50, tier: 'basic' },
   { id: 'top_skindress',   name: 'Skin Dress',       slot: 'top',       value: 'skindress',      price: 0.50, tier: 'basic' },
+  { id: 'top_pizzashirt',  name: 'Pizza Shirt',      slot: 'top',       value: 'pizzashirt',     price: 0.50, tier: 'basic' },
   // { id: 'top_knightchest', name: 'Knight Chest',     slot: 'top',       value: 'knightchest',    price: 1.50, tier: 'premium' },
   // ── Bottoms ───────────────────────────────────────────────────────────────────
   { id: 'bot_camopants',   name: 'Camo Pants',       slot: 'bottom',    value: 'camopants',      price: 0.50, tier: 'basic' },
@@ -248,6 +250,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'fur_djtable',         name: 'DJ Table',          slot: 'furniture', value: 'djtable',         price: 2.00, tier: 'rare',   subcat: 'tech',   hidden: true },
   { id: 'fur_ufopinup',        name: 'UFO Pin-Up',        slot: 'furniture', value: 'ufopinup',        price: 0.50, tier: 'basic',  subcat: 'tech'   },
   { id: 'fur_nostrsign',       name: 'NOSTR Sign',        slot: 'furniture', value: 'nostrsign',       price: 0.50, tier: 'basic',   subcat: 'tech'   },
+  // ── Seasonal unlocks ────────────────────────────────────────────────────────
+  // Bitcoin Pizza Day (May 22): granted on login during the anniversary.
+  { id: 'hat_pizzahat',         name: 'Pizza Hat',          slot: 'hat',       value: 'pizzahat',        price: 0, tier: 'rare', earn: true, hidden: true },
   // ── Fishing unlocks (earned by catching legendary fish) ─────────────────────
   { id: 'hat_fishhat',          name: 'Fish Hat',           slot: 'hat',       value: 'fishhat',         price: 0, tier: 'rare', earn: true, hidden: true },
   { id: 'bot_fishnet',          name: 'Fish Net Bottoms',   slot: 'bottom',    value: 'fishnet',         price: 0, tier: 'rare', earn: true, hidden: true },
@@ -316,6 +321,8 @@ export function isOwned(slot: string, value: string): boolean {
   if (OWNER_PUBKEYS.has(pubkey)) return true;
   if (MANUAL_GRANTS[pubkey]?.includes(key)) return true;
   if (EARN_KEYS.has(key)) {
+    // Pizza hat is a special seasonal unlock (May 22 login), not a fishing reward.
+    if (slot === 'hat' && value === 'pizzahat') return isPizzaHatUnlocked(pubkey);
     if (slot === 'hat' || slot === 'bottom' || slot === 'furniture') return isFishingItemUnlocked(value);
     return isAuraUnlocked(value);
   }
