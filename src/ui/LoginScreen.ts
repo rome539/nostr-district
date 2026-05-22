@@ -111,6 +111,17 @@ export class LoginScreen {
       this._bindLoginBoxEvents();
     }
 
+    // Swap the Bitcoin Pizza Day banner too — it sits OUTSIDE .login-wrapper
+    // (top-left fixed-position sibling), so the wrapper swap above misses it.
+    // Re-bind its click / outside-click / Escape handlers since the new DOM
+    // node has no listeners attached.
+    const newPizza = tmp.querySelector('#login-pizza-day');
+    const oldPizza = this.container.querySelector('#login-pizza-day');
+    if (newPizza && oldPizza) {
+      oldPizza.replaceWith(newPizza);
+      this._bindPizzaDay();
+    }
+
     // Reflect the new active language in the dropdown without rebuilding it
     // (which would also discard our outside-click listener and the open/closed
     // state).
@@ -359,33 +370,20 @@ export class LoginScreen {
            appears in the week around the anniversary. -->
       ${this.shouldShowPizzaDay() ? `
         <div class="login-pizza-day" id="login-pizza-day">
-          <button class="login-pizza-trigger" id="login-pizza-trigger" aria-expanded="false" aria-controls="login-pizza-info" aria-label="Bitcoin Pizza Day — click for details">
+          <button class="login-pizza-trigger" id="login-pizza-trigger" aria-expanded="false" aria-controls="login-pizza-info" aria-label="${this.esc(t('login.pizza_day.aria_label'))}">
             <span class="login-pizza-emoji" aria-hidden="true">🍕</span>
             <div class="login-pizza-text">
-              <div class="login-pizza-title">BITCOIN PIZZA DAY</div>
-              <div class="login-pizza-sub">May 22 · 10,000 BTC ↔ 2 🍕 · ${this.pizzaYears()} years</div>
+              <div class="login-pizza-title">${this.esc(t('login.pizza_day.title'))}</div>
+              <div class="login-pizza-sub">${this.esc(t('login.pizza_day.sub', { n: this.pizzaYears() }))}</div>
             </div>
             <span class="login-pizza-chevron" aria-hidden="true">▾</span>
           </button>
           <div id="login-pizza-info" class="login-pizza-info" hidden>
-            <p>
-              On <strong>May 22, 2010</strong>, programmer <strong>Laszlo Hanyecz</strong>
-              posted on the BitcoinTalk forum offering <strong>10,000 BTC</strong> for two
-              pizzas. Jeremy Sturdivant accepted, ordered two Papa John's pies (~$41 USD
-              at the time), and the first documented real-world Bitcoin transaction
-              was complete.
-            </p>
-            <p>
-              Today those 10,000 BTC would be worth hundreds of millions — a number that
-              shifts every market open. Bitcoiners celebrate the anniversary every May 22
-              as a reminder of where the currency started and how far it's traveled.
-            </p>
-            <p class="login-pizza-extra">
-              Happy ${this.pizzaYears()}th Pizza Day. Stay humble, stack sats,
-              and grab a slice today.
-            </p>
+            <p>${t('login.pizza_day.p1')}</p>
+            <p>${t('login.pizza_day.p2')}</p>
+            <p class="login-pizza-extra">${this.esc(t('login.pizza_day.extra', { n: this.pizzaYears() }))}</p>
             <a href="https://bitcointalk.org/index.php?topic=137.0" target="_blank" rel="noopener noreferrer" class="login-pizza-link">
-              Read the original forum thread ↗
+              ${this.esc(t('login.pizza_day.link'))}
             </a>
           </div>
         </div>

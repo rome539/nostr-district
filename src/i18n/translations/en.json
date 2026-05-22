@@ -38,6 +38,14 @@
 
   "login.lang_label": "Display language",
 
+  "login.pizza_day.title":      "BITCOIN PIZZA DAY",
+  "login.pizza_day.sub":        "May 22 · 10,000 BTC ↔ 2 🍕 · {n} years",
+  "login.pizza_day.aria_label": "Bitcoin Pizza Day — click for details",
+  "login.pizza_day.p1":         "On <strong>May 22, 2010</strong>, programmer <strong>Laszlo Hanyecz</strong> posted on the BitcoinTalk forum offering <strong>10,000 BTC</strong> for two pizzas. Jeremy Sturdivant accepted, ordered two Papa John's pies (~$41 USD at the time), and the first documented real-world Bitcoin transaction was complete.",
+  "login.pizza_day.p2":         "Today those 10,000 BTC would be worth hundreds of millions — a number that shifts every market open. Bitcoiners celebrate the anniversary every May 22 as a reminder of where the currency started and how far it's traveled.",
+  "login.pizza_day.extra":      "Happy {n}th Pizza Day. Stay humble, stack sats, and grab a slice today.",
+  "login.pizza_day.link":       "Read the original forum thread ↗",
+
   "settings.appearance":       "APPEARANCE",
   "settings.language":         "LANGUAGE",
   "settings.nostr_theme":      "NOSTR THEME",
