@@ -225,7 +225,22 @@ export class FollowsPanel {
     const online: FollowEntry[] = [];
     const offline: FollowEntry[] = [];
     for (const f of all) {
-      (this.onlinePubkeys.has(f.pubkey) ? online : offline).push(f);
+      if (this.onlinePubkeys.has(f.pubkey)) {
+        // If the kind:0 fetch returned no usable name (still the truncated
+        // pubkey fallback), use the WS-provided session name so online
+        // follows don't render as "1ec45473…".
+        const fallback = f.pubkey.slice(0, 8) + '...';
+        if (f.displayName === fallback) {
+          const op = this.onlinePlayers.find(p => p.pubkey === f.pubkey);
+          if (op?.name && op.name !== fallback) {
+            online.push({ ...f, displayName: op.name });
+            continue;
+          }
+        }
+        online.push(f);
+      } else {
+        offline.push(f);
+      }
     }
     return { online, offline };
   }

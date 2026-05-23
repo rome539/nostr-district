@@ -16,6 +16,7 @@ import { publishRoomConfig } from '../../nostr/nostrService';
 import { sendRoomConfigUpdate } from '../../nostr/presenceService';
 import { t as ti18n } from '../../i18n/i18n';
 import { SoundEngine, MYROOM_TRACKS, MyRoomTrackId } from '../../audio/SoundEngine';
+import { subscribeToLiveStream, getAllLiveStreams, refreshLiveStream } from '../../nostr/liveStreamService';
 import type { TabCtx } from './types';
 
 function esc(s: string): string {
@@ -430,6 +431,12 @@ export class RoomTab {
       this._initFurPreview();
     } else {
       this._destroyFurPreview();
+    }
+
+    // Tear down the live-stream subscription whenever we navigate away from
+    // the music section so we're not polling relays for no reason.
+    if (this.currentRoomSection !== 'music' && this.musicLiveUnsub) {
+      this.musicLiveUnsub(); this.musicLiveUnsub = null;
     }
 
     switch (this.currentRoomSection) {
@@ -998,61 +1005,101 @@ export class RoomTab {
     });
   }
 
+  /** Subscription teardown for the live-stream poll while the music tab is open. */
+  private musicLiveUnsub: (() => void) | null = null;
+
   private renderMusicPicker(container: HTMLElement): void {
     const snd = SoundEngine.get();
-    const allOptions: { id: MyRoomTrackId; label: string }[] = [
+
+    type TrackOpt = { id: MyRoomTrackId; label: string; sub?: string; isLive?: boolean };
+    const baseOptions: TrackOpt[] = [
       { id: 'off', label: 'Off' },
-      ...MYROOM_TRACKS,
+      ...MYROOM_TRACKS.map(t => ({ id: t.id as MyRoomTrackId, label: t.label })),
     ];
 
     const render = () => {
+      const liveStreams = getAllLiveStreams();
+      const liveOptions: TrackOpt[] = liveStreams.map(s => ({
+        id:    `live:${s.pubkey}:${s.channel}` as MyRoomTrackId,
+        label: s.title,
+        sub:   s.pubkey.slice(0, 8) + '…',
+        isLive: true,
+      }));
+      const allOptions = [...baseOptions, ...liveOptions];
+
+      const renderRow = (t: TrackOpt) => {
+        const active = t.id === snd.myRoomTrack;
+        const accent = t.isLive ? '#ff5b8a' : 'var(--nd-accent)';
+        const liveTag = t.isLive
+          ? `<span style="color:#ff5b8a;font-size:9px;font-weight:bold;letter-spacing:0.1em;border:1px solid color-mix(in srgb,#ff5b8a 60%,transparent);border-radius:3px;padding:1px 4px;margin-right:6px;">LIVE</span>`
+          : '';
+        return `
+          <div class="mu-track" data-trackid="${esc(t.id)}" style="
+            display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;
+            border:1px solid ${active ? accent : 'rgba(255,255,255,0.08)'};
+            background:${active ? `color-mix(in srgb,${accent} 18%,rgba(0,0,0,0.3))` : 'rgba(0,0,0,0.2)'};
+            transition:background 0.15s,border-color 0.15s;
+          ">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
+              background:${active ? accent : 'transparent'};
+              border:1px solid ${active ? accent : 'rgba(255,255,255,0.3)'};
+              box-shadow:${active ? `0 0 6px ${accent}` : 'none'};
+            "></span>
+            ${liveTag}
+            <div style="display:flex;flex-direction:column;min-width:0;">
+              <span style="color:${active ? accent : 'rgba(255,255,255,0.7)'};font-size:12px;">${esc(t.label)}</span>
+              ${t.sub ? `<span style="color:rgba(255,255,255,0.4);font-size:9px;">${esc(t.sub)}</span>` : ''}
+            </div>
+            ${active ? `<span style="color:${accent};font-size:10px;margin-left:auto;opacity:0.7;">${t.id === 'off' ? 'silent' : 'playing'}</span>` : ''}
+          </div>
+        `;
+      };
+
       container.innerHTML = `
         <div style="padding:8px 0;">
           <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:12px;">ROOM TRACK</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            ${allOptions.map(t => {
-              const active = t.id === snd.myRoomTrack;
-              return `
-                <div class="mu-track" data-trackid="${t.id}" style="
-                  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;
-                  border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.08)'};
-                  background:${active ? 'color-mix(in srgb,var(--nd-accent) 18%,rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.2)'};
-                  transition:background 0.15s,border-color 0.15s;
-                ">
-                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;
-                    background:${active ? 'var(--nd-accent)' : 'transparent'};
-                    border:1px solid ${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.3)'};
-                    box-shadow:${active ? '0 0 6px var(--nd-accent)' : 'none'};
-                  "></span>
-                  <span style="color:${active ? 'var(--nd-accent)' : 'rgba(255,255,255,0.6)'};font-size:12px;">${esc(t.label)}</span>
-                  ${active ? `<span style="color:var(--nd-accent);font-size:10px;margin-left:auto;opacity:0.7;">${t.id === 'off' ? 'silent' : 'playing'}</span>` : ''}
-                </div>
-              `;
-            }).join('')}
+            ${baseOptions.map(renderRow).join('')}
           </div>
+          ${liveOptions.length ? `
+            <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin:18px 0 10px;">LIVE NOW</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              ${liveOptions.map(renderRow).join('')}
+            </div>
+          ` : ''}
           <div style="color:var(--nd-subtext);font-size:10px;opacity:0.45;margin-top:14px;line-height:1.5;">
-            Music by Kevin MacLeod (incompetech.com)<br>Licensed under CC BY 4.0
+            Built-in tracks: Kevin MacLeod (incompetech.com), CC BY 4.0.<br>
+            Live tracks: NIP-53 broadcasts from the Lounge allowlist.
           </div>
         </div>
       `;
 
       container.querySelectorAll('.mu-track').forEach(el => {
-        (el as HTMLElement).addEventListener('mouseenter', () => {
-          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
-            (el as HTMLElement).style.background = 'color-mix(in srgb,var(--nd-dpurp) 12%,transparent)';
+        const e = el as HTMLElement;
+        e.addEventListener('mouseenter', () => {
+          if (e.dataset.trackid !== snd.myRoomTrack)
+            e.style.background = 'color-mix(in srgb,var(--nd-dpurp) 12%,transparent)';
         });
-        (el as HTMLElement).addEventListener('mouseleave', () => {
-          if ((el as HTMLElement).dataset.trackid !== snd.myRoomTrack)
-            (el as HTMLElement).style.background = 'transparent';
+        e.addEventListener('mouseleave', () => {
+          if (e.dataset.trackid !== snd.myRoomTrack)
+            e.style.background = 'rgba(0,0,0,0.2)';
         });
-        (el as HTMLElement).addEventListener('click', () => {
-          const tid = (el as HTMLElement).dataset.trackid as MyRoomTrackId;
+        e.addEventListener('click', () => {
+          const tid = e.dataset.trackid as MyRoomTrackId;
           snd.setMyRoomTrack(tid);
           this.ctx?.onMusicChange?.(tid);
           render();
         });
       });
     };
+
+    // Subscribe to live-stream updates so the picker re-renders as streams
+    // come/go live. Tear down any prior subscription if the tab is re-opened.
+    if (this.musicLiveUnsub) { this.musicLiveUnsub(); this.musicLiveUnsub = null; }
+    this.musicLiveUnsub = subscribeToLiveStream(() => render());
+    // Force an immediate refresh so the first paint shows live streams
+    // without waiting for the 30s poll.
+    refreshLiveStream();
 
     render();
   }

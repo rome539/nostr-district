@@ -16,7 +16,15 @@ export const MYROOM_TRACKS = [
   { id: 'hyperfun',label: 'Hyperfun',             url: `${BASE}Hyperfun.mp3`               },
 ] as const;
 
-export type MyRoomTrackId = typeof MYROOM_TRACKS[number]['id'] | 'off';
+/**
+ * MyRoom track identifier. Three forms:
+ *   - 'off'                  : silence
+ *   - <MYROOM_TRACKS id>     : built-in royalty-free MP3 loop
+ *   - 'live:<pubkey>:<channel>' : NIP-53 live stream from the Lounge's
+ *     allowlist. The URL is resolved at play time via liveStreamService
+ *     so the stream picker works across scene restarts.
+ */
+export type MyRoomTrackId = string;
 
 export class SoundEngine {
   private static _inst: SoundEngine | null = null;
@@ -32,6 +40,10 @@ export class SoundEngine {
   private ambNodes: AudioScheduledSourceNode[] = [];
   private streamEl: HTMLAudioElement | null = null;
   private _loopEl: HTMLAudioElement | null = null;
+  /** Active hls.js instance attached to {@link streamEl} when playing an HLS feed
+   *  (e.g. a NIP-53 lounge live stream). Null on native-HLS browsers (Safari/iOS)
+   *  or whenever the current stream isn't an `.m3u8`. */
+  private _hls: any = null;
   private _loopVol = 1.0;
   private bufferSrc: AudioBufferSourceNode | null = null;
   private _xfadeNodes: Array<{ src: AudioBufferSourceNode; gain: GainNode }> = [];
@@ -70,7 +82,9 @@ export class SoundEngine {
       if (typeof s.muted === 'boolean') this._muted  = s.muted;
     } catch {}
     const saved = localStorage.getItem(MYROOM_TRACK_KEY) as MyRoomTrackId | null;
-    if (saved === 'off' || MYROOM_TRACKS.some(t => t.id === saved)) this._myRoomTrack = saved!;
+    if (saved && (saved === 'off' || saved.startsWith('live:') || MYROOM_TRACKS.some(t => t.id === saved))) {
+      this._myRoomTrack = saved;
+    }
   }
 
   get audioUnlocked(): boolean { return this._audioUnlocked; }
@@ -221,21 +235,49 @@ export class SoundEngine {
     localStorage.setItem(MYROOM_TRACK_KEY, id);
     if (this.currentRoom === 'myroom') {
       this._stopStream();
-      if (id !== 'off') {
-        this._startStream(MYROOM_TRACKS.find(t => t.id === id)!.url);
-      }
+      this._playMyRoomTrack(id);
     }
   }
 
   /** Apply a track immediately while staying in myroom — used for visitor sync */
   applyMyRoomTrack(id: MyRoomTrackId): void {
+    // Idempotent: if we're already playing the same track, don't restart it.
+    // Prevents a brief audio cut when the owner receives their own
+    // /game:music: broadcast back from the server, or when a re-sync fires
+    // for the currently-playing track.
+    if (this._myRoomTrack === id && this.streamEl) return;
     this._myRoomTrack = id;
     if (this.currentRoom === 'myroom') {
       this._stopStream();
-      if (id !== 'off') {
-        this._startStream(MYROOM_TRACKS.find(t => t.id === id)!.url);
-      }
+      this._playMyRoomTrack(id);
     }
+  }
+
+  /** Route a MyRoom track id (off / mp3 / live:*) to the right audio path. */
+  private _playMyRoomTrack(id: MyRoomTrackId): void {
+    if (id === 'off') return;
+    if (id.startsWith('live:')) {
+      // Late import to avoid a circular dep at module-load time. Resolves
+      // the live stream URL from the cached pool and starts HLS playback.
+      // If the stream isn't currently live, the track is silently 'off'
+      // until the user picks something else.
+      import('../nostr/liveStreamService').then(({ getAllLiveStreams, refreshLiveStream }) => {
+        const tryStart = () => {
+          const [, pk, ch] = id.split(':');
+          const s = getAllLiveStreams().find(x => x.pubkey === pk && x.channel === ch);
+          if (s && this._myRoomTrack === id && this.currentRoom === 'myroom') {
+            this._startHlsStream(s.hlsUrl);
+          }
+        };
+        // First try the cached snapshot; if empty, force a refresh and try
+        // again so visitors entering cold still hear the stream.
+        if (getAllLiveStreams().length) tryStart();
+        else refreshLiveStream().then(tryStart);
+      });
+      return;
+    }
+    const mp3 = MYROOM_TRACKS.find(t => t.id === id);
+    if (mp3) this._startStream(mp3.url);
   }
 
   private _startStream(url: string): void {
@@ -247,6 +289,68 @@ export class SoundEngine {
     el.volume = this._muted ? 0 : this._ambVol;
     el.play().catch(() => {});
     this.streamEl = el;
+  }
+
+  /**
+   * Start an HLS (.m3u8) stream — used by the Lounge when a NIP-53 broadcast
+   * is live. Uses native playback on Safari/iOS and dynamic-imports hls.js
+   * everywhere else. Loops back to the source on EOF; if the stream is taken
+   * down mid-listen the player will just fail silently (caller should poll
+   * {@link liveStreamService} and stop the stream when status flips off-air).
+   *
+   * Live broadcasts don't loop — `loop=false`. Volume tracks the ambient bus
+   * so users can keep the music balance they're used to.
+   */
+  private async _startHlsStream(url: string, onError?: () => void): Promise<void> {
+    this._stopStream();
+    const el = new Audio();
+    el.disableRemotePlayback = true;
+    el.loop   = false;
+    // Live broadcasts are foreground music, not ambient — bump volume above
+    // the very-quiet ambient default (0.04) so the stream is actually audible.
+    el.volume = this._muted ? 0 : Math.min(1, Math.max(this._ambVol, 0.1));
+    this.streamEl = el;
+
+    // Notify caller at most once per HLS start so a single bad stream
+    // doesn't trigger repeated fallback cascades.
+    let errorReported = false;
+    const reportError = (why: string) => {
+      if (errorReported) return;
+      errorReported = true;
+      console.warn('[HLS]', why, 'url:', url);
+      try { onError?.(); } catch { /* */ }
+    };
+
+    el.addEventListener('error', () => {
+      // Skip the synthetic error fired by _stopStream() clearing src — that's
+      // teardown, not a real stream failure.
+      if ((el as any)._intentionalStop) return;
+      reportError(`audio element error code=${el.error?.code} msg=${el.error?.message ?? ''}`);
+    });
+
+    // Safari (desktop + iOS) plays HLS natively — no hls.js needed.
+    if (el.canPlayType('application/vnd.apple.mpegurl')) {
+      el.src = url;
+      el.play().catch(() => {});
+      return;
+    }
+
+    try {
+      const { default: Hls } = await import('hls.js');
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        this._hls = hls;
+        hls.loadSource(url);
+        hls.attachMedia(el);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { el.play().catch(() => {}); });
+        hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
+          if (data?.fatal) reportError(`fatal hls.js error: ${data?.details}`);
+        });
+        return;
+      }
+    } catch (_) { /* fall through to direct src as last resort */ }
+    el.src = url;
+    el.play().catch(() => {});
   }
 
   /** Gapless loop via Web Audio buffer — avoids MP3 encoder padding gap.
@@ -344,7 +448,17 @@ export class SoundEngine {
 
   private _stopStream(): void {
     this._stopBufferSrc();
+    if (this._hls) {
+      try { this._hls.destroy(); } catch { /* */ }
+      this._hls = null;
+    }
     if (this.streamEl) {
+      // Mark the element as intentionally stopping so the `error` listener
+      // attached in _startHlsStream skips its onError callback when we clear
+      // the src — otherwise the synthetic "src is empty" media error fires
+      // the now-stale onError closure, which would falsely mark the
+      // previously-playing stream as broken and cascade through the picker.
+      (this.streamEl as any)._intentionalStop = true;
       this.streamEl.pause();
       this.streamEl.src = '';
       this.streamEl = null;
@@ -826,6 +940,10 @@ export class SoundEngine {
     this._pendingBuffer = null;
     this._pendingBufferLoopAt = undefined;
     this._pendingBufferGainMult = 1.0;
+    // Reset the lounge audio-source cache on every room change so a re-entry
+    // refetches and re-attaches even when the cached URL hasn't changed.
+    this._loungeLiveSrc = null;
+    this._loungeAudioStarted = false;
     this.currentRoom = room;
     if (!room) return;
     if (room === 'hub') {
@@ -840,12 +958,17 @@ export class SoundEngine {
     } else if (room === 'alley') {
       this._startStreamGapless('/assets/audio/rain-alley.m4a', 'alley');
     } else if (room === 'lounge') {
-      this._startStream(`${BASE}Backbay%20Lounge.mp3`);
+      // Don't start any audio here — LoungeLiveBanner will call
+      // setLoungeLiveStream() with either the live HLS URL (if a streamer is
+      // broadcasting) or null (to play the default Backbay Lounge MP3).
+      // This avoids briefly starting the MP3 and then stopping it to swap to
+      // HLS, which races on some browsers and silences the audio element.
     } else if (room === 'myroom') {
-      if (this._myRoomTrack !== 'off') {
-        const track = MYROOM_TRACKS.find(t => t.id === this._myRoomTrack)!;
-        this._startStream(track.url);
-      }
+      // Intentionally don't auto-play here. RoomScene calls applyMyRoomTrack
+      // explicitly when it knows whether the player is the room owner (own
+      // saved track) or a visitor (wait for the owner's /game:music:
+      // broadcast). Auto-playing here would briefly play the visitor's own
+      // track in someone else's room before the broadcast arrives.
     } else {
       this._startAmbient(room);
     }
@@ -903,6 +1026,30 @@ export class SoundEngine {
     this.oscLoop(120, 'sine', 0.022); // neon tube hum
     this.oscLoop(240, 'sine', 0.010);
     this.oscLoop(360, 'sine', 0.005);
+  }
+
+  /**
+   * Swap the Lounge audio source. Pass an HLS URL while a NIP-53 broadcast
+   * is live; pass `null` to play the default Backbay Lounge track.
+   *
+   * The first call after entering the Lounge ALWAYS triggers a start (even
+   * for null), because `setRoom('lounge')` no longer auto-plays — it leaves
+   * the room silent until the banner decides which source to use. Subsequent
+   * calls with the same source are no-ops so we don't restart audio on every
+   * 30-second poll.
+   *
+   * Caller should only invoke this while {@link currentRoom} is 'lounge'.
+   */
+  private _loungeLiveSrc: string | null = null;
+  private _loungeAudioStarted = false;
+  setLoungeLiveStream(hlsUrl: string | null, onError?: () => void): void {
+    if (this.currentRoom !== 'lounge') return;
+    const desired = hlsUrl || null;
+    if (this._loungeAudioStarted && this._loungeLiveSrc === desired) return;
+    this._loungeAudioStarted = true;
+    this._loungeLiveSrc = desired;
+    if (desired) this._startHlsStream(desired, onError);
+    else         this._startStream(`${BASE}Backbay%20Lounge.mp3`);
   }
 
   /** Start the boot scene track (Neon Laser Horizon) — call once on first user gesture */

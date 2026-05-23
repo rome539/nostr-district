@@ -62,8 +62,9 @@ export const DEFAULT_RELAYS = [
   'wss://relay.coinos.io',
   'wss://relay.mostr.pub',
   'wss://relay1.nostrchat.io',
-  'wss://nostr-01.yakihonne.com',
-  'wss://nostr-02.yakihonne.com',
+  // yakihonne relays removed — they were flapping (repeated WS disconnects)
+  // and spamming the console with reconnect noise without contributing
+  // event coverage we don't already get from the others.
   'wss://relay.satlantis.io',
   'wss://relay.fountain.fm',
 ];

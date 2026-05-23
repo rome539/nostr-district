@@ -11,6 +11,8 @@ import { sendChat } from '../nostr/presenceService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { getSparkBalance, getSparkSdk } from '../nostr/sparkService';
 import { boltIcon } from './icons';
+// @ts-ignore — JS module, no types
+import { renderQR } from '../../nip46-bunker.js';
 
 const PRESETS = [21, 100, 500, 1000, 5000];
 const MODAL_ID = 'zap-modal';
@@ -98,21 +100,28 @@ export class ZapModal {
 
         <div id="zap-status" style="color:var(--nd-subtext);font-size:11px;text-align:center;min-height:16px;margin-bottom:10px;"></div>
 
-        <div id="zap-invoice-section" style="display:none;margin-bottom:12px;">
-          <button id="zap-open-wallet" style="
-            width:100%;padding:10px;border-radius:6px;cursor:pointer;margin-bottom:6px;
-            font-family:'Courier New',monospace;font-size:13px;font-weight:bold;
-            background:color-mix(in srgb,#f0b040 18%,transparent);
-            border:1px solid color-mix(in srgb,#f0b040 50%,transparent);
-            color:#f0b040;transition:all 0.12s;
-          "><span style="display:inline-flex;align-items:center;gap:6px;">${boltIcon(13)} ${ti18n('zap.open_wallet')}</span></button>
-          <button id="zap-copy-invoice" style="
-            width:100%;padding:8px;border-radius:5px;cursor:pointer;
-            font-family:'Courier New',monospace;font-size:11px;
-            background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
-            border:1px solid color-mix(in srgb,var(--nd-dpurp) 40%,transparent);
-            color:var(--nd-subtext);
-          ">${ti18n('zap.copy_invoice')}</button>
+        <div id="zap-invoice-section" style="display:none;margin-bottom:12px;flex-direction:column;align-items:center;gap:10px;">
+          <div id="zap-invoice-qr" style="
+            background:#fff;border-radius:10px;padding:10px;
+            display:flex;align-items:center;justify-content:center;
+            min-width:200px;min-height:200px;
+          "><span style="color:#888;font-size:12px;">Generating…</span></div>
+          <div style="display:flex;gap:8px;width:100%;">
+            <button id="zap-copy-invoice" style="
+              flex:1;padding:8px;border-radius:6px;cursor:pointer;
+              font-family:'Courier New',monospace;font-size:11px;font-weight:bold;
+              background:color-mix(in srgb,#f0b040 15%,transparent);
+              border:1px solid color-mix(in srgb,#f0b040 40%,transparent);
+              color:#f0b040;
+            ">${ti18n('zap.copy_invoice')}</button>
+            <button id="zap-open-wallet" style="
+              flex:1;padding:8px;border-radius:6px;cursor:pointer;
+              font-family:'Courier New',monospace;font-size:11px;font-weight:bold;
+              background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
+              border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
+              color:var(--nd-subtext);
+            ">${ti18n('zap.open_wallet')}</button>
+          </div>
         </div>
 
         <button id="zap-send" style="
@@ -227,7 +236,9 @@ export class ZapModal {
 
     openWalletBtn?.addEventListener('click', () => {
       if (!currentInvoice) return;
-      window.open(`lightning:${currentInvoice}`, '_self');
+      // _blank avoids navigating away from the game when the OS lightning
+      // handler doesn't intercept (matches MarketInvoice's behavior).
+      window.open(`lightning:${currentInvoice}`, '_blank');
     });
 
     copyBtn?.addEventListener('click', () => {
@@ -263,12 +274,17 @@ export class ZapModal {
 
       if (result.status === 'invoice' && result.invoice) {
         currentInvoice = result.invoice;
-        statusEl.textContent = 'No wallet connected — open directly or copy invoice';
+        statusEl.textContent = 'Scan QR or use your wallet — payment will settle on its own';
         statusEl.style.color = 'var(--nd-subtext)';
-        invoiceSection.style.display = 'block';
+        invoiceSection.style.display = 'flex';
         sendBtn.style.display = 'none';
-        // Auto-try opening the wallet immediately
-        window.open(`lightning:${result.invoice}`, '_self');
+        const qrWrap = modal.querySelector('#zap-invoice-qr') as HTMLElement;
+        if (qrWrap) {
+          try { renderQR(qrWrap, result.invoice, { size: 220 }); }
+          catch {
+            qrWrap.innerHTML = `<span style="color:#888;font-size:11px;word-break:break-all;padding:8px;">${result.invoice.slice(0, 40)}…</span>`;
+          }
+        }
         return;
       }
 

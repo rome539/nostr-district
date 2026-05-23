@@ -181,6 +181,12 @@ export class ProfileModal {
       modal.querySelector('#profile-close')?.addEventListener('click', () => destroyModal());
       const npubEl = modal.querySelector('#profile-copy-npub') as HTMLElement | null;
       if (npubEl && npubToCopy) {
+        // Capture the original styles so we can restore them exactly.
+        // `style.color = ''` would strip the inline color set in the template
+        // and let the element inherit a different color, making the npub
+        // chip look "off" after the copy feedback resolves.
+        const origColor   = npubEl.style.color;
+        const origOpacity = npubEl.style.opacity;
         npubEl.addEventListener('click', () => {
           navigator.clipboard.writeText(npubToCopy).then(() => {
             npubEl.textContent = '✓ copied';
@@ -188,8 +194,8 @@ export class ProfileModal {
             npubEl.style.opacity = '1';
             setTimeout(() => {
               npubEl.textContent = npubDisplayShort || npubToCopy.slice(0, 10) + '..';
-              npubEl.style.color = '';
-              npubEl.style.opacity = '';
+              npubEl.style.color   = origColor;
+              npubEl.style.opacity = origOpacity;
             }, 2000);
           }).catch(() => {});
         });

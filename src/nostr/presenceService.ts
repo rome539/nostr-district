@@ -282,6 +282,9 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'room_config_update') callbacks?.onRoomConfigUpdate?.(msg.pubkey, msg.roomConfig);
       if (msg.type === 'name_update') callbacks?.onNameUpdate?.(msg.pubkey, msg.name);
       if (msg.type === 'status_update') callbacks?.onStatusUpdate?.(msg.pubkey, msg.status);
+      if (msg.type === 'lounge_listeners' && onLoungeListeners) {
+        onLoungeListeners((msg as any).listeners || {});
+      }
 
       // Room request system — these use global handlers, not scene callbacks
       if (msg.type === 'room_request') onRoomRequest?.(msg.requesterPubkey, msg.requesterName);
@@ -427,6 +430,24 @@ export function sendStatusUpdate(status: string): void {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'status_update', status }));
   }
+}
+
+/**
+ * Lounge-only: tell the server which live stream we're listening to (or
+ * null to clear). The server tracks this per-player and broadcasts a
+ * `lounge_listeners` message to every lounge visitor so each client can
+ * show listener counts in the stream picker.
+ */
+export function sendLoungeListening(streamKey: string | null): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'lounge_listening_update', streamKey }));
+  }
+}
+
+type LoungeListenersHandler = (listeners: Record<string, string>) => void;
+let onLoungeListeners: LoungeListenersHandler | null = null;
+export function setLoungeListenersHandler(fn: LoungeListenersHandler | null): void {
+  onLoungeListeners = fn;
 }
 
 export function disconnectPresence(): void {

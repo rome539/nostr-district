@@ -103,6 +103,11 @@ wss.on('connection', (ws) => {
 
         broadcastToRoom(oldRoom, { type: 'leave', pubkey: myPubkey }, myPubkey);
 
+        // Clear lounge listening when leaving the lounge so visitors no
+        // longer see the departed player counted toward stream listeners.
+        const wasInLounge = oldRoom === 'lounge';
+        if (wasInLounge) (player as any).loungeListening = null;
+
         player.room = newRoom;
         player.x = msg.x || 400;
         player.y = msg.y || 348;
@@ -117,6 +122,9 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'players', room: newRoom, players: others }));
         broadcastToRoom(newRoom, { type: 'join', pubkey: myPubkey, name: player.name, x: player.x, y: player.y, avatar: player.avatar, status: player.status, room: newRoom }, myPubkey);
         broadcastCount();
+        // If they left the lounge OR just entered it, push fresh listener
+        // counts to the lounge crowd.
+        if (wasInLounge || newRoom === 'lounge') broadcastLoungeListeners();
       }
 
       // Request to enter someone's myroom
@@ -259,6 +267,18 @@ wss.on('connection', (ws) => {
         }
       }
 
+      // A Lounge visitor changed (or cleared) which live stream they're listening
+      // to. We track per-player and broadcast the full listener map to other
+      // Lounge visitors so they can render "N listeners" next to each stream.
+      // streamKey format: "<broadcasterPubkey>:<channel>" — null clears.
+      if (msg.type === 'lounge_listening_update' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (!player) return;
+        const k = typeof msg.streamKey === 'string' ? msg.streamKey.slice(0, 200) : null;
+        (player as any).loungeListening = k || null;
+        broadcastLoungeListeners();
+      }
+
       if (msg.type === 'name_update' && myPubkey && msg.name) {
         const player = players.get(myPubkey);
         if (player) {
@@ -300,7 +320,12 @@ wss.on('connection', (ws) => {
       }
 
       if (player) {
+        const wasInLounge = player.room === 'lounge';
         broadcastToRoom(player.room, { type: 'leave', pubkey: myPubkey }, null);
+        if (wasInLounge) {
+          (player as any).loungeListening = null;
+          broadcastLoungeListeners();
+        }
       }
       players.delete(myPubkey);
       broadcastCount();
@@ -331,6 +356,27 @@ function broadcastCount() {
   const data = JSON.stringify({ type: 'count', count });
   players.forEach((p) => {
     if (p.ws.readyState === WebSocket.OPEN) {
+      p.ws.send(data);
+    }
+  });
+}
+
+/**
+ * Push the current map of (pubkey → streamKey) for everyone in the Lounge
+ * to every Lounge visitor, so each client can render listener counts next
+ * to streams in its picker. Sent on lounge_listening_update and whenever a
+ * Lounge visitor leaves the room or disconnects.
+ */
+function broadcastLoungeListeners() {
+  const listeners: Record<string, string> = {};
+  players.forEach((p) => {
+    if (p.room === 'lounge' && (p as any).loungeListening) {
+      listeners[p.pubkey] = (p as any).loungeListening;
+    }
+  });
+  const data = JSON.stringify({ type: 'lounge_listeners', listeners });
+  players.forEach((p) => {
+    if (p.room === 'lounge' && p.ws.readyState === WebSocket.OPEN) {
       p.ws.send(data);
     }
   });

@@ -22,6 +22,7 @@ import { SoundEngine } from '../audio/SoundEngine';
 import { RoomFeedSystem } from './room/RoomFeedSystem';
 import { RoomRelaySystem } from './room/RoomRelaySystem';
 import { updateLoungeRoom } from './room/RoomLoungeSystem';
+import { LoungeLiveBanner } from '../ui/LoungeLiveBanner';
 import { updateBlinkingLEDs, updateCandleFlames, updateAmbient, updateLightingOverlay, updateFireplaceFlames, updateVoidStars } from './room/RoomAnimations';
 import { MyRoomSystem } from './room/MyRoomSystem';
 import { MarketRoomSystem } from './room/MarketRoomSystem';
@@ -72,6 +73,9 @@ export class RoomScene extends BaseScene {
   private globalPlayerCount = 1;
   private isLeavingRoom = false;
   private backBtnEl: HTMLButtonElement | null = null;
+  /** Lazily created when entering the Lounge — handles NIP-53 live stream
+   *  discovery, the LIVE banner UI, and swapping the lounge audio. */
+  private loungeLiveBanner: LoungeLiveBanner | null = null;
 
   constructor() { super({ key: 'RoomScene' }); }
 
@@ -136,7 +140,9 @@ export class RoomScene extends BaseScene {
     const unsubLocalAvatar = onLocalAvatarChange(() => rerenderPlayerSprite(false));
     this.events.once('shutdown', unsubLocalAvatar);
     this.createBackButton();
-    this.createRoomLabel();
+    // Lounge owns its top strip for the live-streamer banner — skip the
+    // generic room-name pill there so the two don't compete for space.
+    if (this.roomConfig.id !== 'lounge') this.createRoomLabel();
 
     this.chatUI = new ChatUI();
     this.chatInput = this.chatUI.create(`Chat in ${this.roomConfig.name}...`, this.roomConfig.neonColor, (cmd) => this.handleCommand(cmd));
@@ -193,6 +199,12 @@ export class RoomScene extends BaseScene {
     }
     const _roomSoundId = this.roomConfig.id.startsWith('myroom:') ? 'myroom' : this.roomConfig.id;
     SoundEngine.get().setRoom(_roomSoundId as any);
+    // SoundEngine no longer auto-plays for myroom. Owner starts their own
+    // saved track immediately for zero-latency music; visitors stay silent
+    // and pick up the owner's track when the /game:music: broadcast arrives.
+    if (this.roomConfig.id.startsWith('myroom:') && this.isOwner) {
+      SoundEngine.get().applyMyRoomTrack(SoundEngine.get().myRoomTrack);
+    }
 
     this.setupProfileSubscription();
 
@@ -204,6 +216,10 @@ export class RoomScene extends BaseScene {
     this.settingsPanel.create();
 
     if (this.roomConfig.id === 'relay') this.relaySystem.setup(this);
+    if (this.roomConfig.id === 'lounge') {
+      this.loungeLiveBanner = new LoungeLiveBanner();
+      this.loungeLiveBanner.mount();
+    }
 
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
@@ -212,6 +228,8 @@ export class RoomScene extends BaseScene {
       if (this.backBtnEl) { this.backBtnEl.remove(); this.backBtnEl = null; }
       this.feedSystem.destroy();
       this.relaySystem.destroy();
+      this.loungeLiveBanner?.unmount();
+      this.loungeLiveBanner = null;
       clearRoomKickHandler(this.roomKickHandler);
       clearRoomGrantedHandler(this.roomGrantedHandler);
       clearRoomDeniedHandler(this.roomDeniedHandler);
@@ -382,7 +400,9 @@ export class RoomScene extends BaseScene {
       const sats = parseInt(text.slice(5), 10);
       if (!isNaN(sats)) {
         const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite;
-        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000, undefined, isMe);
+        // Use the scene's bubble Y offset so the zap pill sits exactly where
+        // chat bubbles do (above the head), not at chest level.
+        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y + this.getBubbleYOffset(), `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000, undefined, isMe);
       }
       return true;
     }

@@ -14,7 +14,6 @@ import {
 } from '../nostr/emojiService';
 
 const PACK_RELAYS = [
-  'wss://relay.nostr.band',
   'wss://nos.lol',
   'wss://relay.damus.io',
   'wss://purplepag.es',

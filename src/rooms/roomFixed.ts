@@ -66,7 +66,7 @@ export function drawRelay(
   x.strokeStyle = nc; x.globalAlpha = 0.15; x.strokeRect(450, 30, 310, 265); x.globalAlpha = 1;
   r(460, 40, 290, 24, '#0a0818');
   x.fillStyle = nc; x.font = 'bold 11px monospace'; x.textAlign = 'center'; x.fillText('RELAY STATUS: CONNECTED', 605, 57);
-  const relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.nostr.band', 'wss://eden.nostr.land', 'wss://nostr.wine', 'wss://relay.mostr.pub'];
+  const relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://eden.nostr.land', 'wss://nostr.wine', 'wss://relay.mostr.pub'];
   relays.forEach((rl, i) => {
     const ry = 78 + i * 26;
     r(460, ry, 290, 20, i % 2 === 0 ? '#0a0818' : '#0c0a20');

@@ -25,9 +25,7 @@ export interface PollResults {
   totalVoters: number;
 }
 
-// relay.nostr.band indexes all event kinds — best for rare kinds like 1068
 const POLL_RELAYS = [
-  'wss://relay.nostr.band',
   'wss://nos.lol',
   'wss://relay.damus.io',
   'wss://purplepag.es',

@@ -315,7 +315,6 @@ const MNEMONIC_BACKUP_RELAYS = [
   'wss://nos.lol',
   'wss://relay.primal.net',
   'wss://offchain.pub',
-  'wss://relay.nostr.band',
   'wss://nostr.wine',
   'wss://relay.0xchat.com',
   'wss://nostr21.com',
