@@ -281,7 +281,7 @@ export function getWeeklySaleItem(): MarketItem {
 
 /** Returns the discounted price for the weekly sale item. */
 export function getSalePrice(item: MarketItem): number {
-  return Math.round(item.price * 0.75 * 100) / 100;
+  return Math.round(item.price * 0.65 * 100) / 100;
 }
 
 /** Returns how many days remain in the current sale week. */

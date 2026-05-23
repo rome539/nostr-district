@@ -2,7 +2,7 @@
  * MarketPanel.ts — In-game item shop
  *
  * Opens when the player presses [E] in the market room.
- * Paid items are unlocked by paying sats to roomyflag04@walletofsatoshi.com.
+ * Paid items are unlocked by paying sats to falsepancake303@walletofsatoshi.com.
  * Purchases are persisted to Nostr kind:30078.
  *
  * Preview rendering → src/ui/market/MarketPreview.ts
@@ -23,7 +23,7 @@ import { boltIcon } from './icons';
 import { t as ti18n } from '../i18n/i18n';
 
 const PANEL_ID    = 'market-panel';
-const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
+const STORE_LUD16 = 'falsepancake303@walletofsatoshi.com';
 
 const SLOT_LABEL_KEY: Record<string, string> = {
   hair:      'market.slot.hair', top:       'market.slot.top',   bottom:    'market.slot.bot',

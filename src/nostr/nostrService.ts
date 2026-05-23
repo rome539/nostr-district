@@ -115,7 +115,7 @@ export async function publishSparkAddress(pubkey: string, lud16: string): Promis
       kind: 30078,
       pubkey,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', SPARK_ADDR_D_TAG]],
+      tags: [['d', SPARK_ADDR_D_TAG], ['client', 'Nostr District']],
       content: JSON.stringify({ lud16 }),
     });
     const ok = await publishEvent(signed);
@@ -290,7 +290,7 @@ export async function fetchInventory(pubkey: string): Promise<string[] | null> {
   }
 }
 
-const STORE_LUD16 = 'roomyflag04@walletofsatoshi.com';
+const STORE_LUD16 = 'falsepancake303@walletofsatoshi.com';
 
 // All store nostr pubkeys ever used — add the old one here before switching lightning addresses
 // so receipts signed by previous providers are still honoured.
@@ -708,15 +708,17 @@ export interface UserActivityEntry {
 }
 
 /**
- * Fetch every event authored by `pubkey` within the last `days` days,
- * across whatever kinds the relays return. Used by Settings → Activity Log
- * to show the user what's actually been published with their key — the
- * canonical view rather than a local cache.
+ * Fetch every event authored by `pubkey` within the last `days` days that
+ * was signed via Nostr District (i.e. has `['client', 'Nostr District']` in
+ * its tags). Used by Settings → Activity Log to show only this app's
+ * activity, not the user's entire Nostr footprint.
  *
  * Relays may not return everything (rate limits, individual relays missing
  * specific kinds), but across our default relay set this is usually within
  * a few of complete for normal usage.
  */
+const ND_CLIENT_NAME = 'Nostr District';
+
 export async function fetchUserActivity(pubkey: string, days = 7): Promise<UserActivityEntry[]> {
   if (!pool) await loadNostrTools();
   const since = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
@@ -731,6 +733,16 @@ export async function fetchUserActivity(pubkey: string, days = 7): Promise<UserA
       if (ev?.id && !byId.has(ev.id)) byId.set(ev.id, ev);
     }
     return [...byId.values()]
+      .filter((ev): boolean => {
+        // Always include kind:0 profile events — ND doesn't tag those with a
+        // client name (it'd leak the app to every external profile reader),
+        // but they're still ND-originated activity worth showing.
+        if (ev.kind === 0) return true;
+        if (!Array.isArray(ev.tags)) return false;
+        return ev.tags.some((t: any) =>
+          Array.isArray(t) && t[0] === 'client' && t[1] === ND_CLIENT_NAME
+        );
+      })
       .sort((a, b) => b.created_at - a.created_at)
       .map((ev): UserActivityEntry => ({
         id:        ev.id,

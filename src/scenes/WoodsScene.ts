@@ -1479,7 +1479,7 @@ export class WoodsScene extends BaseScene {
 
   private reelIn(): void {
     const table = WoodsScene.FISH_TABLE;
-    // Weighted: 0.15% legendary, 15% junk, 25% rare, 59.85% common
+    // Weighted: 0.15% legendary, 24.85% junk, 25% rare, 50% common
     const roll = Math.random();
     let catch_: typeof table[number];
     if (roll < 0.0015) {
@@ -2043,6 +2043,19 @@ export class WoodsScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
   protected override showEmoteAsBubble(): boolean { return true; }
+  protected override handleSceneChatCommand(pk: string, _name: string, text: string, isMe: boolean): boolean {
+    // Render /zap:N as a bubble above the sender (same behavior as HubScene
+    // and RoomScene) instead of letting the raw command leak into chat.
+    if (text.startsWith('/zap:')) {
+      const sats = parseInt(text.slice(5), 10);
+      if (!isNaN(sats)) {
+        const sprite = isMe ? this.player : this.otherPlayers.get(pk)?.sprite;
+        if (sprite) ChatUI.showBubble(this, sprite.x, sprite.y - 48, `⚡ ${sats.toLocaleString()} sats`, '#f0b040', 3000, undefined, isMe);
+      }
+      return true;
+    }
+    return false;
+  }
   protected override handleSceneEsc(): boolean {
     if (this.telescopeOverlay) { this.closeTelescopeView(); return true; }
     return false;

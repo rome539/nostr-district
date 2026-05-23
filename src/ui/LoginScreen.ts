@@ -1,5 +1,6 @@
 import { P } from '../config/game.config';
 import { t, getCurrentLang, setLang, onLangChange } from '../i18n/i18n';
+import { getActiveHoliday, holidayYears, getHalvingLiveInfo, onHalvingLiveUpdate, getActiveHolidayTheme } from './holidayBanners';
 import { LoginInfo } from './LoginInfo';
 
 interface LoginBuilding {
@@ -88,9 +89,15 @@ export class LoginScreen {
     // translated string updates in one pass. We re-bind events too because
     // the new innerHTML drops all the existing listeners.
     this.unsubLang = onLangChange(() => this.rerender());
+
+    // Re-render when mempool.space's live halving data arrives so the banner
+    // subtitle swaps from "{n} years since the first" → "Xd · Y blocks
+    // until block reward halves" without a page refresh.
+    this.unsubHalving = onHalvingLiveUpdate(() => this.rerender());
   }
 
-  private unsubLang: (() => void) | null = null;
+  private unsubLang:    (() => void) | null = null;
+  private unsubHalving: (() => void) | null = null;
 
   /**
    * Surgical re-render on language change. We only swap the `.login-wrapper`
@@ -365,29 +372,11 @@ export class LoginScreen {
       <a href="https://github.com/rome539/nostr-district" target="_blank" rel="noopener noreferrer" class="open-source-link">${this.esc(t('login.open_source'))}</a>
       </div>
 
-      <!-- Bitcoin Pizza Day banner: pinned top-left, commemorates 2010-05-22.
-           Date-gated (May 22 ± a couple days for timezone slop) so it only
-           appears in the week around the anniversary. -->
-      ${this.shouldShowPizzaDay() ? `
-        <div class="login-pizza-day" id="login-pizza-day">
-          <button class="login-pizza-trigger" id="login-pizza-trigger" aria-expanded="false" aria-controls="login-pizza-info" aria-label="${this.esc(t('login.pizza_day.aria_label'))}">
-            <span class="login-pizza-emoji" aria-hidden="true">🍕</span>
-            <div class="login-pizza-text">
-              <div class="login-pizza-title">${this.esc(t('login.pizza_day.title'))}</div>
-              <div class="login-pizza-sub">${this.esc(t('login.pizza_day.sub', { n: this.pizzaYears() }))}</div>
-            </div>
-            <span class="login-pizza-chevron" aria-hidden="true">▾</span>
-          </button>
-          <div id="login-pizza-info" class="login-pizza-info" hidden>
-            <p>${t('login.pizza_day.p1')}</p>
-            <p>${t('login.pizza_day.p2')}</p>
-            <p class="login-pizza-extra">${this.esc(t('login.pizza_day.extra', { n: this.pizzaYears() }))}</p>
-            <a href="https://bitcointalk.org/index.php?topic=137.0" target="_blank" rel="noopener noreferrer" class="login-pizza-link">
-              ${this.esc(t('login.pizza_day.link'))}
-            </a>
-          </div>
-        </div>
-      ` : ''}
+      <!-- Seasonal holiday banner — pinned top-left when today falls inside
+           any holiday's date window. Pizza Day, Whitepaper Day, Genesis
+           Block Day, etc. all funnel through holidayBanners.ts so there's
+           no per-holiday code here. -->
+      ${this.renderHolidayBanner()}
 
       <!-- Language selector: pinned to the viewport's top-right. We use a
            custom dropdown instead of a native <select> because at the top of
@@ -405,20 +394,63 @@ export class LoginScreen {
   }
 
   /**
-   * Bitcoin Pizza Day window — show the banner from May 18 through May 25 each
-   * year so the celebration is visible for a few days around the anniversary
-   * (May 22, 2010 was the original 10,000-BTC-for-2-pizzas transaction).
+   * Render the active holiday banner (or '' if no holiday's in season).
+   * All theming is inlined as CSS custom properties so the static rules in
+   * applyStyles() can stay generic.
    */
-  private shouldShowPizzaDay(): boolean {
-    const now = new Date();
-    const month = now.getMonth() + 1; // 1-based
-    const day = now.getDate();
-    return month === 5 && day >= 18 && day <= 25;
-  }
-
-  /** Years since the original Pizza Day (2010-05-22). */
-  private pizzaYears(): number {
-    return new Date().getFullYear() - 2010;
+  private renderHolidayBanner(): string {
+    const holiday = getActiveHoliday();
+    if (!holiday) return '';
+    const years = holidayYears(holiday);
+    const theme = getActiveHolidayTheme(holiday);
+    // Halving has a live subtitle override pulled from mempool.space —
+    // shows "Xd · Y blocks until block reward halves" when the API has
+    // responded; otherwise falls back to the static "{n} years" sub.
+    let subOverride: string | null = null;
+    if (holiday.id === 'halving') {
+      const live = getHalvingLiveInfo();
+      if (live) {
+        subOverride = t('login.halving.sub_live', {
+          days:   Math.max(0, Math.ceil(live.daysLeft)),
+          blocks: live.blocksLeft.toLocaleString(),
+        });
+      }
+    }
+    const themeVars = [
+      `--hb-bg:${theme.bg}`,
+      `--hb-border:${theme.border}`,
+      `--hb-emoji-glow:${theme.emojiGlow}`,
+      `--hb-title:${theme.titleColor}`,
+      `--hb-text:${theme.textColor}`,
+      `--hb-sub:${theme.subColor}`,
+      `--hb-panel-bg:${theme.panelBg}`,
+      `--hb-panel-border:${theme.panelBorder}`,
+      `--hb-link:${theme.linkColor}`,
+      `--hb-strong:${theme.strongColor}`,
+      `--hb-extra:${theme.extraColor}`,
+    ].join(';');
+    const prefix = holiday.i18nPrefix;
+    const link = holiday.externalLink
+      ? `<a href="${this.esc(holiday.externalLink)}" target="_blank" rel="noopener noreferrer" class="login-holiday-link">${this.esc(t(`${prefix}.link`))}</a>`
+      : '';
+    return `
+      <div class="login-holiday" id="login-pizza-day" style="${themeVars}" data-holiday="${this.esc(holiday.id)}">
+        <button class="login-holiday-trigger" id="login-pizza-trigger" aria-expanded="false" aria-controls="login-pizza-info" aria-label="${this.esc(t(`${prefix}.aria_label`))}">
+          <span class="login-holiday-emoji" aria-hidden="true">${holiday.emoji}</span>
+          <div class="login-holiday-text">
+            <div class="login-holiday-title">${this.esc(t(`${prefix}.title`))}</div>
+            <div class="login-holiday-sub">${this.esc(subOverride ?? t(`${prefix}.sub`, { n: years }))}</div>
+          </div>
+          <span class="login-holiday-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="login-pizza-info" class="login-holiday-info" hidden>
+          <p>${t(`${prefix}.p1`)}</p>
+          <p>${t(`${prefix}.p2`)}</p>
+          <p class="login-holiday-extra">${this.esc(t(`${prefix}.extra`, { n: years }))}</p>
+          ${link}
+        </div>
+      </div>
+    `;
   }
 
   private static readonly LANGUAGES: { code: string; label: string }[] = [
@@ -489,84 +521,85 @@ export class LoginScreen {
           0 0 30px var(--nd-accent),
           0 0 60px var(--nd-accent);
       }
-      .login-pizza-day {
+      /* ── Holiday banner (top-left, theme-driven via --hb-* vars) ────────── */
+      .login-holiday {
         position: fixed; top: 16px; left: 18px; z-index: 50;
         font: inherit;
       }
-      .login-pizza-trigger {
+      .login-holiday-trigger {
         display: inline-flex; align-items: center; gap: 8px;
         padding: 6px 11px 6px 9px;
-        background: color-mix(in srgb, black 55%, #f0a030);
-        border: 1px solid color-mix(in srgb, #f0b040 60%, transparent);
+        background: var(--hb-bg);
+        border: 1px solid var(--hb-border);
         border-radius: 6px;
-        color: #ffd07a;
+        color: var(--hb-text);
         font: inherit; font-size: 9px;
         letter-spacing: 0.08em; line-height: 1.3;
         cursor: pointer;
         backdrop-filter: blur(4px);
         opacity: 0.85;
         box-shadow:
-          0 0 12px color-mix(in srgb, #f0a030 25%, transparent),
-          inset 0 0 8px color-mix(in srgb, #f0a030 15%, transparent);
-        animation: pizza-pulse 4s ease-in-out infinite;
+          0 0 12px var(--hb-emoji-glow),
+          inset 0 0 8px var(--hb-emoji-glow);
+        animation: holiday-pulse 4s ease-in-out infinite;
         transition: opacity 0.15s, border-color 0.15s;
       }
-      .login-pizza-trigger:hover,
-      .login-pizza-day.is-open .login-pizza-trigger {
+      .login-holiday-trigger:hover,
+      .login-holiday.is-open .login-holiday-trigger {
         opacity: 1;
-        border-color: color-mix(in srgb, #ffd07a 80%, transparent);
+        border-color: color-mix(in srgb, var(--hb-text) 80%, transparent);
       }
-      .login-pizza-emoji {
+      .login-holiday-emoji {
         font-size: 22px; line-height: 1;
-        filter: drop-shadow(0 0 6px color-mix(in srgb, #f0a030 55%, transparent));
+        filter: drop-shadow(0 0 6px var(--hb-emoji-glow));
       }
-      .login-pizza-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
-      .login-pizza-title {
-        color: #ffe098; font-weight: bold; font-size: 10px;
-        text-shadow: 0 0 6px color-mix(in srgb, #f0a030 60%, transparent);
+      .login-holiday-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+      .login-holiday-title {
+        color: var(--hb-title); font-weight: bold; font-size: 10px;
+        text-shadow: 0 0 6px var(--hb-emoji-glow);
       }
-      .login-pizza-sub {
-        color: #f4cb88; opacity: 0.85; font-size: 8px; letter-spacing: 0.04em;
+      .login-holiday-sub {
+        color: var(--hb-sub); opacity: 0.85; font-size: 8px; letter-spacing: 0.04em;
       }
-      .login-pizza-chevron {
-        color: #ffd07a; font-size: 10px; opacity: 0.8;
+      .login-holiday-chevron {
+        color: var(--hb-text); font-size: 10px; opacity: 0.8;
         transition: transform 0.2s;
       }
-      .login-pizza-day.is-open .login-pizza-chevron { transform: rotate(180deg); }
-      .login-pizza-info {
+      .login-holiday.is-open .login-holiday-chevron { transform: rotate(180deg); }
+      .login-holiday-info {
         margin-top: 6px;
         max-width: 320px;
         padding: 12px 14px;
-        background: color-mix(in srgb, black 75%, #f0a030);
-        border: 1px solid color-mix(in srgb, #f0b040 50%, transparent);
+        background: var(--hb-panel-bg);
+        border: 1px solid var(--hb-panel-border);
         border-radius: 6px;
-        color: #f4d5a0;
+        color: var(--hb-sub);
         font-size: 11px;
         letter-spacing: 0.02em;
         line-height: 1.55;
         backdrop-filter: blur(8px);
         box-shadow: 0 8px 28px rgba(0,0,0,0.6),
-                    0 0 14px color-mix(in srgb, #f0a030 18%, transparent);
-        animation: pizza-info-in 0.25s ease-out;
+                    0 0 14px var(--hb-emoji-glow);
+        animation: holiday-info-in 0.25s ease-out;
       }
-      .login-pizza-info[hidden] { display: none; }
-      .login-pizza-info p { margin: 0 0 8px 0; }
-      .login-pizza-info p:last-of-type { margin-bottom: 10px; }
-      .login-pizza-info strong { color: #ffe098; }
-      .login-pizza-extra { color: #ffc870; font-style: italic; }
-      .login-pizza-link {
+      .login-holiday-info[hidden] { display: none; }
+      .login-holiday-info p { margin: 0 0 8px 0; }
+      .login-holiday-info p:last-of-type { margin-bottom: 10px; }
+      .login-holiday-info strong { color: var(--hb-strong); }
+      .login-holiday-extra { color: var(--hb-extra); font-style: italic; }
+      .login-holiday-link {
         display: inline-block; margin-top: 2px;
-        color: #ffd07a; font-size: 10px; letter-spacing: 0.06em;
+        color: var(--hb-link); font-size: 10px; letter-spacing: 0.06em;
         text-decoration: none; opacity: 0.85;
-        text-shadow: 0 0 6px color-mix(in srgb, #f0a030 50%, transparent);
+        text-shadow: 0 0 6px var(--hb-emoji-glow);
         transition: opacity 0.15s;
       }
-      .login-pizza-link:hover { opacity: 1; text-decoration: underline; }
-      @keyframes pizza-pulse {
-        0%, 100% { box-shadow: 0 0 12px color-mix(in srgb, #f0a030 25%, transparent), inset 0 0 8px color-mix(in srgb, #f0a030 15%, transparent); }
-        50%      { box-shadow: 0 0 20px color-mix(in srgb, #f0a030 45%, transparent), inset 0 0 10px color-mix(in srgb, #f0a030 22%, transparent); }
+      .login-holiday-link:hover { opacity: 1; text-decoration: underline; }
+      @keyframes holiday-pulse {
+        0%, 100% { box-shadow: 0 0 12px var(--hb-emoji-glow), inset 0 0 8px var(--hb-emoji-glow); }
+        50%      { box-shadow: 0 0 20px var(--hb-emoji-glow), inset 0 0 10px var(--hb-emoji-glow); }
       }
-      @keyframes pizza-info-in {
+      @keyframes holiday-info-in {
         from { opacity: 0; transform: translateY(-4px); }
         to   { opacity: 1; transform: translateY(0);    }
       }
@@ -641,13 +674,13 @@ export class LoginScreen {
         .login-lang-btn { padding: 4px 7px; font-size: 10px; }
         .login-lang-current { min-width: 48px; }
         .login-lang-list { min-width: 130px; max-height: 50vh; }
-        .login-pizza-day { top: 10px; left: 10px; }
-        .login-pizza-trigger { padding: 4px 8px 4px 7px; gap: 6px; }
-        .login-pizza-emoji { font-size: 18px; }
-        .login-pizza-title { font-size: 9px; }
-        .login-pizza-sub { font-size: 7px; }
-        .login-pizza-info { max-width: calc(100vw - 24px); font-size: 10px; padding: 10px 12px; }
-        .login-pizza-link { font-size: 9px; }
+        .login-holiday { top: 10px; left: 10px; }
+        .login-holiday-trigger { padding: 4px 8px 4px 7px; gap: 6px; }
+        .login-holiday-emoji { font-size: 18px; }
+        .login-holiday-title { font-size: 9px; }
+        .login-holiday-sub { font-size: 7px; }
+        .login-holiday-info { max-width: calc(100vw - 24px); font-size: 10px; padding: 10px 12px; }
+        .login-holiday-link { font-size: 9px; }
       }
       .login-title {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
@@ -1893,7 +1926,8 @@ export class LoginScreen {
   destroy(): void {
     if (this.animFrameId !== null) cancelAnimationFrame(this.animFrameId);
     window.removeEventListener('resize', this.handleResize);
-    if (this.unsubLang) { this.unsubLang(); this.unsubLang = null; }
+    if (this.unsubLang)    { this.unsubLang();    this.unsubLang    = null; }
+    if (this.unsubHalving) { this.unsubHalving(); this.unsubHalving = null; }
     if (this._langDocClickHandler) {
       document.removeEventListener('click', this._langDocClickHandler);
       this._langDocClickHandler = null;
