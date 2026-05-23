@@ -14,13 +14,47 @@
  */
 import { DEFAULT_RELAYS } from './relayManager';
 
-/** Pubkeys (hex) we'll consider "live" if they publish a 30311 with status=live. */
-const ALLOWED_STREAMER_PUBKEYS = [
+/**
+ * Allowlisted streamers. Two forms:
+ *   - bare hex pubkey: every 30311 from that pubkey counts (self-hosted
+ *     artists who sign with their own key, e.g. Laan)
+ *   - `{ pubkey, dTag }`: only the matching (pubkey, d-tag) counts. Use
+ *     this for streams hosted on a shared signing platform like
+ *     zap.stream, where one pubkey signs many artists' 30311s and we want
+ *     just a specific channel rather than every guest broadcast.
+ */
+type AllowedStreamer = string | { pubkey: string; dTag: string };
+
+const ALLOWED_STREAMERS: AllowedStreamer[] = [
   '1ec454734dcbf6fe54901ce25c0c7c6bca5edd89443416761fadc321d38df139', // Laan Tungir
-  '55f04590674f3648f4cdc9dc8ce32da2a282074cd0b020596ee033d12d385185', // Nogood
   '5ca9371fa79503e2d162ef4a745ac61c557dcfbbc52780cce1871edb6e3bdbac', // additional streamer
   '05e60159f1e0a6cb64fa573fc1ebe35f985a975defe7d75603fdb9e8cfd38334', // additional streamer
+  // Nogood — hosted on zap.stream's signing pubkey; filter to the specific
+  // channel UUID so we don't pick up every other zap.stream broadcast.
+  { pubkey: 'cf45a6ba1363ad7ed213a078e710d24115ae721c9b47bd1ebf4458eaefb4c2a5',
+    dTag:   '537a365c-f1ec-44ac-af10-22d14a7319fb' },
 ];
+
+/** Unique list of pubkeys we'll query 30311 for. */
+const ALLOWED_STREAMER_PUBKEYS = [...new Set(
+  ALLOWED_STREAMERS.map(s => typeof s === 'string' ? s : s.pubkey)
+)];
+
+/**
+ * Whether an incoming (pubkey, dTag) pair passes the allowlist. A bare
+ * pubkey entry passes any d-tag; an entry with `dTag` only passes that
+ * exact channel.
+ */
+function isAllowed(pubkey: string, dTag: string): boolean {
+  for (const s of ALLOWED_STREAMERS) {
+    if (typeof s === 'string') {
+      if (s === pubkey) return true;
+    } else {
+      if (s.pubkey === pubkey && s.dTag === dTag) return true;
+    }
+  }
+  return false;
+}
 
 const POLL_INTERVAL_MS = 30_000;
 // Use the full DEFAULT_RELAYS list (not just the first 6) plus a handful of
@@ -151,11 +185,16 @@ function pickAllLiveStreams(events: any[]): LiveStream[] {
     if (!prev || ev.created_at > prev.created_at) newestByAddr.set(key, ev);
   }
 
-  // Of the newest revisions, keep only those flagged live.
+  // Of the newest revisions, keep only those flagged live AND that match
+  // the allowlist. For bare-pubkey allowlist entries, every channel passes.
+  // For (pubkey, dTag) entries, only the named channel passes — so
+  // shared-host pubkeys (zap.stream et al) don't drag in every guest stream.
   const liveOnly: any[] = [];
   for (const ev of newestByAddr.values()) {
     const status = ev.tags.find((t: any[]) => t[0] === 'status')?.[1];
-    if (status === 'live') liveOnly.push(ev);
+    if (status !== 'live') continue;
+    if (!isAllowed(ev.pubkey, ev.tags.find((t: any[]) => t[0] === 'd')?.[1] ?? '')) continue;
+    liveOnly.push(ev);
   }
   if (liveOnly.length === 0) return [];
 
