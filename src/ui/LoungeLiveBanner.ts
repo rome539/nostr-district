@@ -130,9 +130,15 @@ export class LoungeLiveBanner {
   }
 
   /**
-   * Resolve which stream to actually play right now:
-   *   1. The user's manual pick if it's still live AND not in {@link brokenStreams}
-   *   2. The service's auto-pick if it's not broken
+   * Resolve which stream to actually play right now. Sticky: once a stream
+   * is playing, we stay on it until it goes off-air or the user manually
+   * picks something else. Without this, every 30s poll could swap audio
+   * to whichever stream most-recently became "newest".
+   *
+   * Order of precedence:
+   *   1. The user's manual pick (or the previously-locked auto-pick) if
+   *      it's still live AND not in {@link brokenStreams}
+   *   2. The service's freshest auto-pick if it's not broken
    *   3. The next-newest live stream that isn't broken
    *   4. null (nobody usable is live)
    */
@@ -146,17 +152,18 @@ export class LoungeLiveBanner {
         s.channel === this.manualPick!.channel
       );
       if (pick) return pick;
-      // User's pick went off-air OR is broken — clear it and fall through
-      // to auto-pick. (If broken, the error handler already recorded the
-      // failure name; if just off-air, no "failed" hint is appropriate.)
+      // Picked stream went off-air OR is broken — clear and fall through
+      // to a fresh auto-pick. (If broken, the error handler already
+      // recorded the failure name; if off-air, no "failed" hint fires.)
       this.manualPick = null;
     }
 
-    // Auto-pick already prefers most-recently-started. Filter out broken
-    // ones and take the first healthy entry.
     const auto = getCurrentLiveStream();
-    if (auto && !this.brokenStreams.has(streamKey(auto))) return auto;
-    return healthy[0] ?? null;
+    const next = (auto && !this.brokenStreams.has(streamKey(auto))) ? auto : healthy[0] ?? null;
+    // Lock in whatever we chose so subsequent polls don't swap audio
+    // under the user when a different stream becomes "newest".
+    if (next) this.manualPick = { pubkey: next.pubkey, channel: next.channel };
+    return next;
   }
 
   /**
