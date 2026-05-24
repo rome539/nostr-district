@@ -12,6 +12,15 @@ import { SoundEngine } from './audio/SoundEngine';
 import { disconnectPresence } from './nostr/presenceService';
 import './stores/themeStore'; // init theme CSS vars early
 
+// PWA service worker — registers a no-op SW so Chrome/Edge consider the app
+// installable. We do NOT cache anything: the game is fully real-time and
+// offline play is not supported.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 // Graceful disconnect when the page is actually unloaded (tab close, navigate away).
 // e.persisted = true means the page entered the back-forward cache (iOS bfcache) —
 // we skip disconnect in that case so returning users reconnect cleanly.

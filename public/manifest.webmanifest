@@ -1,0 +1,21 @@
+{
+  "name": "Nostr District",
+  "short_name": "Nostr District",
+  "description": "A multiplayer pixel art social world built on Nostr.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0D0221",
+  "theme_color": "#0D0221",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["games", "social"],
+  "lang": "en"
+}
