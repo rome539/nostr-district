@@ -279,7 +279,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
 
   update(time: number, delta: number): void {
-    this.updateMovement(); this.updateProximity(); this.updateParallax();
+    this.updateMovement(delta); this.updateProximity(); this.updateParallax();
     this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
     this.updateChimneySmoke(delta);
 
@@ -625,7 +625,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   private generateWalkFrames(avatar = getAvatar()): void {
     for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
   }
-  private updateMovement(): void {
+  private updateMovement(delta: number): void {
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
@@ -652,7 +652,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (vx !== 0) {
       this.targetX = null;
       this.isMoving = false;
-      this.player.x += vx / 60;
+      this.player.x += vx * (delta / 1000);
       this.facingRight = vx > 0;
     } else if (this.isMoving && this.targetX !== null) {
       const dx = this.targetX - this.player.x;
@@ -660,7 +660,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
         this.isMoving = false;
         this.targetX = null;
       } else {
-        this.player.x += Math.sign(dx) * PLAYER_SPEED / 60;
+        this.player.x += Math.sign(dx) * PLAYER_SPEED * (delta / 1000);
         this.facingRight = dx > 0;
       }
     }

@@ -758,7 +758,7 @@ export class WoodsScene extends BaseScene {
   // UPDATE
   // ══════════════════════════════════════════════════════════════════
   update(time: number, delta: number): void {
-    this.updateMovement();
+    this.updateMovement(delta);
     this.parallaxBg.x = W / 2 - this.cameras.main.scrollX * 0.4;
     this.updateCampfire(time, delta);
     this.updateChimneySmoke(delta);
@@ -799,7 +799,7 @@ export class WoodsScene extends BaseScene {
     this.updateLocalNameColor(time, delta);
   }
 
-  private updateMovement(): void {
+  private updateMovement(delta: number): void {
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
@@ -816,7 +816,7 @@ export class WoodsScene extends BaseScene {
     if (vx !== 0) {
       this.targetX = null;
       this.isMoving = false;
-      this.player.x += vx / 60;
+      this.player.x += vx * (delta / 1000);
       this.facingRight = vx > 0;
     } else if (this.isMoving && this.targetX !== null) {
       const dx = this.targetX - this.player.x;
@@ -824,7 +824,7 @@ export class WoodsScene extends BaseScene {
         this.isMoving = false;
         this.targetX = null;
       } else {
-        this.player.x += Math.sign(dx) * PLAYER_SPEED / 60;
+        this.player.x += Math.sign(dx) * PLAYER_SPEED * (delta / 1000);
         this.facingRight = dx > 0;
       }
     }

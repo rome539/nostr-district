@@ -239,7 +239,7 @@ export class RoomScene extends BaseScene {
 
   // ── Update ──
   update(time: number, delta: number): void {
-    if (!this.myRoom.intro.isActive) this.updateMovement();
+    if (!this.myRoom.intro.isActive) this.updateMovement(delta);
     this.playerName.setPosition(this.player.x, this.player.y + 14);
     this.playerStatusText.setPosition(this.player.x, this.player.y + 26);
     this.player.setDepth(this.player.y);
@@ -598,7 +598,7 @@ export class RoomScene extends BaseScene {
   }
 
   // ── Movement ──
-  private updateMovement(): void {
+  private updateMovement(delta: number): void {
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0, vy = 0;
@@ -612,13 +612,13 @@ export class RoomScene extends BaseScene {
     }
     if (vx !== 0 || vy !== 0) {
       this.targetX = null; this.isMoving = false;
-      this.player.x = Math.round(this.player.x + vx / 60);
-      this.player.y = Math.round(this.player.y + vy / 60);
+      this.player.x = Math.round(this.player.x + vx * (delta / 1000));
+      this.player.y = Math.round(this.player.y + vy * (delta / 1000));
       if (vx !== 0) this.facingRight = vx > 0;
     } else if (this.isMoving && this.targetX !== null) {
       const dx = this.targetX - this.player.x;
       if (Math.abs(dx) < 3) { this.isMoving = false; this.targetX = null; }
-      else { this.player.x = Math.round(this.player.x + Math.sign(dx) * sp / 60); this.facingRight = dx > 0; }
+      else { this.player.x = Math.round(this.player.x + Math.sign(dx) * sp * (delta / 1000)); this.facingRight = dx > 0; }
     }
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, GAME_WIDTH - 40);
     this.player.y = Phaser.Math.Clamp(this.player.y, 320, 470);
