@@ -123,13 +123,22 @@ class RawRelayPool {
 
     publish(event) {
         const msg = JSON.stringify(['EVENT', event]);
-        let sent = 0;
-        for (const [, ws] of this._sockets) {
+        let sent = 0, queued = 0;
+        for (const [url, ws] of this._sockets) {
             if (ws.readyState === WebSocket.OPEN) {
                 try { ws.send(msg); sent++; } catch(e) {}
+            } else if (ws.readyState === WebSocket.CONNECTING) {
+                // Queue for later — without this, publishing before any relay
+                // finishes connecting silently drops the message (bunker URL
+                // login on mobile would hang waiting for a response that
+                // could never come because the request was never sent).
+                const q = this._queue.get(url) || [];
+                q.push(msg);
+                this._queue.set(url, q);
+                queued++;
             }
         }
-        console.log(`[NIP-46 WS] Published to ${sent} relays`);
+        console.log(`[NIP-46 WS] Published to ${sent} relays, queued for ${queued}`);
     }
 
     destroy() {
@@ -318,7 +327,9 @@ export class BunkerClient {
 
         this._rawPool = new RawRelayPool();
         this._rawPool.connect(relays);
-        await new Promise(r => setTimeout(r, 800));
+        // No arbitrary wait — subscribe() and publish() both queue messages
+        // for sockets still in CONNECTING state, so the REQ and EVENT will be
+        // sent in order as soon as each relay finishes opening.
 
         const since = Math.floor(Date.now() / 1000) - 300;
         const subId = 'nip46-bunker-' + randomHex(4);
