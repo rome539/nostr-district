@@ -396,9 +396,33 @@ async function fetchEncryptedMnemonic(pubkeyHex: string): Promise<FetchBackupRes
   return { status: 'error' };
 }
 
-async function getOrDeriveMnemonic(pubkeyHex: string, signer: SignerFn): Promise<string> {
+async function getOrDeriveMnemonic(pubkeyHex: string, signer: SignerFn, assumeNoBackup: boolean): Promise<string> {
+  // Brand-new account just created in this session — we KNOW no backup can
+  // exist for this pubkey on relays, so skip the strict relay check (which
+  // would otherwise abort wallet creation if MIN_CONFIRMATIONS relays don't
+  // confirm in time) and go straight to derive + publish.
+  if (assumeNoBackup) {
+    console.log('[Spark] assumeNoBackup=true, skipping relay backup check');
+    const mnemonic = await deriveMnemonicFromSigner(signer);
+    const published = await publishEncryptedMnemonic(mnemonic, pubkeyHex, signer);
+    if (!published) {
+      console.warn('[Spark] Backup publish failed for new account — wallet will work locally but may not sync across devices.');
+    }
+    return mnemonic;
+  }
+
   // Nostr is the single source of truth — no localStorage caching ever.
-  const fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
+  // Retry on 'error' status — relays are often slow on the very first
+  // connection of a session, and a single attempt can miss the
+  // MIN_CONFIRMATIONS threshold even when the user has no backup. Without
+  // this loop, existing Nostr users would frequently fail wallet creation
+  // on first district login and have to re-login to retry.
+  let fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
+  for (let attempt = 1; fromNostr.status === 'error' && attempt < 3; attempt++) {
+    console.log(`[Spark] Mnemonic fetch returned 'error' — retrying in ${attempt * 3}s (attempt ${attempt + 1}/3)`);
+    await new Promise(r => setTimeout(r, attempt * 3000));
+    fromNostr = await fetchEncryptedMnemonic(pubkeyHex);
+  }
 
   if (fromNostr.status === 'found') return fromNostr.mnemonic;
 
@@ -441,14 +465,23 @@ export function getSparkInitError(): string | null { return _initError; }
 // when it settles. Returns null if init hasn't been kicked off yet or is done.
 export function getSparkInitPromise(): Promise<void> | null { return _initPromise; }
 
-export function initSparkWallet(pubkeyHex: string, signer: SignerFn): Promise<void> {
-  console.log('[Spark] initSparkWallet called');
+/**
+ * @param assumeNoBackup  Skip the Nostr relay backup-check and derive a
+ * fresh mnemonic immediately. Pass `true` only when we KNOW this pubkey
+ * was just generated in this session (e.g. {@link loginWithNewAccount}) —
+ * there cannot be a pre-existing backup to overwrite. Prevents the
+ * first-login deadlock where flaky relays return fewer than
+ * {@link MIN_CONFIRMATIONS} EOSE-empty responses and the strict check
+ * throws instead of provisioning the wallet.
+ */
+export function initSparkWallet(pubkeyHex: string, signer: SignerFn, assumeNoBackup = false): Promise<void> {
+  console.log('[Spark] initSparkWallet called', assumeNoBackup ? '(assumeNoBackup)' : '');
   if (_initPromise) { console.log('[Spark] already initializing'); return _initPromise; }
-  _initPromise = _doInit(pubkeyHex, signer);
+  _initPromise = _doInit(pubkeyHex, signer, assumeNoBackup);
   return _initPromise;
 }
 
-async function _doInit(pubkeyHex: string, signer: SignerFn): Promise<void> {
+async function _doInit(pubkeyHex: string, signer: SignerFn, assumeNoBackup: boolean): Promise<void> {
   _initError = null;
   console.log('[Spark] API key present:', !!BREEZ_API_KEY, 'length:', BREEZ_API_KEY?.length ?? 0);
   if (!BREEZ_API_KEY) {
@@ -463,7 +496,7 @@ async function _doInit(pubkeyHex: string, signer: SignerFn): Promise<void> {
     await init();
     console.log('[Spark] WASM ready, getting/deriving mnemonic...');
 
-    const mnemonic   = await getOrDeriveMnemonic(pubkeyHex, signer);
+    const mnemonic   = await getOrDeriveMnemonic(pubkeyHex, signer, assumeNoBackup);
     const storageDir = storageDirFor(pubkeyHex);
     const config     = defaultConfig('mainnet');
     config.apiKey    = BREEZ_API_KEY;

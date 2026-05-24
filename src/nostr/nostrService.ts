@@ -485,7 +485,7 @@ export async function loginWithExtension(): Promise<void> {
   syncFromRelays(pubkey);
 }
 
-export async function loginWithNsec(nsecString: string, knownDisplayName?: string): Promise<void> {
+export async function loginWithNsec(nsecString: string, knownDisplayName?: string, isNewAccount = false): Promise<void> {
   if (!nsecString.startsWith('nsec1')) {
     throw new Error('Invalid nsec. Must start with nsec1');
   }
@@ -509,7 +509,9 @@ export async function loginWithNsec(nsecString: string, knownDisplayName?: strin
   // Init Spark wallet in background — derives the BIP39 mnemonic from a
   // deterministic signed Nostr event so any login method (nsec, passkey,
   // extension, bunker) can provision the same wallet for the same identity.
-  initSparkWallet(pubkey, signEvent).then(async () => {
+  // Pass isNewAccount through so freshly-generated accounts skip the strict
+  // relay backup-check (which would otherwise deadlock on slow relays).
+  initSparkWallet(pubkey, signEvent, isNewAccount).then(async () => {
     if (knownDisplayName) {
       ensureAndPublishSparkAddress(knownDisplayName, pubkey);
       return;
@@ -641,7 +643,9 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
 export async function loginWithNewAccount(nsecString: string, displayName: string): Promise<void> {
   // Pass the chosen name through so the in-game wallet's Lightning address
   // is registered as `<displayName>@breez.tips` instead of a pubkey fallback.
-  await loginWithNsec(nsecString, displayName);
+  // isNewAccount=true skips the wallet's relay backup-check so a slow first
+  // connection doesn't abort wallet provisioning for brand-new signups.
+  await loginWithNsec(nsecString, displayName, true);
   authStore.getState().nsec = nsecString;
   authStore.updateProfile({ name: displayName, display_name: displayName });
 
@@ -679,6 +683,9 @@ export async function loginAsGuest(): Promise<void> {
     profile: { name: `guest_${guestId}` },
     loginMethod: 'guest',
   });
+  // Intentionally no Spark wallet provisioning for guests — they're
+  // ephemeral by design. If they want a wallet, they upgrade to a real
+  // login (nsec, extension, bunker) and the wallet gets created then.
 }
 
 export interface UserNote {
