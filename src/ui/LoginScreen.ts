@@ -1473,7 +1473,23 @@ export class LoginScreen {
     });
 
     this.el('bunker-cancel').addEventListener('click', () => {
+      // Always cancel any in-flight bunker connection before navigating.
       if (this.onBunkerCancel) this.onBunkerCancel();
+
+      // Two-level navigation: if we're on the QR/URL paste sub-panel, step
+      // back to the picker (Remote Signer / Browser Extension / nsec) instead
+      // of exiting the bunker view entirely.
+      const onQrPanel = !this.el('bunker-qr-panel').classList.contains('hidden');
+      if (onQrPanel) {
+        this.el('bunker-qr-panel').classList.add('hidden');
+        this.el('bunker-options').classList.remove('hidden');
+        this.setBunkerStatus('');
+        (this.el('bunker-input') as HTMLInputElement).value = '';
+        this.el('bunker-uri-display').classList.add('hidden');
+        return;
+      }
+
+      // Otherwise we're already on the picker — back out to the main screen.
       this.el('login-bunker-view').classList.add('hidden');
       this.el('login-main').classList.remove('hidden');
       this.el('bunker-options').classList.remove('hidden');
@@ -1482,8 +1498,6 @@ export class LoginScreen {
       (this.el('nsec-accept') as HTMLInputElement).checked = false;
       this.el('nsec-input-wrap').classList.add('hidden');
       this.container.querySelector('.login-box')!.classList.remove('view-nostr');
-      // Clear the in-flight "Connecting..." state so re-entering the bunker
-      // view shows a clean slate instead of a stale connection attempt.
       this.setBunkerStatus('');
       (this.el('bunker-input') as HTMLInputElement).value = '';
       this.el('bunker-uri-display').classList.add('hidden');
