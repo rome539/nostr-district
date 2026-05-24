@@ -325,18 +325,26 @@ export class BunkerClient {
         let settled = false;
 
         return new Promise((resolve, reject) => {
+            // Expose the reject so cancel() can interrupt this in-flight connection
+            // instead of leaving the promise dangling forever when the user backs out.
+            this._cancelReject = (err) => {
+                if (settled) return;
+                settled = true;
+                this._cancelReject = null;
+                reject(err);
+            };
             this._rawPool.subscribe(subId, { kinds: [24133], '#p': [clientPk], since }, async (ev) => {
                 if (settled) return;
                 try {
                     const resp = JSON.parse(await nip44Decrypt(clientSk, ev.pubkey, ev.content));
                     if (resp.result === 'auth_url' && resp.error) { this.onAuthUrl(resp.error); return; }
                     if (resp.error && resp.result !== 'auth_url') {
-                        settled = true; this._rawPool.unsubscribe(subId);
+                        settled = true; this._cancelReject = null; this._rawPool.unsubscribe(subId);
                         this._connecting = false;
                         this.onStatusChange('error', resp.error);
                         reject(new Error(resp.error)); return;
                     }
-                    settled = true;
+                    settled = true; this._cancelReject = null;
                     this._rawPool.unsubscribe(subId);
                     try { this._userPk = await this._request('get_public_key'); }
                     catch (e) { this._userPk = signerPk; }
@@ -516,6 +524,12 @@ export class BunkerClient {
 
     cancel() {
         this._connecting = false;
+        // Reject any in-flight connect promise so awaiters can clean up
+        // instead of hanging forever.
+        if (this._cancelReject) {
+            const r = this._cancelReject; this._cancelReject = null;
+            r(new Error('cancelled'));
+        }
         if (this._rawPool) { this._rawPool.destroy(); this._rawPool = null; }
         this.onStatusChange('idle', 'Cancelled');
     }

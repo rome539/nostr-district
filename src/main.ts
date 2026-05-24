@@ -284,8 +284,11 @@ const loginScreen = new LoginScreen({
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
+      // If the user clicked Back mid-connect, onBunkerCancel already reset
+      // state — don't clobber it with the cancellation error.
+      if (e?.message === 'cancelled') return;
       loginInProgress = false;
-      loginScreen.setStatus(safeError(e), true);
+      loginScreen.setBunkerStatus(safeError(e));
     }
   },
   onBunkerClientFlow: async () => {

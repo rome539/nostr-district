@@ -630,7 +630,19 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     },
   });
 
-  const userPubkey = await bunkerClient.connectBunkerUrl(bunkerUrl);
+  // Race the connect against a 30s timeout — without this, an offline signer or
+  // bad URL leaves the user stuck on "Connecting..." with no feedback.
+  // Reject the race FIRST so the user sees the timeout message; then cancel()
+  // the client as cleanup (its synchronous 'cancelled' rejection of the inner
+  // promise is absorbed by the already-settled race).
+  const BUNKER_URL_TIMEOUT_MS = 30_000;
+  const userPubkey = await Promise.race([
+    bunkerClient.connectBunkerUrl(bunkerUrl),
+    new Promise<never>((_, reject) => setTimeout(() => {
+      reject(new Error('Bunker connection timed out — check the URL and that your signer is online'));
+      if (bunkerClient) bunkerClient.cancel();
+    }, BUNKER_URL_TIMEOUT_MS)),
+  ]);
   const npub = NostrTools.nip19.npubEncode(userPubkey);
 
   authStore.getState().login({ pubkey: userPubkey, npub, profile: {}, loginMethod: 'bunker' });

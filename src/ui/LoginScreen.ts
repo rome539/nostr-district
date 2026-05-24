@@ -1482,6 +1482,11 @@ export class LoginScreen {
       (this.el('nsec-accept') as HTMLInputElement).checked = false;
       this.el('nsec-input-wrap').classList.add('hidden');
       this.container.querySelector('.login-box')!.classList.remove('view-nostr');
+      // Clear the in-flight "Connecting..." state so re-entering the bunker
+      // view shows a clean slate instead of a stale connection attempt.
+      this.setBunkerStatus('');
+      (this.el('bunker-input') as HTMLInputElement).value = '';
+      this.el('bunker-uri-display').classList.add('hidden');
       this.setStatus('');
     });
 
