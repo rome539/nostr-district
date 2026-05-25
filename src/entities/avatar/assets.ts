@@ -234,10 +234,13 @@ export const itemImagesReady = Promise.all([
   loadItemImg('bottom_jeans_hub_2', 'assets/bottoms/jeanshub2.png'),
   loadItemImg('bottom_jeans_hub_3', 'assets/bottoms/jeanshub3.png'),
   loadItemImg('bottom_jeans_hub_4', 'assets/bottoms/jeanshub4.png'),
+  // Walk frames 2 and 4 swapped for the room sprite only — the source PNGs
+  // were exported with the leg-swing direction opposite to what body_room_N
+  // expects, which made the body's leg poke through the jeans during walk.
   loadItemImg('bottom_jeans_room_1', 'assets/bottoms/jeans1.png'),
-  loadItemImg('bottom_jeans_room_2', 'assets/bottoms/jeans2.png'),
+  loadItemImg('bottom_jeans_room_2', 'assets/bottoms/jeans4.png'),
   loadItemImg('bottom_jeans_room_3', 'assets/bottoms/jeans3.png'),
-  loadItemImg('bottom_jeans_room_4', 'assets/bottoms/jeans4.png'),
+  loadItemImg('bottom_jeans_room_4', 'assets/bottoms/jeans2.png'),
   // baggy jeans walk frames
   loadItemImg('bottom_baggyjeans_hub_1', 'assets/bottoms/baggyjeanshub1.png'),
   loadItemImg('bottom_baggyjeans_hub_2', 'assets/bottoms/baggyjeanshub2.png'),

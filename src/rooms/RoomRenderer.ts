@@ -89,6 +89,7 @@ export const PNG_FURNITURE_IDS = new Set<FurnitureId>([
   'endtable',
   'djtable',
   'ufopinup',
+  'radio',
 ]);
 
 // Asset paths for PNG furniture — defaults to assets/furniture/<id>.png if not listed
@@ -129,6 +130,7 @@ export const PNG_FURNITURE_PATHS: Partial<Record<FurnitureId, string>> = {
   endtable:           'assets/furniture/lounge/endtable.png',
   djtable:            'assets/furniture/tech/djtable.png',
   ufopinup:           'assets/furniture/tech/ufopinup.png',
+  radio:              'assets/furniture/tech/radio.png',
 };
 
 export type { CandleFlame };

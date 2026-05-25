@@ -288,6 +288,30 @@ wss.on('connection', (ws) => {
         }
       }
 
+      // Privacy-preserving player-to-player zap notification. The sender's
+      // wallet pays the recipient via direct Lightning (no kind:9734 published
+      // to relays — zero metadata leakage on the public network). The sender
+      // then notifies the server, which forwards a toast event to the
+      // recipient's socket. The server enriches with the sender's display name
+      // (from the players map) so the recipient can render "X zapped you N
+      // sats" without needing a kind:0 lookup.
+      if (msg.type === 'incoming_zap' && myPubkey) {
+        const recipientPk = typeof msg.recipientPk === 'string' ? msg.recipientPk : null;
+        const amountSats  = Math.floor(Number(msg.amountSats) || 0);
+        const comment     = typeof msg.comment === 'string' ? msg.comment.slice(0, 280) : '';
+        if (!recipientPk || recipientPk === myPubkey || amountSats <= 0) return;
+        const sender    = players.get(myPubkey);
+        const recipient = players.get(recipientPk);
+        if (!recipient || recipient.ws.readyState !== WebSocket.OPEN) return;
+        recipient.ws.send(JSON.stringify({
+          type:       'incoming_zap',
+          senderPk:   myPubkey,
+          senderName: sender?.name || '',
+          amountSats,
+          comment,
+        }));
+      }
+
       if (msg.type === 'game_msg' && myPubkey) {
         const player = players.get(myPubkey);
         if (!player) return;

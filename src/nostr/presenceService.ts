@@ -49,6 +49,26 @@ export function sendGameMsg(payload: Record<string, unknown>): void {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'game_msg', ...payload }));
 }
 
+// Privacy-preserving in-game zap notifications. After a successful direct
+// Lightning payment to another player (no kind:9734 published to relays),
+// the sender pings the server which forwards a toast event to the recipient.
+type IncomingZapHandler = (senderPk: string, senderName: string, amountSats: number, comment: string) => void;
+let onIncomingZap: IncomingZapHandler | null = null;
+
+export function setIncomingZapHandler(handler: IncomingZapHandler | null): void { onIncomingZap = handler; }
+
+export function sendIncomingZapPing(recipientPk: string, amountSats: number, comment: string): void {
+  console.log('[Zap] sendIncomingZapPing called', {
+    recipientPk: recipientPk.slice(0, 16),
+    amountSats,
+    comment,
+    wsOpen: ws?.readyState === WebSocket.OPEN,
+  });
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'incoming_zap', recipientPk, amountSats, comment }));
+  }
+}
+
 // Returns true to consume the message (skip scene onChat), false to pass through
 type ChatInterceptor = (pubkey: string, name: string, text: string) => boolean;
 let chatInterceptor: ChatInterceptor | null = null;
@@ -294,6 +314,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'online_players') { onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
       if (msg.type === 'zone_counts') onZoneCounts?.(msg as ZoneCounts);
       if (msg.type === 'game_msg') onGameMsg?.(msg);
+      if (msg.type === 'incoming_zap') onIncomingZap?.(msg.senderPk, msg.senderName || '', Number(msg.amountSats) || 0, msg.comment || '');
     } catch (e) {}
   };
 

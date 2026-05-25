@@ -14,6 +14,7 @@ const OWNER_PUBKEYS = new Set([
   '5069ea44d8977e77c6aea605d0c5386b24504a3abd0fe8a3d1cf5f4cedca40a7',
   '0edcc015b167377154fa40ff1c59b2bbb18aca20b5b9c714980cfef60994a27a',
   '40a0a47768141eddabcf3b25f2947c783f2c8a150781abb9c1b9ba4cefb385f4',
+  'ec9829300c96faa481b7cdfdc58ac31ec00502aec0d5e7813f99aece82a64c24', // test 1
 ]);
 
 // If someone paid and didn't receive an item, add their hex pubkey + the item(s) here.
@@ -250,6 +251,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'fur_djtable',         name: 'DJ Table',          slot: 'furniture', value: 'djtable',         price: 2.00, tier: 'rare',   subcat: 'tech',   hidden: true },
   { id: 'fur_ufopinup',        name: 'UFO Pin-Up',        slot: 'furniture', value: 'ufopinup',        price: 0.50, tier: 'basic',  subcat: 'tech'   },
   { id: 'fur_nostrsign',       name: 'NOSTR Sign',        slot: 'furniture', value: 'nostrsign',       price: 0.50, tier: 'basic',   subcat: 'tech'   },
+  { id: 'fur_radio',           name: 'Radio Table',       slot: 'furniture', value: 'radio',           price: 0.50, tier: 'basic',   subcat: 'tech'   },
   // ── Seasonal unlocks ────────────────────────────────────────────────────────
   // Bitcoin Pizza Day (May 22): granted on login during the anniversary.
   { id: 'hat_pizzahat',         name: 'Pizza Hat',          slot: 'hat',       value: 'pizzahat',        price: 0, tier: 'rare', earn: true, hidden: true },

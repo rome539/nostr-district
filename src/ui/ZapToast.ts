@@ -25,6 +25,20 @@ export function recentNostrZapMatches(amountSats: number, withinMs: number = REC
   return !!ts && (Date.now() - ts) < withinMs;
 }
 
+/**
+ * Pre-claim an incoming zap so the Spark generic-Lightning toast dedupes
+ * against it. Called the moment we know a named zap is about to fire —
+ * before any async work — so a fast Spark payment_succeeded event doesn't
+ * race past us and double-toast.
+ */
+export function claimIncomingZap(amountSats: number): void {
+  _recentIncoming.set(amountSats, Date.now());
+  setTimeout(() => {
+    const t = _recentIncoming.get(amountSats);
+    if (t && (Date.now() - t) >= RECENT_WINDOW_MS) _recentIncoming.delete(amountSats);
+  }, RECENT_WINDOW_MS + 1000);
+}
+
 function getContainer(): HTMLElement {
   let el = document.getElementById(CONTAINER_ID);
   if (!el) {

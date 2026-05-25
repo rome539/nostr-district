@@ -25,6 +25,11 @@ import { t as ti18n } from '../i18n/i18n';
 const PANEL_ID    = 'market-panel';
 const STORE_LUD16 = 'falsepancake303@walletofsatoshi.com';
 
+// Temporary kill switch — flip to false when the receipt-grant flow is fixed.
+// While true, MarketPanel.open() shows a "closed for maintenance" notice
+// instead of the shop UI, so users can't buy items that won't restore.
+const SHOP_CLOSED = true;
+
 const SLOT_LABEL_KEY: Record<string, string> = {
   hair:      'market.slot.hair', top:       'market.slot.top',   bottom:    'market.slot.bot',
   hat:       'market.slot.hat',  accessory: 'market.slot.acc',   nameColor: 'market.slot.color',
@@ -117,8 +122,52 @@ export class MarketPanel {
   // ─── LIFECYCLE — open / destroy ─────────────────────────────
   static isOpen(): boolean { return !!document.getElementById(PANEL_ID); }
 
+  // Lightweight "closed for maintenance" overlay shown when SHOP_CLOSED=true.
+  // Uses the same backdrop + ESC handling as the real panel so the dismiss
+  // UX is consistent.
+  private static _showClosedNotice(): void {
+    const backdrop = document.createElement('div');
+    backdrop.id = 'mp-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(8,4,16,0.7);z-index:3999;display:flex;align-items:center;justify-content:center;';
+
+    const panel = document.createElement('div');
+    panel.id = PANEL_ID;
+    panel.style.cssText = `
+      background:linear-gradient(135deg,#1a1008 0%,#0e0a04 100%);
+      border:1px solid rgba(240,176,64,0.45);
+      border-radius:10px;padding:24px 28px;max-width:340px;
+      font-family:'Courier New',monospace;color:var(--nd-text,#f4ecd8);
+      box-shadow:0 8px 28px rgba(0,0,0,0.7);text-align:center;
+    `;
+    panel.innerHTML = `
+      <div style="font-size:22px;margin-bottom:10px;">🛠</div>
+      <div style="font-size:14px;font-weight:bold;color:var(--nd-accent,#f0b040);margin-bottom:8px;letter-spacing:0.05em;">SHOP TEMPORARILY CLOSED</div>
+      <div style="font-size:12px;opacity:0.75;line-height:1.5;margin-bottom:14px;">
+        Sorry, the shop is offline while we work on the receipt system.<br>Check back soon.
+      </div>
+      <button id="mp-closed-ok" style="
+        background:rgba(240,176,64,0.18);
+        border:1px solid rgba(240,176,64,0.55);
+        color:#f0b040;font-family:inherit;font-size:11px;letter-spacing:0.05em;
+        padding:6px 18px;border-radius:5px;cursor:pointer;
+      ">OK</button>
+    `;
+
+    backdrop.appendChild(panel);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) MarketPanel.destroy(); });
+    panel.querySelector('#mp-closed-ok')?.addEventListener('click', () => MarketPanel.destroy());
+    document.body.appendChild(backdrop);
+
+    MarketPanel.escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') MarketPanel.destroy(); };
+    window.addEventListener('keydown', MarketPanel.escHandler);
+  }
+
   static open(): void {
     MarketPanel.destroy();
+    if (SHOP_CLOSED) {
+      MarketPanel._showClosedNotice();
+      return;
+    }
     MarketPanel._group    = 'all';
     MarketPanel._category = 'all';
     MarketPanel.buying    = null;
@@ -690,10 +739,18 @@ export class MarketPanel {
     // Color swatch click: equips the item AND sets the slot's color in a single
     // setAvatar patch, then publishes kind:30078 + broadcasts to room players —
     // same persistence path the Wardrobe uses, so the change syncs everywhere.
+    // Mouseenter / mouseleave drive a hover preview on the avatar canvas so
+    // users can see the color on the model before committing.
     container.querySelectorAll('.mp-color-swatch').forEach(swatch => {
-      swatch.addEventListener('click', (e) => {
+      const el = swatch as HTMLElement;
+      el.addEventListener('mouseenter', () => {
+        if (el.dataset.color) MarketPreview.setHoverColorOverride(el.dataset.color);
+      });
+      el.addEventListener('mouseleave', () => {
+        MarketPreview.setHoverColorOverride(null);
+      });
+      el.addEventListener('click', (e) => {
         e.stopPropagation();
-        const el = swatch as HTMLElement;
         const item = CATALOG.find(i => i.id === el.dataset.id);
         const color = el.dataset.color;
         if (!item || !color) return;
@@ -703,6 +760,7 @@ export class MarketPanel {
         const updated = setAvatar(patch);
         publishAvatar(updated);
         sendAvatarUpdate();
+        MarketPreview.setHoverColorOverride(null);
         MarketPanel._equipPickerOpenId = null;
         MarketPanel._renderItems(!!authStore.getState().pubkey && !authStore.getState().isGuest);
       });

@@ -10,6 +10,8 @@ import { authStore } from '../stores/authStore';
 import { signEvent, fetchSparkAddress, publishEvent } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
 import { sendSparkPayment, sparkCanCover } from './sparkService';
+import { sendIncomingZapPing, setIncomingZapHandler } from './presenceService';
+import { claimIncomingZap, showZapToast as _showZapToastEager } from '../ui/ZapToast';
 
 // ── Local zap-message cache ──────────────────────────────────────────────────
 // When the user sends a zap with an attached message, NIP-57 only includes the
@@ -413,54 +415,29 @@ export async function zapUser(
     return { status: 'error', error: `Amount out of range (${Math.ceil(minSendable / 1000)}–${Math.floor(maxSendable / 1000)} sats)` };
   }
 
-  const supportsZap = lnurlData.allowsNostr && lnurlData.nostrPubkey;
-
-  onStatus?.('Building zap…');
-  let signedZapRequest: any | null = null;
-  if (supportsZap) {
-    signedZapRequest = await buildZapRequest(recipientPubkey, amountMsats, comment, lnurlData.callback);
-  }
-  const zapRequestJson = signedZapRequest ? JSON.stringify(signedZapRequest) : null;
-
+  // Privacy: player-to-player zaps no longer publish a kind:9734 zap request
+  // to relays. The LNURL invoice is requested WITHOUT the nostr= parameter,
+  // so no zap metadata (sender, amount, comment, relay list) leaks onto the
+  // public network. The recipient is notified via a private WS ping instead
+  // — see sendIncomingZapPing below.
   onStatus?.('Requesting invoice…');
-  const inv = await fetchInvoice(
-    lnurlData.callback,
-    amountMsats,
-    zapRequestJson || '{}',
-  );
+  const inv = await fetchInvoice(lnurlData.callback, amountMsats, null);
   if (!inv) return { status: 'error', error: 'Failed to get invoice' };
+
+  // Fires the WS ping that surfaces a "X zapped you N sats" toast on the
+  // recipient's client (no-op if they're offline). The server adds the
+  // sender's display name from the players map.
+  const notifyRecipient = () => {
+    try { sendIncomingZapPing(recipientPubkey, amountSats, comment); } catch {}
+  };
 
   // Spark (in-game wallet) — preferred when it has the funds
   if (await sparkCanCover(amountSats)) {
     onStatus?.('Paying from in-game wallet…');
     const r = await sendSparkPayment(inv.pr);
     if (r.ok) {
-      // Cache the comment locally so the sender can see it in wallet history
-      // (NIP-57 puts the comment in the zap request, not the bolt11 itself).
       if (r.paymentId && comment.trim()) cacheZapMessage(r.paymentId, comment);
-      // FUTURE: encrypt the zap comment before relay publish.
-      // Currently the kind:9734 we publish to relays carries the comment in
-      // plaintext, so anyone watching the sender's events can read it. This
-      // matches every other Nostr zap client today, but we could do better:
-      //   1. Keep the LNURL-POSTed 9734 plaintext (NIP-57 compliance — breez.tips
-      //      uses its content for description_hash and may include it in 9735).
-      //   2. Build a SECOND 9734 with content = NIP-44(comment, recipientPubkey)
-      //      and tags += [['encrypted','nip44'], ['bolt11', inv.pr]]. Publish
-      //      that one to relays instead of the plaintext copy.
-      //   3. Receiver's handleZapRequest checks for the encrypted tag and
-      //      decrypts via signer; falls back to plaintext for external senders.
-      //   4. Switch dedupe primary key to bolt11 (the 9735 receipt has the
-      //      same bolt11 tag, so cross-correlation still works even though the
-      //      encrypted 9734's event id differs from the LNURL-POSTed one).
-      // Partial privacy only — if breez.tips publishes the 9735 with the
-      // plaintext 9734 embedded in `description`, the comment leaks via that
-      // path regardless of what we do here. Worth shipping when we have data
-      // on actual zap traffic / message sensitivity.
-      //
-      // Publish the signed zap request to relays so the recipient's client
-      // can surface the comment even if the LNURL provider doesn't publish
-      // a proper kind:9735 zap receipt.
-      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      notifyRecipient();
       return { status: 'paid' };
     }
   }
@@ -470,7 +447,7 @@ export async function zapUser(
     onStatus?.('Paying via WebLN…');
     const result = await weblnPayInvoice(inv.pr);
     if (result.preimage) {
-      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      notifyRecipient();
       return { status: 'paid' };
     }
     if (result.error && result.error !== 'No WebLN') {
@@ -483,13 +460,15 @@ export async function zapUser(
     onStatus?.('Paying via wallet…');
     const result = await nwcPayInvoice(inv.pr);
     if (result.preimage) {
-      if (signedZapRequest) publishEvent(signedZapRequest).catch(() => {});
+      notifyRecipient();
       return { status: 'paid' };
     }
     if (result.error) return { status: 'error', error: result.error };
   }
 
-  // QR fallback
+  // QR fallback — recipient toast can only fire AFTER we know the QR was
+  // actually paid (out of band). For now, no WS ping is sent for QR-paid
+  // zaps; the recipient sees a generic Lightning notification from Spark.
   return { status: 'invoice', invoice: inv.pr, verifyUrl: inv.verify };
 }
 
@@ -769,10 +748,40 @@ export function startGlobalZapToasts(): void {
     const { showZapToast } = await import('../ui/ZapToast');
     showZapToast(name, amountSats, comment || undefined, 'incoming');
   });
+
+  // Privacy-preserving in-game zaps don't publish a kind:9734, so the
+  // kind:9735 receipt subscription above never fires for them. Listen for
+  // the WS-routed `incoming_zap` ping instead — the server has already
+  // enriched it with the sender's display name. We also write the comment
+  // into the same incoming-zap cache that the wallet panel reads, so the
+  // recipient's wallet history shows "X: <comment>" instead of a generic
+  // Lightning row.
+  setIncomingZapHandler(async (senderPk, senderName, amountSats, comment) => {
+    if (!senderPk || amountSats <= 0) return;
+    // Pre-claim the amount SYNCHRONOUSLY (top-level import) so the Spark
+    // generic-Lightning toast dedupes against us even if its
+    // payment_succeeded event fires before our async work finishes.
+    claimIncomingZap(amountSats);
+    console.log('[Zap] WS incoming_zap', { senderPk: senderPk.slice(0, 16), senderName, amountSats, comment });
+    const name = senderName || await resolveSenderName(senderPk);
+    if (senderName && senderName.trim()) {
+      _senderNameHints.set(senderPk, senderName.trim().slice(0, 30));
+    }
+    if (comment && comment.trim()) {
+      cacheIncomingZap({
+        comment:      comment,
+        senderPubkey: senderPk,
+        amountSats,
+        ts:           Math.floor(Date.now() / 1000),
+      });
+    }
+    _showZapToastEager(name, amountSats, comment || undefined, 'incoming');
+  });
 }
 
 export function stopGlobalZapToasts(): void {
   if (_globalZapUnsub) { _globalZapUnsub(); _globalZapUnsub = null; }
   _globalZapPubkey = null;
   _senderNameHints.clear();
+  setIncomingZapHandler(null);
 }

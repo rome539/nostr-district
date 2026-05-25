@@ -117,7 +117,8 @@ export type FurnitureId =
   | 'carddeck'           // small deck of playing cards
   | 'endtable'           // small end table (lounge)
   | 'djtable'            // DJ turntable setup (tech)
-  | 'ufopinup';          // UFO pin-up wall poster (tech)
+  | 'ufopinup'           // UFO pin-up wall poster (tech)
+  | 'radio';             // radio table — vintage receiver on a small table (tech)
 
 export type PosterId =
   | 'none'
@@ -197,6 +198,7 @@ export const FURNITURE_DEFAULT_POS: Partial<Record<FurnitureId, FurniturePos>> =
   carddeck:           { x: 88,  y: 287 },
   djtable:            { x: 290, y: 295 },
   ufopinup:           { x: 340, y: 50  },
+  radio:              { x: 660, y: 320 },
 };
 
 export function getDefaultPos(id: FurnitureId): FurniturePos {
@@ -406,6 +408,7 @@ export const DEFAULT_FURNITURE_COLORS: Record<FurnitureId, string> = {
   endtable:           '#2a1a08',
   djtable:            '#ffffff',
   ufopinup:           '#ffffff',
+  radio:              '#ffffff',
 };
 
 export function setFurnitureColor(id: FurnitureId, color: string): RoomConfig {
@@ -570,6 +573,7 @@ export const FURNITURE_DATA: Record<FurnitureId, { label: string; emoji: string 
   endtable:           { label: 'End Table',             emoji: '🪵' },
   djtable:            { label: 'DJ Table',              emoji: '🎧' },
   ufopinup:           { label: 'UFO Pin-Up',            emoji: '🛸' },
+  radio:              { label: 'Radio Table',           emoji: '📻' },
 };
 
 /** Poster display data */

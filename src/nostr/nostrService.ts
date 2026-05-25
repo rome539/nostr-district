@@ -557,7 +557,7 @@ export async function startBunkerFlow(
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,nip44_encrypt,nip44_decrypt',
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onStatusChange: (status: string, msg: string) => {
       console.log(`[Bunker] ${status}: ${msg}`);
@@ -668,7 +668,13 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     pool: null,
     appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
-    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,nip44_encrypt,nip44_decrypt',
+    // sign_event:9734 is REQUIRED for shop purchases — the LNURL zap request
+    // is signed by the bunker, embedded in the LNURL callback, and used by
+    // the store's LNURL provider to publish the kind:9735 receipt that
+    // grants paid items on re-login. Without this perm, signEvent throws,
+    // payLightningAddress's catch silently sends a plain payment, no
+    // receipt is published, and purchases vanish across sessions.
+    perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     clientSkHex: reuseClientSkHex,
     // Disable heartbeat: Amber's ping handler is unreliable, especially when

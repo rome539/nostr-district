@@ -85,6 +85,7 @@ export const FURNITURE_PATHS: Record<string, string> = {
   endtable:           'assets/furniture/lounge/endtable.png',
   djtable:            'assets/furniture/tech/djtable.png',
   ufopinup:           'assets/furniture/tech/ufopinup.png',
+  radio:              'assets/furniture/tech/radio.png',
 };
 
 export class MarketPreview {
@@ -386,13 +387,42 @@ export class MarketPreview {
     ];
   }
 
-  /** Build an AvatarConfig override that previews a wearable in a random color. */
+  // Last wearable item shown in the preview + an optional color override
+  // driven by mouseenter on the equip picker's color swatches. When the
+  // user hovers a swatch we re-render the preview with that color; on
+  // mouseleave we clear the override and re-render with the random color.
+  private static _lastWearableItem: MarketItem | null = null;
+  private static _colorOverride: string | null = null;
+  private static _randomColorForItem: string | null = null;
+
+  /** Build an AvatarConfig override that previews a wearable in a color. */
   private static _wearablePreviewConfig(item: MarketItem): AvatarConfig {
     const base = getAvatar();
     const colorField = MarketPreview.WEARABLE_COLOR_FIELD[item.slot];
     const overrides: Partial<AvatarConfig> = { [item.slot]: item.value as never };
-    if (colorField) overrides[colorField] = MarketPreview._randomClothingColor() as never;
+    if (colorField) {
+      // Lock in a single random color per item-preview session so re-renders
+      // (e.g. clearing a hover override) don't shuffle the color each time.
+      if (MarketPreview._lastWearableItem?.id !== item.id || !MarketPreview._randomColorForItem) {
+        MarketPreview._randomColorForItem = MarketPreview._randomClothingColor();
+      }
+      overrides[colorField] = (MarketPreview._colorOverride ?? MarketPreview._randomColorForItem) as never;
+    }
+    MarketPreview._lastWearableItem = item;
     return { ...base, ...overrides } as AvatarConfig;
+  }
+
+  /**
+   * Set a temporary color override and re-render the last wearable preview.
+   * Pass null to clear (reverts to the locked random color). Called from
+   * MarketPanel on color-swatch mouseenter/mouseleave.
+   */
+  static setHoverColorOverride(color: string | null): void {
+    MarketPreview._colorOverride = color;
+    const item = MarketPreview._lastWearableItem;
+    if (item && WEARABLE_SLOTS.has(item.slot)) {
+      MarketPreview._drawAvatarCanvas(MarketPreview._wearablePreviewConfig(item));
+    }
   }
 
   private static _makeWallThemeCanvas(value: string): HTMLCanvasElement {
