@@ -608,15 +608,60 @@ export async function startBunkerFlow(
 /**
  * NIP-46 Signer-initiated flow:
  * User pastes a bunker:// URL, connects directly.
+ *
+ * Persists a per-signer clientSk in localStorage under
+ * `nostr_district_bunker_clients` so re-pasting the same bunker URL
+ * reuses the same client identity. Without this, Amber/other signers
+ * reject the second connect with "already connected" because they see
+ * a NEW client trying to consume the same secret.
  */
 export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
   await loadNostrTools();
+
+  // Parse signerPk early so we can look up a saved clientSk for this signer.
+  let signerPkFromUrl: string | null = null;
+  try {
+    const u = new URL(bunkerUrl);
+    if (u.protocol === 'bunker:') {
+      const pk = u.hostname || u.pathname.replace(/^\/\//, '');
+      if (pk && pk.length === 64) signerPkFromUrl = pk;
+    }
+  } catch {}
+
+  const CLIENTS_KEY = 'nostr_district_bunker_clients';
+  let reuseClientSkHex: string | null = null;
+  if (signerPkFromUrl) {
+    // Primary: new per-signer map.
+    try {
+      const raw = localStorage.getItem(CLIENTS_KEY);
+      if (raw) {
+        const map = JSON.parse(raw);
+        if (map && typeof map[signerPkFromUrl] === 'string') {
+          reuseClientSkHex = map[signerPkFromUrl];
+          console.log('[Bunker] Reusing saved clientSk (map) for signer', signerPkFromUrl);
+        }
+      }
+    } catch {}
+    // Fallback: legacy single-session save, in case the user already
+    // successfully connected before this fix shipped.
+    if (!reuseClientSkHex) {
+      try {
+        const raw = localStorage.getItem('nostr_district_bunker');
+        if (raw) {
+          const legacy = JSON.parse(raw);
+          if (legacy?.signer === signerPkFromUrl && typeof legacy?.sk === 'string') {
+            reuseClientSkHex = legacy.sk;
+            console.log('[Bunker] Reusing saved clientSk (legacy) for signer', signerPkFromUrl);
+          }
+        }
+      } catch {}
+    }
+  }
 
   if (bunkerClient) {
     bunkerClient.destroy();
     bunkerClient = null;
   }
-
 
   bunkerClient = new BunkerClient({
     NostrTools,
@@ -625,27 +670,49 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
     perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
-    onDisconnect: () => {
-      console.warn('[Bunker] Signer disconnected');
-    },
+    clientSkHex: reuseClientSkHex,
+    // Disable heartbeat: Amber's ping handler is unreliable, especially when
+    // a session is reused via saved clientSk. A failed ping triggers
+    // _handleDisconnect which destructively wipes _signerPk and breaks every
+    // in-flight signing request (including Spark wallet provisioning).
+    // Real signing failures will surface naturally via _request timeouts.
+    heartbeatMs: 0,
+    onDisconnect: () => { console.warn('[Bunker] Signer disconnected'); },
   });
 
-  // Race the connect against a 30s timeout — without this, an offline signer or
-  // bad URL leaves the user stuck on "Connecting..." with no feedback.
-  // Reject the race FIRST so the user sees the timeout message; then cancel()
-  // the client as cleanup (its synchronous 'cancelled' rejection of the inner
-  // promise is absorbed by the already-settled race).
   const BUNKER_URL_TIMEOUT_MS = 30_000;
   const userPubkey = await Promise.race([
     bunkerClient.connectBunkerUrl(bunkerUrl),
     new Promise<never>((_, reject) => setTimeout(() => {
-      reject(new Error('Bunker connection timed out — check the URL and that your signer is online'));
+      reject(new Error('No response from signer. Open your signer app and try again.'));
       if (bunkerClient) bunkerClient.cancel();
     }, BUNKER_URL_TIMEOUT_MS)),
   ]);
-  const npub = NostrTools.nip19.npubEncode(userPubkey);
 
+  // After a successful connect, persist the clientSk for this signer so the
+  // next time the user pastes the same bunker URL we reuse the same client
+  // identity (avoiding the "already connected" error from the signer).
+  if (signerPkFromUrl && bunkerClient?._clientSk) {
+    try {
+      const raw = localStorage.getItem(CLIENTS_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      const skBytes: Uint8Array = bunkerClient._clientSk;
+      const skHex = Array.from(skBytes).map((b: number) => b.toString(16).padStart(2, '0')).join('');
+      map[signerPkFromUrl] = skHex;
+      localStorage.setItem(CLIENTS_KEY, JSON.stringify(map));
+      console.log('[Bunker] Saved clientSk for signer', signerPkFromUrl);
+    } catch (e) {
+      console.warn('[Bunker] Failed to save clientSk:', e);
+    }
+  }
+
+  const npub = NostrTools.nip19.npubEncode(userPubkey);
   authStore.getState().login({ pubkey: userPubkey, npub, profile: {}, loginMethod: 'bunker' });
+  // Kick off Spark wallet provisioning + lightning-address registration —
+  // same as the QR flow. Without this, bunker URL users never get an
+  // in-game wallet even though the encrypted mnemonic backup exists on
+  // relays.
+  initBunkerSparkWallet(userPubkey);
   fetchProfile(userPubkey).then(profile => {
     if (profile && Object.keys(profile).length > 0) authStore.updateProfile(profile);
   });

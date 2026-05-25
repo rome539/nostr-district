@@ -70,9 +70,11 @@ class RawRelayPool {
             console.log(`[NIP-46 WS] Connected: ${url}`);
             const q = this._queue.get(url) || [];
             this._queue.delete(url);
+            let flushed = 0;
             for (const msg of q) {
-                try { ws.send(msg); } catch(e) {}
+                try { ws.send(msg); flushed++; } catch(e) {}
             }
+            if (flushed > 0) console.log(`[NIP-46 WS] Flushed ${flushed} queued msg(s) to ${url}`);
             for (const { subId, filter } of this._listeners) {
                 try { ws.send(JSON.stringify(['REQ', subId, filter])); } catch(e) {}
             }
@@ -84,11 +86,16 @@ class RawRelayPool {
                 if (data[0] === 'EVENT' && data[2]) {
                     const ev = data[2];
                     const subId = data[1];
+                    console.log(`[NIP-46 WS] EVENT received from ${url} sub=${subId} kind=${ev.kind}`);
                     for (const listener of this._listeners) {
                         if (listener.subId === subId) {
                             listener.onEvent(ev, url);
                         }
                     }
+                } else if (data[0] === 'NOTICE') {
+                    console.warn(`[NIP-46 WS] NOTICE from ${url}: ${data[1]}`);
+                } else if (data[0] === 'OK') {
+                    console.log(`[NIP-46 WS] OK from ${url}: id=${data[1]} accepted=${data[2]} msg=${data[3] || ''}`);
                 }
             } catch(e) {}
         };
@@ -202,11 +209,27 @@ export class BunkerClient {
         this.onStatusChange = opts.onStatusChange || (() => {});
         this.onDisconnect = opts.onDisconnect || (() => {});
 
+        // Optional nostr-tools SimplePool. When provided, the bunker URL
+        // flow uses it (matching the proven Fren-finder pattern) instead of
+        // the custom RawRelayPool, which can drop publishes on slow mobile
+        // relay connections.
+        this._simplePool = opts.simplePool || null;
+
+        // Optional pre-existing clientSk (hex). When provided, connectBunkerUrl
+        // reuses this client identity instead of generating a new one — this
+        // is what makes "paste the same bunker URL twice" work, because Amber
+        // and other signers track sessions by clientPk and reject re-uses of
+        // the same secret from a DIFFERENT clientPk with "already connected".
+        this._fixedClientSk = opts.clientSkHex
+            ? hexToSk(opts.clientSkHex)
+            : null;
+
         this._clientSk = null; this._clientPk = null;
         this._signerPk = null; this._userPk = null;
         this._relays = null;
         this._connecting = false; this._heartbeat = null;
         this._rawPool = null;
+        this._urlFlowSub = null;
     }
 
     get connected() { return !!(this._signerPk && this._userPk); }
@@ -320,24 +343,122 @@ export class BunkerClient {
         if (!relays.length) throw new Error('No relays in bunker URL');
         const secret = url.searchParams.get('secret') || '';
 
-        const clientSk = this.NostrTools.generateSecretKey();
+        // Reuse a saved clientSk if provided (so Amber recognizes us as the
+        // same client on re-login); otherwise generate a fresh one.
+        const clientSk = this._fixedClientSk
+            ? this._fixedClientSk
+            : this.NostrTools.generateSecretKey();
         const clientPk = this.NostrTools.getPublicKey(clientSk);
         this._clientSk = clientSk; this._clientPk = clientPk;
         this._signerPk = signerPk; this._relays = relays;
+        if (this._fixedClientSk) console.log('[NIP-46] Reusing saved clientSk, clientPk:', clientPk);
 
+        // SimplePool path (preferred when injected) — copies the Fren-finder
+        // pattern exactly: await ensureRelay on every relay, then subscribe,
+        // then publish. RawRelayPool path below is the legacy fallback.
+        if (this._simplePool) {
+            console.log('[BUNKER-URL] using SimplePool, signerPk:', signerPk, 'relays:', relays);
+            const pool = this._simplePool;
+
+            console.log('[BUNKER-URL] ensuring relays...');
+            await Promise.allSettled(relays.map(u => pool.ensureRelay(u).then(
+                () => console.log('[BUNKER-URL] relay open:', u),
+                (e) => console.warn('[BUNKER-URL] relay failed:', u, e?.message),
+            )));
+
+            const since = Math.floor(Date.now() / 1000) - 60;
+            return new Promise((resolve, reject) => {
+                let settled = false;
+                let sub = null;
+                const cleanup = () => {
+                    if (sub) { try { sub.close(); } catch (e) {} sub = null; }
+                    this._urlFlowSub = null;
+                    this._cancelReject = null;
+                };
+                this._cancelReject = (err) => {
+                    if (settled) return;
+                    settled = true; cleanup();
+                    this._connecting = false;
+                    reject(err);
+                };
+
+                console.log('[BUNKER-URL] subscribing to', relays, 'filter', { kinds: [24133], '#p': [clientPk], since });
+                sub = pool.subscribeMany(relays, [{ kinds: [24133], '#p': [clientPk], since }], {
+                    onevent: async (ev) => {
+                        console.log('[BUNKER-URL] event from', ev.pubkey.slice(0, 16), 'kind', ev.kind);
+                        if (settled) return;
+                        try {
+                            const resp = JSON.parse(await nip44Decrypt(clientSk, ev.pubkey, ev.content));
+                            console.log('[BUNKER-URL] decrypted response:', resp);
+                            if (resp.result === 'auth_url' && resp.error) { this.onAuthUrl(resp.error); return; }
+                            if (resp.error && resp.result !== 'auth_url') {
+                                settled = true; cleanup();
+                                this._connecting = false;
+                                this.onStatusChange('error', resp.error);
+                                reject(new Error(resp.error));
+                                return;
+                            }
+                            settled = true; cleanup();
+                            console.log('[BUNKER-URL] connect ack, calling get_public_key');
+                            try { this._userPk = await this._request('get_public_key'); }
+                            catch (e) { console.warn('[BUNKER-URL] get_public_key failed:', e?.message); this._userPk = signerPk; }
+                            console.log('[BUNKER-URL] connected, userPk:', this._userPk);
+                            this._finishConnect();
+                            resolve(this._userPk);
+                        } catch (e) {
+                            console.warn('[BUNKER-URL] decrypt/parse failed (ignoring):', e?.message);
+                        }
+                    },
+                    oneose: () => console.log('[BUNKER-URL] EOSE'),
+                });
+                this._urlFlowSub = sub;
+
+                (async () => {
+                    try {
+                        const reqId = randomHex(8);
+                        const payload = JSON.stringify({
+                            id: reqId, method: 'connect', params: [signerPk, secret, this.perms],
+                        });
+                        console.log('[BUNKER-URL] encrypting + publishing connect, reqId:', reqId);
+                        const enc = await nip44Encrypt(clientSk, signerPk, payload);
+                        const signed = this.NostrTools.finalizeEvent({
+                            kind: 24133, created_at: Math.floor(Date.now() / 1000),
+                            tags: [['p', signerPk]], content: enc,
+                        }, clientSk);
+                        const results = await Promise.allSettled(relays.map(async u => {
+                            const r = await pool.ensureRelay(u);
+                            await r.publish(signed);
+                            console.log('[BUNKER-URL] published to:', u);
+                        }));
+                        const ok = results.filter(r => r.status === 'fulfilled').length;
+                        console.log(`[BUNKER-URL] publish summary: ${ok}/${relays.length} relays`);
+                        if (ok === 0 && !settled) {
+                            settled = true; cleanup();
+                            this._connecting = false;
+                            reject(new Error('Could not reach any relays in the bunker URL'));
+                        }
+                    } catch (e) {
+                        console.error('[BUNKER-URL] publish error:', e);
+                        if (settled) return;
+                        settled = true; cleanup();
+                        this._connecting = false;
+                        reject(e);
+                    }
+                })();
+            });
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Legacy RawRelayPool path (kept for QR flow / fallback)
+        // ────────────────────────────────────────────────────────────────
         this._rawPool = new RawRelayPool();
         this._rawPool.connect(relays);
-        // No arbitrary wait — subscribe() and publish() both queue messages
-        // for sockets still in CONNECTING state, so the REQ and EVENT will be
-        // sent in order as soon as each relay finishes opening.
 
         const since = Math.floor(Date.now() / 1000) - 300;
         const subId = 'nip46-bunker-' + randomHex(4);
         let settled = false;
 
         return new Promise((resolve, reject) => {
-            // Expose the reject so cancel() can interrupt this in-flight connection
-            // instead of leaving the promise dangling forever when the user backs out.
             this._cancelReject = (err) => {
                 if (settled) return;
                 settled = true;
@@ -347,7 +468,9 @@ export class BunkerClient {
             this._rawPool.subscribe(subId, { kinds: [24133], '#p': [clientPk], since }, async (ev) => {
                 if (settled) return;
                 try {
-                    const resp = JSON.parse(await nip44Decrypt(clientSk, ev.pubkey, ev.content));
+                    const decrypted = await nip44Decrypt(clientSk, ev.pubkey, ev.content);
+                    const resp = JSON.parse(decrypted);
+                    console.log('[BUNKER-URL] Decrypted response:', resp);
                     if (resp.result === 'auth_url' && resp.error) { this.onAuthUrl(resp.error); return; }
                     if (resp.error && resp.result !== 'auth_url') {
                         settled = true; this._cancelReject = null; this._rawPool.unsubscribe(subId);
@@ -358,10 +481,13 @@ export class BunkerClient {
                     settled = true; this._cancelReject = null;
                     this._rawPool.unsubscribe(subId);
                     try { this._userPk = await this._request('get_public_key'); }
-                    catch (e) { this._userPk = signerPk; }
+                    catch (e) { console.warn('[BUNKER-URL] get_public_key failed:', e?.message); this._userPk = signerPk; }
+                    console.log('[BUNKER-URL] Connect complete, userPk:', this._userPk);
                     this._finishConnect();
                     resolve(this._userPk);
-                } catch (e) {}
+                } catch (e) {
+                    console.warn('[BUNKER-URL] Decrypt/parse failed for event from', ev.pubkey.slice(0, 16), ':', e?.message);
+                }
             });
 
             const reqId = randomHex(8);
@@ -535,12 +661,11 @@ export class BunkerClient {
 
     cancel() {
         this._connecting = false;
-        // Reject any in-flight connect promise so awaiters can clean up
-        // instead of hanging forever.
         if (this._cancelReject) {
             const r = this._cancelReject; this._cancelReject = null;
             r(new Error('cancelled'));
         }
+        if (this._urlFlowSub) { try { this._urlFlowSub.close(); } catch (e) {} this._urlFlowSub = null; }
         if (this._rawPool) { this._rawPool.destroy(); this._rawPool = null; }
         this.onStatusChange('idle', 'Cancelled');
     }
@@ -569,8 +694,42 @@ export class BunkerClient {
         }, sk);
 
         const since = Math.floor(Date.now() / 1000) - 60;
-        const subId = 'nip46-req-' + id;
 
+        // SimplePool path (used by URL flow when simplePool injected).
+        if (this._simplePool) {
+            const pool = this._simplePool;
+            return new Promise((resolve, reject) => {
+                let done = false;
+                let sub = null;
+                const to = setTimeout(() => {
+                    if (done) return;
+                    done = true;
+                    if (sub) { try { sub.close(); } catch (e) {} }
+                    reject(new Error(`${method} timed out (45s)`));
+                }, 45000);
+
+                sub = pool.subscribeMany(relays, [{ kinds: [24133], '#p': [pk], since }], {
+                    onevent: async (ev) => {
+                        try {
+                            const r = JSON.parse(await nip44Decrypt(sk, ev.pubkey, ev.content));
+                            if (r.id !== id) return;
+                            if (r.result === 'auth_url' && r.error) { this.onAuthUrl(r.error); return; }
+                            if (done) return;
+                            done = true; clearTimeout(to);
+                            if (sub) { try { sub.close(); } catch (e) {} }
+                            r.error ? reject(new Error(r.error)) : resolve(r.result);
+                        } catch (e) {}
+                    },
+                });
+
+                Promise.allSettled(relays.map(async u => {
+                    try { (await pool.ensureRelay(u)).publish(signed); } catch (e) {}
+                }));
+            });
+        }
+
+        // RawRelayPool fallback (QR / legacy flows).
+        const subId = 'nip46-req-' + id;
         return new Promise((resolve, reject) => {
             let done = false;
             const to = setTimeout(() => {
@@ -595,7 +754,7 @@ export class BunkerClient {
                 });
             }
 
-            this._rawPool.publish(signed);
+            if (this._rawPool) this._rawPool.publish(signed);
         });
     }
 }

@@ -275,17 +275,25 @@ const loginScreen = new LoginScreen({
     }
   },
   onBunkerLogin: async (url: string) => {
-    if (loginInProgress) return;
+    // If a QR/client flow is already in progress (loginInProgress=true was
+    // set when the user opened the Remote Signer panel), cancel it so the
+    // user-initiated URL paste takes priority. Without this, clicking Go
+    // silently no-ops because the in-progress guard rejects it.
+    if (loginInProgress) {
+      cancelBunkerFlow();
+      loginInProgress = false;
+    }
     loginInProgress = true;
-    // Signer-initiated: user pasted a bunker:// URL
+    // Re-set the status AFTER cancel — cancel()'s onStatusChange fires
+    // 'Cancelled' synchronously and would otherwise leave the UI showing
+    // "Cancelled" while the URL connect is actually running in the background.
+    loginScreen.setBunkerStatus('Connecting to signer…');
     try {
       await loginWithBunkerUrl(url);
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();
     } catch (e: any) {
-      // If the user clicked Back mid-connect, onBunkerCancel already reset
-      // state — don't clobber it with the cancellation error.
       if (e?.message === 'cancelled') return;
       loginInProgress = false;
       loginScreen.setBunkerStatus(safeError(e));
