@@ -10,10 +10,10 @@
  */
 
 import { authStore } from '../stores/authStore';
-import { CATALOG, MarketItem, isOwned, addToInventory, getInventory, getWeeklySaleItem, getSalePrice, getSaleDaysLeft } from '../stores/marketStore';
+import { CATALOG, MarketItem, isOwned, addToInventory, getWeeklySaleItem, getSalePrice, getSaleDaysLeft } from '../stores/marketStore';
 import { getAuraProgress } from '../stores/auraUnlockStore';
 import { payLightningAddress } from '../nostr/zapService';
-import { publishInventory, publishAvatar } from '../nostr/nostrService';
+import { publishAvatar } from '../nostr/nostrService';
 import { sendAvatarUpdate } from '../nostr/presenceService';
 import { getAvatar, setAvatar, AvatarConfig, COLOR_PRESETS } from '../stores/avatarStore';
 import { usdToSats, getBtcUsdPrice } from '../stores/priceService';
@@ -23,12 +23,11 @@ import { boltIcon } from './icons';
 import { t as ti18n } from '../i18n/i18n';
 
 const PANEL_ID    = 'market-panel';
-const STORE_LUD16 = 'falsepancake303@walletofsatoshi.com';
+const STORE_LUD16 = 'Myrtieraven16@blitzwalletapp.com';
 
-// Temporary kill switch — flip to false when the receipt-grant flow is fixed.
-// While true, MarketPanel.open() shows a "closed for maintenance" notice
-// instead of the shop UI, so users can't buy items that won't restore.
-const SHOP_CLOSED = true;
+// Temporary kill switch — flip to true to show a "closed for maintenance"
+// notice (e.g. while debugging the receipt-grant flow) instead of the shop.
+const SHOP_CLOSED = false;
 
 const SLOT_LABEL_KEY: Record<string, string> = {
   hair:      'market.slot.hair', top:       'market.slot.top',   bottom:    'market.slot.bot',
@@ -796,8 +795,13 @@ export class MarketPanel {
     const result = await payLightningAddress(STORE_LUD16, sats, setStatus, { id: item.id, slot: item.slot, value: item.value, name: item.name });
 
     if (result.status === 'paid') {
+      // Paid items: NO kind:30078 publish. Paid ownership is verified
+      // exclusively from the kind:9735 receipt that the store's LNURL
+      // publishes (the receipt embeds our signed kind:9734 with the
+      // ['item', id, slot, value] tag). Publishing 30078 here would put
+      // a fakeable claim of ownership on relays. addToInventory() is
+      // just an in-memory cache so the UI updates immediately.
       addToInventory(item.slot, item.value);
-      publishInventory(getInventory());
       autoEquip(item.slot, item.value);
       setStatus(`✓ ${item.name} unlocked!`);
       setTimeout(() => {
@@ -814,8 +818,9 @@ export class MarketPanel {
         result.verifyUrl, result.nostrPubkey, result.zapEventId,
         item,
         () => {
+          // Same rationale as the 'paid' branch above — in-memory only,
+          // never publish kind:30078 for paid items.
           addToInventory(item.slot, item.value);
-          publishInventory(getInventory());
           autoEquip(item.slot, item.value);
           MarketPanel._renderSaleBanner(true);
           MarketPanel._renderItems(true);

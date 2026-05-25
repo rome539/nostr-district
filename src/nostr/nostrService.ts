@@ -290,12 +290,17 @@ export async function fetchInventory(pubkey: string): Promise<string[] | null> {
   }
 }
 
-const STORE_LUD16 = 'falsepancake303@walletofsatoshi.com';
+const STORE_LUD16 = 'Myrtieraven16@blitzwalletapp.com';
 
-// All store nostr pubkeys ever used — add the old one here before switching lightning addresses
-// so receipts signed by previous providers are still honoured.
+// All store nostr pubkeys ever used — add the old one here before switching
+// lightning providers so receipts signed by previous ones are still honoured.
+// Note: Wallet of Satoshi uses a SINGLE shared nostrPubkey across every
+// user account on the service (roomyflag04, falsepancake303, etc. all
+// return the same be1d8979... pubkey), so one entry covers every WoS
+// address we've ever used as the store.
 const KNOWN_STORE_PUBKEYS = new Set<string>([
-  'be1d89794bf92de5dd64c1e60f6a2c70c140abac9932418fee30c5c637fe9479', // Wallet of Satoshi (current)
+  'c6e230a25ead3c497013637bf377bced81c7cdb60d881a63edb138b08aa68083', // Blitz Wallet (current)
+  'be1d89794bf92de5dd64c1e60f6a2c70c140abac9932418fee30c5c637fe9479', // Wallet of Satoshi (covers roomyflag04, falsepancake303, all WoS users)
 ]);
 
 async function loadCurrentStoreNostrPubkey(): Promise<void> {

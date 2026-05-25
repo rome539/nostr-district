@@ -58,12 +58,6 @@ let onIncomingZap: IncomingZapHandler | null = null;
 export function setIncomingZapHandler(handler: IncomingZapHandler | null): void { onIncomingZap = handler; }
 
 export function sendIncomingZapPing(recipientPk: string, amountSats: number, comment: string): void {
-  console.log('[Zap] sendIncomingZapPing called', {
-    recipientPk: recipientPk.slice(0, 16),
-    amountSats,
-    comment,
-    wsOpen: ws?.readyState === WebSocket.OPEN,
-  });
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'incoming_zap', recipientPk, amountSats, comment }));
   }

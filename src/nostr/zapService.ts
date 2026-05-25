@@ -7,7 +7,7 @@
  */
 
 import { authStore } from '../stores/authStore';
-import { signEvent, fetchSparkAddress, publishEvent } from './nostrService';
+import { signEvent, fetchSparkAddress } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
 import { sendSparkPayment, sparkCanCover } from './sparkService';
 import { sendIncomingZapPing, setIncomingZapHandler } from './presenceService';
@@ -193,34 +193,6 @@ export async function fetchKind0(pubkey: string): Promise<Record<string, any> | 
   });
 }
 
-// ── Zap request builder (kind:9734) ──────────────────────────────────────────
-
-async function buildZapRequest(
-  recipientPubkey: string,
-  amountMsats: number,
-  comment: string,
-  lnurlCallbackUrl: string,
-): Promise<any | null> {
-  const auth = authStore.getState();
-  if (!auth.pubkey || auth.isGuest) return null;
-
-  const zapRequest = {
-    kind: 9734,
-    created_at: Math.floor(Date.now() / 1000),
-    content: comment,
-    tags: [
-      ['p', recipientPubkey],
-      ['amount', String(amountMsats)],
-      ['lnurl', lnurlCallbackUrl],
-      ['relays', ...RELAYS],
-      ['client', 'Nostr District'],
-    ],
-  };
-
-  try { return await signEvent(zapRequest); }
-  catch { return null; }
-}
-
 // ── Fetch Lightning invoice ───────────────────────────────────────────────────
 
 async function fetchInvoice(
@@ -295,7 +267,13 @@ export async function payLightningAddress(
         const signed = await signEvent(zapReq);
         zapRequestJson = JSON.stringify(signed);
         zapEventId = (signed as any).id;
-      } catch { /* fall through to plain pay */ }
+      } catch (e) {
+        // Without a signed kind:9734 the LNURL provider won't publish a
+        // kind:9735 receipt, so the item won't restore on re-login. Log
+        // so the failure is visible; payment still goes through as a
+        // plain LN send for any caller that wants to retry sign + receipt.
+        console.warn('[market] kind:9734 signing failed — purchasing as plain LN payment, no receipt will be published:', e);
+      }
     }
   }
 
@@ -762,7 +740,6 @@ export function startGlobalZapToasts(): void {
     // generic-Lightning toast dedupes against us even if its
     // payment_succeeded event fires before our async work finishes.
     claimIncomingZap(amountSats);
-    console.log('[Zap] WS incoming_zap', { senderPk: senderPk.slice(0, 16), senderName, amountSats, comment });
     const name = senderName || await resolveSenderName(senderPk);
     if (senderName && senderName.trim()) {
       _senderNameHints.set(senderPk, senderName.trim().slice(0, 30));
