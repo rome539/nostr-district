@@ -29,6 +29,7 @@ const ALLOWED_STREAMERS: AllowedStreamer[] = [
   '1ec454734dcbf6fe54901ce25c0c7c6bca5edd89443416761fadc321d38df139', // Laan Tungir
   '5ca9371fa79503e2d162ef4a745ac61c557dcfbbc52780cce1871edb6e3bdbac', // additional streamer
   '05e60159f1e0a6cb64fa573fc1ebe35f985a975defe7d75603fdb9e8cfd38334', // additional streamer
+  '70c766d23f7a954a51d6f79692f4f7bbcd837361463562a37c83e6cc6c17ab0b', // npub1wrrkd53l022555wk77tf9a8hh0xcxumpgc6k9gmus0nvcmqh4v9srykfn4
   // Nogood — hosted on zap.stream's signing pubkey; filter to the specific
   // channel UUID so we don't pick up every other zap.stream broadcast.
   { pubkey: 'cf45a6ba1363ad7ed213a078e710d24115ae721c9b47bd1ebf4458eaefb4c2a5',
