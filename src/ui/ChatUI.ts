@@ -152,10 +152,34 @@ export class ChatUI {
     const nameHtml = (pubkey && this.onNameClick)
       ? `<span style="color:${color};font-weight:bold;cursor:pointer;${neonGlow}" data-pk="${pubkey}">${escapeHtml(name)}</span>`
       : `<span style="color:${color};font-weight:bold;${neonGlow}">${escapeHtml(name)}</span>`;
-    msg.innerHTML = `${nameHtml}: <span class="cu-msg-body">${renderContent(text, emojis)}</span>`;
+    msg.innerHTML = `${nameHtml}: <span class="cu-msg-body" style="cursor:pointer;" title="Click to toggle original language">${renderContent(text, emojis)}</span>`;
     if (pubkey && this.onNameClick) {
       msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));
     }
+    const body = msg.querySelector('.cu-msg-body') as HTMLElement;
+    body.dataset.original = text;
+    body.dataset.showing = 'translated';
+    let downX = 0, downY = 0;
+    body.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
+    body.addEventListener('click', (e) => {
+      // Treat as drag (selection) only if pointer moved >4px between down and up
+      const dx = Math.abs(e.clientX - downX), dy = Math.abs(e.clientY - downY);
+      if (dx > 4 || dy > 4) return;
+      e.stopPropagation();
+      const showingOriginal = body.dataset.showing === 'original';
+      if (showingOriginal) {
+        const t = body.dataset.translated;
+        body.innerHTML = renderContent(t || text, emojis);
+        body.style.fontStyle = body.dataset.translated ? 'italic' : 'normal';
+        body.removeAttribute('translate');
+        body.dataset.showing = 'translated';
+      } else {
+        body.innerHTML = renderContent(body.dataset.original!, emojis);
+        body.style.fontStyle = 'normal';
+        body.setAttribute('translate', 'no');
+        body.dataset.showing = 'original';
+      }
+    });
     this.log.appendChild(msg);
     this.log.scrollTop = this.log.scrollHeight;
     while (this.log.children.length > 50) this.log.removeChild(this.log.firstChild!);
@@ -169,10 +193,11 @@ export class ChatUI {
     if (isMe) return;
     maybeTranslate(text).then((res) => {
       if (!res || !msg.isConnected) return;
-      const body = msg.querySelector('.cu-msg-body') as HTMLElement | null;
-      if (!body) return;
-      body.innerHTML = renderContent(res.translated, emojis);
-      body.style.fontStyle = 'italic';
+      body.dataset.translated = res.translated;
+      if (body.dataset.showing === 'translated') {
+        body.innerHTML = renderContent(res.translated, emojis);
+        body.style.fontStyle = 'italic';
+      }
     }).catch(() => { /* never throws */ });
   }
 
