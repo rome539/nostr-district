@@ -487,18 +487,23 @@ export function drawRoomBottom(
 ): { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null {
   const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
   const rY = walkFrame === 1 ? 1 : walkFrame === 2 ? -1 : 0;
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
 
   if (!hasPng) {
     x.fillStyle = a.bottomColor;
     if (!['skirt', 'miniskirt', 'dress'].includes(a.bottom) && a.top !== 'dress') {
-      x.fillRect(7, oY + 28, 10, 2);
+      // Belt raised 1px from oY+28 to oY+27 so the waistline sits flush
+      // against the body PNG; the row below (oY+29) is then a full-width
+      // pants-color strip so the silhouette reads as continuous trousers
+      // across the waist regardless of walk-frame leg offsets.
+      x.fillRect(7, oY + 26, 10, 3);
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(6, oY + 28, 12, 2);
+      x.fillRect(6, oY + 26, 12, 3);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(10, oY + 28, 4, 2);
+      x.fillRect(10, oY + 26, 4, 3);
       x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
+      x.fillRect(6, oY + 29, 12, 1);
     }
     if (a.top === 'dress') {
       x.fillRect(7, oY + 29 + lY, 4, 15);
@@ -509,21 +514,21 @@ export function drawRoomBottom(
     } else if (a.bottom === 'skirt') {
       x.fillRect(6, oY + 28, 12, 6);
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(6, oY + 28, 12, 2);
+      x.fillRect(6, oY + 27, 12, 2);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(10, oY + 28, 4, 2);
+      x.fillRect(10, oY + 27, 4, 2);
       x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
     } else if (a.bottom === 'overalls') {
       x.fillRect(7, oY + 29 + lY, 4, 15);
       x.fillRect(13, oY + 29 + rY, 4, 15);
       x.fillStyle = darken(a.bottomColor, 10);
-      x.fillRect(5, oY + 28, 14, 3);
+      x.fillRect(5, oY + 27, 14, 3);
     } else if (a.bottom === 'miniskirt') {
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(6, oY + 28, 12, 2);
+      x.fillRect(6, oY + 27, 12, 2);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(10, oY + 28, 4, 2);
+      x.fillRect(10, oY + 27, 4, 2);
       x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
       x.fillRect(6, oY + 29, 12, 3);
@@ -555,9 +560,9 @@ export function drawRoomBottom(
       }
       x.restore();
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(6, oY + 28, 12, 2);
+      x.fillRect(6, oY + 26, 12, 3);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(10, oY + 28, 4, 2);
+      x.fillRect(10, oY + 26, 4, 3);
       x.globalAlpha = 1;
     }
   }
@@ -568,6 +573,7 @@ export function drawRoomBottom(
     baggyjeans: 'bottom_baggyjeans_room', trousers: 'bottom_trousers_room',
     utilitypants: 'bottom_utilitypants_room', knightpants: 'bottom_knightpants_room',
     cargopants: 'bottom_cargopants_room', fishnet: 'bottom_fishnet_room',
+    camoshorts: 'bottom_camoshorts_room', cargoshorts: 'bottom_cargoshorts_room',
   };
   if (roomPngBottomPrefix[a.bottom] && a.top !== 'dress') {
     const cFrame = walkFrame >= 1 && walkFrame <= 4 ? walkFrame : 1;
@@ -606,7 +612,7 @@ export function drawRoomTop(
     x.fillRect(7, oY + 16, 10, 12);
   } else if (a.top === 'tshirt') {
     x.fillRect(3, oY + 14, 18, 4);
-    x.fillRect(6, oY + 18, 12, 10);
+    x.fillRect(6, oY + 18, 12, 9);
     x.fillStyle = a.skinColor;
     x.fillRect(4, oY + 18, 2, 10);
     x.fillRect(18, oY + 18, 2, 10);
@@ -671,7 +677,7 @@ export function drawRoomTop(
     x.fillStyle = a.skinColor;
     x.fillRect(4, oY + 18, 2, 10);
     x.fillRect(18, oY + 18, 2, 10);
-    x.fillRect(6, oY + 24, 12, 4);
+    x.fillRect(6, oY + 24, 12, 3);
     x.fillStyle = topDark;
     x.fillRect(9, oY + 14, 6, 1);
   } else if (a.top === 'jersey') {
@@ -720,7 +726,7 @@ export function drawRoomTop(
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve') {
   }
 
   // ── PNG top detail overlay ──
@@ -736,6 +742,7 @@ export function drawRoomTop(
     skindress:    'top_skindress_room',
     knightchest:  'top_knightchest_room',
     pizzashirt:   'top_pizzashirt_room',
+    camolongsleeve: 'top_camolongsleeve_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;

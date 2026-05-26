@@ -215,6 +215,12 @@ function startGame(): void {
             },
           },
         });
+        if (import.meta.env.DEV && game) {
+          (window as unknown as { __nd_game?: Phaser.Game }).__nd_game = game;
+          // Side-effect import wires window.__refreshClothing() and the
+          // Vite HMR listener for /public/assets/ clothing PNG changes.
+          import('./entities/avatar/devRefresh');
+        }
       });
     });
   }, 100);

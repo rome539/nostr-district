@@ -88,6 +88,19 @@ const CLOTHING_COLOR_KEYS: Record<string, keyof AvatarConfig> = {
 };
 const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
 
+/**
+ * Items inside CLOTHING_SLOTS whose visual is pre-themed and ignores the
+ * slot's color companion field. They render the same regardless of
+ * eyeColor/hairColor/etc., so the shop should equip them directly on
+ * EQUIP click instead of opening a useless color picker.
+ */
+const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
+  eyes: new Set(['blaze', 'frost', 'cosmic']),
+};
+function hasColorOption(item: MarketItem): boolean {
+  return !NO_COLOR_VARIANTS[item.slot]?.has(item.value);
+}
+
 /** Auto-equip nameColor/chatColor/rodSkin on purchase so they apply immediately. */
 function autoEquip(slot: string, value: string): void {
   if (!COSMETIC_SLOTS.has(slot)) return;
@@ -634,7 +647,7 @@ export class MarketPanel {
         <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0;gap:2px;">
           ${earnRight ??
             (owned
-              ? isCosmetic
+              ? isCosmetic || (isClothing && !hasColorOption(item))
                 ? `<button class="mp-equip" data-id="${esc(item.id)}" style="
                      padding:${btnPad};border-radius:4px;cursor:pointer;
                      font-family:'Courier New',monospace;font-size:10px;font-weight:bold;

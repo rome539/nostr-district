@@ -115,6 +115,7 @@ export const TIER_COLOR: Record<MarketItem['tier'], string> = {
 export const CATALOG: MarketItem[] = [
   // ── Tops ─────────────────────────────────────────────────────────────────────
   { id: 'top_camoshirt',   name: 'Camo Shirt',      slot: 'top',       value: 'camoshirt',      price: 0.50, tier: 'basic' },
+  { id: 'top_camolongsleeve', name: 'Camo Long Sleeve', slot: 'top',    value: 'camolongsleeve', price: 0.50, tier: 'basic' },
   { id: 'top_flannel',     name: 'Flannel',          slot: 'top',       value: 'flannel',        price: 0.50, tier: 'basic' },
   { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 1.50, tier: 'premium' },
   { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },
@@ -124,6 +125,8 @@ export const CATALOG: MarketItem[] = [
   // { id: 'top_knightchest', name: 'Knight Chest',     slot: 'top',       value: 'knightchest',    price: 1.50, tier: 'premium' },
   // ── Bottoms ───────────────────────────────────────────────────────────────────
   { id: 'bot_camopants',   name: 'Camo Pants',       slot: 'bottom',    value: 'camopants',      price: 0.50, tier: 'basic' },
+  { id: 'bot_camoshorts',  name: 'Camo Shorts',      slot: 'bottom',    value: 'camoshorts',     price: 0.50, tier: 'basic' },
+  { id: 'bot_cargoshorts', name: 'Cargo Shorts',     slot: 'bottom',    value: 'cargoshorts',    price: 0.50, tier: 'basic' },
   { id: 'bot_baggyjeans',  name: 'Baggy Jeans',      slot: 'bottom',    value: 'baggyjeans',     price: 0.50, tier: 'basic' },
   { id: 'bot_trousers',    name: 'Trousers',         slot: 'bottom',    value: 'trousers',       price: 0.50, tier: 'basic' },
   { id: 'bot_utilitypants',name: 'Utility Pants',    slot: 'bottom',    value: 'utilitypants',   price: 0.50, tier: 'basic' },

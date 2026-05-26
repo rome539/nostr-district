@@ -483,31 +483,33 @@ export function drawHubBottom(
   const legRY = walkFrame < 0 ? 0 : (walkFrame === 1 ? 1 : walkFrame === 3 ? -1 : 0);
 
   // ── Procedural bottoms ──
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
   if (a.top !== 'dress' && !isPngBottom) {
     x.fillStyle = a.bottomColor;
     if (a.bottom === 'skirt') {
       x.fillRect(cx - 2 * s, legY + 1, 4 * s, 2 * s);
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
+      x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(cx - 1, legY - 1, 2, 2);
+      x.fillRect(cx - 1, legY - 2, 2, 2);
       x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
     } else if (a.bottom === 'miniskirt') {
       x.fillRect(cx - 2 * s, legY + 1, 4 * s, 1 * s);
       x.fillStyle = darken(a.bottomColor, 30);
-      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 2);
-      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
-      x.fillRect(cx - 1, legY - 1, 2, 2);
-      x.globalAlpha = 1;
-      x.fillStyle = a.bottomColor;
-    } else {
-      x.fillRect(cx - 2 * s, legY, 4 * s, 3);
-      x.fillStyle = darken(a.bottomColor, 30);
       x.fillRect(cx - 2 * s, legY - 2, 4 * s, 2);
       x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
       x.fillRect(cx - 1, legY - 2, 2, 2);
+      x.globalAlpha = 1;
+      x.fillStyle = a.bottomColor;
+    } else {
+      // Pants top stripe extended up by 1 (4px instead of 3) so the 1px
+      // row vacated by raising the belt is filled with pants color.
+      x.fillRect(cx - 2 * s, legY - 1, 4 * s, 4);
+      x.fillStyle = darken(a.bottomColor, 30);
+      x.fillRect(cx - 2 * s, legY - 3, 4 * s, 2);
+      x.fillStyle = '#c8a830'; x.globalAlpha = 0.85;
+      x.fillRect(cx - 1, legY - 3, 2, 2);
       x.globalAlpha = 1;
       x.fillStyle = a.bottomColor;
       x.fillRect(cx - 2 * s, legY + legLY, 2 * s - 1, 7 * s);
@@ -526,6 +528,7 @@ export function drawHubBottom(
     baggyjeans: 'bottom_baggyjeans_hub', trousers: 'bottom_trousers_hub',
     utilitypants: 'bottom_utilitypants_hub', knightpants: 'bottom_knightpants_hub',
     cargopants: 'bottom_cargopants_hub', fishnet: 'bottom_fishnet_hub',
+    camoshorts: 'bottom_camoshorts_hub', cargoshorts: 'bottom_cargoshorts_hub',
   };
   if (hubPngBottomPrefix[a.bottom] && a.top !== 'dress') {
     const cFrame = walkFrame >= 0 && walkFrame <= 3 ? walkFrame + 1 : 1;
@@ -655,6 +658,7 @@ export function drawHubTop(
     skindress:   'top_skindress_hub',
     knightchest: 'top_knightchest_hub',
     pizzashirt:  'top_pizzashirt_hub',
+    camolongsleeve: 'top_camolongsleeve_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;

@@ -422,6 +422,34 @@ export abstract class BaseScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════════════
 
   /**
+   * Dev-only: regenerate every avatar texture in this scene from the
+   * current `imgCache` / `hubImgCache`. Used by the clothing hot-reload
+   * helper (src/entities/avatar/devRefresh.ts) so saving a PNG under
+   * `public/assets/{tops,bottoms,…}` live-updates instead of forcing a
+   * full page reload. Iterates the local player + every otherPlayer in
+   * the scene.
+   */
+  public _devRefreshAvatars(): void {
+    // Local player — re-emit walk frames + standing sprite.
+    const concrete = this as unknown as { generateWalkFrames?: (a: AvatarConfig) => void };
+    concrete.generateWalkFrames?.(getAvatar());
+    if (this.textures.exists('player')) this.textures.remove('player');
+    this.textures.addCanvas('player', this.renderOtherAvatar(getAvatar()));
+    this.playerSprite?.setTexture('player');
+
+    // Other players — reuse the live-update path from onAvatarUpdate.
+    const cfg = this.getOtherPlayerConfig();
+    this.otherPlayers.forEach((o, pk) => {
+      const av = o.avatar ? deserializeAvatar(o.avatar) : getDefaultAvatar();
+      if (!av) return;
+      const texKey = `${cfg.texKeyPrefix}${pk}`;
+      if (this.textures.exists(texKey)) this.textures.remove(texKey);
+      this.textures.addCanvas(texKey, this.renderOtherAvatar(av));
+      o.sprite.setTexture(texKey);
+    });
+  }
+
+  /**
    * Fade-out and destroy an other-player entry. Moves the entry to
    * dyingSprites during the tween so re-joins can cancel it cleanly.
    */
