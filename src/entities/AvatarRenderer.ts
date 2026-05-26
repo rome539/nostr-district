@@ -8,8 +8,8 @@
 import { AvatarConfig } from '../stores/avatarStore';
 import { imgCache, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from './avatar/assets';
 import { drawHairImg } from './avatar/drawCore';
-import { drawHubHair, drawHubHairSidesOnly, drawHubHat, drawHubEyes, drawHubAccessory, drawHubPngAccBehind, drawHubPngAccOver, drawHubPngAccAbove, drawHubBottom, drawHubTop } from './avatar/hubParts';
-import { drawRoomHair, drawRoomHairSidesOnly, drawRoomHat, drawRoomEyes, drawRoomAccessory, drawRoomPngAccBehind, drawRoomPngAccOver, drawRoomPngAccAbove, drawRoomBottom, drawRoomTop } from './avatar/roomParts';
+import { drawHubHair, drawHubHairSidesOnly, drawHubHat, drawHubEyes, drawHubAccessory, drawHubPngAccBehind, drawHubPngAccOver, drawHubPngAccFace, drawHubPngAccAbove, drawHubBottom, drawHubTop } from './avatar/hubParts';
+import { drawRoomHair, drawRoomHairSidesOnly, drawRoomHat, drawRoomEyes, drawRoomAccessory, drawRoomPngAccBehind, drawRoomPngAccOver, drawRoomPngAccFace, drawRoomPngAccAbove, drawRoomBottom, drawRoomTop } from './avatar/roomParts';
 
 export { itemImagesReady, hatImagesReady, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from './avatar/assets';
 
@@ -78,6 +78,9 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
 
   // ── Eyes (before hat so hat always covers eyes) ──
   drawHubEyes(x, a, cx, headY, s);
+
+  // ── Face mask PNG (over eyes, under hat) ──
+  drawHubPngAccFace(x, a.accessory, a.accessoryColor, cx, headY, s);
 
   // ── Hat ──
   if (hasHat) {
@@ -159,6 +162,9 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
 
   // ── Eyes (before hat so hat always covers eyes) ──
   drawRoomEyes(x, a, oY);
+
+  // ── Face mask PNG (over eyes, under hat) ──
+  drawRoomPngAccFace(x, a.accessory, a.accessoryColor, oY);
 
   // ── Hat ──
   if (hasHat) {

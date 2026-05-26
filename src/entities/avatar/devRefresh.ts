@@ -65,19 +65,12 @@ export async function refreshClothingArt(): Promise<void> {
 if (import.meta.env.DEV) {
   (window as unknown as { __refreshClothing?: () => Promise<void> }).__refreshClothing = refreshClothingArt;
   if (import.meta.hot) {
-    // Vite fires this for ALL static asset changes under /public, then
-    // schedules a full reload. Intercept clothing-asset changes and do
-    // an in-place refresh instead — return without letting the reload
-    // proceed by accepting the HMR update.
-    import.meta.hot.on('vite:beforeFullReload', (payload: { path?: string }) => {
-      const p = payload?.path || '';
-      if (/\/assets\/(tops|bottoms|hats|accessories|hair|eyes|body)\//.test(p)) {
-        refreshClothingArt();
-        // Vite still wants to reload — there's no clean way to cancel,
-        // but the refresh fires before the reload completes so the user
-        // gets an instant preview. The subsequent reload is a no-op
-        // visually since the new state matches.
-      }
+    // Custom HMR event sent by clothingHmrPlugin in vite.config.ts when a
+    // PNG under /public/assets/{tops,bottoms,hats,accessories,hair,eyes,body,furniture}/
+    // changes. The plugin suppresses the default full-reload so this is the
+    // only thing that fires — refresh art in place without losing scene state.
+    import.meta.hot.on('nd:asset-changed', () => {
+      refreshClothingArt();
     });
   }
 }

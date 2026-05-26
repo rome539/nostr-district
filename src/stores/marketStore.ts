@@ -150,6 +150,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'acc_ballonostrich',  name: 'Ostrich Balloon',    slot: 'accessory', value: 'ballonostrich',   price: 1.50, tier: 'premium' },
   { id: 'acc_wings',       name: 'Wings',            slot: 'accessory', value: 'wings',          price: 3.00, tier: 'rare' },
   { id: 'acc_cape',        name: 'Cape',             slot: 'accessory', value: 'cape',           price: 3.00, tier: 'rare' },
+  { id: 'acc_guyfaux',     name: 'Guy Fawkes Mask',  slot: 'accessory', value: 'guyfaux',        price: 1.50, tier: 'premium' },
+  { id: 'acc_hockeymask',  name: 'Hockey Mask',      slot: 'accessory', value: 'hockeymask',     price: 1.50, tier: 'premium' },
   // ── Hair ─────────────────────────────────────────────────────────────────────
   { id: 'hair_afro',       name: 'Afro',             slot: 'hair',      value: 'afro',           price: 0.50, tier: 'basic' },
   { id: 'hair_ponytail',   name: 'Ponytail',         slot: 'hair',      value: 'ponytail',       price: 0.50, tier: 'basic' },

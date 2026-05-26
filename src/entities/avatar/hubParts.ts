@@ -711,6 +711,18 @@ export function drawHubPngAccOver(x: CanvasRenderingContext2D, acc: string, colo
   }
 }
 
+/** Face masks (Guy Fawkes etc.) — drawn over eyes but under hat */
+export function drawHubPngAccFace(x: CanvasRenderingContext2D, acc: string, color: string, cx: number, hy: number, s: number): void {
+  if (acc === 'guyfaux') {
+    const img = imgCache.get('acc_guyfaux_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_guyfaux_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 8, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'hockeymask') {
+    const img = imgCache.get('acc_hockeymask_hub');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_hockeymask_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 9, img.naturalWidth, img.naturalHeight); }
+  }
+}
+
 /** Balloon — floats above everything, string anchored at wrist */
 export function drawHubPngAccAbove(x: CanvasRenderingContext2D, acc: string, color: string, cx: number, hy: number, _s: number): void {
   if (acc === 'ballon') {

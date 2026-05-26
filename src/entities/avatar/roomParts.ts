@@ -795,6 +795,18 @@ export function drawRoomPngAccOver(x: CanvasRenderingContext2D, acc: string, col
   }
 }
 
+/** Face masks (Guy Fawkes etc.) — drawn over eyes but under hat */
+export function drawRoomPngAccFace(x: CanvasRenderingContext2D, acc: string, color: string, oY: number): void {
+  if (acc === 'guyfaux') {
+    const img = imgCache.get('acc_guyfaux_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_guyfaux_room', Math.round(12 - img.naturalWidth / 2), oY, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'hockeymask') {
+    const img = imgCache.get('acc_hockeymask_room');
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_hockeymask_room', Math.round(12 - img.naturalWidth / 2), oY - 1, img.naturalWidth, img.naturalHeight); }
+  }
+}
+
 /** Balloon — floats above everything, string anchored at wrist */
 export function drawRoomPngAccAbove(x: CanvasRenderingContext2D, acc: string, color: string, oY: number): void {
   if (acc === 'ballon') {

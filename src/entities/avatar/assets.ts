@@ -217,6 +217,10 @@ export const itemImagesReady = Promise.all([
   loadItemImg('acc_ballonbitcoin_room',      'assets/accessories/ballonbitcoin.png'),
   loadItemImg('acc_ballonostrich_hub',       'assets/accessories/ballonostrichhub.png'),
   loadItemImg('acc_ballonostrich_room',      'assets/accessories/ballonostrich.png'),
+  loadItemImg('acc_guyfaux_hub',             'assets/accessories/guyfauxhub.png'),
+  loadItemImg('acc_guyfaux_room',            'assets/accessories/guyfaux.png'),
+  loadItemImg('acc_hockeymask_hub',          'assets/accessories/hockeymaskhub.png'),
+  loadItemImg('acc_hockeymask_room',         'assets/accessories/hockeymask.png'),
   // fish hat
   loadItemImg('fishhat', 'assets/hats/fishhat.png'),
   loadItemImg('fishhat', 'assets/hats/fishhathub.png', hubImgCache),
