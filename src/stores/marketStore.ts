@@ -153,9 +153,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'acc_cape',        name: 'Cape',             slot: 'accessory', value: 'cape',           price: 3.00, tier: 'rare' },
   { id: 'acc_guyfaux',     name: 'Guy Fawkes Mask',  slot: 'accessory', value: 'guyfaux',        price: 1.50, tier: 'premium' },
   { id: 'acc_hockeymask',  name: 'Hockey Mask',      slot: 'accessory', value: 'hockeymask',     price: 1.50, tier: 'premium' },
-  { id: 'acc_onimask',     name: 'Oni Mask',         slot: 'accessory', value: 'onimask',        price: 0.50, tier: 'basic' },
-  { id: 'acc_onimaskblue', name: 'Blue Oni Mask',    slot: 'accessory', value: 'onimaskblue',    price: 0.50, tier: 'basic' },
-  { id: 'acc_onimaskgreen',name: 'Green Oni Mask',   slot: 'accessory', value: 'onimaskgreen',   price: 0.50, tier: 'basic' },
+  { id: 'acc_onimask',     name: 'Oni Mask',         slot: 'accessory', value: 'onimask',        price: 1.50, tier: 'premium' },
+  { id: 'acc_onimaskblue', name: 'Blue Oni Mask',    slot: 'accessory', value: 'onimaskblue',    price: 1.50, tier: 'premium' },
+  { id: 'acc_onimaskgreen',name: 'Green Oni Mask',   slot: 'accessory', value: 'onimaskgreen',   price: 1.50, tier: 'premium' },
   // ── Hair ─────────────────────────────────────────────────────────────────────
   { id: 'hair_afro',       name: 'Afro',             slot: 'hair',      value: 'afro',           price: 0.50, tier: 'basic' },
   { id: 'hair_ponytail',   name: 'Ponytail',         slot: 'hair',      value: 'ponytail',       price: 0.50, tier: 'basic' },
@@ -169,7 +169,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'hair_braid',      name: 'Braid',            slot: 'hair',      value: 'braid',          price: 1.50, tier: 'premium' },
   // ── Eyes ─────────────────────────────────────────────────────────────────────
   { id: 'eye_heart',  name: '♥ Heart Eyes',  slot: 'eyes', value: 'heart',  price: 0.50, tier: 'basic' },
-  { id: 'eye_glow',   name: '✦ Glow Eyes',   slot: 'eyes', value: 'glow',   price: 2.00, tier: 'premium' },
+  { id: 'eye_glow',   name: '✦ Glow Eyes',   slot: 'eyes', value: 'glow',   price: 1.50, tier: 'premium' },
   { id: 'eye_blaze',  name: '🔥 Blaze Eyes',  slot: 'eyes', value: 'blaze',  price: 3.00, tier: 'rare' },
   { id: 'eye_frost',  name: '❄️ Frost Eyes',  slot: 'eyes', value: 'frost',  price: 3.00, tier: 'rare' },
   { id: 'eye_cosmic', name: '✨ Cosmic Eyes', slot: 'eyes', value: 'cosmic', price: 3.00, tier: 'rare' },
