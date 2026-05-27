@@ -659,12 +659,13 @@ export function drawHubTop(
     knightchest: 'top_knightchest_hub',
     pizzashirt:  'top_pizzashirt_hub',
     camolongsleeve: 'top_camolongsleeve_hub',
+    vjacket:     'top_vjacket_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
     const tx = Math.round(cx - tImg.naturalWidth / 2);
     const hubTopYOffset = a.top === 'bomber' ? -1 : 0;
-    x.fillStyle = a.topColor;
+    x.fillStyle = a.top === 'vjacket' ? '#ffffff' : a.topColor;
     drawHairImg(x, hubTopPngKey, tx, headY + 5 * s + hubTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }
 
@@ -715,11 +716,16 @@ export function drawHubPngAccOver(x: CanvasRenderingContext2D, acc: string, colo
 export function drawHubPngAccFace(x: CanvasRenderingContext2D, acc: string, color: string, cx: number, hy: number, s: number): void {
   if (acc === 'guyfaux') {
     const img = imgCache.get('acc_guyfaux_hub');
-    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_guyfaux_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 8, img.naturalWidth, img.naturalHeight); }
+    if (img) { x.fillStyle = color; drawHairImg(x, 'acc_guyfaux_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 9, img.naturalWidth, img.naturalHeight); }
   }
   if (acc === 'hockeymask') {
     const img = imgCache.get('acc_hockeymask_hub');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_hockeymask_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 9, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'onimask' || acc === 'onimaskblue' || acc === 'onimaskgreen') {
+    const key = `acc_${acc}_hub`;
+    const img = imgCache.get(key);
+    if (img) { x.fillStyle = '#ffffff'; drawHairImg(x, key, Math.round(cx - img.naturalWidth / 2), hy + 4 * s - 9, img.naturalWidth, img.naturalHeight); }
   }
 }
 

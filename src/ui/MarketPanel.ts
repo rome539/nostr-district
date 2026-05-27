@@ -96,6 +96,8 @@ const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
  */
 const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
   eyes: new Set(['blaze', 'frost', 'cosmic']),
+  accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen']),
+  top: new Set(['vjacket']),
 };
 function hasColorOption(item: MarketItem): boolean {
   return !NO_COLOR_VARIANTS[item.slot]?.has(item.value);
@@ -582,7 +584,7 @@ export class MarketPanel {
       const isEquipped = (isCosmetic || isClothing) && (avatar as any)[item.slot] === item.value;
       const colorKey   = isClothing ? CLOTHING_COLOR_KEYS[item.slot] : null;
       const currentColor = colorKey ? (avatar as any)[colorKey] as string : '';
-      const pickerOpen = isClothing && owned && MarketPanel._equipPickerOpenId === item.id;
+      const pickerOpen = isClothing && owned && hasColorOption(item) && MarketPanel._equipPickerOpenId === item.id;
       const onSale     = !owned && item.id === saleItem.id;
       const finalPrice = onSale ? getSalePrice(item) : item.price;
 

@@ -116,6 +116,7 @@ export const CATALOG: MarketItem[] = [
   // ── Tops ─────────────────────────────────────────────────────────────────────
   { id: 'top_camoshirt',   name: 'Camo Shirt',      slot: 'top',       value: 'camoshirt',      price: 0.50, tier: 'basic' },
   { id: 'top_camolongsleeve', name: 'Camo Long Sleeve', slot: 'top',    value: 'camolongsleeve', price: 0.50, tier: 'basic' },
+  { id: 'top_vjacket',     name: 'V Jacket',         slot: 'top',       value: 'vjacket',        price: 1.50, tier: 'premium' },
   { id: 'top_flannel',     name: 'Flannel',          slot: 'top',       value: 'flannel',        price: 0.50, tier: 'basic' },
   { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 1.50, tier: 'premium' },
   { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },
@@ -152,6 +153,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'acc_cape',        name: 'Cape',             slot: 'accessory', value: 'cape',           price: 3.00, tier: 'rare' },
   { id: 'acc_guyfaux',     name: 'Guy Fawkes Mask',  slot: 'accessory', value: 'guyfaux',        price: 1.50, tier: 'premium' },
   { id: 'acc_hockeymask',  name: 'Hockey Mask',      slot: 'accessory', value: 'hockeymask',     price: 1.50, tier: 'premium' },
+  { id: 'acc_onimask',     name: 'Oni Mask',         slot: 'accessory', value: 'onimask',        price: 0.50, tier: 'basic' },
+  { id: 'acc_onimaskblue', name: 'Blue Oni Mask',    slot: 'accessory', value: 'onimaskblue',    price: 0.50, tier: 'basic' },
+  { id: 'acc_onimaskgreen',name: 'Green Oni Mask',   slot: 'accessory', value: 'onimaskgreen',   price: 0.50, tier: 'basic' },
   // ── Hair ─────────────────────────────────────────────────────────────────────
   { id: 'hair_afro',       name: 'Afro',             slot: 'hair',      value: 'afro',           price: 0.50, tier: 'basic' },
   { id: 'hair_ponytail',   name: 'Ponytail',         slot: 'hair',      value: 'ponytail',       price: 0.50, tier: 'basic' },

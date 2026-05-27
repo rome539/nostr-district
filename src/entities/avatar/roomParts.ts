@@ -65,8 +65,8 @@ export function drawRoomHair(x: CanvasRenderingContext2D, hair: string, oY: numb
     }
     case 'pigtails': {
       const d = HAIR_DEFS.pigtails;
-      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY, d.flipH); }
-      else { x.fillRect(5, oY, 14, 4); x.fillRect(1, oY + 2, 4, 10); x.fillRect(19, oY + 2, 4, 10); }
+      if (imgCache.has(d.roomKey)) { drawHairNative(x, d.roomKey, d.roomX, oY + d.roomY + 1, d.flipH); }
+      else { x.fillRect(5, oY + 1, 14, 4); x.fillRect(1, oY + 3, 4, 10); x.fillRect(19, oY + 3, 4, 10); }
       break;
     }
     case 'horseshoe': {
@@ -726,7 +726,7 @@ export function drawRoomTop(
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve' || a.top === 'vjacket') {
   }
 
   // ── PNG top detail overlay ──
@@ -743,12 +743,13 @@ export function drawRoomTop(
     knightchest:  'top_knightchest_room',
     pizzashirt:   'top_pizzashirt_room',
     camolongsleeve: 'top_camolongsleeve_room',
+    vjacket:        'top_vjacket_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;
     const tx = Math.round(12 - tImg.naturalWidth / 2);
     const roomTopYOffset = a.top === 'bomber' ? -1 : a.top === 'jacket' ? -1 : 0;
-    x.fillStyle = a.topColor;
+    x.fillStyle = a.top === 'vjacket' ? '#ffffff' : a.topColor;
     drawHairImg(x, roomTopPngKey, tx, oY + 14 + roomTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }
 
@@ -804,6 +805,11 @@ export function drawRoomPngAccFace(x: CanvasRenderingContext2D, acc: string, col
   if (acc === 'hockeymask') {
     const img = imgCache.get('acc_hockeymask_room');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_hockeymask_room', Math.round(12 - img.naturalWidth / 2), oY - 1, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'onimask' || acc === 'onimaskblue' || acc === 'onimaskgreen') {
+    const key = `acc_${acc}_room`;
+    const img = imgCache.get(key);
+    if (img) { x.fillStyle = '#ffffff'; drawHairImg(x, key, Math.round(12 - img.naturalWidth / 2), oY - 1, img.naturalWidth, img.naturalHeight); }
   }
 }
 

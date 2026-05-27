@@ -173,6 +173,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_knightchest_hub',  'assets/bottoms/knightchesthub.png'),
   loadItemImg('top_pizzashirt_hub',   'assets/tops/pizzashirthub.png'),
   loadItemImg('top_camolongsleeve_hub','assets/tops/camolongsleevehub.png'),
+  loadItemImg('top_vjacket_hub',      'assets/tops/Vjackethub.png'),
   loadItemImg('top_bomber_room',      'assets/tops/bomber.png'),
   loadItemImg('top_flannel_room',     'assets/tops/flanel.png'),
   loadItemImg('top_robe_room',        'assets/tops/wizardrobe.png'),
@@ -184,6 +185,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_knightchest_room', 'assets/bottoms/knightchest.png'),
   loadItemImg('top_pizzashirt_room',  'assets/tops/pizzashirt.png'),
   loadItemImg('top_camolongsleeve_room','assets/tops/camolongsleeve.png'),
+  loadItemImg('top_vjacket_room',     'assets/tops/Vjacket.png'),
   // Shorts — static (no walk frames). Same PNG aliased to all 4 frame slots
   // so the bottom-renderer's `_${cFrame}` key lookup always resolves.
   loadItemImg('bottom_camoshorts_hub_1',  'assets/bottoms/camoshortshub.png'),
@@ -221,6 +223,12 @@ export const itemImagesReady = Promise.all([
   loadItemImg('acc_guyfaux_room',            'assets/accessories/guyfaux.png'),
   loadItemImg('acc_hockeymask_hub',          'assets/accessories/hockeymaskhub.png'),
   loadItemImg('acc_hockeymask_room',         'assets/accessories/hockeymask.png'),
+  loadItemImg('acc_onimask_hub',             'assets/accessories/onimaskhub.png'),
+  loadItemImg('acc_onimask_room',            'assets/accessories/onimask.png'),
+  loadItemImg('acc_onimaskblue_hub',         'assets/accessories/onimaskbluehub.png'),
+  loadItemImg('acc_onimaskblue_room',        'assets/accessories/onimaskblue.png'),
+  loadItemImg('acc_onimaskgreen_hub',        'assets/accessories/onimaskgreenhub.png'),
+  loadItemImg('acc_onimaskgreen_room',       'assets/accessories/onimaskgreen.png'),
   // fish hat
   loadItemImg('fishhat', 'assets/hats/fishhat.png'),
   loadItemImg('fishhat', 'assets/hats/fishhathub.png', hubImgCache),

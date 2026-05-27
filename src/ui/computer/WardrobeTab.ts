@@ -279,6 +279,10 @@ export class WardrobeTab {
     if (!colorKey) { container.innerHTML = ''; return; }
     const eyeCycleTypes = new Set(['blaze', 'frost', 'cosmic']);
     if (this.currentSlot === 'eyes' && eyeCycleTypes.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
+    const noColorAcc = new Set(['onimask', 'onimaskblue', 'onimaskgreen']);
+    if (this.currentSlot === 'accessory' && noColorAcc.has(avatar.accessory ?? '')) { container.innerHTML = ''; return; }
+    const noColorTop = new Set(['vjacket']);
+    if (this.currentSlot === 'top' && noColorTop.has(avatar.top ?? '')) { container.innerHTML = ''; return; }
     const currentColor = (avatar as any)[colorKey] as string;
 
     container.innerHTML = `
