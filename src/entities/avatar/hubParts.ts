@@ -483,7 +483,7 @@ export function drawHubBottom(
   const legRY = walkFrame < 0 ? 0 : (walkFrame === 1 ? 1 : walkFrame === 3 ? -1 : 0);
 
   // ── Procedural bottoms ──
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
   if (a.top !== 'dress' && !isPngBottom) {
     x.fillStyle = a.bottomColor;
     if (a.bottom === 'skirt') {
@@ -527,7 +527,7 @@ export function drawHubBottom(
     jeans: 'bottom_jeans_hub', camopants: 'bottom_camopants_hub',
     baggyjeans: 'bottom_baggyjeans_hub', trousers: 'bottom_trousers_hub',
     utilitypants: 'bottom_utilitypants_hub', knightpants: 'bottom_knightpants_hub',
-    cargopants: 'bottom_cargopants_hub', fishnet: 'bottom_fishnet_hub',
+    cargopants: 'bottom_cargopants_hub', splitlinepants: 'bottom_splitlinepants_hub', fishnet: 'bottom_fishnet_hub',
     camoshorts: 'bottom_camoshorts_hub', cargoshorts: 'bottom_cargoshorts_hub',
   };
   if (hubPngBottomPrefix[a.bottom] && a.top !== 'dress') {
@@ -664,7 +664,7 @@ export function drawHubTop(
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
     const tx = Math.round(cx - tImg.naturalWidth / 2);
-    const hubTopYOffset = a.top === 'bomber' ? -1 : 0;
+    const hubTopYOffset = a.top === 'bomber' ? -1 : a.top === 'jacket' ? -1 : 0;
     x.fillStyle = a.top === 'vjacket' ? '#ffffff' : a.topColor;
     drawHairImg(x, hubTopPngKey, tx, headY + 5 * s + hubTopYOffset, tImg.naturalWidth, tImg.naturalHeight);
   }
@@ -705,6 +705,18 @@ export function drawHubPngAccOver(x: CanvasRenderingContext2D, acc: string, colo
   if (acc === 'cape') {
     const img = imgCache.get('acc_cape_hub');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard') {
+    const key = `acc_${acc}_hub`;
+    const img = imgCache.get(key);
+    if (img) {
+      const yOff = acc === 'embercloak' ? hy + 4 * s + 1
+                 : acc === 'wanderhood' ? hy + 4 * s - 8
+                 : hy + 4 * s;
+      const xOff = acc === 'arenaguard' ? -2 : 0;
+      x.fillStyle = acc === 'arenaguard' ? '#ffffff' : color;
+      drawHairImg(x, key, Math.round(cx - img.naturalWidth / 2) + xOff, yOff, img.naturalWidth, img.naturalHeight);
+    }
   }
   if (acc === 'ostirchfloatie') {
     const img = imgCache.get('acc_ostirchfloatie_hub');

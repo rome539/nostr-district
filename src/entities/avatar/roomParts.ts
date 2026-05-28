@@ -487,7 +487,7 @@ export function drawRoomBottom(
 ): { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null {
   const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
   const rY = walkFrame === 1 ? 1 : walkFrame === 2 ? -1 : 0;
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
 
   if (!hasPng) {
     x.fillStyle = a.bottomColor;
@@ -572,7 +572,7 @@ export function drawRoomBottom(
     jeans: 'bottom_jeans_room', camopants: 'bottom_camopants_room',
     baggyjeans: 'bottom_baggyjeans_room', trousers: 'bottom_trousers_room',
     utilitypants: 'bottom_utilitypants_room', knightpants: 'bottom_knightpants_room',
-    cargopants: 'bottom_cargopants_room', fishnet: 'bottom_fishnet_room',
+    cargopants: 'bottom_cargopants_room', splitlinepants: 'bottom_splitlinepants_room', fishnet: 'bottom_fishnet_room',
     camoshorts: 'bottom_camoshorts_room', cargoshorts: 'bottom_cargoshorts_room',
   };
   if (roomPngBottomPrefix[a.bottom] && a.top !== 'dress') {
@@ -789,6 +789,18 @@ export function drawRoomPngAccOver(x: CanvasRenderingContext2D, acc: string, col
   if (acc === 'cape') {
     const img = imgCache.get('acc_cape_room');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_room', Math.round(12 - img.naturalWidth / 2), oY + 13, img.naturalWidth, img.naturalHeight); }
+  }
+  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard') {
+    const key = `acc_${acc}_room`;
+    const img = imgCache.get(key);
+    if (img) {
+      const yOff = acc === 'embercloak' ? oY + 14
+                 : acc === 'wanderhood' ? oY - 1
+                 : oY + 13;
+      const xOff = acc === 'arenaguard' ? -2 : 0;
+      x.fillStyle = acc === 'arenaguard' ? '#ffffff' : color;
+      drawHairImg(x, key, Math.round(12 - img.naturalWidth / 2) + xOff, yOff, img.naturalWidth, img.naturalHeight);
+    }
   }
   if (acc === 'ostirchfloatie') {
     const img = imgCache.get('acc_ostirchfloatie_room');

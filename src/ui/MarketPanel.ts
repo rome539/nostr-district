@@ -96,8 +96,9 @@ const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
  */
 const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
   eyes: new Set(['blaze', 'frost', 'cosmic']),
-  accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen']),
+  accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']),
   top: new Set(['vjacket']),
+  hat: new Set(['beasthat', 'arenahelm']),
 };
 function hasColorOption(item: MarketItem): boolean {
   return !NO_COLOR_VARIANTS[item.slot]?.has(item.value);

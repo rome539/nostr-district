@@ -67,7 +67,8 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
   const hasHat = a.hat !== 'none';
   const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
   const longHairStyle = ['long', 'mullet', 'partbeard', 'braid'].includes(a.hair);
-  if (a.hair !== 'none') {
+  const hoodCoversHair = a.accessory === 'wanderhood' || a.hat === 'arenahelm';
+  if (a.hair !== 'none' && !hoodCoversHair) {
     x.fillStyle = a.hairColor;
     if (!hasHat || hatAllowsFullHair) {
       drawHubHair(x, a.hair, cx, headY, s);
@@ -151,7 +152,8 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
   const hasHat = a.hat !== 'none';
   const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
   const longHairStyle = ['long', 'mullet', 'partbeard', 'braid'].includes(a.hair);
-  if (a.hair !== 'none') {
+  const hoodCoversHair = a.accessory === 'wanderhood' || a.hat === 'arenahelm';
+  if (a.hair !== 'none' && !hoodCoversHair) {
     x.fillStyle = a.hairColor;
     if (!hasHat || hatAllowsFullHair) {
       drawRoomHair(x, a.hair, oY);
