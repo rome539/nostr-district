@@ -119,6 +119,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'top_vjacket',     name: 'V Jacket',         slot: 'top',       value: 'vjacket',        price: 1.50, tier: 'premium' },
   { id: 'top_travelercoat', name: "Traveler's Coat", slot: 'top',       value: 'travelercoat',   price: 1.50, tier: 'premium' },
   { id: 'top_twotoneshirt', name: 'Two Tone Shirt',  slot: 'top',       value: 'twotoneshirt',   price: 1.50, tier: 'premium' },
+  { id: 'top_bannercoat',  name: 'Banner Coat',       slot: 'top',       value: 'bannercoat',     price: 1.50, tier: 'premium' },
   { id: 'top_flannel',     name: 'Flannel',          slot: 'top',       value: 'flannel',        price: 0.50, tier: 'basic' },
   { id: 'top_bomber',      name: 'Bomber Jacket',    slot: 'top',       value: 'bomber',         price: 1.50, tier: 'premium' },
   { id: 'top_jacket',      name: 'Jacket',           slot: 'top',       value: 'jacket',         price: 0.50, tier: 'basic' },

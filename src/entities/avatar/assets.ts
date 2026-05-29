@@ -179,6 +179,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_vjacket_hub',      'assets/tops/Vjackethub.png'),
   loadItemImg('top_travelercoat_hub', 'assets/tops/TravelerCoathub.png'),
   loadItemImg('top_twotoneshirt_hub', 'assets/tops/twotoneshirthub.png'),
+  loadItemImg('top_bannercoat_hub',   'assets/tops/bannercoathub.png'),
   loadItemImg('top_bomber_room',      'assets/tops/bomber.png'),
   loadItemImg('top_flannel_room',     'assets/tops/flanel.png'),
   loadItemImg('top_robe_room',        'assets/tops/wizardrobe.png'),
@@ -193,6 +194,7 @@ export const itemImagesReady = Promise.all([
   loadItemImg('top_vjacket_room',     'assets/tops/Vjacket.png'),
   loadItemImg('top_travelercoat_room','assets/tops/TravelerCoat.png'),
   loadItemImg('top_twotoneshirt_room','assets/tops/twotoneshirt.png'),
+  loadItemImg('top_bannercoat_room',  'assets/tops/bannercoat.png'),
   // Shorts — static (no walk frames). Same PNG aliased to all 4 frame slots
   // so the bottom-renderer's `_${cFrame}` key lookup always resolves.
   loadItemImg('bottom_camoshorts_hub_1',  'assets/bottoms/camoshortshub.png'),
