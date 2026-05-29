@@ -791,6 +791,13 @@ export class WalletPanel {
       WalletPanel._render();
     });
 
+    // Stop key events on every wallet input from bubbling up to the Phaser
+    // game canvas, which would otherwise swallow space-bar (emote toggle) and
+    // arrow keys while the user is typing a comment / amount / Lightning addr.
+    document.querySelectorAll('#wallet-panel input').forEach(el => {
+      el.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key !== 'Escape') e.stopPropagation(); });
+    });
+
     // Enter key triggers generate from any input on receive tab
     document.getElementById('wp-amt')?.addEventListener('keydown', (e) => {
       if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); document.getElementById('wp-make')?.click(); }
