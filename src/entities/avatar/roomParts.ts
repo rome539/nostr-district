@@ -726,7 +726,7 @@ export function drawRoomTop(
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve' || a.top === 'vjacket' || a.top === 'travelercoat') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve' || a.top === 'vjacket' || a.top === 'travelercoat' || a.top === 'twotoneshirt') {
   }
 
   // ── PNG top detail overlay ──
@@ -745,6 +745,7 @@ export function drawRoomTop(
     camolongsleeve: 'top_camolongsleeve_room',
     vjacket:        'top_vjacket_room',
     travelercoat:   'top_travelercoat_room',
+    twotoneshirt:   'top_twotoneshirt_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;

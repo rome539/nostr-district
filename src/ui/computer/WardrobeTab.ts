@@ -9,7 +9,11 @@ import { t as ti18n } from '../../i18n/i18n';
 function esc(s: string): string {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
 }
+const LABEL_OVERRIDES: Record<string, string> = {
+  splitlinepants: 'Two Tone Pants',
+};
 function fmtLabel(s: string): string {
+  if (LABEL_OVERRIDES[s]) return esc(LABEL_OVERRIDES[s]);
   return esc(s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
 }
 

@@ -661,6 +661,7 @@ export function drawHubTop(
     camolongsleeve: 'top_camolongsleeve_hub',
     vjacket:     'top_vjacket_hub',
     travelercoat:'top_travelercoat_hub',
+    twotoneshirt:'top_twotoneshirt_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
