@@ -483,7 +483,7 @@ export function drawHubBottom(
   const legRY = walkFrame < 0 ? 0 : (walkFrame === 1 ? 1 : walkFrame === 3 ? -1 : 0);
 
   // ── Procedural bottoms ──
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'carnivalpants', 'explorerpants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
   if (a.top !== 'dress' && !isPngBottom) {
     x.fillStyle = a.bottomColor;
     if (a.bottom === 'skirt') {
@@ -527,7 +527,7 @@ export function drawHubBottom(
     jeans: 'bottom_jeans_hub', camopants: 'bottom_camopants_hub',
     baggyjeans: 'bottom_baggyjeans_hub', trousers: 'bottom_trousers_hub',
     utilitypants: 'bottom_utilitypants_hub', knightpants: 'bottom_knightpants_hub',
-    cargopants: 'bottom_cargopants_hub', splitlinepants: 'bottom_splitlinepants_hub', fishnet: 'bottom_fishnet_hub',
+    cargopants: 'bottom_cargopants_hub', splitlinepants: 'bottom_splitlinepants_hub', carnivalpants: 'bottom_carnivalpants_hub', explorerpants: 'bottom_explorerpants_hub', fishnet: 'bottom_fishnet_hub',
     camoshorts: 'bottom_camoshorts_hub', cargoshorts: 'bottom_cargoshorts_hub',
   };
   if (hubPngBottomPrefix[a.bottom] && a.top !== 'dress') {
@@ -660,6 +660,7 @@ export function drawHubTop(
     pizzashirt:  'top_pizzashirt_hub',
     camolongsleeve: 'top_camolongsleeve_hub',
     vjacket:     'top_vjacket_hub',
+    travelercoat:'top_travelercoat_hub',
   } as Record<string, string>)[a.top];
   if (hubTopPngKey && imgCache.has(hubTopPngKey)) {
     const tImg = imgCache.get(hubTopPngKey)!;
@@ -706,7 +707,7 @@ export function drawHubPngAccOver(x: CanvasRenderingContext2D, acc: string, colo
     const img = imgCache.get('acc_cape_hub');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_hub', Math.round(cx - img.naturalWidth / 2), hy + 4 * s, img.naturalWidth, img.naturalHeight); }
   }
-  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard') {
+  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard' || acc === 'sandcloak') {
     const key = `acc_${acc}_hub`;
     const img = imgCache.get(key);
     if (img) {

@@ -1407,6 +1407,11 @@ export abstract class BaseScene extends Phaser.Scene {
           return;
         }
         if (this.handleRpsIncoming(pk, name, text)) return;
+        // Drop any unhandled slash-prefixed control messages (e.g. /game:music:*
+        // sent for myroom music sync). They're broadcast over chat but should
+        // never display as a chat line — a user-typed slash command goes through
+        // the local handler in ChatUI and never reaches the wire.
+        if (text.startsWith('/')) return;
         if (!isMe && mutedPlayers.has(pk)) {
           this.chatUI.addMessage(name, text, '#3d3d55', pk, emojis);
           return;

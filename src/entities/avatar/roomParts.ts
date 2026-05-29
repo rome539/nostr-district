@@ -487,7 +487,7 @@ export function drawRoomBottom(
 ): { data: ImageData; cx: number; cy: number; cw: number; ch: number } | null {
   const lY = walkFrame === 1 ? -1 : walkFrame === 2 ? 1 : 0;
   const rY = walkFrame === 1 ? 1 : walkFrame === 2 ? -1 : 0;
-  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
+  const isPngBottom = ['jeans', 'camopants', 'baggyjeans', 'trousers', 'utilitypants', 'knightpants', 'cargopants', 'splitlinepants', 'carnivalpants', 'explorerpants', 'fishnet', 'camoshorts', 'cargoshorts'].includes(a.bottom);
 
   if (!hasPng) {
     x.fillStyle = a.bottomColor;
@@ -572,7 +572,7 @@ export function drawRoomBottom(
     jeans: 'bottom_jeans_room', camopants: 'bottom_camopants_room',
     baggyjeans: 'bottom_baggyjeans_room', trousers: 'bottom_trousers_room',
     utilitypants: 'bottom_utilitypants_room', knightpants: 'bottom_knightpants_room',
-    cargopants: 'bottom_cargopants_room', splitlinepants: 'bottom_splitlinepants_room', fishnet: 'bottom_fishnet_room',
+    cargopants: 'bottom_cargopants_room', splitlinepants: 'bottom_splitlinepants_room', carnivalpants: 'bottom_carnivalpants_room', explorerpants: 'bottom_explorerpants_room', fishnet: 'bottom_fishnet_room',
     camoshorts: 'bottom_camoshorts_room', cargoshorts: 'bottom_cargoshorts_room',
   };
   if (roomPngBottomPrefix[a.bottom] && a.top !== 'dress') {
@@ -726,7 +726,7 @@ export function drawRoomTop(
     x.fillRect(18, oY + 18, 2, 10);
     x.fillStyle = topDark;
     x.fillRect(8, oY + 13, 8, 1);
-  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve' || a.top === 'vjacket') {
+  } else if (a.top === 'robe' || a.top === 'bitcoinshirt' || a.top === 'ostrichshirt' || a.top === 'camoshirt' || a.top === 'tunic' || a.top === 'skindress' || a.top === 'knightchest' || a.top === 'camolongsleeve' || a.top === 'vjacket' || a.top === 'travelercoat') {
   }
 
   // ── PNG top detail overlay ──
@@ -744,6 +744,7 @@ export function drawRoomTop(
     pizzashirt:   'top_pizzashirt_room',
     camolongsleeve: 'top_camolongsleeve_room',
     vjacket:        'top_vjacket_room',
+    travelercoat:   'top_travelercoat_room',
   } as Record<string, string>)[a.top];
   if (roomTopPngKey && imgCache.has(roomTopPngKey)) {
     const tImg = imgCache.get(roomTopPngKey)!;
@@ -790,7 +791,7 @@ export function drawRoomPngAccOver(x: CanvasRenderingContext2D, acc: string, col
     const img = imgCache.get('acc_cape_room');
     if (img) { x.fillStyle = color; drawHairImg(x, 'acc_cape_room', Math.round(12 - img.naturalWidth / 2), oY + 13, img.naturalWidth, img.naturalHeight); }
   }
-  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard') {
+  if (acc === 'embercloak' || acc === 'battlecloak' || acc === 'wanderhood' || acc === 'arenaguard' || acc === 'sandcloak') {
     const key = `acc_${acc}_room`;
     const img = imgCache.get(key);
     if (img) {
