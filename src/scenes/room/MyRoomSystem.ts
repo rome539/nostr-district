@@ -568,8 +568,8 @@ export class MyRoomSystem {
       const x = Math.round(pos.x + bounds.w / 2);
       const y = Math.max(30, Math.round(pos.y - 38));
       this.cardPrompt.setPosition(x, y);
-      positionPromptBubble(this.cardPromptBg, x, y - 14);
-      this.cardPromptArrow.setPosition(x, y + 10);
+      positionPromptBubble(this.cardPromptBg, x, y - 9);
+      this.cardPromptArrow.setPosition(x, y + 12);
       this.ctx.scene.tweens.killTweensOf(this.cardPromptArrow);
       this.ctx.scene.tweens.add({ targets: this.cardPromptArrow, y: y + 15, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.cardPromptShown = true;

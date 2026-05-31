@@ -856,15 +856,16 @@ export class AlleyScene extends BaseScene {
   // EXIT & SUBWAY PROXIMITY
   // ══════════════════════════════════════════════════════════════════
   private updateTarotProximity(): void {
-    if (TarotModal.isOpen()) return;
     const near = Math.abs(this.player.x - TAROT_X) <= TAROT_RANGE;
     if (near !== this.nearTarot) {
       this.nearTarot = near;
-      this.tarotPromptBg.setVisible(near);
-      this.tarotPromptText.setVisible(near);
-      this.tarotPromptArrow.setVisible(near);
+      if (!near && TarotModal.isOpen()) TarotModal.destroy();
+      this.tarotPromptBg.setVisible(near && !TarotModal.isOpen());
+      this.tarotPromptText.setVisible(near && !TarotModal.isOpen());
+      this.tarotPromptArrow.setVisible(near && !TarotModal.isOpen());
       if (!near) this.tweens.killTweensOf(this.tarotPromptArrow);
     }
+    if (TarotModal.isOpen()) return;
     if (near) {
       const zoom = this.cameras.main.zoom;
       const sx = TAROT_X - this.cameras.main.scrollX;
@@ -879,15 +880,16 @@ export class AlleyScene extends BaseScene {
   }
 
   private updateFortuneProximity(): void {
-    if (FortuneTellerModal.isOpen()) return;
     const near = Math.abs(this.player.x - FORTUNE_X) <= FORTUNE_RANGE;
     if (near !== this.nearFortune) {
       this.nearFortune = near;
-      this.fortunePromptBg.setVisible(near);
-      this.fortunePromptText.setVisible(near);
-      this.fortunePromptArrow.setVisible(near);
+      if (!near && FortuneTellerModal.isOpen()) FortuneTellerModal.destroy();
+      this.fortunePromptBg.setVisible(near && !FortuneTellerModal.isOpen());
+      this.fortunePromptText.setVisible(near && !FortuneTellerModal.isOpen());
+      this.fortunePromptArrow.setVisible(near && !FortuneTellerModal.isOpen());
       if (!near) this.tweens.killTweensOf(this.fortunePromptArrow);
     }
+    if (FortuneTellerModal.isOpen()) return;
     if (near) {
       const zoom = this.cameras.main.zoom;
       const sx = FORTUNE_X - this.cameras.main.scrollX;

@@ -1333,6 +1333,7 @@ export class WoodsScene extends BaseScene {
         this.tweens.add({ targets: this.fishBoardPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       } else {
         this.tweens.killTweensOf(this.fishBoardPromptArrow);
+        if (this.fishGuidePanel) { this.fishGuidePanel.previousElementSibling?.remove(); this.fishGuidePanel.remove(); this.fishGuidePanel = null; }
       }
     }
   }
@@ -1358,13 +1359,30 @@ export class WoodsScene extends BaseScene {
         ${entries.map(f => row(f.name, f.kg, color === '#a0c880' ? '#d0e8b8' : color === '#f0b040' ? '#ffe090' : color === '#888898' ? '#c0c0cc' : '#cc8844')).join('')}
       </div>`;
 
+    // Themed scrollbar styles injected once
+    if (!document.getElementById('fish-guide-style')) {
+      const s = document.createElement('style');
+      s.id = 'fish-guide-style';
+      s.textContent = `
+        #fish-guide-panel::-webkit-scrollbar { width: 6px; }
+        #fish-guide-panel::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 3px; }
+        #fish-guide-panel::-webkit-scrollbar-thumb { background: #2a4a18; border-radius: 3px; }
+        #fish-guide-panel::-webkit-scrollbar-thumb:hover { background: #3a6a28; }
+      `;
+      document.head.appendChild(s);
+    }
+
+    // Backdrop — click outside to close
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `position:fixed;inset:0;z-index:999;`;
+
     const el = document.createElement('div');
     el.id = 'fish-guide-panel';
     el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
       background:rgba(8,14,8,0.97);border:1px solid #2a4a18;border-radius:6px;
       padding:16px 18px;z-index:1000;width:280px;max-height:75vh;overflow-y:auto;
       font-family:'Courier New',monospace;font-size:10px;color:#c8e0b0;
-      box-shadow:0 0 24px rgba(40,90,20,0.4);`;
+      box-shadow:0 0 24px rgba(40,90,20,0.4);scrollbar-width:thin;scrollbar-color:#2a4a18 rgba(0,0,0,0.3);`;
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -1378,14 +1396,23 @@ export class WoodsScene extends BaseScene {
       <div style="margin-top:8px;color:rgba(160,200,128,0.4);font-size:8px;text-align:center;">walk to the dock tip and press [E] to fish</div>
     `;
 
+    const close = () => {
+      backdrop.remove(); el.remove(); this.fishGuidePanel = null;
+      document.removeEventListener('keydown', onKey);
+    };
+
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    backdrop.addEventListener('click', close);
+    el.querySelector('#fish-guide-close')?.addEventListener('click', close);
+    // Stop clicks inside the panel from hitting the backdrop
+    el.addEventListener('click', e => e.stopPropagation());
+
+    document.body.appendChild(backdrop);
     document.body.appendChild(el);
     this.fishGuidePanel = el;
 
-    el.querySelector('#fish-guide-close')?.addEventListener('click', () => {
-      el.remove(); this.fishGuidePanel = null;
-    });
-
-    this.events.once('shutdown', () => { el.remove(); this.fishGuidePanel = null; });
+    this.events.once('shutdown', close);
   }
 
   private updateBoatProximity(): void {
@@ -1789,6 +1816,7 @@ export class WoodsScene extends BaseScene {
         this.tweens.add({ targets: this.telescopePromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       } else {
         this.tweens.killTweensOf(this.telescopePromptArrow);
+        if (this.telescopeOverlay) this.closeTelescopeView();
       }
     }
   }
