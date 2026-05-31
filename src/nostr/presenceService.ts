@@ -23,6 +23,7 @@ export type PresenceCallback = {
   onNameUpdate?: (pubkey: string, name: string) => void;
   onStatusUpdate?: (pubkey: string, status: string) => void;
   onOnlinePlayers?: (players: { pubkey: string; name: string; room: string }[]) => void;
+  onPlayersReady?: (count: number) => void;
   onDisconnect?: () => void;
 };
 
@@ -277,6 +278,7 @@ export function connectPresence(cb: PresenceCallback): void {
         // Drop stale player lists that arrived after a room change
         if (!msg.room || msg.room === currentRoom) {
           msg.players.forEach((p: PlayerData) => { callbacks?.onPlayerJoin(p); });
+          callbacks?.onPlayersReady?.(msg.players.length);
         }
       }
       if (msg.type === 'join') {

@@ -446,7 +446,16 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
   // ── Presence ──
   protected override setupPresenceCallbacks(myPubkey: string): void {
-    const cb = this.buildPresenceCallbacks(myPubkey);
+    const cb = {
+      ...this.buildPresenceCallbacks(myPubkey),
+      onPlayersReady: (count: number) => {
+        const total = count + 1; // include self
+        const msg = total === 1
+          ? 'You\'re the only one here right now.'
+          : `${total} players online.`;
+        this.chatUI.addMessage('system', msg, P.teal);
+      },
+    };
     if (!this.isReturning) connectPresence(cb);
     else { setPresenceCallbacks(cb); sendRoomChange('hub', 400, GROUND_Y + 8); const ae = this.emoteSet.activeNames(); if (ae.length) this.time.delayedCall(500, () => ae.forEach(n => sendChat(`/emote ${n}_on sync`))); }
     this.snd.setRoom('hub');
