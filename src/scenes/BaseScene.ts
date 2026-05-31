@@ -1648,13 +1648,34 @@ export abstract class BaseScene extends Phaser.Scene {
       case 'dm': case 'dms': case 'messages': case 'msg': {
         if (!canUseDMs()) { this.chatUI.addMessage('system', ti18n('sys.dm.need_key'), P.amber); return true; }
         if (!arg) { this.crewPanel.close(); this.dmPanel.toggle(); return true; }
+        const openDM = (pk: string) => {
+          this.crewPanel.close();
+          this.dmPanel.open(pk);
+          this.chatUI.addMessage('system', ti18n('sys.dm.opening'), ac);
+        };
+        // /dm <npub|nprofile> — open a conversation with anyone, even if they're
+        // not in the room. Decoded via dynamic import (require() isn't available
+        // in the ESM bundle).
+        if (arg.startsWith('npub1') || arg.startsWith('nprofile1')) {
+          import('nostr-tools').then(({ nip19 }) => {
+            try {
+              const d = nip19.decode(arg);
+              const pk = d.type === 'npub' ? d.data as string
+                       : d.type === 'nprofile' ? (d.data as { pubkey: string }).pubkey
+                       : null;
+              if (!pk) throw new Error('not a pubkey');
+              openDM(pk);
+            } catch { this.chatUI.addMessage('system', 'Invalid npub', P.amber); }
+          });
+          return true;
+        }
         // /dm <name> — find matching player in scene and open conversation
         let target: string | null = null;
         this.otherPlayers.forEach((o, pk) => {
           const name = (o.name ?? o.nameText?.text ?? '').toLowerCase();
           if (name.includes(arg.toLowerCase())) target = pk;
         });
-        if (target) { this.dmPanel.open(target); this.chatUI.addMessage('system', ti18n('sys.dm.opening'), ac); }
+        if (target) openDM(target);
         else this.chatUI.addMessage('system', ti18n('sys.not_found', { name: arg }), P.amber);
         return true;
       }

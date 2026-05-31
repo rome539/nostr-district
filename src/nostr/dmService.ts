@@ -472,10 +472,22 @@ async function handleGiftWrap(event: any): Promise<void> {
     const senderPubkey = rumor.pubkey;
     const isOwn = senderPubkey === state.pubkey;
 
-    // Determine conversation partner
-    const conversationPubkey = isOwn
-      ? (rumor.tags?.find((t: any[]) => t[0] === 'p')?.[1] || senderPubkey)
-      : senderPubkey;
+    // Determine conversation partner.
+    //
+    // The partner is simply "the participant who isn't me". Participants are
+    // the sender plus every recipient p-tag. We can't assume the rumor's
+    // FIRST p-tag is the partner: external clients build their self-copy of a
+    // sent message differently (some list the sender's own pubkey among the
+    // p-tags, or order them differently), so picking the first p-tag would
+    // key the message to our own pubkey and spawn a duplicate self-thread.
+    const pTagPubkeys = (rumor.tags || [])
+      .filter((t: any[]) => t[0] === 'p' && t[1])
+      .map((t: any[]) => t[1]);
+    const participants = new Set<string>([senderPubkey, ...pTagPubkeys]);
+    participants.delete(state.pubkey);
+    const conversationPubkey = participants.size > 0
+      ? [...participants][0]
+      : state.pubkey; // genuine note-to-self
 
     // ── If this is our own sent message coming back, mark as delivered ──
     if (isOwn) {
@@ -580,7 +592,12 @@ function retryPendingDMs(): void {
 
 // ── Helpers ──
 
-/** Randomize timestamp by ±2 hours for NIP-59 metadata protection */
+/**
+ * Randomize the seal + gift-wrap timestamp ±2 hours for NIP-59 metadata
+ * protection. Kept deliberately small: many clients only subscribe to gift
+ * wraps from the last ~24h, so a larger backdate (e.g. 2 days) drops messages
+ * outside the recipient's window and they silently never arrive.
+ */
 function randomTimestamp(): number {
   const TWO_HOURS = 2 * 60 * 60;
   return Math.round(Date.now() / 1000 - Math.random() * TWO_HOURS);
