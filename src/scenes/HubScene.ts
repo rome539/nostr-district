@@ -213,7 +213,7 @@ export class HubScene extends BaseScene {
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteGraphics = this.add.graphics().setDepth(15);
-    this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard(); this.createCrewBoard();
+    this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard(); this.createCrewBoard(); this.createWoodsSign();
     onNextAvatarSync(() => {
       this.generateWalkFrames(getAvatar());
       if (this.textures.exists('player')) this.textures.remove('player');
@@ -839,6 +839,30 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.events.on('update', (time: number) => {
       signText.setAlpha(Math.sin(time * 0.0025 + 1.5) > 0.94 ? 0.4 : 1);
     });
+  }
+
+  private createWoodsSign(): void {
+    const g = this.add.graphics().setDepth(4);
+
+    const bw = 46, bh = 14;
+    const bx = 4;
+    const by = GROUND_Y - 42;
+
+    // Sign plate (dark metal)
+    g.fillStyle(0x22222e, 1);
+    g.fillRect(bx, by, bw, bh);
+    g.lineStyle(1, 0x5566aa, 0.7);
+    g.strokeRect(bx, by, bw, bh);
+
+    // Left arrow
+    g.fillStyle(0xaabbdd, 0.9);
+    g.fillTriangle(bx + 3, by + 7, bx + 9, by + 3, bx + 9, by + 11);
+    g.fillRect(bx + 9, by + 5, 7, 4);
+
+    this.add.text(bx + bw - 3, by + bh / 2, 'WOODS', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '8px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setDepth(5);
   }
 
   private tryEnter(): void {
