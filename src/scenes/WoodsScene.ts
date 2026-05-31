@@ -160,6 +160,13 @@ export class WoodsScene extends BaseScene {
   private boatPromptText!: Phaser.GameObjects.Text;
   private boatPromptArrow!: Phaser.GameObjects.Text;
 
+  // fish guide board
+  private nearFishBoard = false;
+  private fishBoardPromptBg!: Phaser.GameObjects.Graphics;
+  private fishBoardPromptText!: Phaser.GameObjects.Text;
+  private fishBoardPromptArrow!: Phaser.GameObjects.Text;
+  private fishGuidePanel: HTMLElement | null = null;
+
   // fishing
   private nearDockTip = false;
   private fishingState: 'idle' | 'waiting' | 'bite' = 'idle';
@@ -250,6 +257,7 @@ export class WoodsScene extends BaseScene {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
       if (this.nearTelescope) { this.openTelescopeView(); return; }
+      if (this.nearFishBoard) { this.openFishGuide(); return; }
       if (this.nearDockTip) { this.handleFishingPress(); }
     });
 
@@ -274,6 +282,18 @@ export class WoodsScene extends BaseScene {
     this.dockPromptBg.on('pointerdown', () => {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearDockTip) this.handleFishingPress();
+    });
+
+    // Fish guide board prompt
+    this.fishBoardPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.fishBoardPromptText = this.add.text(0, 0, `${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} Fish Guide`, {
+      fontFamily: '"Courier New", monospace', fontSize: '8px', color: '#a0c880', fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.fishBoardPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '6px', color: '#a0c880' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.fishBoardPromptBg, this.fishBoardPromptText, { minWidth: 60, fill: 0x020c06, fillAlpha: 0.92, stroke: 0x2a4a18, strokeAlpha: 0.7 });
+    this.fishBoardPromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearFishBoard) this.openFishGuide();
     });
 
     // Boat prompt
@@ -579,6 +599,26 @@ export class WoodsScene extends BaseScene {
       r(dX+3,cbY-dH-12,dW-6,10,'#2e2010'); r(dX+4,cbY-dH-11,dW-8,8,'#3a2c14');
     }
 
+    // ── Fish guide board (near dock) ──
+    const fbX = 610;
+    const fbY = FLOOR_Y;
+    // Post
+    r(fbX - 1, fbY - 20, 3, 20, '#2e1c0a');
+    // Board face
+    r(fbX - 18, fbY - 32, 36, 16, '#3a2610');
+    r(fbX - 17, fbY - 31, 34, 14, '#4a3018');
+    // Top shadow
+    r(fbX - 18, fbY - 32, 36, 2, '#28180a');
+    // Fish icons
+    x.globalAlpha = 0.85;
+    r(fbX - 12, fbY - 28, 7, 4, '#4a7a60'); r(fbX - 14, fbY - 27, 3, 2, '#4a7a60'); r(fbX - 6, fbY - 27, 1, 1, '#1a3020');
+    r(fbX + 2,  fbY - 28, 7, 4, '#3a6878'); r(fbX,      fbY - 27, 3, 2, '#3a6878'); r(fbX + 8, fbY - 27, 1, 1, '#1a2830');
+    r(fbX - 5,  fbY - 21, 6, 3, '#7a5820'); r(fbX - 7,  fbY - 20, 3, 2, '#7a5820'); r(fbX,     fbY - 20, 1, 1, '#3a2808');
+    x.globalAlpha = 1;
+    // Border
+    x.strokeStyle = '#6a4820'; x.lineWidth = 1;
+    x.strokeRect(fbX - 18, fbY - 32, 36, 16);
+
     // ── Fish drying rack (left of cabin) ──
     const fsX = 845;
     r(fsX-18, FLOOR_Y-42, 4, 42, '#2a1c0c');       // left post
@@ -773,6 +813,7 @@ export class WoodsScene extends BaseScene {
     this.updateTelescopeProximity();
     this.updateDockTipProximity();
     this.updateBoatProximity();
+    this.updateFishBoardProximity();
     this.updateFishing(time, delta);
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -1275,24 +1316,96 @@ export class WoodsScene extends BaseScene {
     g.fillCircle(bx + 54, wl - 20, 28);
   }
 
+  private updateFishBoardProximity(): void {
+    const BOARD_X = 610;
+    const near = Math.abs(this.player.x - BOARD_X) <= 48;
+    if (near !== this.nearFishBoard) {
+      this.nearFishBoard = near;
+      this.fishBoardPromptBg.setVisible(near);
+      this.fishBoardPromptText.setVisible(near);
+      this.fishBoardPromptArrow.setVisible(near);
+      if (near) {
+        const px = BOARD_X, py = FLOOR_Y - 65;
+        positionPromptBubble(this.fishBoardPromptBg, px, py - 2);
+        this.fishBoardPromptText.setPosition(px, py + 8);
+        this.fishBoardPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.fishBoardPromptArrow);
+        this.tweens.add({ targets: this.fishBoardPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.fishBoardPromptArrow);
+      }
+    }
+  }
+
+  private openFishGuide(): void {
+    if (this.fishGuidePanel) { this.fishGuidePanel.remove(); this.fishGuidePanel = null; return; }
+
+    const fish = WoodsScene.FISH_TABLE;
+    const common   = fish.filter(f => !f.rare && !f.junk && !(f as any).legendary);
+    const rare     = fish.filter(f => f.rare);
+    const junk     = fish.filter(f => f.junk);
+    const legendary = fish.filter(f => (f as any).legendary);
+
+    const row = (name: string, kg: string, color: string) =>
+      `<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+        <span style="color:${color}">${name}</span>
+        <span style="color:rgba(255,255,255,0.4);font-size:9px;white-space:nowrap">${kg} kg</span>
+      </div>`;
+
+    const section = (title: string, color: string, entries: typeof common) =>
+      `<div style="margin-bottom:10px;">
+        <div style="color:${color};font-size:9px;letter-spacing:1px;margin-bottom:4px;border-bottom:1px solid ${color}44;padding-bottom:2px;">${title}</div>
+        ${entries.map(f => row(f.name, f.kg, color === '#a0c880' ? '#d0e8b8' : color === '#f0b040' ? '#ffe090' : color === '#888898' ? '#c0c0cc' : '#cc8844')).join('')}
+      </div>`;
+
+    const el = document.createElement('div');
+    el.id = 'fish-guide-panel';
+    el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+      background:rgba(8,14,8,0.97);border:1px solid #2a4a18;border-radius:6px;
+      padding:16px 18px;z-index:1000;width:280px;max-height:75vh;overflow-y:auto;
+      font-family:'Courier New',monospace;font-size:10px;color:#c8e0b0;
+      box-shadow:0 0 24px rgba(40,90,20,0.4);`;
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="color:#a0c880;font-size:11px;font-weight:bold;letter-spacing:1px;">🎣 LAKE FISH GUIDE</span>
+        <button id="fish-guide-close" style="background:none;border:none;color:#a0c880;cursor:pointer;font-size:14px;line-height:1;">✕</button>
+      </div>
+      ${section('COMMON', '#a0c880', common)}
+      ${section('RARE', '#f0b040', rare)}
+      ${section('JUNK', '#888898', junk)}
+      ${section('LEGENDARY', '#cc8844', legendary)}
+      <div style="margin-top:8px;color:rgba(160,200,128,0.4);font-size:8px;text-align:center;">walk to the dock tip and press [E] to fish</div>
+    `;
+
+    document.body.appendChild(el);
+    this.fishGuidePanel = el;
+
+    el.querySelector('#fish-guide-close')?.addEventListener('click', () => {
+      el.remove(); this.fishGuidePanel = null;
+    });
+
+    this.events.once('shutdown', () => { el.remove(); this.fishGuidePanel = null; });
+  }
+
   private updateBoatProximity(): void {
     const boatCenterX = 490;
     const near = this.player.x >= boatCenterX - 60 && this.player.x <= boatCenterX + 60;
-    if (near !== this.nearBoat) this.nearBoat = near;
-
-    this.boatPromptBg.setVisible(near);
-    this.boatPromptText.setVisible(near);
-    this.boatPromptArrow.setVisible(near);
-    if (near) {
-      const px = boatCenterX, py = FLOOR_Y - 70;
-      positionPromptBubble(this.boatPromptBg, px, py - 2);
-      this.boatPromptText.setPosition(px, py + 8);
-      this.boatPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.boatPromptArrow)) {
+    if (near !== this.nearBoat) {
+      this.nearBoat = near;
+      this.boatPromptBg.setVisible(near);
+      this.boatPromptText.setVisible(near);
+      this.boatPromptArrow.setVisible(near);
+      if (near) {
+        const px = boatCenterX, py = FLOOR_Y - 70;
+        positionPromptBubble(this.boatPromptBg, px, py - 2);
+        this.boatPromptText.setPosition(px, py + 8);
+        this.boatPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.boatPromptArrow);
         this.tweens.add({ targets: this.boatPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.boatPromptArrow);
       }
-    } else {
-      this.tweens.killTweensOf(this.boatPromptArrow);
     }
   }
 
@@ -1350,18 +1463,18 @@ export class WoodsScene extends BaseScene {
     }
     // Show / update prompt only in idle state while near
     const showPrompt = near && this.fishingState === 'idle';
+    const wasShowing = this.dockPromptBg.visible;
     this.dockPromptBg.setVisible(showPrompt);
     this.dockPromptText.setVisible(showPrompt);
     this.dockPromptArrow.setVisible(showPrompt);
-    if (showPrompt) {
+    if (showPrompt && !wasShowing) {
       const px = DOCK_X + 12, py = FLOOR_Y - 90;
       positionPromptBubble(this.dockPromptBg, px, py - 2);
       this.dockPromptText.setPosition(px, py + 8);
       this.dockPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.dockPromptArrow)) {
-        this.tweens.add({ targets: this.dockPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      }
-    } else {
+      this.tweens.killTweensOf(this.dockPromptArrow);
+      this.tweens.add({ targets: this.dockPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    } else if (!showPrompt) {
       this.tweens.killTweensOf(this.dockPromptArrow);
     }
   }
@@ -1667,15 +1780,15 @@ export class WoodsScene extends BaseScene {
       this.telescopePromptBg.setVisible(near);
       this.telescopePromptText.setVisible(near);
       this.telescopePromptArrow.setVisible(near);
-      if (!near) this.tweens.killTweensOf(this.telescopePromptArrow);
-    }
-    if (near) {
-      const px = TELESCOPE_X, py = FLOOR_Y - 90;
-      positionPromptBubble(this.telescopePromptBg, px, py - 2);
-      this.telescopePromptText.setPosition(px, py + 8);
-      this.telescopePromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.telescopePromptArrow)) {
+      if (near) {
+        const px = TELESCOPE_X, py = FLOOR_Y - 90;
+        positionPromptBubble(this.telescopePromptBg, px, py - 2);
+        this.telescopePromptText.setPosition(px, py + 8);
+        this.telescopePromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.telescopePromptArrow);
         this.tweens.add({ targets: this.telescopePromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.telescopePromptArrow);
       }
     }
   }
@@ -2025,15 +2138,15 @@ export class WoodsScene extends BaseScene {
     if (near !== this.nearCabin) {
       this.nearCabin = near;
       this.cabinPromptBg.setVisible(near); this.cabinPromptText.setVisible(near); this.cabinPromptArrow.setVisible(near);
-      if (!near) this.tweens.killTweensOf(this.cabinPromptArrow);
-    }
-    if (near) {
-      const px = CABIN_DOOR_X, py = FLOOR_Y - 96;
-      positionPromptBubble(this.cabinPromptBg, px, py - 2);
-      this.cabinPromptText.setPosition(px, py + 8);
-      this.cabinPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.cabinPromptArrow)) {
+      if (near) {
+        const px = CABIN_DOOR_X, py = FLOOR_Y - 96;
+        positionPromptBubble(this.cabinPromptBg, px, py - 2);
+        this.cabinPromptText.setPosition(px, py + 8);
+        this.cabinPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.cabinPromptArrow);
         this.tweens.add({ targets: this.cabinPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.cabinPromptArrow);
       }
     }
   }

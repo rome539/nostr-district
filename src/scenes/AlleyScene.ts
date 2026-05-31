@@ -870,10 +870,10 @@ export class AlleyScene extends BaseScene {
       const sx = TAROT_X - this.cameras.main.scrollX;
       const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
       positionPromptBubble(this.tarotPromptBg, sx, sy - 2);
-      this.tarotPromptText.setPosition(sx, sy + 12);
-      this.tarotPromptArrow.setPosition(sx, sy + 24);
+      this.tarotPromptText.setPosition(sx, sy + 7);
+      this.tarotPromptArrow.setPosition(sx, sy + 19);
       if (!this.tweens.isTweening(this.tarotPromptArrow)) {
-        this.tweens.add({ targets: this.tarotPromptArrow, y: sy + 28, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: this.tarotPromptArrow, y: sy + 23, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     }
   }
@@ -893,10 +893,10 @@ export class AlleyScene extends BaseScene {
       const sx = FORTUNE_X - this.cameras.main.scrollX;
       const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
       positionPromptBubble(this.fortunePromptBg, sx, sy - 2);
-      this.fortunePromptText.setPosition(sx, sy + 12);
-      this.fortunePromptArrow.setPosition(sx, sy + 24);
+      this.fortunePromptText.setPosition(sx, sy + 7);
+      this.fortunePromptArrow.setPosition(sx, sy + 19);
       if (!this.tweens.isTweening(this.fortunePromptArrow)) {
-        this.tweens.add({ targets: this.fortunePromptArrow, y: sy + 28, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: this.fortunePromptArrow, y: sy + 23, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     }
   }

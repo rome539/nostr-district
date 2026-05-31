@@ -6,12 +6,19 @@ import { t as ti18n } from '../../i18n/i18n';
 export class MarketRoomSystem {
   private shopPrompt!: Phaser.GameObjects.Text;
   private shopPromptBg!: Phaser.GameObjects.Graphics;
+  private shopPromptArrow!: Phaser.GameObjects.Text;
   private nearShop = false;
+  private scene!: Phaser.Scene;
+  private shopShown = false;
 
   setup(scene: Phaser.Scene): void {
+    this.scene = scene;
     this.shopPromptBg = scene.add.graphics().setDepth(50).setVisible(false);
     this.shopPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.browse_shop')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.amber, fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.shopPromptArrow = scene.add.text(0, 0, '▼', {
+      fontFamily: 'monospace', fontSize: '9px', color: P.amber,
     }).setOrigin(0.5).setDepth(51).setVisible(false);
     fitPromptBubble(this.shopPromptBg, this.shopPrompt, { minWidth: 128, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.amber), strokeAlpha: 0.3 });
     this.shopPrompt.setInteractive();
@@ -25,9 +32,18 @@ export class MarketRoomSystem {
   setVisible(visible: boolean): void {
     this.shopPrompt.setVisible(visible);
     this.shopPromptBg.setVisible(visible);
-    if (visible) {
-      this.shopPrompt.setPosition(GAME_WIDTH / 2, 214);
+    this.shopPromptArrow.setVisible(visible);
+    if (visible && !this.shopShown) {
+      // Position once on show — let the tween own y from here on
+      this.shopPrompt.setPosition(GAME_WIDTH / 2, 209);
       positionPromptBubble(this.shopPromptBg, GAME_WIDTH / 2, 200);
+      this.shopPromptArrow.setPosition(GAME_WIDTH / 2, 222);
+      this.scene.tweens.killTweensOf(this.shopPromptArrow);
+      this.scene.tweens.add({ targets: this.shopPromptArrow, y: 227, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.shopShown = true;
+    } else if (!visible) {
+      this.scene.tweens.killTweensOf(this.shopPromptArrow);
+      this.shopShown = false;
     }
   }
 

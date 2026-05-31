@@ -117,7 +117,7 @@ export function fitPromptBubble(
   text: Phaser.GameObjects.Text,
   opts: { minWidth: number; height?: number; fill: number; fillAlpha: number; stroke: number; strokeAlpha: number },
 ): number {
-  const h = opts.height ?? 28;
+  const h = opts.height ?? 18;
   const w = Math.max(opts.minWidth, Math.ceil(text.width) + 24);
   bg.clear();
   bg.fillStyle(opts.fill, opts.fillAlpha); bg.fillRoundedRect(0, 0, w, h, 5);

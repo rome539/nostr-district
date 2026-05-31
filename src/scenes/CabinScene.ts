@@ -507,15 +507,15 @@ export class CabinScene extends BaseScene {
     if (near !== this.nearDoor) {
       this.nearDoor = near;
       this.doorPromptBg.setVisible(near); this.doorPromptText.setVisible(near); this.doorPromptArrow.setVisible(near);
-      if (!near) this.tweens.killTweensOf(this.doorPromptArrow);
-    }
-    if (near) {
-      const px = DOOR_X, py = FLOOR_Y - 120;
-      positionPromptBubble(this.doorPromptBg, px, py - 2);
-      this.doorPromptText.setPosition(px, py + 8);
-      this.doorPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.doorPromptArrow)) {
+      if (near) {
+        const px = DOOR_X, py = FLOOR_Y - 120;
+        positionPromptBubble(this.doorPromptBg, px, py - 2);
+        this.doorPromptText.setPosition(px, py + 8);
+        this.doorPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.doorPromptArrow);
         this.tweens.add({ targets: this.doorPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.doorPromptArrow);
       }
     }
   }
@@ -537,14 +537,13 @@ export class CabinScene extends BaseScene {
       this.fireplacePromptBg.setVisible(showPrompt); this.fireplacePromptText.setVisible(showPrompt); this.fireplacePromptArrow.setVisible(showPrompt);
       if (!showPrompt) this.tweens.killTweensOf(this.fireplacePromptArrow);
     }
-    if (showPrompt) {
+    if (showPrompt && !this.fireplacePromptBg.visible) {
       const px = FP_X, py = FLOOR_Y - 120;
       positionPromptBubble(this.fireplacePromptBg, px, py - 2);
       this.fireplacePromptText.setPosition(px, py + 8);
       this.fireplacePromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.fireplacePromptArrow)) {
-        this.tweens.add({ targets: this.fireplacePromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      }
+      this.tweens.killTweensOf(this.fireplacePromptArrow);
+      this.tweens.add({ targets: this.fireplacePromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
   }
 
@@ -557,15 +556,15 @@ export class CabinScene extends BaseScene {
     if (near !== this.nearBookshelf) {
       this.nearBookshelf = near;
       this.bookshelfPromptBg.setVisible(near); this.bookshelfPromptText.setVisible(near); this.bookshelfPromptArrow.setVisible(near);
-      if (!near) this.tweens.killTweensOf(this.bookshelfPromptArrow);
-    }
-    if (near) {
-      const px = shCX, py = FLOOR_Y - 120;
-      positionPromptBubble(this.bookshelfPromptBg, px, py - 2);
-      this.bookshelfPromptText.setPosition(px, py + 8);
-      this.bookshelfPromptArrow.setPosition(px, py + 22);
-      if (!this.tweens.isTweening(this.bookshelfPromptArrow)) {
+      if (near) {
+        const px = shCX, py = FLOOR_Y - 120;
+        positionPromptBubble(this.bookshelfPromptBg, px, py - 2);
+        this.bookshelfPromptText.setPosition(px, py + 8);
+        this.bookshelfPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.bookshelfPromptArrow);
         this.tweens.add({ targets: this.bookshelfPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.bookshelfPromptArrow);
       }
     }
   }

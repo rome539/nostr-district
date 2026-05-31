@@ -77,12 +77,18 @@ export class MyRoomSystem {
   private previewBtn: Phaser.GameObjects.Text | null = null;
   private computerPrompt!: Phaser.GameObjects.Text;
   private computerPromptBg!: Phaser.GameObjects.Graphics;
+  private computerPromptArrow!: Phaser.GameObjects.Text;
+  private computerPromptShown = false;
   private nearComputerField = false;
   private bookcasePrompt!: Phaser.GameObjects.Text;
   private bookcasePromptBg!: Phaser.GameObjects.Graphics;
+  private bookcasePromptArrow!: Phaser.GameObjects.Text;
+  private bookcasePromptShown = false;
   private nearBookcaseField = false;
   private cardPrompt!: Phaser.GameObjects.Text;
   private cardPromptBg!: Phaser.GameObjects.Graphics;
+  private cardPromptArrow!: Phaser.GameObjects.Text;
+  private cardPromptShown = false;
   private hasCardDeckField = false;
   private nearCardDeckField = false;
   private pet: any = null; // PetSprite
@@ -186,6 +192,7 @@ export class MyRoomSystem {
     this.computerPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.use_computer')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    this.computerPromptArrow = scene.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: P.teal }).setOrigin(0.5).setDepth(901).setVisible(false);
     fitPromptBubble(this.computerPromptBg, this.computerPrompt, { minWidth: 130, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.teal), strokeAlpha: 0.3 });
     this.computerPrompt.setInteractive();
     this.computerPrompt.on('pointerdown', () => {
@@ -197,6 +204,7 @@ export class MyRoomSystem {
     this.bookcasePrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.sign_bookcase')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.purp, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    this.bookcasePromptArrow = scene.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: P.purp }).setOrigin(0.5).setDepth(901).setVisible(false);
     fitPromptBubble(this.bookcasePromptBg, this.bookcasePrompt, { minWidth: 148, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.purp), strokeAlpha: 0.3 });
     this.bookcasePrompt.setInteractive();
     this.bookcasePrompt.on('pointerdown', () => {
@@ -208,6 +216,7 @@ export class MyRoomSystem {
     this.cardPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.play_cards')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.teal, fontStyle: 'bold', align: 'center',
     }).setOrigin(0.5).setDepth(901).setVisible(false);
+    this.cardPromptArrow = scene.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: P.teal }).setOrigin(0.5).setDepth(901).setVisible(false);
     fitPromptBubble(this.cardPromptBg, this.cardPrompt, { minWidth: 112, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.teal), strokeAlpha: 0.3 });
     this.cardPrompt.setInteractive();
     this.cardPrompt.on('pointerdown', () => {
@@ -517,25 +526,42 @@ export class MyRoomSystem {
   private setComputerPromptVisible(visible: boolean): void {
     this.computerPrompt.setVisible(visible);
     this.computerPromptBg.setVisible(visible);
-    if (visible) {
-      this.computerPrompt.setPosition(660, 274);
+    this.computerPromptArrow.setVisible(visible);
+    if (visible && !this.computerPromptShown) {
+      this.computerPrompt.setPosition(660, 269);
       positionPromptBubble(this.computerPromptBg, 660, 260);
+      this.computerPromptArrow.setPosition(660, 282);
+      this.ctx.scene.tweens.killTweensOf(this.computerPromptArrow);
+      this.ctx.scene.tweens.add({ targets: this.computerPromptArrow, y: 287, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.computerPromptShown = true;
+    } else if (!visible) {
+      this.ctx.scene.tweens.killTweensOf(this.computerPromptArrow);
+      this.computerPromptShown = false;
     }
   }
 
   private setBookcasePromptVisible(visible: boolean): void {
     this.bookcasePrompt.setVisible(visible);
     this.bookcasePromptBg.setVisible(visible);
-    if (visible) {
-      this.bookcasePrompt.setPosition(708, 332);
+    this.bookcasePromptArrow.setVisible(visible);
+    if (visible && !this.bookcasePromptShown) {
+      this.bookcasePrompt.setPosition(708, 327);
       positionPromptBubble(this.bookcasePromptBg, 708, 318);
+      this.bookcasePromptArrow.setPosition(708, 340);
+      this.ctx.scene.tweens.killTweensOf(this.bookcasePromptArrow);
+      this.ctx.scene.tweens.add({ targets: this.bookcasePromptArrow, y: 345, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.bookcasePromptShown = true;
+    } else if (!visible) {
+      this.ctx.scene.tweens.killTweensOf(this.bookcasePromptArrow);
+      this.bookcasePromptShown = false;
     }
   }
 
   private setCardPromptVisible(visible: boolean): void {
     this.cardPrompt.setVisible(visible);
     this.cardPromptBg.setVisible(visible);
-    if (visible) {
+    this.cardPromptArrow.setVisible(visible);
+    if (visible && !this.cardPromptShown) {
       const cfg = this.ctx.isOwner ? getRoomConfig() : this.parsedRoomConfig;
       const pos = cfg?.furniturePositions?.carddeck ?? getDefaultPos('carddeck');
       const bounds = getFurnitureBounds(this.ctx.scene, 'carddeck') ?? { w: 44, h: 21 };
@@ -543,6 +569,13 @@ export class MyRoomSystem {
       const y = Math.max(30, Math.round(pos.y - 38));
       this.cardPrompt.setPosition(x, y);
       positionPromptBubble(this.cardPromptBg, x, y - 14);
+      this.cardPromptArrow.setPosition(x, y + 10);
+      this.ctx.scene.tweens.killTweensOf(this.cardPromptArrow);
+      this.ctx.scene.tweens.add({ targets: this.cardPromptArrow, y: y + 15, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.cardPromptShown = true;
+    } else if (!visible) {
+      this.ctx.scene.tweens.killTweensOf(this.cardPromptArrow);
+      this.cardPromptShown = false;
     }
   }
 
