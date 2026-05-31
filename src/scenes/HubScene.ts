@@ -449,6 +449,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     const cb = {
       ...this.buildPresenceCallbacks(myPubkey),
       onPlayersReady: (count: number) => {
+        if (this.isReturning) return;
         const total = count + 1; // include self
         const msg = total === 1
           ? 'You\'re the only one here right now.'
