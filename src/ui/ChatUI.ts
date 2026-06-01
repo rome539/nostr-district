@@ -12,6 +12,45 @@ import { maybeTranslate } from '../i18n/translator';
 
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 
+const SLASH_COMMANDS: { cmd: string; hint: string }[] = [
+  { cmd: 'dm',       hint: '<name|npub>' },
+  { cmd: 'zap',      hint: '<name|npub>' },
+  { cmd: 'visit',    hint: '<name|npub>' },
+  { cmd: 'crew',     hint: '' },
+  { cmd: 'follows',  hint: '' },
+  { cmd: 'tp',       hint: '<hub|woods|cabin|relay|myroom|market>' },
+  { cmd: 'who',      hint: '' },
+  { cmd: 'map',      hint: '' },
+  { cmd: 'polls',    hint: '' },
+  { cmd: 'shop',     hint: '' },
+  { cmd: 'wallet',   hint: '' },
+  { cmd: 'mute',     hint: '' },
+  { cmd: 'mutelist', hint: '' },
+  { cmd: 'filter',   hint: '<word>' },
+  { cmd: 'unfilter', hint: '<word>' },
+  { cmd: 'terminal', hint: '' },
+  { cmd: 'tutorial', hint: '' },
+  { cmd: 'help',     hint: '' },
+  { cmd: 'flip',     hint: '' },
+  { cmd: '8ball',    hint: '<question>' },
+  { cmd: 'slots',    hint: '' },
+  { cmd: 'ship',     hint: '<name1> <name2>' },
+  { cmd: 'rps',      hint: '<rock|paper|scissors>' },
+  { cmd: 'smoke',    hint: '' },
+  { cmd: 'coffee',   hint: '' },
+  { cmd: 'music',    hint: '' },
+  { cmd: 'zzz',      hint: '' },
+  { cmd: 'think',    hint: '' },
+  { cmd: 'hearts',   hint: '' },
+  { cmd: 'angry',    hint: '' },
+  { cmd: 'fire',     hint: '' },
+  { cmd: 'sparkle',  hint: '' },
+  { cmd: 'confetti', hint: '' },
+  { cmd: 'rain',     hint: '' },
+  { cmd: 'ghost',    hint: '' },
+  { cmd: 'status',   hint: '' },
+];
+
 function escapeHtml(text: string): string {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
 }
@@ -44,6 +83,8 @@ export class ChatUI {
   private commandMode = false;
   private _inputFocused = false;
   private gifPicker: GifPicker | null = null;
+  private suggestBox!: HTMLDivElement;
+  private suggestIdx = 0;
 
   /** Create and attach the chat UI */
   create(placeholder: string, accentColor: string, onCommand: (text: string) => void): HTMLInputElement {
@@ -60,6 +101,10 @@ export class ChatUI {
     this.log.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
     this.log.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.container.appendChild(this.log);
+
+    this.suggestBox = document.createElement('div');
+    this.suggestBox.style.cssText = `display:none;margin-bottom:4px;background:color-mix(in srgb,var(--nd-bg) 97%,transparent);border:1px solid color-mix(in srgb,var(--nd-accent) 30%,transparent);border-radius:6px;overflow:hidden;font-family:'Courier New',monospace;font-size:12px;pointer-events:auto;`;
+    this.container.appendChild(this.suggestBox);
 
     this.inputRow = document.createElement('div');
     this.inputRow.style.cssText = `display:flex;gap:6px;pointer-events:auto;`;
@@ -86,10 +131,36 @@ export class ChatUI {
       this.input.style.boxShadow = 'none';
       this.scheduleHide(this.commandMode ? 25000 : 8000);
       this.commandMode = false;
+      // Delay hide so mousedown on a suggestion fires before blur removes it
+      setTimeout(() => { this.suggestBox.style.display = 'none'; }, 120);
+    });
+    this.input.addEventListener('input', () => {
+      this.suggestIdx = 0;
+      this.renderSuggestions();
     });
     this.input.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') e.stopPropagation();
+      const suggestVisible = this.suggestBox.style.display !== 'none';
+      if (suggestVisible && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        this.applySuggestion();
+        return;
+      }
+      if (suggestVisible && e.key === 'ArrowDown') {
+        e.preventDefault();
+        const count = this.suggestBox.children.length;
+        this.suggestIdx = Math.min(this.suggestIdx + 1, count - 1);
+        this.renderSuggestions();
+        return;
+      }
+      if (suggestVisible && e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.suggestIdx = Math.max(this.suggestIdx - 1, 0);
+        this.renderSuggestions();
+        return;
+      }
       if (e.key === 'Enter') {
+        if (suggestVisible) { this.applySuggestion(); return; }
         const text = this.input.value.trim();
         if (!text) { this.input.blur(); return; }
         if (text.startsWith('/')) {
@@ -101,7 +172,7 @@ export class ChatUI {
         }
         sendChat(text); incrementAuraProgress('electric'); this.input.value = ''; this.input.blur();
       }
-      if (e.key === 'Escape') { this.gifPicker?.close(); this.input.blur(); }
+      if (e.key === 'Escape') { this.gifPicker?.close(); this.suggestBox.style.display = 'none'; this.input.blur(); }
     });
 
     // GIF button
@@ -273,6 +344,50 @@ export class ChatUI {
   setNameClickHandler(fn: (pubkey: string, name: string) => void): void { this.onNameClick = fn; }
 
   getInput(): HTMLInputElement { return this.input; }
+
+  private renderSuggestions(): void {
+    const val = this.input.value;
+    if (!val.startsWith('/') || val.includes(' ')) { this.suggestBox.style.display = 'none'; return; }
+    const typed = val.slice(1).toLowerCase();
+    const matches = SLASH_COMMANDS.filter(c => c.cmd.startsWith(typed) && c.cmd !== typed).slice(0, 7);
+    if (!matches.length) { this.suggestBox.style.display = 'none'; return; }
+    this.suggestIdx = Math.min(this.suggestIdx, matches.length - 1);
+    this.suggestBox.innerHTML = '';
+    matches.forEach((m, i) => {
+      const row = document.createElement('div');
+      const sel = i === this.suggestIdx;
+      row.style.cssText = `display:flex;gap:10px;align-items:center;padding:5px 11px;cursor:pointer;background:${sel ? 'color-mix(in srgb,var(--nd-accent) 10%,transparent)' : 'transparent'};border-left:2px solid ${sel ? 'var(--nd-accent)' : 'transparent'};`;
+      const cmd = document.createElement('span');
+      cmd.style.cssText = `font-weight:bold;`;
+      cmd.innerHTML = `<span style="color:var(--nd-accent);">/${typed}</span><span style="color:var(--nd-text);opacity:${sel ? '1' : '0.65'};">${escapeHtml(m.cmd.slice(typed.length))}</span>`;
+      row.appendChild(cmd);
+      if (m.hint) {
+        const hint = document.createElement('span');
+        hint.style.cssText = `opacity:0.35;font-size:11px;color:var(--nd-subtext);`;
+        hint.textContent = m.hint;
+        row.appendChild(hint);
+      }
+      const select = (e: Event) => { e.preventDefault(); this.suggestIdx = i; this.applySuggestion(); };
+      row.addEventListener('mousedown', select);
+      row.addEventListener('touchstart', select, { passive: false });
+      row.addEventListener('mouseenter', () => { this.suggestIdx = i; this.renderSuggestions(); });
+      this.suggestBox.appendChild(row);
+    });
+    this.suggestBox.style.display = 'block';
+  }
+
+  private applySuggestion(): void {
+    const val = this.input.value;
+    if (!val.startsWith('/') || val.includes(' ')) return;
+    const typed = val.slice(1).toLowerCase();
+    const matches = SLASH_COMMANDS.filter(c => c.cmd.startsWith(typed) && c.cmd !== typed);
+    const m = matches[this.suggestIdx] ?? matches[0];
+    if (!m) return;
+    this.input.value = `/${m.cmd}${m.hint ? ' ' : ''}`;
+    this.suggestBox.style.display = 'none';
+    this.suggestIdx = 0;
+    this.input.focus();
+  }
 
   isFocused(): boolean {
     return document.activeElement === this.input;
