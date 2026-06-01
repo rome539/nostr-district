@@ -431,10 +431,6 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.chatUI.addMessage('system', ti18n('sys.already_in_hub'), P.teal);
       return;
     }
-    if (roomId === 'cabin') {
-      this.enterWoods();
-      return;
-    }
     super.teleportToRoom(roomId);
   }
 
