@@ -426,6 +426,8 @@
   "sys.not_found": "\"{name}\" no encontrado",
   "sys.muted": "Apagado",
   "sys.unmuted": "no silenciado",
+  "sys.online.one":  "Eres el único aquí ahora.",
+  "sys.online.many": "{count} jugadores en línea.",
   "blackjack.dealer": "DISTRIBUIDOR",
   "blackjack.you_suffix": "(tú)",
   "blackjack.win": "GANAR",

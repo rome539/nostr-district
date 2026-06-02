@@ -426,6 +426,8 @@
   "sys.not_found": "未找到“{name}”",
   "sys.muted": "静音",
   "sys.unmuted": "取消静音",
+  "sys.online.one":  "你现在是唯一的玩家。",
+  "sys.online.many": "{count} 名玩家在线。",
   "blackjack.dealer": "经销商",
   "blackjack.you_suffix": "（你）",
   "blackjack.win": "赢",

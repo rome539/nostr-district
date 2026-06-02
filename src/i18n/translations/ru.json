@@ -426,6 +426,8 @@
   "sys.not_found": "«{name}» не найден",
   "sys.muted": "Без звука",
   "sys.unmuted": "Включен звук",
+  "sys.online.one":  "Ты здесь единственный.",
+  "sys.online.many": "{count} игроков онлайн.",
   "blackjack.dealer": "ДИЛЕР",
   "blackjack.you_suffix": "(ты)",
   "blackjack.win": "ПОБЕДИТЬ",

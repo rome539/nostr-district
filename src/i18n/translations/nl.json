@@ -426,6 +426,8 @@
   "sys.not_found": "\"{name}\" niet gevonden",
   "sys.muted": "Gedempt",
   "sys.unmuted": "Niet gedempt",
+  "sys.online.one":  "Je bent nu de enige hier.",
+  "sys.online.many": "{count} spelers online.",
   "blackjack.dealer": "DEALER",
   "blackjack.you_suffix": "(Jij)",
   "blackjack.win": "WINNEN",

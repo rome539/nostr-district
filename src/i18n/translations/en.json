@@ -474,6 +474,8 @@
   "sys.not_found":       "\"{name}\" not found",
   "sys.muted":           "Muted",
   "sys.unmuted":         "Unmuted",
+  "sys.online.one":      "You're the only one here right now.",
+  "sys.online.many":     "{count} players online.",
 
   "blackjack.dealer":    "DEALER",
   "blackjack.you_suffix":"(you)",

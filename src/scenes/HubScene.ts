@@ -448,8 +448,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
         if (this.isReturning) return;
         const total = count + 1; // include self
         const msg = total === 1
-          ? 'You\'re the only one here right now.'
-          : `${total} players online.`;
+          ? ti18n('sys.online.one')
+          : ti18n('sys.online.many', { count: total });
         this.chatUI.addMessage('system', msg, P.teal);
       },
     };
