@@ -712,7 +712,7 @@ export class CabinScene extends BaseScene {
       // Pre-board catches that predate the record system — merged into Nostr records, never replaced
       const PRE_BOARD: Record<string, Array<{ name: string; kg: string; ts: number }>> = {
         'c45041618951bb6012ac23f5cdf3d740465f2d640be841fd9bb1d0733370cd3c': [
-          { name: 'leviathan coelacanth', kg: '91.2', ts: 1748995200 },
+          { name: 'golden satoshi coin', kg: '0.01', ts: 1779321600 },
         ],
       };
 
