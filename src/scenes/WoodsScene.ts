@@ -14,7 +14,7 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
+import { onNextAvatarSync, signEvent, publishEvent, publishFishingRecord } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
@@ -167,6 +167,7 @@ export class WoodsScene extends BaseScene {
   private fishBoardPromptArrow!: Phaser.GameObjects.Text;
   private fishGuidePanel: HTMLElement | null = null;
 
+
   // fishing
   private nearDockTip = false;
   private fishingState: 'idle' | 'waiting' | 'bite' = 'idle';
@@ -295,6 +296,7 @@ export class WoodsScene extends BaseScene {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.nearFishBoard) this.openFishGuide();
     });
+
 
     // Boat prompt
     this.boatPromptBg = this.add.graphics().setDepth(50).setVisible(false);
@@ -1655,6 +1657,7 @@ export class WoodsScene extends BaseScene {
     if (isLegendary) {
       if (catch_.name === 'leviathan coelacanth') incrementCoelacanth();
       incrementLegendaryCatch();
+      publishFishingRecord({ name: catch_.name, kg: catch_.kg, ts: Math.floor(Date.now() / 1000) }).catch(() => {});
       const flavor = 'flavor' in catch_ ? catch_.flavor : '';
       const lore = 'lore' in catch_ ? catch_.lore : '';
       this.showLegendaryPostPrompt(catch_.name, catch_.kg, flavor, lore);

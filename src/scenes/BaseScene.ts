@@ -87,6 +87,7 @@ import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { GROUND_Y, P } from '../config/game.config';
+import { addSeenPubkey } from '../stores/seenPlayersStore';
 
 // ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
 
@@ -552,6 +553,7 @@ export abstract class BaseScene extends Phaser.Scene {
     // Feed the global zap-toast subscription a name hint so an incoming zap
     // from this player renders as "Alice" instead of "5069ea44…".
     registerSenderNameHint(pk, name);
+    addSeenPubkey(pk);
 
     this.afterAddOtherPlayer(pk, name);
   }

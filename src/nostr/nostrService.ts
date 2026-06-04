@@ -991,3 +991,54 @@ export function cancelBunkerFlow(): void {
     bunkerClient = null;
   }
 }
+
+export interface FishCatch { name: string; kg: string; ts: number; }
+export interface FishingRecord { pubkey: string; catches: FishCatch[]; total: number; }
+
+/** Fetch nd-fishing-record events for a set of pubkeys (one event per player). */
+export async function fetchFishingRecords(pubkeys: string[]): Promise<Map<string, FishingRecord>> {
+  if (!pubkeys.length) return new Map();
+  if (!pool) await loadNostrTools();
+  const result = new Map<string, FishingRecord>();
+  const BATCH = 50;
+  for (let i = 0; i < pubkeys.length; i += BATCH) {
+    const batch = pubkeys.slice(i, i + BATCH);
+    const events: any[] = await pool.querySync(
+      RELAYS,
+      { kinds: [30078], '#d': ['nd-fishing-record'], authors: batch },
+      { maxWait: 5000 },
+    );
+    for (const ev of events) {
+      try {
+        const data = JSON.parse(ev.content);
+        result.set(ev.pubkey, { pubkey: ev.pubkey, catches: data.catches || [], total: data.total || 0 });
+      } catch {}
+    }
+  }
+  return result;
+}
+
+/** Append a legendary catch to this player's fishing record and republish. */
+export async function publishFishingRecord(newCatch: FishCatch): Promise<void> {
+  if (!pool) await loadNostrTools();
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return;
+
+  let existing: FishCatch[] = [];
+  try {
+    const ev = await pool.get(RELAYS, { kinds: [30078], '#d': ['nd-fishing-record'], authors: [pubkey] });
+    if (ev) {
+      const data = JSON.parse(ev.content);
+      existing = data.catches || [];
+    }
+  } catch {}
+
+  const catches = [...existing, newCatch];
+  const event = await signEvent({
+    kind: 30078,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', 'nd-fishing-record'], ['t', 'ndfish']],
+    content: JSON.stringify({ catches, total: catches.length }),
+  });
+  await publishEvent(event);
+}

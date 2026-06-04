@@ -10,7 +10,10 @@ import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync } from '../nostr/nostrService';
+import { onNextAvatarSync, fetchFishingRecords, fetchProfile, publishFishingRecord } from '../nostr/nostrService';
+import { getSeenPubkeys } from '../stores/seenPlayersStore';
+import { getFishingProgress } from '../stores/fishingUnlockStore';
+import { authStore } from '../stores/authStore';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
@@ -55,6 +58,12 @@ export class CabinScene extends BaseScene {
   private bookshelfPromptText!: Phaser.GameObjects.Text;
   private bookshelfPromptArrow!: Phaser.GameObjects.Text;
   private bookOverlay: HTMLElement | null = null;
+
+  private nearLeaderboard = false;
+  private leaderBoardPromptBg!: Phaser.GameObjects.Graphics;
+  private leaderBoardPromptText!: Phaser.GameObjects.Text;
+  private leaderBoardPromptArrow!: Phaser.GameObjects.Text;
+  private leaderBoardPanel: HTMLElement | null = null;
 
   constructor() { super({ key: 'CabinScene' }); }
   init(): void { super.init(); }
@@ -126,6 +135,18 @@ export class CabinScene extends BaseScene {
     this.bookshelfPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '9px', color: CABIN_ACCENT }).setOrigin(0.5).setDepth(51).setVisible(false);
     fitPromptBubble(this.bookshelfPromptBg, this.bookshelfPromptText, { minWidth: 138, fill: 0x080302, fillAlpha: 0.9, stroke: 0x3a2010, strokeAlpha: 0.6 });
 
+    // Leaderboard trophy prompt
+    this.leaderBoardPromptBg = this.add.graphics().setDepth(50).setVisible(false);
+    this.leaderBoardPromptText = this.add.text(0, 0, `${this.sys.game.device.input.touch ? '[TAP]' : '[E]'} Top Catches`, {
+      fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#ffd700', fontStyle: 'bold', align: 'center',
+    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    this.leaderBoardPromptArrow = this.add.text(0, 0, '▼', { fontFamily: 'monospace', fontSize: '7px', color: '#ffd700' }).setOrigin(0.5).setDepth(51).setVisible(false);
+    fitPromptBubble(this.leaderBoardPromptBg, this.leaderBoardPromptText, { minWidth: 72, fill: 0x0c0a00, fillAlpha: 0.92, stroke: 0x4a3800, strokeAlpha: 0.8 });
+    this.leaderBoardPromptBg.on('pointerdown', () => {
+      if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      if (this.nearLeaderboard) this.openFishLeaderboard();
+    });
+
     this.input.keyboard?.on('keydown-E', () => {
       if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
@@ -133,6 +154,7 @@ export class CabinScene extends BaseScene {
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); return; }
       if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); incrementAuraProgress('fire'); return; }
       if (this.nearBookshelf) { this.showBookQuote(); return; }
+      if (this.nearLeaderboard) { this.openFishLeaderboard(); return; }
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);
@@ -150,6 +172,8 @@ export class CabinScene extends BaseScene {
       this.doorPromptBg?.destroy(); this.doorPromptText?.destroy(); this.doorPromptArrow?.destroy();
       this.fireplacePromptBg?.destroy(); this.fireplacePromptText?.destroy(); this.fireplacePromptArrow?.destroy();
       this.bookshelfPromptBg?.destroy(); this.bookshelfPromptText?.destroy(); this.bookshelfPromptArrow?.destroy();
+      this.leaderBoardPromptBg?.destroy(); this.leaderBoardPromptText?.destroy(); this.leaderBoardPromptArrow?.destroy();
+      if (this.leaderBoardPanel) { this.leaderBoardPanel.remove(); this.leaderBoardPanel = null; }
       if (this.bookOverlay) { this.bookOverlay.remove(); this.bookOverlay = null; }
     });
   }
@@ -322,6 +346,33 @@ export class CabinScene extends BaseScene {
     r(fpX + 14, antY - 4, 4, 8, '#2a1c0c');
     r(fpX + 21, antY - 8, 3, 6, '#2a1c0c');
 
+    // ── Legendary catches trophy board (wall-mounted between bookshelf and table) ──
+    const lbX = 460, lbY = FLOOR_Y - 80;
+    // Wood backing plaque
+    r(lbX - 28, lbY, 56, 40, '#1e1408');
+    r(lbX - 27, lbY + 1, 54, 38, '#261a0c');
+    // Gold border
+    x.strokeStyle = '#b8860b'; x.lineWidth = 1.5;
+    x.strokeRect(lbX - 28, lbY, 56, 40);
+    // Inner gold inset
+    x.strokeStyle = '#7a5a08'; x.lineWidth = 0.5;
+    x.strokeRect(lbX - 25, lbY + 3, 50, 34);
+    // Trophy cup (pixel art, centered)
+    x.globalAlpha = 0.95;
+    r(lbX - 6, lbY + 6, 12, 8, '#b8860b');    // cup body
+    r(lbX - 8, lbY + 7, 3, 5, '#8b6508');     // left handle
+    r(lbX + 5, lbY + 7, 3, 5, '#8b6508');     // right handle
+    r(lbX - 4, lbY + 14, 8, 2, '#b8860b');    // stem
+    r(lbX - 7, lbY + 16, 14, 3, '#b8860b');   // base
+    // Star sparkles
+    r(lbX + 12, lbY + 5, 2, 2, '#ffd700');
+    r(lbX - 16, lbY + 10, 2, 2, '#ffd700');
+    r(lbX + 14, lbY + 22, 1, 1, '#ffd700');
+    x.globalAlpha = 1;
+    // Label text line (tiny pixel underline)
+    r(lbX - 18, lbY + 32, 36, 1, '#6a4a08');
+    r(lbX - 14, lbY + 34, 28, 3, '#1a1008');
+
     // ── Coat peg near door ──
     r(DOOR_X + 35, FLOOR_Y - 130, 4, 8, '#2a1c0c');   // peg
     // Hat on peg
@@ -376,6 +427,7 @@ export class CabinScene extends BaseScene {
     this.updateDoorProximity();
     this.updateFireplaceProximity();
     this.updateBookshelfProximity();
+    this.updateLeaderboardProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
     if (isWalking) {
@@ -566,6 +618,157 @@ export class CabinScene extends BaseScene {
       } else {
         this.tweens.killTweensOf(this.bookshelfPromptArrow);
       }
+    }
+  }
+
+  private updateLeaderboardProximity(): void {
+    const BOARD_X = 460;
+    const near = Math.abs(this.player.x - BOARD_X) < 56;
+    if (near !== this.nearLeaderboard) {
+      this.nearLeaderboard = near;
+      this.leaderBoardPromptBg.setVisible(near);
+      this.leaderBoardPromptText.setVisible(near);
+      this.leaderBoardPromptArrow.setVisible(near);
+      if (near) {
+        const px = BOARD_X, py = FLOOR_Y - 130;
+        positionPromptBubble(this.leaderBoardPromptBg, px, py - 2);
+        this.leaderBoardPromptText.setPosition(px, py + 8);
+        this.leaderBoardPromptArrow.setPosition(px, py + 22);
+        this.tweens.killTweensOf(this.leaderBoardPromptArrow);
+        this.tweens.add({ targets: this.leaderBoardPromptArrow, y: py + 27, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        this.tweens.killTweensOf(this.leaderBoardPromptArrow);
+        if (this.leaderBoardPanel) { this.leaderBoardPanel.remove(); this.leaderBoardPanel = null; }
+      }
+    }
+  }
+
+  private async openFishLeaderboard(): Promise<void> {
+    if (this.leaderBoardPanel) { this.leaderBoardPanel.remove(); this.leaderBoardPanel = null; return; }
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2000;
+      background:#0c0900;border:2px solid #b8860b;border-radius:12px;padding:20px 24px;
+      min-width:320px;max-width:420px;width:90vw;font-family:'Courier New',monospace;
+      box-shadow:0 0 40px rgba(184,134,11,0.25);`;
+
+    const title = document.createElement('div');
+    title.style.cssText = `color:#ffd700;font-size:15px;font-weight:bold;text-align:center;margin-bottom:4px;`;
+    title.textContent = '✦ LEGENDARY CATCH LEADERBOARD ✦';
+
+    const sub = document.createElement('div');
+    sub.style.cssText = `color:#8a7030;font-size:10px;text-align:center;margin-bottom:16px;`;
+    sub.textContent = 'Players seen in Nostr District';
+
+    const list = document.createElement('div');
+    list.style.cssText = `color:#c0a030;font-size:12px;text-align:center;min-height:60px;`;
+    list.textContent = 'Loading…';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Close';
+    closeBtn.style.cssText = `display:block;margin:16px auto 0;padding:7px 18px;
+      background:rgba(0,0,0,0.3);border:1px solid rgba(184,134,11,0.4);border-radius:6px;
+      color:#8a7030;font-family:'Courier New',monospace;font-size:11px;cursor:pointer;`;
+    closeBtn.addEventListener('click', () => { panel.remove(); this.leaderBoardPanel = null; });
+
+    panel.appendChild(title);
+    panel.appendChild(sub);
+    panel.appendChild(list);
+    panel.appendChild(closeBtn);
+    document.body.appendChild(panel);
+    this.leaderBoardPanel = panel;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { panel.remove(); this.leaderBoardPanel = null; window.removeEventListener('keydown', onKey); }
+    };
+    window.addEventListener('keydown', onKey);
+    this.events.once('shutdown', () => { panel.remove(); window.removeEventListener('keydown', onKey); });
+
+    // Silently backfill local user's record if they have local catches but nothing published yet
+    const { pubkey, loginMethod } = authStore.getState();
+    if (pubkey && loginMethod !== 'guest') {
+      const progress = getFishingProgress('fishhat');
+      if (progress.count > 0) {
+        fetchFishingRecords([pubkey]).then(existing => {
+          const record = existing.get(pubkey);
+          const publishedTotal = record?.total ?? 0;
+          if (publishedTotal < progress.count) {
+            const gap = progress.count - publishedTotal;
+            const ts = Math.floor(Date.now() / 1000);
+            const backfillCatches = Array.from({ length: gap }, (_, i) => ({
+              name: 'legendary catch (backfilled)', kg: '?', ts: ts - i,
+            }));
+            // Publish all at once: first catch triggers fetch+append, rest chain sequentially
+            backfillCatches.reduce(
+              (chain, c) => chain.then(() => publishFishingRecord(c)),
+              Promise.resolve(),
+            ).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    }
+
+    try {
+      // Always include known legendary catchers alongside seen pubkeys
+      const PINNED = ['c45041618951bb6012ac23f5cdf3d740465f2d640be841fd9bb1d0733370cd3c'];
+      const seen = [...new Set([...getSeenPubkeys(), ...PINNED])];
+
+      const records = await fetchFishingRecords(seen);
+      if (!records.size) { list.textContent = 'No legendary catches recorded yet.'; return; }
+
+      const sorted = [...records.values()]
+        .filter(r => r.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+
+      if (!sorted.length) { list.textContent = 'No legendary catches recorded yet.'; return; }
+
+      // Fetch display names in parallel
+      const names = new Map<string, string>();
+      await Promise.allSettled(sorted.map(async r => {
+        try {
+          const profile = await fetchProfile(r.pubkey);
+          if (profile) {
+            const data = JSON.parse(profile.content);
+            names.set(r.pubkey, data.display_name || data.name || r.pubkey.slice(0, 10) + '…');
+          }
+        } catch {}
+      }));
+
+      const MEDALS = ['🥇', '🥈', '🥉'];
+      list.innerHTML = '';
+      list.style.textAlign = 'left';
+
+      sorted.forEach((r, i) => {
+        const name = names.get(r.pubkey) || r.pubkey.slice(0, 10) + '…';
+        const lastCatch = r.catches[r.catches.length - 1];
+        const lastDate = lastCatch ? new Date(lastCatch.ts * 1000).toLocaleDateString() : '';
+        const lastFish = lastCatch ? lastCatch.name : '';
+
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 6px;
+          border-bottom:1px solid rgba(184,134,11,0.15);`;
+
+        const medal = document.createElement('span');
+        medal.style.cssText = `font-size:16px;min-width:22px;text-align:center;`;
+        medal.textContent = MEDALS[i] || `${i + 1}.`;
+
+        const info = document.createElement('div');
+        info.style.cssText = `flex:1;`;
+        info.innerHTML = `<div style="color:#f0d070;font-size:12px;font-weight:bold;">${name}</div>
+          <div style="color:#8a7030;font-size:10px;">${lastFish}${lastDate ? ` · ${lastDate}` : ''}</div>`;
+
+        const count = document.createElement('div');
+        count.style.cssText = `color:#ffd700;font-size:14px;font-weight:bold;min-width:28px;text-align:right;`;
+        count.textContent = `×${r.total}`;
+
+        row.appendChild(medal);
+        row.appendChild(info);
+        row.appendChild(count);
+        list.appendChild(row);
+      });
+    } catch {
+      list.textContent = 'Failed to load leaderboard.';
     }
   }
 
