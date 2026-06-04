@@ -36,6 +36,9 @@ export class LoginScreen {
   private _pendingCreateNsec = '';
   private _pendingCreateUsername = '';
 
+  private _lastLogin: string | null = null;
+  private _hasExtension = false;
+
   private canvas: HTMLCanvasElement | null = null;
   private animFrameId: number | null = null;
   private buildings: LoginBuilding[] = [];
@@ -72,6 +75,8 @@ export class LoginScreen {
     this.onCreateWithPasskey = callbacks.onCreateWithPasskey || null;
     this.onPasskeyLogin = callbacks.onPasskeyLogin || null;
     this.storedPasskeys = callbacks.storedPasskeys || [];
+    this._lastLogin = localStorage.getItem('nd_last_login');
+    this._hasExtension = typeof (window as any).nostr !== 'undefined';
     const storedPrimary = localStorage.getItem('nd_primary_passkey');
     const firstId = this.storedPasskeys[0]?.credentialId ?? null;
     this._primaryPasskeyId = (storedPrimary && this.storedPasskeys.some(p => p.credentialId === storedPrimary))
@@ -269,6 +274,10 @@ export class LoginScreen {
       <canvas id="login-canvas"></canvas>
       <div class="login-wrapper">
       <div class="login-box">
+        ${this._lastLogin === 'extension' ? `<button id="login-continue-ext" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_ext'))}</button>` : ''}
+        ${this._lastLogin === 'bunker'    ? `<button id="login-continue-bunker" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_bunker'))}</button>` : ''}
+        ${this._lastLogin === 'nsec'      ? `<button id="login-continue-nsec" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_nsec'))}</button>` : ''}
+        <button id="login-guest-top" class="login-link bunker-cancel" style="position:absolute;top:8px;right:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.guest_link'))}</button>
         <h1 class="login-title">NOSTR DISTRICT</h1>
         <p class="login-subtitle">${this.esc(t('login.subtitle'))}</p>
         <button id="login-what-is-nostr" class="login-what-is-nostr">What is Nostr?</button>
@@ -775,6 +784,24 @@ export class LoginScreen {
       .login-status.error { color: #e85454; }
 
       /* ── Create account button ── */
+      .login-btn-continue {
+        background: var(--nd-navy);
+        color: var(--nd-text);
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 45%, transparent);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--nd-accent) 8%, transparent);
+      }
+      .login-btn-continue:hover {
+        box-shadow: 0 0 16px color-mix(in srgb, var(--nd-accent) 20%, transparent) !important;
+      }
+      .last-used-badge {
+        margin-left: 8px;
+        font-size: 9px; font-weight: normal; letter-spacing: 0.06em;
+        color: var(--nd-accent); opacity: 0.6;
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 35%, transparent);
+        border-radius: 3px; padding: 1px 5px;
+        vertical-align: middle;
+        text-transform: uppercase;
+      }
       .login-btn-create {
         background: var(--nd-navy);
         color: var(--nd-text); border: 1px solid color-mix(in srgb, var(--nd-purp) 50%, transparent);
@@ -1452,7 +1479,51 @@ export class LoginScreen {
       btn.addEventListener('click', () => this._showPasskeyManager());
     });
 
+    // Guest link top-right — hide when navigating into sub-views
+    this.container.querySelector('#login-guest-top')?.addEventListener('click', () => this.onGuestLogin());
+
+    // New: extension detected on main screen
+    this.container.querySelector('#login-extension-direct')?.addEventListener('click', () => {
+      localStorage.setItem('nd_last_login', 'extension');
+      this.setStatus('Connecting to extension...');
+      this.onExtensionLogin();
+    });
+
+    // New: continue with extension (last used)
+    this.container.querySelector('#login-continue-ext')?.addEventListener('click', () => {
+      localStorage.setItem('nd_last_login', 'extension');
+      this.setStatus('Connecting to extension...');
+      this.onExtensionLogin();
+    });
+
+    // New: continue with nsec (last used) — jump straight to nsec input
+    this.container.querySelector('#login-continue-nsec')?.addEventListener('click', () => {
+      this.el('login-main').classList.add('hidden');
+      this.el('login-bunker-view').classList.remove('hidden');
+      this.el('bunker-options').classList.remove('hidden');
+      this.el('bunker-qr-panel').classList.add('hidden');
+      this.container.querySelector('.login-box')!.classList.add('view-nostr');
+      this.el('nsec-form').classList.remove('hidden');
+      (this.el('nsec-accept') as HTMLInputElement).checked = true;
+      this.el('nsec-input-wrap').classList.remove('hidden');
+      (this.el('nsec-input') as HTMLInputElement).focus();
+      this.setStatus('');
+    });
+
+    // New: continue with bunker (last used) — jump straight to QR/URL panel
+    this.container.querySelector('#login-continue-bunker')?.addEventListener('click', () => {
+      this.container.querySelector<HTMLElement>('#login-guest-top')?.style.setProperty('display', 'none');
+      this.el('login-main').classList.add('hidden');
+      this.el('login-bunker-view').classList.remove('hidden');
+      this.el('bunker-options').classList.add('hidden');
+      this.el('bunker-qr-panel').classList.remove('hidden');
+      this.container.querySelector('.login-box')!.classList.add('view-nostr');
+      this.setStatus('');
+      if (this.onBunkerClientFlow) this.onBunkerClientFlow();
+    });
+
     this.el('login-extension').addEventListener('click', () => {
+      localStorage.setItem('nd_last_login', 'extension');
       this.setStatus('Connecting to extension...');
       this.onExtensionLogin();
     });
@@ -1463,10 +1534,12 @@ export class LoginScreen {
       this.el('bunker-options').classList.remove('hidden');
       this.el('bunker-qr-panel').classList.add('hidden');
       this.container.querySelector('.login-box')!.classList.add('view-nostr');
+      this.container.querySelector<HTMLElement>('#login-guest-top')!.style.display = 'none';
       this.setStatus('');
     });
 
     this.el('login-bunker-start').addEventListener('click', () => {
+      localStorage.setItem('nd_last_login', 'bunker');
       this.el('bunker-options').classList.add('hidden');
       this.el('bunker-qr-panel').classList.remove('hidden');
       if (this.onBunkerClientFlow) this.onBunkerClientFlow();
@@ -1498,6 +1571,7 @@ export class LoginScreen {
       (this.el('nsec-accept') as HTMLInputElement).checked = false;
       this.el('nsec-input-wrap').classList.add('hidden');
       this.container.querySelector('.login-box')!.classList.remove('view-nostr');
+      const gt = this.container.querySelector<HTMLElement>('#login-guest-top'); if (gt) gt.style.display = '';
       this.setBunkerStatus('');
       (this.el('bunker-input') as HTMLInputElement).value = '';
       this.el('bunker-uri-display').classList.add('hidden');
@@ -1508,6 +1582,7 @@ export class LoginScreen {
       const input = this.el('bunker-input') as HTMLInputElement;
       const url = input.value.trim();
       if (!url) return;
+      localStorage.setItem('nd_last_login', 'bunker');
       this.setBunkerStatus('Connecting...');
       this.onBunkerLogin(url);
     });
@@ -1517,6 +1592,7 @@ export class LoginScreen {
         const input = this.el('bunker-input') as HTMLInputElement;
         const url = input.value.trim();
         if (!url) return;
+        localStorage.setItem('nd_last_login', 'bunker');
         this.setBunkerStatus('Connecting...');
         this.onBunkerLogin(url);
       }
@@ -1545,6 +1621,7 @@ export class LoginScreen {
       const nsec = input.value.trim();
       input.value = '';
       if (!nsec) return;
+      localStorage.setItem('nd_last_login', 'nsec');
       this.setStatus('Logging in...');
       this.onNsecLogin(nsec);
     });
@@ -1554,6 +1631,7 @@ export class LoginScreen {
       this.el('login-main').classList.add('hidden');
       this.el('login-create-view').classList.remove('hidden');
       this.container.querySelector('.login-box')!.classList.add('view-create');
+      const gt2 = this.container.querySelector<HTMLElement>('#login-guest-top'); if (gt2) gt2.style.display = 'none';
       this.setStatus('');
     };
     this.el('login-create').addEventListener('click', goToCreate);
@@ -1562,6 +1640,7 @@ export class LoginScreen {
       this.el('login-create-view').classList.add('hidden');
       this.el('login-main').classList.remove('hidden');
       this.container.querySelector('.login-box')!.classList.remove('view-create');
+      const gt3 = this.container.querySelector<HTMLElement>('#login-guest-top'); if (gt3) gt3.style.display = '';
       this.setStatus('');
       // Reset form state
       this.el('create-step-1').classList.remove('hidden');
