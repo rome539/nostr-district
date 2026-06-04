@@ -346,8 +346,8 @@ export class CabinScene extends BaseScene {
     r(fpX + 14, antY - 4, 4, 8, '#2a1c0c');
     r(fpX + 21, antY - 8, 3, 6, '#2a1c0c');
 
-    // ── Legendary catches trophy board (wall-mounted between bookshelf and table) ──
-    const lbX = 460, lbY = FLOOR_Y - 80;
+    // ── Legendary catches trophy board (wall-mounted near bookshelf) ──
+    const lbX = 320, lbY = FLOOR_Y - 80;
     // Wood backing plaque
     r(lbX - 28, lbY, 56, 40, '#1e1408');
     r(lbX - 27, lbY + 1, 54, 38, '#261a0c');
@@ -622,7 +622,7 @@ export class CabinScene extends BaseScene {
   }
 
   private updateLeaderboardProximity(): void {
-    const BOARD_X = 460;
+    const BOARD_X = 320;
     const near = Math.abs(this.player.x - BOARD_X) < 56;
     if (near !== this.nearLeaderboard) {
       this.nearLeaderboard = near;
@@ -709,11 +709,29 @@ export class CabinScene extends BaseScene {
     }
 
     try {
-      // Always include known legendary catchers alongside seen pubkeys
-      const PINNED = ['c45041618951bb6012ac23f5cdf3d740465f2d640be841fd9bb1d0733370cd3c'];
-      const seen = [...new Set([...getSeenPubkeys(), ...PINNED])];
+      // Pre-board catches that predate the record system — merged into Nostr records, never replaced
+      const PRE_BOARD: Record<string, Array<{ name: string; kg: string; ts: number }>> = {
+        'c45041618951bb6012ac23f5cdf3d740465f2d640be841fd9bb1d0733370cd3c': [
+          { name: 'leviathan coelacanth', kg: '91.2', ts: 1748995200 },
+        ],
+      };
 
+      const seen = [...new Set([...getSeenPubkeys(), ...Object.keys(PRE_BOARD)])];
       const records = await fetchFishingRecords(seen);
+
+      // Merge pre-board catches: always add them unless already tracked by timestamp
+      for (const [pk, manual] of Object.entries(PRE_BOARD)) {
+        const existing = records.get(pk);
+        if (existing) {
+          const knownTs = new Set(existing.catches.map((c: { ts: number }) => c.ts));
+          const extra = manual.filter(c => !knownTs.has(c.ts));
+          existing.catches = [...extra, ...existing.catches];
+          existing.total = existing.catches.length;
+        } else {
+          records.set(pk, { pubkey: pk, catches: manual, total: manual.length });
+        }
+      }
+
       if (!records.size) { list.textContent = 'No legendary catches recorded yet.'; return; }
 
       const sorted = [...records.values()]
