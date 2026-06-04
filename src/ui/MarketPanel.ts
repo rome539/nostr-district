@@ -2,7 +2,7 @@
  * MarketPanel.ts — In-game item shop
  *
  * Opens when the player presses [E] in the market room.
- * Paid items are unlocked by paying sats to falsepancake303@walletofsatoshi.com.
+ * Paid items are unlocked by paying sats to the store lightning address (STORE_LUD16).
  * Purchases are persisted to Nostr kind:30078.
  *
  * Preview rendering → src/ui/market/MarketPreview.ts

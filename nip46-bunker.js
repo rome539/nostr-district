@@ -504,6 +504,48 @@ export class BunkerClient {
     }
 
     // ------------------------------------------------------------------
+    // SILENT RECONNECT — skip connect RPC, just ping existing session
+    // Used when we have a saved clientSk + signerPk + relays from a prior
+    // successful login. Amber tracks sessions by clientPk, so as long as
+    // the signer app still has the session open, a ping is enough.
+    // ------------------------------------------------------------------
+
+    async reconnectSilent(signerPk, clientSkHex, relays, userPk) {
+        if (this._connecting) throw new Error('Already connecting');
+        if (this._signerPk) throw new Error('Already connected');
+        this._connecting = true;
+        this.onStatusChange('waiting', 'Reconnecting…');
+
+        this._clientSk = hexToSk(clientSkHex);
+        this._clientPk = this.NostrTools.getPublicKey(this._clientSk);
+        this._signerPk = signerPk;
+        this._relays = relays;
+        this._userPk = userPk;
+
+        // Connect raw relay pool (no SimplePool injected in this flow)
+        this._rawPool = new RawRelayPool();
+        this._rawPool.connect(relays);
+        await new Promise(r => setTimeout(r, 800));
+
+        try {
+            const pong = await Promise.race([
+                this._request('ping'),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('ping timeout')), 10000)),
+            ]);
+            if (pong !== 'pong') throw new Error('unexpected pong: ' + pong);
+        } catch (e) {
+            this._clientSk = null; this._clientPk = null;
+            this._signerPk = null; this._userPk = null; this._relays = null;
+            this._connecting = false;
+            if (this._rawPool) { this._rawPool.destroy(); this._rawPool = null; }
+            throw new Error('Silent reconnect failed: ' + e.message);
+        }
+
+        this._finishConnect();
+        return this._userPk;
+    }
+
+    // ------------------------------------------------------------------
     // POST-CONNECT
     // ------------------------------------------------------------------
 

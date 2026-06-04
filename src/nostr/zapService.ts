@@ -205,7 +205,6 @@ async function fetchInvoice(
   try {
     const r = await fetch(`${callbackUrl}?${params}`);
     const data = await r.json();
-    console.log('[market] LNURL callback response:', JSON.stringify(data));
     if (!data.pr) return null;
     return { pr: data.pr, verify: data.verify || undefined };
   } catch { return null; }
@@ -475,13 +474,7 @@ export function watchForPurchaseReceipt(
       const zapReq = JSON.parse(descTag[1]);
       if (zapReq.id === zapEventId) {
         const itemTag = zapReq.tags?.find((t: string[]) => t[0] === 'item');
-        console.log('[Market] zap receipt received', {
-          receiptId: ev.id,
-          receiptPubkey: ev.pubkey,
-          zapRequestId: zapReq.id,
-          item: itemTag ? { id: itemTag[1], slot: itemTag[2], value: itemTag[3] } : null,
-          fullReceipt: ev,
-        });
+        console.log('[Market] zap receipt received', { receiptId: ev.id, item: itemTag ? { id: itemTag[1], slot: itemTag[2], value: itemTag[3] } : null });
         cleanup();
         onPaid();
       }

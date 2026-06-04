@@ -634,44 +634,42 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
   } catch {}
 
   const CLIENTS_KEY = 'nostr_district_bunker_clients';
-  let reuseClientSkHex: string | null = null;
+
+  // Load saved session for this signer (sk + relays + userPk saved after last login)
+  type SavedSession = { sk: string; relays: string[]; user: string };
+  let savedSession: SavedSession | null = null;
   if (signerPkFromUrl) {
-    // Primary: new per-signer map.
     try {
       const raw = localStorage.getItem(CLIENTS_KEY);
       if (raw) {
         const map = JSON.parse(raw);
-        if (map && typeof map[signerPkFromUrl] === 'string') {
-          reuseClientSkHex = map[signerPkFromUrl];
-          console.log('[Bunker] Reusing saved clientSk (map) for signer', signerPkFromUrl);
+        const entry = map?.[signerPkFromUrl];
+        // Support both new format { sk, relays, user } and legacy format (string sk only)
+        if (entry && typeof entry === 'object' && entry.sk && entry.relays?.length && entry.user) {
+          savedSession = entry as SavedSession;
+        } else if (typeof entry === 'string') {
+          savedSession = { sk: entry, relays: [], user: '' };
         }
       }
     } catch {}
-    // Fallback: legacy single-session save, in case the user already
-    // successfully connected before this fix shipped.
-    if (!reuseClientSkHex) {
+    // Fallback: legacy nostr_district_bunker key
+    if (!savedSession?.sk) {
       try {
         const raw = localStorage.getItem('nostr_district_bunker');
         if (raw) {
           const legacy = JSON.parse(raw);
           if (legacy?.signer === signerPkFromUrl && typeof legacy?.sk === 'string') {
-            reuseClientSkHex = legacy.sk;
-            console.log('[Bunker] Reusing saved clientSk (legacy) for signer', signerPkFromUrl);
+            savedSession = { sk: legacy.sk, relays: legacy.relays || [], user: legacy.user || '' };
           }
         }
       } catch {}
     }
   }
 
-  if (bunkerClient) {
-    bunkerClient.destroy();
-    bunkerClient = null;
-  }
+  if (bunkerClient) { bunkerClient.destroy(); bunkerClient = null; }
 
   bunkerClient = new BunkerClient({
-    NostrTools,
-    pool: null,
-    appName: 'Nostr District',
+    NostrTools, pool: null, appName: 'Nostr District',
     relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
     // sign_event:9734 is REQUIRED for shop purchases — the LNURL zap request
     // is signed by the bunker, embedded in the LNURL callback, and used by
@@ -681,7 +679,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     // receipt is published, and purchases vanish across sessions.
     perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
-    clientSkHex: reuseClientSkHex,
+    clientSkHex: savedSession?.sk ?? null,
     // Disable heartbeat: Amber's ping handler is unreliable, especially when
     // a session is reused via saved clientSk. A failed ping triggers
     // _handleDisconnect which destructively wipes _signerPk and breaks every
@@ -691,29 +689,62 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
     onDisconnect: () => { console.warn('[Bunker] Signer disconnected'); },
   });
 
+  // If we have a full saved session (sk + relays + userPk), try a silent
+  // reconnect first — just ping to verify Amber still recognises our clientPk.
+  // This avoids re-sending the connect RPC with the one-time secret from the
+  // bunker URL, which Amber invalidates after first use.
+  let userPubkey = '';
   const BUNKER_URL_TIMEOUT_MS = 30_000;
-  const userPubkey = await Promise.race([
-    bunkerClient.connectBunkerUrl(bunkerUrl),
-    new Promise<never>((_, reject) => setTimeout(() => {
-      reject(new Error('No response from signer. Open your signer app and try again.'));
-      if (bunkerClient) bunkerClient.cancel();
-    }, BUNKER_URL_TIMEOUT_MS)),
-  ]);
+  let silentOk = false;
+  if (savedSession?.sk && savedSession.relays?.length && savedSession.user) {
+    try {
+      console.log('[Bunker] Trying silent reconnect for signer', signerPkFromUrl);
+      userPubkey = await Promise.race([
+        bunkerClient.reconnectSilent(signerPkFromUrl!, savedSession.sk, savedSession.relays, savedSession.user),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('silent reconnect timeout')), 12000)),
+      ]);
+      silentOk = true;
+      console.log('[Bunker] Silent reconnect succeeded');
+    } catch (e) {
+      console.log('[Bunker] Silent reconnect failed, falling back to full connect:', (e as Error).message);
+      // Reset client so it's clean for the full connect path
+      bunkerClient.destroy();
+      bunkerClient = new BunkerClient({
+        NostrTools, pool: null, appName: 'Nostr District',
+        relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
+        perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
+        storageKey: 'nostr_district_bunker',
+        clientSkHex: savedSession?.sk ?? null,
+        heartbeatMs: 0,
+        onDisconnect: () => { console.warn('[Bunker] Signer disconnected'); },
+      });
+    }
+  }
+  if (!silentOk) {
+    userPubkey = await Promise.race([
+      bunkerClient.connectBunkerUrl(bunkerUrl),
+      new Promise<never>((_, reject) => setTimeout(() => {
+        reject(new Error('No response from signer. Open your signer app and try again.'));
+        if (bunkerClient) bunkerClient.cancel();
+      }, BUNKER_URL_TIMEOUT_MS)),
+    ]);
+  }
 
-  // After a successful connect, persist the clientSk for this signer so the
-  // next time the user pastes the same bunker URL we reuse the same client
-  // identity (avoiding the "already connected" error from the signer).
+  // Persist the full session (sk + relays from the bunker URL + userPk) so
+  // the next login can attempt a silent reconnect without the one-time secret.
   if (signerPkFromUrl && bunkerClient?._clientSk) {
     try {
       const raw = localStorage.getItem(CLIENTS_KEY);
       const map = raw ? JSON.parse(raw) : {};
       const skBytes: Uint8Array = bunkerClient._clientSk;
       const skHex = Array.from(skBytes).map((b: number) => b.toString(16).padStart(2, '0')).join('');
-      map[signerPkFromUrl] = skHex;
+      // Parse relays from the bunker URL so we reconnect on the right relays
+      let bunkerRelays: string[] = savedSession?.relays || [];
+      try { bunkerRelays = new URL(bunkerUrl).searchParams.getAll('relay'); } catch {}
+      map[signerPkFromUrl] = { sk: skHex, relays: bunkerRelays, user: userPubkey! };
       localStorage.setItem(CLIENTS_KEY, JSON.stringify(map));
-      console.log('[Bunker] Saved clientSk for signer', signerPkFromUrl);
     } catch (e) {
-      console.warn('[Bunker] Failed to save clientSk:', e);
+      console.warn('[Bunker] Failed to save session:', e);
     }
   }
 
