@@ -167,6 +167,20 @@ const HALVING_COUNTDOWN_THEME: HolidayTheme = {
   extraColor:  '#b890e0',
 };
 
+const JULY4_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 52%, #cc2233)',
+  border:      'color-mix(in srgb, #ff4455 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #ff3344 60%, transparent)',
+  titleColor:  '#ffffff',
+  textColor:   '#ffcccc',
+  subColor:    '#aabbff',
+  panelBg:     'color-mix(in srgb, black 72%, #cc2233)',
+  panelBorder: 'color-mix(in srgb, #ff4455 55%, transparent)',
+  linkColor:   '#aabbff',
+  strongColor: '#ffffff',
+  extraColor:  '#ff8888',
+};
+
 const FINNEY_THEME: HolidayTheme = {
   // Soft silver/blue — a respectful tribute palette
   bg:          'color-mix(in srgb, black 55%, #7080a0)',
@@ -231,6 +245,16 @@ const HOLIDAYS: Holiday[] = [
     anniversaryYear: 2009,
     externalLink:    'https://twitter.com/halfin/status/1110302988',
     theme:           FINNEY_THEME,
+  },
+  {
+    id:              'july4',
+    emoji:           '🎆',
+    monthDayStart:   [7, 3],
+    monthDayEnd:     [7, 6],
+    i18nPrefix:      'login.july4',
+    anniversaryYear: 1776,
+    externalLink:    'https://en.wikipedia.org/wiki/Independence_Day_(United_States)',
+    theme:           JULY4_THEME,
   },
   {
     // Bitcoin Halving — every 210,000 blocks (~4 years). Date drifts based

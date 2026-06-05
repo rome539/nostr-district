@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble } from '../config/game.config';
+import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../utils/fireworks';
 import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendAvatarUpdate,
@@ -66,6 +67,8 @@ export class HubScene extends BaseScene {
   ];
   private nearBulletinBoard = false;
   private nearCrewBoard = false;
+  private fwGraphics: Phaser.GameObjects.Graphics | null = null;
+  private fwEngine: FireworksEngine | null = null;
   private readonly BULLETIN_X = 860;
   private readonly CREW_BOARD_X = 615;
 
@@ -210,6 +213,17 @@ export class HubScene extends BaseScene {
     }
     this.parallaxBg = this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'parallax_bg').setDepth(-2).setAlpha(0.6);
     this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
+    if (isJuly4thPeriod()) {
+      this.fwGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
+      this.fwEngine = new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
+        launchY:        GROUND_Y - 200, // building-top level (~y=140)
+        explodeYMin:    10,
+        explodeYMax:    75,             // always above tallest building top (~y=82)
+        particleRadius: 0.5,
+        explosionCount: 10,
+        explosionSpeed: 1.3,
+      });
+    }
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteGraphics = this.add.graphics().setDepth(15);
@@ -274,12 +288,18 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.settingsPanel.create();
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
+      this.fwGraphics?.destroy(); this.fwEngine = null;
       this.chimneyGraphics?.destroy(); this.chimneyParticles = [];
     });
   }
 
   update(time: number, delta: number): void {
     this.updateMovement(delta); this.updateProximity(); this.updateParallax();
+    if (this.fwEngine && this.fwGraphics) {
+      this.fwGraphics.clear();
+      this.fwEngine.tick(time, delta);
+      drawFireworksPhaser(this.fwGraphics, this.fwEngine);
+    }
     this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
     this.updateChimneySmoke(delta);
 

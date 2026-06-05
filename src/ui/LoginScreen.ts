@@ -2,6 +2,7 @@ import { P } from '../config/game.config';
 import { t, getCurrentLang, setLang, onLangChange } from '../i18n/i18n';
 import { getActiveHoliday, holidayYears, getHalvingLiveInfo, onHalvingLiveUpdate, getActiveHolidayTheme } from './holidayBanners';
 import { LoginInfo } from './LoginInfo';
+import { FireworksEngine, drawFireworksCanvas, isJuly4thPeriod } from '../utils/fireworks';
 
 interface LoginBuilding {
   x: number; y: number; w: number; h: number; shade: string;
@@ -45,6 +46,7 @@ export class LoginScreen {
   private stars: Star[] = [];
   private shootingStar: ShootingStar | null = null;
   private shootingStarNext = 0;
+  private fireworks: FireworksEngine | null = null;
   // 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter — random each session
   private handleResize = (): void => {
     if (!this.canvas) return;
@@ -1106,6 +1108,7 @@ export class LoginScreen {
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
     this.generateBuildings();
+    if (isJuly4thPeriod()) this.fireworks = new FireworksEngine(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', this.handleResize);
     const loop = (time: number) => {
       this.drawFrame(time);
@@ -1308,6 +1311,12 @@ export class LoginScreen {
       }
     }
 
+    // ── July 4th fireworks ───────────────────────────────────────────────────
+    if (this.fireworks) {
+      this.fireworks.tick(time, 16);
+      drawFireworksCanvas(ctx, this.fireworks);
+    }
+
     // ── Far buildings (tiny silhouettes) ────────────────────────────────────
     for (const b of this.buildings) {
       if (!b.far) continue;
@@ -1498,7 +1507,9 @@ export class LoginScreen {
 
     // New: continue with nsec (last used) — jump straight to nsec input
     this.container.querySelector('#login-continue-nsec')?.addEventListener('click', () => {
+      this.container.querySelector<HTMLElement>('#login-guest-top')?.style.setProperty('display', 'none');
       this.el('login-main').classList.add('hidden');
+      this.el('login-create-view').classList.add('hidden');
       this.el('login-bunker-view').classList.remove('hidden');
       this.el('bunker-options').classList.remove('hidden');
       this.el('bunker-qr-panel').classList.add('hidden');

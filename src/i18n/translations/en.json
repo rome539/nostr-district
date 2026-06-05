@@ -80,6 +80,14 @@
   "login.finney.extra":      "Happy {n}th Running Bitcoin Day. We're still running it.",
   "login.finney.link":       "Read \"Bitcoin and me\" ↗",
 
+  "login.july4.title":      "INDEPENDENCE DAY",
+  "login.july4.sub":        "July 4 · {n} years of freedom",
+  "login.july4.aria_label": "Independence Day — click for details",
+  "login.july4.p1":         "On <strong>July 4, 1776</strong>, the thirteen American colonies declared independence from British rule, establishing a nation built on the ideals of individual liberty and self-governance. The <strong>Declaration of Independence</strong> remains one of the most influential documents in human history.",
+  "login.july4.p2":         "Bitcoin shares something with that founding spirit — a system designed so no single authority can debase, confiscate, or control. Hard money for a free people.",
+  "login.july4.extra":      "Happy {n}th Independence Day. Stay free, stay sovereign.",
+  "login.july4.link":       "Read the Declaration of Independence ↗",
+
   "login.halving.title":      "BITCOIN HALVING",
   "login.halving.sub":        "Block reward cuts in half · {n} years since the first",
   "login.halving.sub_live":   "{days}d · {blocks} blocks until block reward halves",

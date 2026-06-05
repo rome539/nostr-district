@@ -1,5 +1,17 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, P, hexToRgb, hexToNum } from '../../config/game.config';
+import { GAME_WIDTH, GAME_HEIGHT, P, hexToRgb, hexToNum } from '../../config/game.config';
+import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../../utils/fireworks';
+
+let loungeFireworks: FireworksEngine | null = isJuly4thPeriod()
+  ? new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
+      launchY:        190,
+      explodeYMin:    20,
+      explodeYMax:    140,
+      particleRadius: 0.45,
+      explosionCount: 8,
+      explosionSpeed: 1.0,
+    })
+  : null;
 
 export function updateLoungeRoom(
   graphics: Phaser.GameObjects.Graphics,
@@ -37,4 +49,9 @@ export function updateLoungeRoom(
 
   graphics.fillStyle(hexToNum(P.amber), 0.06 + Math.sin(time * 0.005) * 0.03);
   graphics.fillCircle(fx + 20, fy - 8, 40);
+
+  if (loungeFireworks) {
+    loungeFireworks.tick(time, _delta);
+    drawFireworksPhaser(graphics, loungeFireworks);
+  }
 }

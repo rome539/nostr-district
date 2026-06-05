@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { FireworksEngine, isJuly4thPeriod } from '../utils/fireworks';
 import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
@@ -17,7 +18,7 @@ import { ProfileModal } from '../ui/ProfileModal';
 import { RoomRenderer } from '../rooms/RoomRenderer';
 import { renderRoomSprite, renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { deserializeAvatar, getDefaultAvatar, getAvatar, setAvatar, onLocalAvatarChange, AvatarConfig } from '../stores/avatarStore';
-import { RoomConfig } from '../stores/roomStore';
+import { RoomConfig, POSTER_DEFAULT_POS, POSTER_SIZE, FURNITURE_BOUNDS } from '../stores/roomStore';
 import { SoundEngine } from '../audio/SoundEngine';
 import { RoomFeedSystem } from './room/RoomFeedSystem';
 import { RoomRelaySystem } from './room/RoomRelaySystem';
@@ -63,6 +64,11 @@ export class RoomScene extends BaseScene {
   private shootingStar: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number } | null = null;
   private shootingStarTimer = 0;
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
+  private cityFwEngines: FireworksEngine[] = [];
+  private bgTexKey = '';
+  private bgOffscreen: HTMLCanvasElement | null = null;
+  private bgLiveCanvas: HTMLCanvasElement | null = null;
+  private bgLiveCtx: CanvasRenderingContext2D | null = null;
 
   // Subsystems
   private feedSystem = new RoomFeedSystem();
@@ -109,6 +115,8 @@ export class RoomScene extends BaseScene {
 
     const texKey = this.roomRenderer.render(this, this.roomConfig.id, this.roomConfig.neonColor, GAME_WIDTH, GAME_HEIGHT, parsedOwnerConfig);
     this.roomBgImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, texKey).setDepth(-1);
+    this.bgTexKey = texKey;
+    this.captureBgCanvas();
 
     // Graphics layers
     this.ledGraphics             = this.add.graphics();
@@ -116,7 +124,21 @@ export class RoomScene extends BaseScene {
     this.ambientGraphics         = this.add.graphics().setDepth(2);
     this.lightingOverlayGraphics = this.add.graphics().setDepth(3);
     this.loungeGraphics          = this.add.graphics().setDepth(4);
-    this.shootingStarGraphics    = this.add.graphics().setDepth(5);
+    this.shootingStarGraphics    = this.add.graphics().setDepth(0);
+    if (isJuly4thPeriod()) {
+      const winCfg = (x1: number, x2: number, initialDelay: number) => ({
+        launchY: 248, explodeYMin: 30, explodeYMax: 150,
+        xMin: x1 + 10, xMax: x2 - 10,
+        intervalMin: 2500, intervalMax: 4000,
+        particleRadius: 0.8, explosionCount: 14, explosionSpeed: 1.8,
+        initialDelay,
+      });
+      this.cityFwEngines = [
+        new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(52,  233, 0)),
+        new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(309, 492, 1800)),
+        new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(565, 747, 3600)),
+      ];
+    }
     this.voidStarsGraphics       = this.add.graphics();
     this.fireplaceGraphics       = this.add.graphics();
     this.emoteGraphics   = this.add.graphics().setDepth(1000);
@@ -255,6 +277,7 @@ export class RoomScene extends BaseScene {
       updateLightingOverlay(this.lightingOverlayGraphics, this.myRoom.parsedRoomConfig?.lighting ?? 'teal', time);
       if (this.myRoom.parsedRoomConfig?.wallTheme === 'cityview') {
         this.updateShootingStar(delta);
+        this.updateCityWindowFireworks(time, delta);
       } else {
         this.shootingStarGraphics.clear();
       }
@@ -313,6 +336,24 @@ export class RoomScene extends BaseScene {
     return RoomScene.CITY_WINDOWS.some(w => px >= w.x1 && px <= w.x2 && py >= w.y1 && py <= w.y2);
   }
 
+  private inCityDecoration(px: number, py: number): boolean {
+    const cfg = this.myRoom.parsedRoomConfig;
+    // Posters
+    for (let i = 0; i < 3; i++) {
+      if ((cfg?.posters?.[i] ?? 'none') === 'none') continue;
+      const pos = cfg?.posterPositions?.[i] ?? POSTER_DEFAULT_POS[i];
+      const sz  = POSTER_SIZE[i];
+      if (px >= pos.x - 8 && px <= pos.x + sz.w + 8 &&
+          py >= pos.y - 8 && py <= pos.y + sz.h + 8) return true;
+    }
+    // Desk (always present)
+    const dpos = cfg?.furniturePositions?.['desk'] ?? { x: 558, y: 160 };
+    const dsz  = FURNITURE_BOUNDS['desk'] ?? { w: 196, h: 140 };
+    if (px >= dpos.x - 4 && px <= dpos.x + dsz.w + 4 &&
+        py >= dpos.y - 4 && py <= dpos.y + dsz.h + 4) return true;
+    return false;
+  }
+
   private updateShootingStar(delta: number): void {
     const g = this.shootingStarGraphics;
     g.clear();
@@ -342,13 +383,13 @@ export class RoomScene extends BaseScene {
     for (let i = 8; i >= 1; i--) {
       const tx = s.x - s.vx * i * 1.4;
       const ty = s.y - s.vy * i * 1.4;
-      if (!this.inCityWindow(tx, ty)) continue;
+      if (!this.inCityWindow(tx, ty) || this.inCityDecoration(tx, ty)) continue;
       const ta = a * (1 - i / 9) * 0.55;
       g.fillStyle(0xc8b8ff, ta);
       g.fillRect(tx - 1, ty, 2, 1);
     }
-    // Head — only draw if inside a window
-    if (this.inCityWindow(s.x, s.y)) {
+    // Head — only draw if inside a window and not over a decoration
+    if (this.inCityWindow(s.x, s.y) && !this.inCityDecoration(s.x, s.y)) {
       g.fillStyle(0xddd0ff, a * 0.22);
       g.fillRect(s.x - 2, s.y - 2, 5, 5);
       g.fillStyle(0xffffff, a * 0.6);
@@ -357,7 +398,119 @@ export class RoomScene extends BaseScene {
       g.fillRect(s.x, s.y, 2, 2);
     }
 
-    if (s.life >= s.maxLife || !this.inCityWindow(s.x, s.y)) this.shootingStar = null;
+    if (s.life >= s.maxLife || !this.inCityWindow(s.x, s.y) || this.inCityDecoration(s.x, s.y)) this.shootingStar = null;
+  }
+
+  private captureBgCanvas(): void {
+    const src = this.textures.get(this.bgTexKey)?.getSourceImage() as HTMLCanvasElement | undefined;
+    if (!src || typeof src.getContext !== 'function') return;
+    this.bgLiveCanvas = src;
+    this.bgLiveCtx = src.getContext('2d')!;
+    if (!this.bgOffscreen) this.bgOffscreen = document.createElement('canvas');
+    this.bgOffscreen.width = src.width;
+    this.bgOffscreen.height = src.height;
+    this.bgOffscreen.getContext('2d')!.drawImage(src, 0, 0);
+  }
+
+  private updateCityCanvasEffects(time: number, delta: number): void {
+    if (!this.bgLiveCtx || !this.bgOffscreen || !this.bgLiveCanvas) return;
+    const ctx = this.bgLiveCtx;
+    // Restore static background each frame
+    ctx.drawImage(this.bgOffscreen, 0, 0);
+    // Clip all drawing to window panes
+    ctx.save();
+    ctx.beginPath();
+    for (const w of RoomScene.CITY_WINDOWS) ctx.rect(w.x1, w.y1, w.x2 - w.x1, w.y2 - w.y1);
+    ctx.clip();
+    // Shooting star
+    this.drawShootingStarToCtx(ctx, delta);
+    // Fireworks
+    for (const fw of this.cityFwEngines) {
+      fw.tick(time, delta);
+      for (const r of fw.rockets) {
+        for (let i = 0; i < r.trail.length; i++) {
+          ctx.globalAlpha = (i / r.trail.length) * 0.5;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(r.trail[i].x - 1, r.trail[i].y - 1, 2, 2);
+        }
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(r.x, r.y, fw.radius, 0, Math.PI * 2); ctx.fill();
+      }
+      for (const p of fw.particles) {
+        ctx.globalAlpha = p.alpha * 0.9;
+        ctx.fillStyle = fw.colorCss(p.ci);
+        ctx.beginPath(); ctx.arc(p.x, p.y, fw.radius, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+    // Push updated canvas to GPU
+    const tex = this.textures.get(this.bgTexKey);
+    if (tex?.source?.[0]) tex.source[0].update();
+  }
+
+  private drawShootingStarToCtx(ctx: CanvasRenderingContext2D, delta: number): void {
+    if (!this.shootingStar) {
+      this.shootingStarTimer += delta;
+      if (this.shootingStarTimer > 25000 + Math.random() * 30000) {
+        this.shootingStarTimer = 0;
+        const win = RoomScene.CITY_WINDOWS[Math.floor(Math.random() * 3)];
+        this.shootingStar = {
+          x: win.x1 + 20 + Math.random() * (win.x2 - win.x1 - 40),
+          y: win.y1 + 10 + Math.random() * 60,
+          vx: -(0.7 + Math.random() * 0.5),
+          vy:  (0.3 + Math.random() * 0.3),
+          life: 0, maxLife: 900 + Math.random() * 500,
+        };
+      }
+      return;
+    }
+    const s = this.shootingStar;
+    s.x += s.vx * (delta / 16);
+    s.y += s.vy * (delta / 16);
+    s.life += delta;
+    const a = Math.sin((s.life / s.maxLife) * Math.PI);
+    for (let i = 8; i >= 1; i--) {
+      const tx = s.x - s.vx * i * 1.4;
+      const ty = s.y - s.vy * i * 1.4;
+      if (!this.inCityWindow(tx, ty)) continue;
+      ctx.globalAlpha = a * (1 - i / 9) * 0.55;
+      ctx.fillStyle = '#c8b8ff';
+      ctx.fillRect(tx - 1, ty, 2, 1);
+    }
+    if (this.inCityWindow(s.x, s.y)) {
+      ctx.globalAlpha = a * 0.22; ctx.fillStyle = '#ddd0ff'; ctx.fillRect(s.x - 2, s.y - 2, 5, 5);
+      ctx.globalAlpha = a * 0.6;  ctx.fillStyle = '#ffffff';  ctx.fillRect(s.x - 1, s.y - 1, 3, 3);
+      ctx.globalAlpha = a;         ctx.fillStyle = '#ffffff';  ctx.fillRect(s.x, s.y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+    if (s.life >= s.maxLife || !this.inCityWindow(s.x, s.y) || this.inCityDecoration(s.x, s.y)) this.shootingStar = null;
+  }
+
+  private updateCityWindowFireworks(time: number, delta: number): void {
+    if (!this.cityFwEngines.length) return;
+    const g = this.shootingStarGraphics;
+    for (const fw of this.cityFwEngines) {
+      fw.tick(time, delta);
+      for (const r of fw.rockets) {
+        for (let i = 0; i < r.trail.length; i++) {
+          const pt = r.trail[i];
+          if (!this.inCityWindow(pt.x, pt.y) || this.inCityDecoration(pt.x, pt.y)) continue;
+          g.fillStyle(0xffffff, (i / r.trail.length) * 0.5);
+          g.fillRect(pt.x - 1, pt.y - 1, 2, 2);
+        }
+        if (this.inCityWindow(r.x, r.y) && !this.inCityDecoration(r.x, r.y)) {
+          g.fillStyle(0xffffff, 0.9);
+          g.fillCircle(r.x, r.y, fw.radius);
+        }
+      }
+      for (const p of fw.particles) {
+        if (!this.inCityWindow(p.x, p.y)) continue;
+        if (this.inCityDecoration(p.x, p.y)) continue;
+        g.fillStyle(fw.colorNum(p.ci), p.alpha * 0.85);
+        g.fillCircle(p.x, p.y, fw.radius);
+      }
+    }
   }
 
   // ── BaseScene Overrides ──
