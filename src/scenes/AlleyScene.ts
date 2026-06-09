@@ -44,7 +44,7 @@ const TAROT_RANGE    = 36;
 const VENDING_X      = 600;  // bazaar vending machine (open floor between crates & barrels)
 const VENDING_RANGE  = 42;
 const VENDING_KEY    = 'vending_bazaar';
-const VENDING_URL    = 'assets/furniture/Vending Machine 1.1 (No Glass).png';
+const VENDING_URL    = 'assets/furniture/vending-machine-bazaar.png'; // web-safe name (no spaces/parens — those 404 on static hosts)
 
 export class AlleyScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;

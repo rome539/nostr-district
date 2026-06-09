@@ -7,7 +7,6 @@
 import Phaser from 'phaser';
 import { fitPromptBubble, positionPromptBubble, hexToNum, P } from '../config/game.config';
 import { getSceneScavengeSpots, collectScavengeSlot, ScavengeSpot, ItemDef } from '../stores/tradeItemStore';
-import { SoundEngine } from '../audio/SoundEngine';
 
 export class ScavengeSystem {
   private markerG: Phaser.GameObjects.Graphics;
@@ -16,7 +15,6 @@ export class ScavengeSystem {
   private promptArrow: Phaser.GameObjects.Text;
   private nearSpot: ScavengeSpot | null = null;
   private spots: ScavengeSpot[] = [];
-  private snd = SoundEngine.get();
   private isTouch: boolean;
 
   constructor(
@@ -79,7 +77,10 @@ export class ScavengeSystem {
     const id = this.nearSpot.id;
     const def: ItemDef | null = collectScavengeSlot(id);
     if (def) {
-      this.snd.itemReward();
+      // No sound here — the reward chime plays from the mint handler (BaseScene)
+      // when the item_minted event actually arrives, exactly like fishing/weekly
+      // drops. Avoids the double-ping and won't falsely chime if the server rejects
+      // the mint (e.g. scavenge rate-limit).
       window.dispatchEvent(new CustomEvent('nd-toast', {
         detail: { msg: `${def.emoji} Found a ${def.name}! Open /bazaar to view.`, color: this.accent },
       }));

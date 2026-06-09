@@ -892,7 +892,10 @@ export class BazaarPanel {
           row.onmouseenter = () => row.style.borderColor = '#8a8a1a';
           row.onmouseleave = () => row.style.borderColor = '#1e1e3a';
           const display = p.name || getCachedName(p.pubkey);
-          row.innerHTML = `<span>${display}</span><span style="color:#555;font-size:9px;">${p.room ?? ''}</span>`;
+          // A player in their own room reports room = "myroom:<pubkey>" — never show that
+          // raw string (it overflows the row). Show a short label; truncate long names.
+          const roomLabel = p.room ? (p.room.startsWith('myroom:') ? 'in a room' : p.room) : '';
+          row.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${display}</span><span style="color:#555;font-size:9px;flex-shrink:0;margin-left:8px;">${roomLabel}</span>`;
           row.addEventListener('click', () => close({ pubkey: p.pubkey, name: display }));
           wrap.appendChild(row);
         }
