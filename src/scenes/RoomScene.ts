@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { FireworksEngine, isJuly4thPeriod } from '../utils/fireworks';
+import { BatEngine, newBatEngine, drawBatsCanvas, isHalloweenPeriod } from '../utils/bats';
 import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
@@ -65,6 +66,7 @@ export class RoomScene extends BaseScene {
   private shootingStarTimer = 0;
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
   private cityFwEngines: FireworksEngine[] = [];
+  private cityBatEngine: BatEngine | null = null;
   private bgTexKey = '';
   private bgOffscreen: HTMLCanvasElement | null = null;
   private bgLiveCanvas: HTMLCanvasElement | null = null;
@@ -138,6 +140,12 @@ export class RoomScene extends BaseScene {
         new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(309, 492, 1800)),
         new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(565, 747, 3600)),
       ];
+    }
+    if (isHalloweenPeriod()) {
+      // Bats confined to the window y-range so they appear in the city sky
+      this.cityBatEngine = newBatEngine(GAME_WIDTH, {
+        yMin: 25, yMax: 220, count: 5, speedMin: 0.3, speedMax: 0.7,
+      });
     }
     this.voidStarsGraphics       = this.add.graphics();
     this.fireplaceGraphics       = this.add.graphics();
@@ -238,6 +246,7 @@ export class RoomScene extends BaseScene {
     this.settingsPanel.create();
 
     if (this.roomConfig.id === 'relay') this.relaySystem.setup(this);
+
     if (this.roomConfig.id === 'lounge') {
       this.loungeLiveBanner = new LoungeLiveBanner();
       this.loungeLiveBanner.mount();
@@ -424,6 +433,11 @@ export class RoomScene extends BaseScene {
     ctx.clip();
     // Shooting star
     this.drawShootingStarToCtx(ctx, delta);
+    // Bats
+    if (this.cityBatEngine) {
+      this.cityBatEngine.tick(time, delta);
+      drawBatsCanvas(ctx, this.cityBatEngine, time);
+    }
     // Fireworks
     for (const fw of this.cityFwEngines) {
       fw.tick(time, delta);
@@ -752,6 +766,7 @@ export class RoomScene extends BaseScene {
 
   // ── Movement ──
   private updateMovement(delta: number): void {
+    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0, vy = 0;

@@ -34,7 +34,7 @@ export function showInvoiceModal(
   verifyUrl:    string | undefined,
   nostrPubkey:  string | undefined,
   zapEventId:   string | undefined,
-  item:         MarketItem,
+  _item:        MarketItem | null,
   onGrant:      () => void,
 ): void {
   document.getElementById('mp-invoice-modal')?.remove();

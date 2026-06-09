@@ -1,5 +1,7 @@
 import { initAuraProgress } from './auraUnlockStore';
 import { initFishingProgress } from './fishingUnlockStore';
+import { initCollectionUnlocks } from './collectionUnlocks';
+import { initUnlocks, resetUnlocks } from './unlockStore';
 
 type LoginMethod = 'extension' | 'nsec' | 'bunker' | 'guest' | null;
 
@@ -84,7 +86,15 @@ state = {
     state.loginMethod = data.loginMethod;
     state.isLoggedIn = true;
     state.isGuest = data.loginMethod === 'guest';
-    if (!state.isGuest && data.pubkey) { initAuraProgress(data.pubkey); initFishingProgress(data.pubkey); }
+    if (!state.isGuest && data.pubkey) {
+      // Register unlock-check listeners first, THEN kick off the async relay load so
+      // its `nd-unlocks-loaded` event is never missed.
+      initAuraProgress(data.pubkey);
+      initFishingProgress(data.pubkey);
+      initCollectionUnlocks();
+      initUnlocks(data.pubkey);
+      import('./tradeItemStore').then(m => m.initTradeOffers(data.pubkey!));
+    }
     notify();
   },
 
@@ -98,6 +108,8 @@ state = {
     state.loginMethod = 'guest';
     state.isLoggedIn = false;
     state.isGuest = true;
+    resetUnlocks();
+    import('./tradeItemStore').then(m => m.resetTradeOffers());
     notify();
   },
 
@@ -111,6 +123,8 @@ state = {
     state.loginMethod = null;
     state.isLoggedIn = false;
     state.isGuest = false;
+    resetUnlocks();
+    import('./tradeItemStore').then(m => m.resetTradeOffers());
     notify();
   },
 

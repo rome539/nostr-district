@@ -10,6 +10,8 @@
  */
 
 import Phaser from 'phaser';
+import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
+import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
@@ -29,8 +31,10 @@ import { EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
-import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { incrementLegendaryCatch, incrementCoelacanth } from '../stores/fishingUnlockStore';
+import { ITEM_BY_FISH_NAME, FISH_KEEP_CHANCE } from '../stores/tradeItemStore';
+import { ScavengeSystem } from './ScavengeSystem';
+import { sendItemMintRequest } from '../nostr/presenceService';
 
 const WOODS_ACCENT = '#aaff44';
 
@@ -141,6 +145,12 @@ export class WoodsScene extends BaseScene {
   private shootingStar: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number } | null = null;
   private shootingStarTimer = 0;
   private shootingStarGraphics!: Phaser.GameObjects.Graphics;
+  private batGraphics: Phaser.GameObjects.Graphics | null = null;
+  private batEngine: BatEngine | null = null;
+  private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
+  private glowingEyes: GlowingEyesEngine | null = null;
+  private groundFog: GroundFogEngine | null = null;
+  private scavenge: ScavengeSystem | null = null;
   private spawnX = 1400;
   private nearCabin = false;
   private cabinPromptBg!: Phaser.GameObjects.Graphics;
@@ -190,6 +200,18 @@ export class WoodsScene extends BaseScene {
     this.add.image(W / 2, GAME_HEIGHT / 2, 'woods_bg').setDepth(-1);
 
     this.shootingStarGraphics = this.add.graphics().setDepth(-1);
+    if (isHalloweenPeriod()) {
+      this.batGraphics = this.add.graphics().setDepth(0);
+      this.batEngine = newBatEngine(W, {
+        yMin: 20, yMax: FLOOR_Y - 180, count: 8, speedMin: 0.4, speedMax: 1.0,
+      });
+      this.halloweenGraphics = this.add.graphics().setDepth(2);
+      this.glowingEyes = new GlowingEyesEngine([
+        [60, FLOOR_Y - 30], [240, FLOOR_Y - 25], [660, FLOOR_Y - 20],
+        [850, FLOOR_Y - 28], [1250, FLOOR_Y - 24], [1520, FLOOR_Y - 22],
+      ]);
+      this.groundFog = new GroundFogEngine(W, FLOOR_Y + 5, 18);
+    }
     this.waterGraphics = this.add.graphics().setDepth(1);
     this.boatGraphics = this.add.graphics().setDepth(2);
     this.drawBoat();
@@ -259,7 +281,8 @@ export class WoodsScene extends BaseScene {
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
       if (this.nearTelescope) { this.openTelescopeView(); return; }
       if (this.nearFishBoard) { this.openFishGuide(); return; }
-      if (this.nearDockTip) { this.handleFishingPress(); }
+      if (this.nearDockTip) { this.handleFishingPress(); return; }
+      if (this.scavenge?.tryInteract()) return;
     });
 
     // Telescope prompt
@@ -314,8 +337,12 @@ export class WoodsScene extends BaseScene {
     this.cameras.main.fadeIn(400, 4, 8, 10);
     this.settingsPanel.create();
 
+    // Renders whichever of the 2 global scavenge spots happen to be in the woods
+    this.scavenge = new ScavengeSystem(this, 'woods', FLOOR_Y, () => this.player, WOODS_ACCENT);
+
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
+      this.scavenge?.destroy();
       this.cabinPromptBg?.destroy(); this.cabinPromptText?.destroy(); this.cabinPromptArrow?.destroy();
       this.telescopePromptBg?.destroy(); this.telescopePromptText?.destroy(); this.telescopePromptArrow?.destroy();
       this.telescopeOverlay?.remove(); this.telescopeOverlay = null;
@@ -801,6 +828,7 @@ export class WoodsScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   update(time: number, delta: number): void {
     this.updateMovement(delta);
+    this.scavenge?.update(time);
     this.parallaxBg.x = W / 2 - this.cameras.main.scrollX * 0.4;
     this.updateCampfire(time, delta);
     this.updateChimneySmoke(delta);
@@ -810,6 +838,23 @@ export class WoodsScene extends BaseScene {
     this.snd.setLoopElVolume(fireT * fireT);
     this.updateWater(time, delta);
     this.updateShootingStar(delta);
+    if (this.batEngine && this.batGraphics) {
+      this.batGraphics.clear();
+      this.batEngine.tick(time, delta);
+      drawBatsPhaser(this.batGraphics, this.batEngine, time);
+    }
+    if (this.halloweenGraphics) {
+      this.halloweenGraphics.clear();
+      if (this.groundFog) { this.groundFog.tick(delta); drawFogPhaser(this.halloweenGraphics, this.groundFog, time); }
+      const glow = 0.5 + Math.sin(time * 0.002) * 0.3;
+      // Pumpkins: along the path, near campfire, by the cabin
+      drawPumpkinPhaser(this.halloweenGraphics, FIRE_X - 80, FLOOR_Y, 9, glow);
+      drawPumpkinPhaser(this.halloweenGraphics, FIRE_X + 65, FLOOR_Y, 7, glow);
+      drawPumpkinPhaser(this.halloweenGraphics, CABIN_X - 30, FLOOR_Y, 8, glow);
+      drawPumpkinPhaser(this.halloweenGraphics, 300,  FLOOR_Y, 6, glow * 0.7);
+      drawPumpkinPhaser(this.halloweenGraphics, 1300, FLOOR_Y, 7, glow * 0.7);
+      if (this.glowingEyes) { this.glowingEyes.tick(delta); drawEyesPhaser(this.halloweenGraphics, this.glowingEyes, time); }
+    }
     this.updatePlayerGlow(time);
     this.updateCabinProximity();
     this.updateTelescopeProximity();
@@ -843,6 +888,7 @@ export class WoodsScene extends BaseScene {
   }
 
   private updateMovement(delta: number): void {
+    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
@@ -1654,6 +1700,21 @@ export class WoodsScene extends BaseScene {
         this.chatUI.addMessage('system', `"${catch_.lore}"`, '#7a9a7a');
       });
     }
+    // ── Trade inventory: probabilistic keep ───────────────────────────────────
+    const itemDef = ITEM_BY_FISH_NAME[catch_.name];
+    if (itemDef) {
+      const rarity = isLegendary ? 'legendary' : catch_.rare ? 'rare' : catch_.junk ? 'junk' : 'common';
+      const keepChance = FISH_KEEP_CHANCE[rarity] ?? 0;
+      if (Math.random() < keepChance) {
+        sendItemMintRequest(itemDef.id, 'caught');
+        if (!isLegendary) {
+          this.time.delayedCall(800, () => {
+            this.chatUI.addMessage('system', `📦 ${catch_.name} added to your collection.`, '#80c8ff');
+          });
+        }
+      }
+    }
+
     if (isLegendary) {
       if (catch_.name === 'leviathan coelacanth') incrementCoelacanth();
       incrementLegendaryCatch();
@@ -1826,7 +1887,6 @@ export class WoodsScene extends BaseScene {
 
   private openTelescopeView(): void {
     if (this.telescopeOverlay) return;
-    incrementAuraProgress('sparkle');
 
     // ── seeded RNG ──
     const mkRng = (seed: number) => { let s = seed >>> 0; return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 0x100000000; }; };

@@ -6,7 +6,7 @@
  */
 
 import { authStore } from './authStore';
-import { isAuraUnlocked, checkGoldUnlock } from './auraUnlockStore';
+import { isAuraUnlocked } from './auraUnlockStore';
 import { isFishingItemUnlocked } from './fishingUnlockStore';
 import { isPizzaHatUnlocked } from './pizzaDayUnlockStore';
 
@@ -361,7 +361,6 @@ export function isOwned(slot: string, value: string): boolean {
 /** Mark an item as purchased in memory. */
 export function addToInventory(slot: string, value: string): void {
   _inventory.add(`${slot}:${value}`);
-  checkGoldUnlock(_inventory.size);
 }
 
 /** Returns the inventory as a string array for Nostr persistence. */

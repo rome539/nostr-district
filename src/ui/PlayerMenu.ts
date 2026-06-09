@@ -95,6 +95,7 @@ export function showPlayerMenu(
     <div class="ctx-dm" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;">\u2709 ${ti18n('player_menu.send_dm')}</div>
     <div class="ctx-zap" style="padding:10px 16px;color:var(--nd-accent);font-size:13px;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:8px;">${boltIcon(14)} <span>${ti18n('player_menu.zap')}</span></div>
     <div class="ctx-visit" style="padding:10px 16px;color:var(--nd-subtext);font-size:13px;cursor:pointer;transition:background 0.15s;">\uD83D\uDEAA ${ti18n('player_menu.visit_room')}</div>
+    <div class="ctx-trade" style="padding:10px 16px;color:#d0d060;font-size:13px;cursor:pointer;transition:background 0.15s;">\u21C4 Trade Items</div>
     <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 13%,transparent);margin:2px 0;"></div>
     <div class="ctx-mute" style="padding:10px 16px;color:${isMuted ? 'var(--nd-accent)' : 'var(--nd-subtext)'};font-size:13px;cursor:pointer;transition:background 0.15s;">${isMuted ? '\u{1F50A} ' + ti18n('player_menu.unmute') : '\u{1F507} ' + ti18n('player_menu.mute')}</div>
   `;
@@ -112,7 +113,7 @@ export function showPlayerMenu(
   menu.style.top = `${topY}px`;
 
   // Hover effects
-  menu.querySelectorAll('.ctx-profile,.ctx-dm,.ctx-zap,.ctx-visit,.ctx-mute').forEach(el => {
+  menu.querySelectorAll('.ctx-profile,.ctx-dm,.ctx-zap,.ctx-visit,.ctx-trade,.ctx-mute').forEach(el => {
     el.addEventListener('mouseenter', () => (el as HTMLElement).style.background = `color-mix(in srgb,var(--nd-dpurp) 13%,transparent)`);
     el.addEventListener('mouseleave', () => (el as HTMLElement).style.background = 'transparent');
   });
@@ -136,6 +137,14 @@ export function showPlayerMenu(
   menu.querySelector('.ctx-zap')!.addEventListener('click', () => {
     close();
     ZapModal.show(pubkey, name);
+  });
+
+  // Trade Items
+  menu.querySelector('.ctx-trade')!.addEventListener('click', () => {
+    close();
+    import('./BazaarPanel').then(({ bazaarPanel }) => {
+      bazaarPanel.openTradeWith(pubkey, name);
+    });
   });
 
   // Visit Room

@@ -5,7 +5,6 @@
 
 import Phaser from 'phaser';
 import { sendChat } from '../nostr/presenceService';
-import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 import { maybeTranslate } from '../i18n/translator';
@@ -22,8 +21,11 @@ const SLASH_COMMANDS: { cmd: string; hint: string }[] = [
   { cmd: 'who',      hint: '' },
   { cmd: 'map',      hint: '' },
   { cmd: 'polls',    hint: '' },
-  { cmd: 'shop',     hint: '' },
-  { cmd: 'wallet',   hint: '' },
+  { cmd: 'shop',      hint: '' },
+  { cmd: 'wallet',    hint: '' },
+  { cmd: 'bazaar',    hint: '' },
+  { cmd: 'bag',       hint: '' },
+  { cmd: 'inventory', hint: '' },
   { cmd: 'mute',     hint: '' },
   { cmd: 'mutelist', hint: '' },
   { cmd: 'filter',   hint: '<word>' },
@@ -170,7 +172,7 @@ export class ChatUI {
           this.input.blur();
           return;
         }
-        sendChat(text); incrementAuraProgress('electric'); this.input.value = ''; this.input.blur();
+        sendChat(text); this.input.value = ''; this.input.blur();
       }
       if (e.key === 'Escape') { this.gifPicker?.close(); this.suggestBox.style.display = 'none'; this.input.blur(); }
     });

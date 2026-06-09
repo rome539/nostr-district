@@ -10,6 +10,9 @@
  */
 
 import Phaser from 'phaser';
+import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
+import { ScavengeSystem } from './ScavengeSystem';
+import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
@@ -25,6 +28,7 @@ import { onNextAvatarSync } from '../nostr/nostrService';
 import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
 import { TarotModal } from '../ui/TarotModal';
+import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
 import { t as ti18n } from '../i18n/i18n';
 
 const ALLEY_ACCENT   = P.dpurp;
@@ -37,12 +41,21 @@ const FORTUNE_X      = 319;  // center of fortune teller cabinet (mx=302 + 17)
 const FORTUNE_RANGE  = 36;
 const TAROT_X        = 422;  // center of tarot machine (mx=408 + 14)
 const TAROT_RANGE    = 36;
+const VENDING_X      = 600;  // bazaar vending machine (open floor between crates & barrels)
+const VENDING_RANGE  = 42;
+const VENDING_KEY    = 'vending_bazaar';
+const VENDING_URL    = 'assets/furniture/Vending Machine 1.1 (No Glass).png';
 
 export class AlleyScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
 
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private neonGraphics!: Phaser.GameObjects.Graphics;
+  private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
+  private batEngine: BatEngine | null = null;
+  private glowingEyes: GlowingEyesEngine | null = null;
+  private groundFog: GroundFogEngine | null = null;
+  private scavenge: ScavengeSystem | null = null;
 
   // Water drip particles
   private drips: { x: number; y: number; vy: number; len: number; alpha: number }[] = [];
@@ -65,6 +78,13 @@ export class AlleyScene extends BaseScene {
   private tarotPromptText!: Phaser.GameObjects.Text;
   private tarotPromptArrow!: Phaser.GameObjects.Text;
 
+  // Bazaar vending machine proximity
+  private nearVending = false;
+  private vendingSprite: Phaser.GameObjects.Image | null = null;
+  private vendingPromptBg!: Phaser.GameObjects.Graphics;
+  private vendingPromptText!: Phaser.GameObjects.Text;
+  private vendingPromptArrow!: Phaser.GameObjects.Text;
+
   // Exit door prompt
 
   // Subway prompt
@@ -85,6 +105,14 @@ export class AlleyScene extends BaseScene {
 
     this.fxGraphics    = this.add.graphics().setDepth(3);
     this.neonGraphics  = this.add.graphics().setDepth(5);
+    if (isHalloweenPeriod()) {
+      this.halloweenGraphics = this.add.graphics().setDepth(4);
+      this.batEngine = newBatEngine(W, { yMin: 20, yMax: FLOOR_Y - 160, count: 5, speedMin: 0.3, speedMax: 0.7 });
+      this.glowingEyes = new GlowingEyesEngine([
+        [80,  FLOOR_Y - 70], [350, FLOOR_Y - 55], [620, FLOOR_Y - 80], [900, FLOOR_Y - 65],
+      ]);
+      this.groundFog = new GroundFogEngine(W, FLOOR_Y + 5, 10);
+    }
     this.emoteGraphics = this.add.graphics().setDepth(15);
 
     this.spawnParticles();
@@ -140,6 +168,28 @@ export class AlleyScene extends BaseScene {
     fitPromptBubble(this.tarotPromptBg, this.tarotPromptText, { minWidth: 148, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0x4488cc, strokeAlpha: 0.6 });
     this.tarotPromptBg.on('pointerdown', () => { if (this.nearTarot && !TarotModal.isOpen()) TarotModal.show(); });
 
+    // Bazaar vending machine — load the PNG and place it on the floor
+    const placeVending = () => {
+      if (!this.scene.isActive()) return; // scene shut down before load finished
+      this.textures.get(VENDING_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST); // crisp pixels when scaled
+      const img = this.add.image(VENDING_X, FLOOR_Y, VENDING_KEY).setOrigin(0.5, 1).setDepth(2);
+      img.setScale(96 / img.height); // normalize to ~96px tall regardless of source size
+      img.setTint(0x7a6fa6); // dim + cool the bright PNG so it blends into the dark alley
+      this.vendingSprite = img;
+    };
+    if (this.textures.exists(VENDING_KEY)) placeVending();
+    else { this.load.image(VENDING_KEY, VENDING_URL); this.load.once('complete', placeVending); this.load.start(); }
+
+    this.vendingPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
+    this.vendingPromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.open_bazaar')}`,
+      { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#c0a8ff', fontStyle: 'bold', align: 'center' }
+    ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    this.vendingPromptArrow = this.add.text(0, 0, '▼',
+      { fontFamily: 'monospace', fontSize: '9px', color: '#7b68ee' }
+    ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    fitPromptBubble(this.vendingPromptBg, this.vendingPromptText, { minWidth: 140, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0x7b68ee, strokeAlpha: 0.6 });
+    this.vendingPromptBg.on('pointerdown', () => { if (this.nearVending && !BazaarPanel.isOpen()) bazaarPanel.open(); });
+
     // Fortune teller prompt
     this.fortunePromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
     this.fortunePromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.ask_fortune')}`,
@@ -166,8 +216,10 @@ export class AlleyScene extends BaseScene {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (FortuneTellerModal.isOpen()) { FortuneTellerModal.destroy(); return; }
       if (TarotModal.isOpen()) { TarotModal.destroy(); return; }
+      if (this.scavenge?.tryInteract()) return;
       if (this.nearFortune) { FortuneTellerModal.show(); return; }
       if (this.nearTarot) { TarotModal.show(); return; }
+      if (this.nearVending && !BazaarPanel.isOpen()) { bazaarPanel.open(); return; }
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);
@@ -180,13 +232,18 @@ export class AlleyScene extends BaseScene {
     this.cameras.main.fadeIn(350, 0, 0, 0);
     this.settingsPanel.create();
 
+    // Renders whichever of the 2 global scavenge spots happen to be in the alley
+    this.scavenge = new ScavengeSystem(this, 'alley', FLOOR_Y, () => this.player, ALLEY_ACCENT);
+
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
       FortuneTellerModal.destroy();
       TarotModal.destroy();
       this.fortunePromptBg?.destroy(); this.fortunePromptText?.destroy(); this.fortunePromptArrow?.destroy();
       this.tarotPromptBg?.destroy(); this.tarotPromptText?.destroy(); this.tarotPromptArrow?.destroy();
+      this.vendingSprite?.destroy(); this.vendingPromptBg?.destroy(); this.vendingPromptText?.destroy(); this.vendingPromptArrow?.destroy();
       this.subwayPromptBg?.destroy(); this.subwayPromptText?.destroy(); this.subwayPromptArrow?.destroy();
+      this.scavenge?.destroy();
     });
   }
 
@@ -688,8 +745,20 @@ export class AlleyScene extends BaseScene {
     }
     this.updateParticles(delta);
     this.updateNeon(delta);
+    this.scavenge?.update(time);
+    if (this.halloweenGraphics) {
+      this.halloweenGraphics.clear();
+      if (this.groundFog)   { this.groundFog.tick(delta);  drawFogPhaser(this.halloweenGraphics, this.groundFog, time); }
+      if (this.batEngine)   { this.batEngine.tick(time, delta); drawBatsPhaser(this.halloweenGraphics, this.batEngine, time); }
+      if (this.glowingEyes) { this.glowingEyes.tick(delta); drawEyesPhaser(this.halloweenGraphics, this.glowingEyes, time); }
+      const glow = 0.5 + Math.sin(time * 0.002) * 0.3;
+      drawPumpkinPhaser(this.halloweenGraphics, 180,  FLOOR_Y, 14, glow);
+      drawPumpkinPhaser(this.halloweenGraphics, 500,  FLOOR_Y, 12, glow * 0.8);
+      drawPumpkinPhaser(this.halloweenGraphics, 820,  FLOOR_Y, 14, glow);
+    }
     this.updateFortuneProximity();
     this.updateTarotProximity();
+    this.updateVendingProximity();
     this.updateSubwayProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -719,6 +788,7 @@ export class AlleyScene extends BaseScene {
   }
 
   private updateMovement(delta: number): void {
+    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
@@ -904,6 +974,30 @@ export class AlleyScene extends BaseScene {
   }
 
 
+
+  private updateVendingProximity(): void {
+    const near = Math.abs(this.player.x - VENDING_X) <= VENDING_RANGE;
+    if (near !== this.nearVending) {
+      this.nearVending = near;
+      const show = near && !BazaarPanel.isOpen();
+      this.vendingPromptBg.setVisible(show);
+      this.vendingPromptText.setVisible(show);
+      this.vendingPromptArrow.setVisible(show);
+      if (!near) this.tweens.killTweensOf(this.vendingPromptArrow);
+    }
+    if (BazaarPanel.isOpen()) return;
+    if (near) {
+      const zoom = this.cameras.main.zoom;
+      const sx = VENDING_X - this.cameras.main.scrollX;
+      const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
+      positionPromptBubble(this.vendingPromptBg, sx, sy - 2);
+      this.vendingPromptText.setPosition(sx, sy + 7);
+      this.vendingPromptArrow.setPosition(sx, sy + 19);
+      if (!this.tweens.isTweening(this.vendingPromptArrow)) {
+        this.tweens.add({ targets: this.vendingPromptArrow, y: sy + 23, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
+  }
 
   private updateSubwayProximity(): void {
     const near = Math.abs(this.player.x - SUBWAY_X) < 60;

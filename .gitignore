@@ -7,4 +7,10 @@ dist/
 *.docx
 *_orig.png
 *.aseprite
-vite.config.ts.timestamp-*
+vite.config.ts.timestamp-*.mjs
+.weekly-drops.json
+.sold-instances.json
+.bids.json
+.burned-instances.json
+.scavenge-buckets.json
+.oracle-key-dev

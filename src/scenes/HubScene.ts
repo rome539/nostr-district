@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble } from '../config/game.config';
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../utils/fireworks';
+import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
+import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendAvatarUpdate,
@@ -31,6 +33,8 @@ import {
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { TutorialOverlay, isTutorialDone } from '../ui/TutorialOverlay';
+import { tryDailyDrop } from '../stores/tradeItemStore';
+import { ScavengeSystem } from './ScavengeSystem';
 
 interface BuildingZone { id: string; name: string; doorX: number; neonColor: string; }
 
@@ -69,6 +73,12 @@ export class HubScene extends BaseScene {
   private nearCrewBoard = false;
   private fwGraphics: Phaser.GameObjects.Graphics | null = null;
   private fwEngine: FireworksEngine | null = null;
+  private batGraphics: Phaser.GameObjects.Graphics | null = null;
+  private batEngine: BatEngine | null = null;
+  private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
+  private glowingEyes: GlowingEyesEngine | null = null;
+  private groundFog: GroundFogEngine | null = null;
+  private scavenge: ScavengeSystem | null = null;
   private readonly BULLETIN_X = 860;
   private readonly CREW_BOARD_X = 615;
 
@@ -216,13 +226,25 @@ export class HubScene extends BaseScene {
     if (isJuly4thPeriod()) {
       this.fwGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
       this.fwEngine = new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
-        launchY:        GROUND_Y - 200, // building-top level (~y=140)
+        launchY:        GROUND_Y - 200,
         explodeYMin:    10,
-        explodeYMax:    75,             // always above tallest building top (~y=82)
+        explodeYMax:    75,
         particleRadius: 0.5,
         explosionCount: 10,
         explosionSpeed: 1.3,
       });
+    }
+    if (isHalloweenPeriod()) {
+      this.batGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
+      this.batEngine = newBatEngine(GAME_WIDTH, {
+        yMin: 30, yMax: GROUND_Y - 160, count: 6, speedMin: 0.35, speedMax: 0.8,
+      });
+      this.halloweenGraphics = this.add.graphics().setDepth(1);
+      this.glowingEyes = new GlowingEyesEngine([
+        [80, GROUND_Y - 20], [430, GROUND_Y - 25], [760, GROUND_Y - 18],
+        [1050, GROUND_Y - 22], [1380, GROUND_Y - 20],
+      ]);
+      this.groundFog = new GroundFogEngine(WORLD_WIDTH, GROUND_Y + 10, 16);
     }
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
@@ -286,19 +308,49 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.setupEscHandler();
     this.cameras.main.fadeIn(400, 10, 0, 20);
     this.settingsPanel.create();
+
+    // Renders whichever of the 2 global scavenge spots happen to be in the hub
+    this.scavenge = new ScavengeSystem(this, 'hub', GROUND_Y, () => this.player, P.teal);
+
+    // Weekly drop — server is the authoritative gate; on grant it sends back a
+    // minted event and the toast fires from BaseScene's mint handler.
+    this.time.delayedCall(3000, () => tryDailyDrop());
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
+      this.scavenge?.destroy();
       this.fwGraphics?.destroy(); this.fwEngine = null;
+      this.batGraphics?.destroy(); this.batEngine = null;
+      this.halloweenGraphics?.destroy(); this.glowingEyes = null; this.groundFog = null;
       this.chimneyGraphics?.destroy(); this.chimneyParticles = [];
     });
   }
 
   update(time: number, delta: number): void {
     this.updateMovement(delta); this.updateProximity(); this.updateParallax();
+    this.scavenge?.update(time);
     if (this.fwEngine && this.fwGraphics) {
       this.fwGraphics.clear();
       this.fwEngine.tick(time, delta);
       drawFireworksPhaser(this.fwGraphics, this.fwEngine);
+    }
+    if (this.batEngine && this.batGraphics) {
+      this.batGraphics.clear();
+      this.batEngine.tick(time, delta);
+      drawBatsPhaser(this.batGraphics, this.batEngine, time);
+    }
+    if (this.halloweenGraphics) {
+      this.halloweenGraphics.clear();
+      // Ground fog
+      if (this.groundFog) { this.groundFog.tick(delta); drawFogPhaser(this.halloweenGraphics, this.groundFog, time); }
+      // Pumpkins along the street
+      const pumpkinPositions: [number, number, number][] = [
+        [310,  GROUND_Y, 7], [620, GROUND_Y, 9],
+        [870,  GROUND_Y, 7], [1100, GROUND_Y, 8], [1420, GROUND_Y, 7],
+      ];
+      const glow = 0.5 + Math.sin(time * 0.002) * 0.3;
+      for (const [px, py, ps] of pumpkinPositions) drawPumpkinPhaser(this.halloweenGraphics, px, py, ps, glow);
+      // Glowing eyes in dark corners
+      if (this.glowingEyes) { this.glowingEyes.tick(delta); drawEyesPhaser(this.halloweenGraphics, this.glowingEyes, time); }
     }
     this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
     this.updateChimneySmoke(delta);
@@ -652,6 +704,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
   }
   private updateMovement(delta: number): void {
+    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
@@ -897,6 +950,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay, #zap-modal, #sp-keys-modal, #player-context-menu, #profile-modal')) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
+    if (this.scavenge?.tryInteract()) return;
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;

@@ -213,6 +213,26 @@ async function fetchInvoice(
 // ── Direct lightning address pay (no zap request) ────────────────────────────
 
 /**
+/**
+ * Pay a raw bolt11 invoice using whatever wallet the user has, in preference
+ * order: in-game (Spark) → WebLN → NWC. Returns true if paid. Used by the bazaar
+ * escrow purchase flow, where the server hands us the seller's invoice to pay.
+ */
+export async function payBolt11(bolt11: string): Promise<boolean> {
+  try {
+    const r = await sendSparkPayment(bolt11);
+    if (r.ok) return true;
+  } catch { /* fall through to other wallets */ }
+  if (hasWebLN()) {
+    try { const r = await weblnPayInvoice(bolt11); if (r.preimage) return true; } catch { /* */ }
+  }
+  if (hasNWC()) {
+    try { const r = await nwcPayInvoice(bolt11); if (r.preimage) return true; } catch { /* */ }
+  }
+  return false;
+}
+
+/**
  * Pay a lightning address for a market purchase.
  * Uses NIP-57 zap request when the store supports it so we can detect
  * payment via kind:9735 zap receipts on Nostr relays.

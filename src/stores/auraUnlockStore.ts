@@ -1,23 +1,29 @@
 import { SoundEngine } from '../audio/SoundEngine';
+import {
+  hasAura, unlockAura, getUnlockState, setLoginStreak, isUnlocksLoaded,
+} from './unlockStore';
 
 /**
- * auraUnlockStore.ts — Tracks per-player aura unlock progress in localStorage.
+ * auraUnlockStore.ts — aura unlock LOGIC. State lives in unlockStore (relay-backed,
+ * kind:30078), not localStorage.
  *
  * Unlock conditions:
- *   smoke    — use smoke emote 50 times
- *   fire     — stoke the cabin fireplace 30 times
- *   sparkle  — use the telescope in the woods 20 times
+ *   smoke    — complete the "Off the Books" set (every street item)
+ *   fire     — complete "The Canon" set (every lore item)
+ *   sparkle  — complete the "Deep Time" set
+ *   electric — complete the "Dead Hardware" set (every hardware item)
+ *   gold     — collect every legendary item that isn't a fish
  *   ice      — log in 7 consecutive days
- *   electric — send 200 chat messages
- *   void     — log in 30 consecutive days (same streak as ice, higher threshold)
- *   gold     — own 10+ market items
+ *   void     — log in 30 consecutive days
  *   rainbow  — unlock smoke + fire + sparkle + ice first
+ *
+ * smoke/fire/sparkle/electric/gold are SET-based: progress is fed in from the trade
+ * inventory (collectionUnlocks.ts → updateSetAuraProgress). ice/void are login-streak
+ * based, applied once the relay unlock state has loaded (nd-unlocks-loaded).
  */
 
-const THRESHOLDS: Record<string, number> = {
-  smoke: 50, fire: 30, sparkle: 20, ice: 7,
-  electric: 200, void: 30, gold: 10, rainbow: 4,
-};
+const THRESHOLDS: Record<string, number> = { ice: 7, void: 30, rainbow: 4 };
+const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold'];
 
 const LABELS: Record<string, string> = {
   smoke: 'Smoke Aura', fire: 'Fire Aura', sparkle: 'Sparkle Aura', ice: 'Ice Aura',
@@ -25,64 +31,23 @@ const LABELS: Record<string, string> = {
 };
 
 export const AURA_HINTS: Record<string, string> = {
-  smoke:    'Use the smoke emote 50 times',
-  fire:     'Stoke the cabin fireplace 30 times',
-  sparkle:  'Use the telescope in the woods 20 times',
+  smoke:    'Complete the "Off the Books" set (every street item)',
+  fire:     'Complete "The Canon" set (every lore item)',
+  sparkle:  'Complete the "Deep Time" set',
+  electric: 'Complete the "Dead Hardware" set (every hardware item)',
+  gold:     'Collect every legendary item (besides fish)',
   ice:      'Log in 7 days in a row',
-  electric: 'Send 200 chat messages',
   void:     'Log in 30 days in a row (no breaks)',
-  gold:     'Own 10 or more market items',
   rainbow:  'Unlock smoke, fire, sparkle, and ice auras first',
 };
 
 const BASE_AURAS = ['smoke', 'fire', 'sparkle', 'ice'];
 
-interface AuraProgressData {
-  smokeEmoteCount:  number;
-  fireStokesCount:  number;
-  telescopeCount:   number;
-  chatMessageCount: number;
-  goldItemCount:    number;
-  loginStreak:      number;
-  lastLoginDate:    string;
-  unlockedAuras:    string[];
-}
-
-type CountField = keyof AuraProgressData;
-const COUNT_FIELD: Record<string, CountField> = {
-  smoke:    'smokeEmoteCount',
-  fire:     'fireStokesCount',
-  sparkle:  'telescopeCount',
-  electric: 'chatMessageCount',
-  gold:     'goldItemCount',
-  ice:      'loginStreak',
-  void:     'loginStreak',
-};
-
 let _pubkey = '';
+let _streakListenerBound = false;
 
-function storageKey(): string { return `nd_aura_progress_${_pubkey}`; }
-
-function load(): AuraProgressData {
-  try {
-    const raw = localStorage.getItem(storageKey());
-    if (raw) return {
-      smokeEmoteCount: 0, fireStokesCount: 0, telescopeCount: 0,
-      chatMessageCount: 0, goldItemCount: 0,
-      loginStreak: 0, lastLoginDate: '', unlockedAuras: [],
-      ...JSON.parse(raw),
-    };
-  } catch { /* ignore */ }
-  return {
-    smokeEmoteCount: 0, fireStokesCount: 0, telescopeCount: 0,
-    chatMessageCount: 0, goldItemCount: 0,
-    loginStreak: 0, lastLoginDate: '', unlockedAuras: [],
-  };
-}
-
-function persist(data: AuraProgressData): void {
-  try { localStorage.setItem(storageKey(), JSON.stringify(data)); } catch { /* ignore */ }
-}
+// Latest set-completion progress per set-based aura (for the market-panel display).
+const _setAuraProgress: Record<string, { count: number; required: number }> = {};
 
 function showUnlockToast(label: string): void {
   SoundEngine.get().auraUnlock();
@@ -99,107 +64,75 @@ function showUnlockToast(label: string): void {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3600);
 }
 
-function _checkCompositeUnlocks(data: AuraProgressData): boolean {
-  let changed = false;
-  if (!data.unlockedAuras.includes('rainbow') &&
-      BASE_AURAS.every(a => data.unlockedAuras.includes(a))) {
-    data.unlockedAuras = [...data.unlockedAuras, 'rainbow'];
-    changed = true;
-    showUnlockToast(LABELS.rainbow);
+function _checkCompositeUnlocks(): void {
+  const auras = getUnlockState().auras;
+  if (!auras.includes('rainbow') && BASE_AURAS.every(a => auras.includes(a))) {
+    if (unlockAura('rainbow')) showUnlockToast(LABELS.rainbow);
   }
-  return changed;
 }
 
-/** Call once on every real (non-guest) login with the player's pubkey. */
-export function initAuraProgress(pubkey: string): void {
-  _pubkey = pubkey;
-  const data = load();
+// Streak / ice / void — runs once the relay unlock state has loaded.
+function applyLoginStreak(): void {
+  const state = getUnlockState();
+  if (state.auras.includes('ice') && state.auras.includes('void')) { _checkCompositeUnlocks(); return; }
 
-  // Keep tracking streak until both ice (7) and void (30) are unlocked
-  if (data.unlockedAuras.includes('ice') && data.unlockedAuras.includes('void')) {
-    _checkCompositeUnlocks(data);
-    return;
-  }
-
-  const today     = new Date().toISOString().slice(0, 10);
-  if (data.lastLoginDate === today) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.lastLoginDate === today) { _checkCompositeUnlocks(); return; }
 
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  data.loginStreak = data.lastLoginDate === yesterday ? (data.loginStreak || 0) + 1 : 1;
-  data.lastLoginDate = today;
+  const streak = state.lastLoginDate === yesterday ? (state.loginStreak || 0) + 1 : 1;
+  setLoginStreak(streak, today);
 
-  let toasted = false;
-  if (data.loginStreak >= THRESHOLDS.ice && !data.unlockedAuras.includes('ice')) {
-    data.unlockedAuras = [...new Set([...data.unlockedAuras, 'ice'])];
-    showUnlockToast(LABELS.ice);
-    toasted = true;
-  }
-  if (data.loginStreak >= THRESHOLDS.void && !data.unlockedAuras.includes('void')) {
-    data.unlockedAuras = [...new Set([...data.unlockedAuras, 'void'])];
-    if (!toasted) showUnlockToast(LABELS.void);
-  }
+  if (streak >= THRESHOLDS.ice && unlockAura('ice')) showUnlockToast(LABELS.ice);
+  if (streak >= THRESHOLDS.void && unlockAura('void')) showUnlockToast(LABELS.void);
+  _checkCompositeUnlocks();
+}
 
-  _checkCompositeUnlocks(data);
-  persist(data);
+/** Call once on every real (non-guest) login. */
+export function initAuraProgress(pubkey: string): void {
+  _pubkey = pubkey;
+  if (!_streakListenerBound) {
+    _streakListenerBound = true;
+    window.addEventListener('nd-unlocks-loaded', applyLoginStreak);
+  }
+  if (isUnlocksLoaded()) applyLoginStreak(); // already loaded (re-login within session)
 }
 
 /** Returns true if the current player has earned this aura. */
 export function isAuraUnlocked(type: string): boolean {
-  if (!_pubkey) return false;
-  return load().unlockedAuras.includes(type);
+  return hasAura(type);
 }
 
 /** Returns progress info for display in the market panel. */
 export function getAuraProgress(type: string): { count: number; required: number; unlocked: boolean; hint: string } {
-  const required = THRESHOLDS[type] ?? 0;
-  const hint     = AURA_HINTS[type] ?? '';
-  if (!_pubkey) return { count: 0, required, unlocked: false, hint };
-  const data = load();
-  const unlocked = data.unlockedAuras.includes(type);
+  const hint = AURA_HINTS[type] ?? '';
+  if (!_pubkey) return { count: 0, required: THRESHOLDS[type] ?? 0, unlocked: false, hint };
+  const unlocked = hasAura(type);
 
-  let count: number;
   if (type === 'rainbow') {
-    count = BASE_AURAS.filter(a => data.unlockedAuras.includes(a)).length;
-  } else if (COUNT_FIELD[type]) {
-    count = (data[COUNT_FIELD[type]] as number) || 0;
-  } else {
-    count = 0;
+    return { count: getUnlockState().auras.filter(a => BASE_AURAS.includes(a)).length, required: 4, unlocked, hint };
   }
-
-  return { count, required, unlocked, hint };
+  if (type === 'ice' || type === 'void') {
+    return { count: getUnlockState().loginStreak || 0, required: THRESHOLDS[type], unlocked, hint };
+  }
+  if (SET_BASED_AURAS.includes(type)) {
+    const p = _setAuraProgress[type] ?? { count: 0, required: 0 };
+    return { count: p.count, required: p.required, unlocked, hint };
+  }
+  return { count: 0, required: 0, unlocked, hint };
 }
 
-/** Call when the player performs a tracked earn action (smoke, fire, sparkle, electric). */
-export function incrementAuraProgress(type: 'smoke' | 'fire' | 'sparkle' | 'electric'): void {
+/**
+ * Feed in set-completion progress for the set-based auras (called from the inventory
+ * wiring). Unlocks any aura whose set is complete and caches progress for display.
+ */
+export function updateSetAuraProgress(progress: Record<string, { count: number; required: number }>): void {
+  for (const [aura, p] of Object.entries(progress)) _setAuraProgress[aura] = p;
   if (!_pubkey) return;
-  const data = load();
-  if (data.unlockedAuras.includes(type)) return;
-  const field = COUNT_FIELD[type];
-  (data[field] as number) = ((data[field] as number) || 0) + 1;
-  if ((data[field] as number) >= THRESHOLDS[type]) {
-    data.unlockedAuras = [...new Set([...data.unlockedAuras, type])];
-    persist(data);
-    showUnlockToast(LABELS[type]);
-    const data2 = load();
-    if (_checkCompositeUnlocks(data2)) persist(data2);
-  } else {
-    persist(data);
+  for (const [aura, p] of Object.entries(progress)) {
+    if (p.required > 0 && p.count >= p.required && unlockAura(aura)) {
+      showUnlockToast(LABELS[aura] ?? aura);
+    }
   }
-}
-
-/** Call after inventory changes with the new total count. */
-export function checkGoldUnlock(inventoryCount: number): void {
-  if (!_pubkey) return;
-  const data = load();
-  if (data.unlockedAuras.includes('gold')) return;
-  data.goldItemCount = inventoryCount;
-  if (inventoryCount >= THRESHOLDS.gold) {
-    data.unlockedAuras = [...new Set([...data.unlockedAuras, 'gold'])];
-    persist(data);
-    showUnlockToast(LABELS.gold);
-    const data2 = load();
-    if (_checkCompositeUnlocks(data2)) persist(data2);
-  } else {
-    persist(data);
-  }
+  _checkCompositeUnlocks();
 }

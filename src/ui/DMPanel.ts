@@ -7,7 +7,7 @@
  * - Styled to match Nostr District neon cyberpunk aesthetic
  */
 
-import { sendDirectMessage, onDMReceived, canUseDMs, isDMHistoryLoading, onDMHistoryLoading, DMMessage } from '../nostr/dmService';
+import { sendDirectMessage, onDMReceived, canUseDMs, isDMHistoryLoading, isDMBacklogWindow, onDMHistoryLoading, DMMessage } from '../nostr/dmService';
 import { hasUsedInviteToken, markInviteTokenUsed, clearKickedLocally, syncConsumedInviteTokens, areConsumedTokensSynced } from '../nostr/crewService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { fetchProfile } from '../nostr/nostrService';
@@ -19,6 +19,7 @@ import { t as ti18n, onLangChange } from '../i18n/i18n';
 import { ProfileModal } from './ProfileModal';
 import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
 import { nip19 } from 'nostr-tools';
+import { receiveTradeOffer, handleOfferAccepted, handleOfferRejected, ITEM_CATALOG } from '../stores/tradeItemStore';
 
 interface Conversation {
   pubkey: string;
@@ -187,7 +188,7 @@ export class DMPanel {
   // ════════════════════════════════════════════
 
   /** Open the DM panel, optionally focused on a specific user */
-  open(targetPubkey?: string): void {
+  open(targetPubkey?: string, draft?: string): void {
     if (!canUseDMs()) {
       const loginMethod = authStore.getState().loginMethod;
       if (loginMethod === 'extension') {
@@ -213,6 +214,12 @@ export class DMPanel {
       this.openConversation(this.activePubkey);
     } else {
       this.renderConversationList();
+    }
+
+    // Pre-fill a draft message (e.g. from the bazaar "CONTACT seller" button)
+    if (draft && this.inputEl) {
+      this.inputEl.value = draft;
+      this.inputEl.focus();
     }
   }
 
@@ -248,11 +255,11 @@ export class DMPanel {
     this.close();
   }
 
-  toggle(targetPubkey?: string): void {
-    if (this.isOpen) {
+  toggle(targetPubkey?: string, draft?: string): void {
+    if (this.isOpen && !targetPubkey) {
       this.close();
     } else {
-      this.open(targetPubkey);
+      this.open(targetPubkey, draft);
     }
   }
 
@@ -327,10 +334,54 @@ export class DMPanel {
   // ════════════════════════════════════════════
 
   private handleMessage(msg: DMMessage): void {
-    // System-level DMs used by Nostr District for crew key distribution —
-    // never surfaced in the DM UI.
-    if (msg.content?.startsWith('nd-key:')) return;
-    if (msg.content?.startsWith('nd-crew-sk:')) return;
+    const c = msg.content ?? '';
+
+    // System-level protocol DMs — processed for side-effects, NEVER rendered in
+    // the DM UI (neither incoming nor your own outgoing copies).
+    if (c.startsWith('nd-key:') || c.startsWith('nd-crew-sk:')) return;
+    if (c.startsWith('nd-item-')) {
+      if (!msg.isOwn) {
+        // Only toast/ping for LIVE messages. During the login backlog drain
+        // (isDMBacklogWindow — covers the multi-relay straggler window, not just the
+        // first relay's EOSE), still process side-effects but stay silent — else
+        // every old offer/accept/reject re-fires a toast and storms the screen.
+        const live = !isDMBacklogWindow();
+        if (c.startsWith('nd-item-offer:')) {
+          const offer = receiveTradeOffer(c, msg.conversationPubkey);
+          if (offer && live) {
+            const offerDef = ITEM_CATALOG.find(d => d.id === offer.offerItemId);
+            const wantDef  = ITEM_CATALOG.find(d => d.id === offer.wantItemId);
+            if (offerDef && wantDef) {
+              SoundEngine.get().tradeSound();
+              window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer: ${offerDef.emoji} ${offerDef.name} for your ${wantDef.emoji} ${wantDef.name}. Open /bazaar → Offers.`, color: '#ffd700' } }));
+            }
+          }
+        } else if (c.startsWith('nd-item-offer-accept:')) {
+          if (handleOfferAccepted(c) && live) {
+            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade accepted! Open /bazaar for your new item.`, color: '#70ff70' } }));
+          }
+        } else if (c.startsWith('nd-item-offer-reject:')) {
+          if (handleOfferRejected(c) && live) {
+            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer was declined.`, color: '#ff7070' } }));
+          }
+        } else if (c.startsWith('nd-item-sold:')) {
+          try {
+            const { instanceId, listingId, buyerPubkey } = JSON.parse(c.replace(/^nd-item-sold:/, ''));
+            import('../stores/tradeItemStore').then(({ delistItem, getMintedEvent, removeItem }) => {
+              if (listingId) delistItem(listingId);
+              const event = instanceId ? getMintedEvent(instanceId) : null;
+              if (event && buyerPubkey) {
+                import('../nostr/presenceService').then(({ sendItemGiftRequest }) => {
+                  sendItemGiftRequest(event, buyerPubkey);
+                  removeItem(instanceId);
+                });
+              }
+            });
+          } catch { /* malformed */ }
+        }
+      }
+      return; // hidden from the DM thread either way
+    }
 
     const convPubkey = msg.conversationPubkey;
 

@@ -184,6 +184,101 @@ export async function publishEvent(event: any): Promise<boolean> {
   return accepted > 0;
 }
 
+/**
+ * Query events from relays via raw WebSocket REQ — mirrors publishEvent's reliability.
+ * Collects events from each relay until EOSE or timeout, then dedupes by id.
+ */
+const DEFAULT_QUERY_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
+
+// ── Shared relay connection pool ──────────────────────────────────────────────
+// One persistent WebSocket per relay, reused across every query/subscription and
+// multiplexed by subscription id. Without this, each query opened a fresh socket
+// per relay; the bazaar fires ~8 fetches on open × 6 relays = 50+ simultaneous
+// connections, which Safari throttles and kills ("closed before connection
+// established"). Pooling collapses that to one socket per relay.
+interface PooledRelay {
+  url: string;
+  ws: WebSocket | null;
+  ready: boolean;
+  subs: Map<string, { handler: (d: any[]) => void; req: string }>;
+}
+const _relayPool = new Map<string, PooledRelay>();
+
+function ensureRelay(r: PooledRelay): void {
+  if (r.ws && (r.ws.readyState === WebSocket.OPEN || r.ws.readyState === WebSocket.CONNECTING)) return;
+  let ws: WebSocket;
+  try { ws = new WebSocket(r.url); } catch { r.ws = null; r.ready = false; return; }
+  r.ws = ws; r.ready = false;
+  ws.onopen = () => { r.ready = true; for (const s of r.subs.values()) { try { ws.send(s.req); } catch {} } };
+  ws.onmessage = (ev) => {
+    try { const d = JSON.parse((ev as MessageEvent).data); const s = r.subs.get(d[1]); if (s) s.handler(d); } catch {}
+  };
+  ws.onclose = () => { r.ready = false; r.ws = null; };
+  ws.onerror = () => {};
+}
+
+function getRelay(url: string): PooledRelay {
+  let r = _relayPool.get(url);
+  if (!r) { r = { url, ws: null, ready: false, subs: new Map() }; _relayPool.set(url, r); }
+  ensureRelay(r);
+  return r;
+}
+
+function addSub(r: PooledRelay, subId: string, req: string, handler: (d: any[]) => void): void {
+  r.subs.set(subId, { handler, req });
+  if (r.ws && r.ready && r.ws.readyState === WebSocket.OPEN) { try { r.ws.send(req); } catch {} }
+  else ensureRelay(r);
+}
+
+function removeSub(r: PooledRelay, subId: string): void {
+  if (!r.subs.delete(subId)) return;
+  if (r.ws && r.ready && r.ws.readyState === WebSocket.OPEN) { try { r.ws.send(JSON.stringify(['CLOSE', subId])); } catch {} }
+}
+
+export async function queryEvents(filter: any, relayUrls?: string[]): Promise<any[]> {
+  const relays = relayUrls ?? DEFAULT_QUERY_RELAYS;
+  const subId = 'q' + Math.random().toString(36).slice(2, 10);
+
+  const queryRelay = (url: string): Promise<any[]> =>
+    new Promise((resolve) => {
+      const r = getRelay(url);
+      const collected: any[] = [];
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearTimeout(timer); removeSub(r, subId); resolve(collected); };
+      const timer = setTimeout(finish, 6000);
+      addSub(r, subId, JSON.stringify(['REQ', subId, filter]), (d) => {
+        if (d[0] === 'EVENT' && d[1] === subId) collected.push(d[2]);
+        else if (d[0] === 'EOSE' && d[1] === subId) finish();
+      });
+    });
+
+  const results = await Promise.all(relays.map(queryRelay));
+  const byId = new Map<string, any>();
+  for (const list of results) for (const ev of list) if (!byId.has(ev.id)) byId.set(ev.id, ev);
+  return [...byId.values()];
+}
+
+/**
+ * Live subscription via the pooled relay sockets — stays open and fires onEvent for
+ * each event (including new ones after EOSE). Returns an unsubscribe function.
+ */
+export function subscribeEvents(filter: any, onEvent: (ev: any) => void, relayUrls?: string[]): () => void {
+  const relays = relayUrls ?? DEFAULT_QUERY_RELAYS;
+  const subId = 's' + Math.random().toString(36).slice(2, 10);
+  const seen = new Set<string>();
+
+  for (const url of relays) {
+    const r = getRelay(url);
+    addSub(r, subId, JSON.stringify(['REQ', subId, filter]), (d) => {
+      if (d[0] === 'EVENT' && d[1] === subId && !seen.has(d[2].id)) { seen.add(d[2].id); onEvent(d[2]); }
+    });
+  }
+
+  return () => {
+    for (const url of relays) { const r = _relayPool.get(url); if (r) removeSub(r, subId); }
+  };
+}
+
 const AVATAR_D_TAG  = 'nostr-district-avatar';
 const OUTFITS_D_TAG = 'nostr-district-outfits';
 
@@ -286,6 +381,76 @@ export async function fetchInventory(pubkey: string): Promise<string[] | null> {
     return JSON.parse(event.content) as string[];
   } catch (e) {
     console.warn('[Nostr] fetchInventory failed:', e);
+    return null;
+  }
+}
+
+const UNLOCKS_D_TAG = 'nostr-district-unlocks';
+
+export async function publishUnlocks(state: unknown): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', UNLOCKS_D_TAG], ['client', 'Nostr District']],
+      content: JSON.stringify(state),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishUnlocks failed:', e);
+    return false;
+  }
+}
+
+export async function fetchUnlocks(pubkey: string): Promise<any | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [UNLOCKS_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content);
+  } catch (e) {
+    console.warn('[Nostr] fetchUnlocks failed:', e);
+    return null;
+  }
+}
+
+const OFFERS_D_TAG = 'nostr-district-offers';
+
+export async function publishTradeOffers(state: unknown): Promise<boolean> {
+  const { pubkey, loginMethod } = authStore.getState();
+  if (!pubkey || loginMethod === 'guest') return false;
+  try {
+    const event = await signEvent({
+      kind: 30078,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['d', OFFERS_D_TAG], ['client', 'Nostr District']],
+      content: JSON.stringify(state),
+    });
+    return publishEvent(event);
+  } catch (e) {
+    console.warn('[Nostr] publishTradeOffers failed:', e);
+    return false;
+  }
+}
+
+export async function fetchTradeOffers(pubkey: string): Promise<any | null> {
+  if (!pool) await loadNostrTools();
+  try {
+    const event = await pool.get(RELAYS, {
+      kinds: [30078],
+      authors: [pubkey],
+      '#d': [OFFERS_D_TAG],
+    });
+    if (!event?.content) return null;
+    return JSON.parse(event.content);
+  } catch (e) {
+    console.warn('[Nostr] fetchTradeOffers failed:', e);
     return null;
   }
 }

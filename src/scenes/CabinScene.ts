@@ -8,11 +8,12 @@
 
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
+import { ScavengeSystem } from './ScavengeSystem';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync, fetchFishingRecords, fetchProfile, publishFishingRecord } from '../nostr/nostrService';
 import { getSeenPubkeys } from '../stores/seenPlayersStore';
-import { getFishingProgress } from '../stores/fishingUnlockStore';
+import { getLegendaryCount } from '../stores/fishingUnlockStore';
 import { authStore } from '../stores/authStore';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
@@ -24,7 +25,6 @@ import { ChatUI } from '../ui/ChatUI';
 import { ProfileModal } from '../ui/ProfileModal';
 import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
-import { incrementAuraProgress } from '../stores/auraUnlockStore';
 
 const CABIN_ACCENT = '#f0a030';
 const W = 1000;             // cabin world width
@@ -37,6 +37,7 @@ interface Ember { x: number; y: number; vx: number; vy: number; life: number; ma
 
 export class CabinScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
+  private scavenge: ScavengeSystem | null = null;
 
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
   private smokeLayerGraphics!: Phaser.GameObjects.Graphics;
@@ -152,9 +153,10 @@ export class CabinScene extends BaseScene {
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); return; }
-      if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); incrementAuraProgress('fire'); return; }
+      if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); return; }
       if (this.nearBookshelf) { this.showBookQuote(); return; }
       if (this.nearLeaderboard) { this.openFishLeaderboard(); return; }
+      if (this.scavenge?.tryInteract()) return;
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);
@@ -167,8 +169,11 @@ export class CabinScene extends BaseScene {
     this.cameras.main.fadeIn(350, 4, 2, 0);
     this.settingsPanel.create();
 
+    this.scavenge = new ScavengeSystem(this, 'cabin', FLOOR_Y, () => this.player, CABIN_ACCENT);
+
     this.events.on('shutdown', () => {
       this.shutdownCommonPanels();
+      this.scavenge?.destroy();
       this.doorPromptBg?.destroy(); this.doorPromptText?.destroy(); this.doorPromptArrow?.destroy();
       this.fireplacePromptBg?.destroy(); this.fireplacePromptText?.destroy(); this.fireplacePromptArrow?.destroy();
       this.bookshelfPromptBg?.destroy(); this.bookshelfPromptText?.destroy(); this.bookshelfPromptArrow?.destroy();
@@ -422,6 +427,7 @@ export class CabinScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   update(time: number, delta: number): void {
     this.updateMovement(delta);
+    this.scavenge?.update(time);
     if (this.stokedTimer > 0) this.stokedTimer = Math.max(0, this.stokedTimer - delta);
     this.updateFireplace(time, delta);
     this.updateDoorProximity();
@@ -451,6 +457,7 @@ export class CabinScene extends BaseScene {
   }
 
   private updateMovement(delta: number): void {
+    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const CABIN_SPEED = PLAYER_SPEED * 1.5;
     const c = this.input.keyboard?.createCursorKeys();
@@ -687,13 +694,13 @@ export class CabinScene extends BaseScene {
     // Silently backfill local user's record if they have local catches but nothing published yet
     const { pubkey, loginMethod } = authStore.getState();
     if (pubkey && loginMethod !== 'guest') {
-      const progress = getFishingProgress('fishhat');
-      if (progress.count > 0) {
+      const legendaryCount = getLegendaryCount();
+      if (legendaryCount > 0) {
         fetchFishingRecords([pubkey]).then(existing => {
           const record = existing.get(pubkey);
           const publishedTotal = record?.total ?? 0;
-          if (publishedTotal < progress.count) {
-            const gap = progress.count - publishedTotal;
+          if (publishedTotal < legendaryCount) {
+            const gap = legendaryCount - publishedTotal;
             const ts = Math.floor(Date.now() / 1000);
             const backfillCatches = Array.from({ length: gap }, (_, i) => ({
               name: 'legendary catch (backfilled)', kg: '?', ts: ts - i,

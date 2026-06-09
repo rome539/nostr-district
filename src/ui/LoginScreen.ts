@@ -2,7 +2,7 @@ import { P } from '../config/game.config';
 import { t, getCurrentLang, setLang, onLangChange } from '../i18n/i18n';
 import { getActiveHoliday, holidayYears, getHalvingLiveInfo, onHalvingLiveUpdate, getActiveHolidayTheme } from './holidayBanners';
 import { LoginInfo } from './LoginInfo';
-import { FireworksEngine, drawFireworksCanvas, isJuly4thPeriod } from '../utils/fireworks';
+import { LoginHolidayFX } from './loginHolidayFX';
 
 interface LoginBuilding {
   x: number; y: number; w: number; h: number; shade: string;
@@ -46,13 +46,14 @@ export class LoginScreen {
   private stars: Star[] = [];
   private shootingStar: ShootingStar | null = null;
   private shootingStarNext = 0;
-  private fireworks: FireworksEngine | null = null;
+  private holidayFX = new LoginHolidayFX();
   // 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter — random each session
   private handleResize = (): void => {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
     this.generateBuildings();
+    this.holidayFX.resize(window.innerWidth, window.innerHeight);
   };
 
   constructor(callbacks: {
@@ -280,9 +281,8 @@ export class LoginScreen {
         ${this._lastLogin === 'bunker'    ? `<button id="login-continue-bunker" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_bunker'))}</button>` : ''}
         ${this._lastLogin === 'nsec'      ? `<button id="login-continue-nsec" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_nsec'))}</button>` : ''}
         <button id="login-guest-top" class="login-link bunker-cancel" style="position:absolute;top:8px;right:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.guest_link'))}</button>
-        <h1 class="login-title">NOSTR DISTRICT</h1>
+        <h1 id="login-what-is-nostr" class="login-title" role="button" tabindex="0" title="What is Nostr?">NOSTR DISTRICT</h1>
         <p class="login-subtitle">${this.esc(t('login.subtitle'))}</p>
-        <button id="login-what-is-nostr" class="login-what-is-nostr">What is Nostr?</button>
 
         <div id="login-main" class="login-methods">
           ${passkeyBtn}
@@ -697,6 +697,13 @@ export class LoginScreen {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
         margin: 14px 0 6px 0; letter-spacing: 3px;
         text-shadow: 0 0 20px color-mix(in srgb, var(--nd-accent) 50%, transparent);
+        cursor: pointer; transition: text-shadow 0.2s ease; user-select: none;
+      }
+      .login-title:hover {
+        text-shadow: 0 0 30px color-mix(in srgb, var(--nd-accent) 80%, transparent);
+      }
+      .login-title:focus-visible {
+        outline: 1px dotted color-mix(in srgb, var(--nd-accent) 60%, transparent); outline-offset: 6px;
       }
       .login-subtitle {
         font-size: 13px; color: var(--nd-accent); opacity: 0.8; margin: 0 0 32px 0;
@@ -960,21 +967,7 @@ export class LoginScreen {
         }
       }
 
-      /* ── "What is Nostr?" link ── */
-      .login-what-is-nostr {
-        background: none; border: none;
-        color: var(--nd-subtext); cursor: pointer;
-        font-family: 'Courier New', monospace; font-size: 11px;
-        letter-spacing: 0.06em;
-        padding: 4px 8px; margin: 0 auto 16px;
-        border-bottom: 1px dotted color-mix(in srgb, var(--nd-subtext) 35%, transparent);
-        opacity: 0.7; transition: color 0.15s, opacity 0.15s, border-color 0.15s;
-        display: block;
-      }
-      .login-what-is-nostr:hover {
-        color: var(--nd-accent); opacity: 1;
-        border-bottom-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
-      }
+      /* "What is Nostr?" is now the clickable title (see .login-title) */
 
       /* ── Passkey button ── */
       .passkey-row { display: flex; align-items: stretch; gap: 6px; }
@@ -1108,7 +1101,7 @@ export class LoginScreen {
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
     this.generateBuildings();
-    if (isJuly4thPeriod()) this.fireworks = new FireworksEngine(window.innerWidth, window.innerHeight);
+    this.holidayFX.init(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', this.handleResize);
     const loop = (time: number) => {
       this.drawFrame(time);
@@ -1311,11 +1304,8 @@ export class LoginScreen {
       }
     }
 
-    // ── July 4th fireworks ───────────────────────────────────────────────────
-    if (this.fireworks) {
-      this.fireworks.tick(time, 16);
-      drawFireworksCanvas(ctx, this.fireworks);
-    }
+    // ── Holiday FX (fireworks, bats, moon, etc.) ─────────────────────────────
+    this.holidayFX.tick(ctx, time);
 
     // ── Far buildings (tiny silhouettes) ────────────────────────────────────
     for (const b of this.buildings) {
@@ -1447,10 +1437,15 @@ export class LoginScreen {
   }
 
   private _bindLoginBoxEvents(): void {
-    // "What is Nostr?" link at the top of the login box.
-    this.container.querySelector('#login-what-is-nostr')?.addEventListener('click', (e) => {
+    // The "NOSTR DISTRICT" title doubles as the "What is Nostr?" button.
+    const titleBtn = this.container.querySelector('#login-what-is-nostr');
+    titleBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       LoginInfo.open('nostr');
+    });
+    titleBtn?.addEventListener('keydown', (e) => {
+      const k = (e as KeyboardEvent).key;
+      if (k === 'Enter' || k === ' ') { e.preventDefault(); LoginInfo.open('nostr'); }
     });
 
     // Per-method info glyphs. Each ⓘ is a <span role="button"> living inside
@@ -1627,7 +1622,7 @@ export class LoginScreen {
       if (checked) this.el('nsec-input-wrap').classList.remove('hidden');
       else this.el('nsec-input-wrap').classList.add('hidden');
     });
-    this.el('nsec-submit').addEventListener('click', () => {
+    const submitNsec = () => {
       const input = this.el('nsec-input') as HTMLInputElement;
       const nsec = input.value.trim();
       input.value = '';
@@ -1635,6 +1630,11 @@ export class LoginScreen {
       localStorage.setItem('nd_last_login', 'nsec');
       this.setStatus('Logging in...');
       this.onNsecLogin(nsec);
+    };
+    this.el('nsec-submit').addEventListener('click', submitNsec);
+    // Press Enter in the nsec field to log in
+    this.el('nsec-input').addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); submitNsec(); }
     });
 
     // ── Create account ────────────────────────────────────────────────────────

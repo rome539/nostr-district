@@ -39,6 +39,7 @@ const STEPS: Step[] = [
   { titleKey: 'tutorial.hotkeys.title',     bodyKey: 'tutorial.hotkeys.body'                                 },
   { titleKey: 'tutorial.settings.title',    bodyKey: 'tutorial.settings.body',    key: 'S'                   },
   { titleKey: 'tutorial.shop.title',        bodyKey: 'tutorial.shop.body',        img: 'assets/shop.png'     },
+  { titleKey: 'tutorial.bazaar.title',      bodyKey: 'tutorial.bazaar.body',      img: 'assets/bazaar.png'   },
   { titleKey: 'tutorial.wallet.title',      bodyKey: 'tutorial.wallet.body',      key: 'W'                   },
   { titleKey: 'tutorial.ready.title',       bodyKey: 'tutorial.ready.body'                                   },
 ];

@@ -106,18 +106,18 @@ const PIZZA_DAY_THEME: HolidayTheme = {
 };
 
 const WHITEPAPER_THEME: HolidayTheme = {
-  // White / silver — evokes the printed-paper aesthetic
-  bg:          'color-mix(in srgb, black 55%, #d8d8d8)',
-  border:      'color-mix(in srgb, #f0f0f0 60%, transparent)',
-  emojiGlow:   'color-mix(in srgb, #ffffff 50%, transparent)',
-  titleColor:  '#ffffff',
-  textColor:   '#e8e8e8',
-  subColor:    '#bcbcbc',
-  panelBg:     'color-mix(in srgb, black 75%, #d8d8d8)',
-  panelBorder: 'color-mix(in srgb, #f0f0f0 50%, transparent)',
-  linkColor:   '#e8e8e8',
-  strongColor: '#ffffff',
-  extraColor:  '#d0d0d0',
+  // Halloween-tinted — orange & purple since the paper dropped on Oct 31
+  bg:          'color-mix(in srgb, black 52%, #b05010)',
+  border:      'color-mix(in srgb, #ff6a00 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #ff6a00 60%, transparent)',
+  titleColor:  '#ffb347',
+  textColor:   '#e89040',
+  subColor:    '#c070d0',
+  panelBg:     'color-mix(in srgb, black 72%, #b05010)',
+  panelBorder: 'color-mix(in srgb, #ff6a00 55%, transparent)',
+  linkColor:   '#c070d0',
+  strongColor: '#ffb347',
+  extraColor:  '#d060c0',
 };
 
 const GENESIS_THEME: HolidayTheme = {
@@ -181,6 +181,20 @@ const JULY4_THEME: HolidayTheme = {
   extraColor:  '#ff8888',
 };
 
+const HALLOWEEN_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 52%, #b05010)',
+  border:      'color-mix(in srgb, #ff6a00 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #ff6a00 60%, transparent)',
+  titleColor:  '#ffb347',
+  textColor:   '#e89040',
+  subColor:    '#c070d0',
+  panelBg:     'color-mix(in srgb, black 72%, #b05010)',
+  panelBorder: 'color-mix(in srgb, #ff6a00 55%, transparent)',
+  linkColor:   '#c070d0',
+  strongColor: '#ffb347',
+  extraColor:  '#d060c0',
+};
+
 const FINNEY_THEME: HolidayTheme = {
   // Soft silver/blue — a respectful tribute palette
   bg:          'color-mix(in srgb, black 55%, #7080a0)',
@@ -194,6 +208,34 @@ const FINNEY_THEME: HolidayTheme = {
   linkColor:   '#c8d4e8',
   strongColor: '#e8eef8',
   extraColor:  '#b0c0d8',
+};
+
+const NOSTR_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 52%, #7b3fe4)',
+  border:      'color-mix(in srgb, #a060ff 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #8040e0 60%, transparent)',
+  titleColor:  '#d8b8ff',
+  textColor:   '#c8a8f0',
+  subColor:    '#b090e0',
+  panelBg:     'color-mix(in srgb, black 73%, #7b3fe4)',
+  panelBorder: 'color-mix(in srgb, #a060ff 55%, transparent)',
+  linkColor:   '#c8a8f0',
+  strongColor: '#d8b8ff',
+  extraColor:  '#b89cf0',
+};
+
+const WINTER_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 52%, #3a90b8)',
+  border:      'color-mix(in srgb, #9fd8ec 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #9fd8ec 60%, transparent)',
+  titleColor:  '#d8f0fb',
+  textColor:   '#aadcf0',
+  subColor:    '#92c8e0',
+  panelBg:     'color-mix(in srgb, black 73%, #3a90b8)',
+  panelBorder: 'color-mix(in srgb, #9fd8ec 50%, transparent)',
+  linkColor:   '#aadcf0',
+  strongColor: '#d8f0fb',
+  extraColor:  '#9fd8ec',
 };
 
 const HOLIDAYS: Holiday[] = [
@@ -212,7 +254,7 @@ const HOLIDAYS: Holiday[] = [
     // cryptography mailing list on October 31, 2008.
     id:              'whitepaper',
     emoji:           '📄',
-    monthDayStart:   [10, 28],
+    monthDayStart:   [10, 31],
     monthDayEnd:     [11, 4],
     i18nPrefix:      'login.whitepaper',
     anniversaryYear: 2008,
@@ -255,6 +297,37 @@ const HOLIDAYS: Holiday[] = [
     anniversaryYear: 1776,
     externalLink:    'https://en.wikipedia.org/wiki/Independence_Day_(United_States)',
     theme:           JULY4_THEME,
+  },
+  {
+    id:              'halloween',
+    emoji:           '🎃',
+    monthDayStart:   [10, 29],
+    monthDayEnd:     [10, 30],
+    i18nPrefix:      'login.halloween',
+    anniversaryYear: null,
+    theme:           HALLOWEEN_THEME,
+  },
+  {
+    // Nostr's birthday — fiatjaf published the protocol spec on Nov 7, 2020.
+    // Starts Nov 7 so it doesn't overlap Whitepaper (Oct 31–Nov 4).
+    id:              'nostr_day',
+    emoji:           '💜',
+    monthDayStart:   [11, 7],
+    monthDayEnd:     [11, 11],
+    i18nPrefix:      'login.nostr_day',
+    anniversaryYear: 2020,
+    externalLink:    'https://github.com/nostr-protocol/nostr',
+    theme:           NOSTR_THEME,
+  },
+  {
+    // Winter Holiday — end-of-year celebration leading into Genesis (Jan 3).
+    id:              'winter',
+    emoji:           '❄️',
+    monthDayStart:   [12, 20],
+    monthDayEnd:     [12, 31],
+    i18nPrefix:      'login.winter',
+    anniversaryYear: null,
+    theme:           WINTER_THEME,
   },
   {
     // Bitcoin Halving — every 210,000 blocks (~4 years). Date drifts based

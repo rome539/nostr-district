@@ -62,6 +62,7 @@ export class HotkeyModal {
     const navCmds: [string, string][] = [
       ['/map',          ti18n('hk.world_map')],
       ['/shop',         ti18n('hk.cmd.shop')],
+      ['/bazaar',       'Open item market & inventory'],
       ['/wallet',       ti18n('hk.cmd.wallet')],
       ['/tp <room>',    ti18n('hk.cmd.tp')],
       ['/dm <name>',    ti18n('hk.cmd.dm')],

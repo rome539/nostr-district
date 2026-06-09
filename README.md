@@ -18,6 +18,7 @@ Nostr District is a browser-based MMO where your Nostr identity is your characte
 - **Zaps** — lightning tips via NWC or WebLN (NIP-57 / NIP-47)
 - **Polls** — create and vote on polls pinned to rooms (NIP-88)
 - **Crews** — persistent guilds with chat, roles, and membership (NIP-29)
+- **Bazaar** — an oracle-signed item economy: collect, trade, and sell unique items for sats, settled peer-to-peer over Lightning
 - **Avatars** — fully customizable pixel art characters
 - **Themes** — publish and browse community pixel art room themes
 
@@ -64,6 +65,8 @@ Room name aliases for `/tp`: `thefeed` → feed, `room` / `my` → myroom, `roof
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/terminal` | `/outfit`, `/avatar`, `/computer` | Open the avatar & room customizer. |
+| `/shop` | `/store`, `/market` | Open the cosmetics shop (clothes, colors, auras — paid over Lightning). |
+| `/bazaar` | `/items`, `/inv`, `/inventory`, `/bag` | Open the item bazaar: your collection, the market, offers, and sets. Also via the vending machine in the Alley. |
 | `/polls` | — | Open the poll board. |
 | `/map` | `/world` | Open the district world map. Also toggleable with Tab. |
 
@@ -140,7 +143,8 @@ All emotes are toggles — run the command again to stop.
 | 20000 | Ephemeral channel message (room chat) | NIP-28 |
 | 23194 | NWC request | NIP-47 |
 | 23195 | NWC response | NIP-47 |
-| 30078 | App-specific replaceable data (avatar, room config, crew definitions, crew membership, invite tokens) | NIP-78 |
+| 30078 | App-specific addressable data (avatar, room config, crew definitions/membership, invite tokens, item economy: items/bids/wins/escrow, unlocks, trade offers) | NIP-78 |
+| 30402 | Market listing (item offered for sale at a sats price) | NIP-99 |
 | 36767 | Published room theme (addressable) | custom |
 | 39001 | Group admin list (relay-maintained) | NIP-29 |
 | 39002 | Group member list (relay-maintained) | NIP-29 |
@@ -154,7 +158,12 @@ All kind 30078 events are namespaced by their `d` tag:
 | `nostr-district-avatar` | any user | Avatar configuration (body, hair, clothes, colors) |
 | `nostr-district-outfits` | any user | Saved outfit presets |
 | `nostr-district-room` | any user | Room decoration and layout config |
-| `nostr-district-inventory` | any user | Purchased item cache (free/earned items only — paid items are derived from kind:9735 zap receipts) |
+| `nostr-district-inventory` | any user | Purchased cosmetic cache (free/earned items only — paid cosmetics are derived from kind:9735 zap receipts) |
+| `nostr-district-unlocks` | any user | Relay-backed cosmetic unlocks (auras, fishing items, login streak, legendary-catch count) |
+| `nostr-district-offers` | any user | The player's pending trade offers + resolved-offer set |
+| `{instanceId}` (`t=nditem`) | **oracle** | An item ownership record. `p` tag = current owner; transfers re-publish under the same `d` with a new owner; `burned` tag tombstones it. Escrow variants carry `escrow_*` tags. |
+| `{instanceId}` (`t=ndbid`) | bidder | A bid on a listing (`p` = seller, `amount` tag) |
+| `win_{instanceId}` (`t=ndwin`) | **oracle** | Durable "you won the auction" marker (`p` = winner) |
 | `nostr-district:spark-address` | any user | Maps the user's Nostr pubkey → in-game Spark Lightning address so in-game zaps land in the in-game wallet |
 | `nostr-district:spark-mnemonic` | any user | NIP-44 self-encrypted Spark wallet mnemonic — enables cross-device wallet sync (same nsec → same wallet on every browser/device) |
 | `nd-crew-ptr-{id}` | founder | Crew pointer (v2 authority) — names the current `crewPk`. Only the founder can replace it; cryptographic recovery anchor. |
@@ -180,8 +189,9 @@ All kind 30078 events are namespaced by their `d` tag:
 | NIP-47 | Nostr Wallet Connect | Pay zap invoices from a connected lightning wallet |
 | NIP-57 | Zaps | Zap requests, receipt verification, and ZAP-gated item ownership — paid items are unlocked exclusively by verifying kind:9735 receipts signed by the store's lightning wallet |
 | NIP-59 | Gift wraps | Seals and gift wraps for NIP-17 DM privacy |
-| NIP-78 | App-specific data | Kind 30078 for avatar, room config, crew definitions, membership, and invite tokens |
+| NIP-78 | App-specific data | Kind 30078 for avatar, room config, crews, and the item economy (items, bids, wins, escrow, unlocks, trade offers) |
 | NIP-88 | Polls | Create polls and record votes in rooms |
+| NIP-99 | Classified listings | Kind 30402 for item market listings (price in sats) |
 | NIP-89 | App handler info | `client` tag on published notes so clients display "posted via Nostr District" |
 | NIP-92 | Media attachments | `imeta` tags on kind 1 tarot share notes for inline image previews in Primal, Nostur, and other clients |
 | NIP-96 | HTTP file storage | Card images upscaled and uploaded to a free NIP-96 host (nostr.build → nostrcheck.me fallback) before publishing tarot spread notes |
@@ -234,6 +244,32 @@ DM crew invites include a one-time token. When accepted, a `kind:30078` event wi
 Crew chat, membership actions, and group management use [groups.0xchat.com](wss://groups.0xchat.com) and [relay.groups.nip29.com](wss://relay.groups.nip29.com) as the NIP-29 relay layer. Crew definitions and member records are also mirrored to standard discovery relays (kind:30078) so crews are browsable without needing NIP-29 access.
 
 Live chat subscription uses both layers, with a 5-second poll fallback to catch any messages the live socket misses. Sends are throttled to ~2 msg/sec and retried up to 3× if zero relays ACK, to handle NIP-29 burst rate limits.
+
+## Item Economy & Bazaar
+
+Unique, ownable items that live entirely on relays — collected by fishing and scavenging, then traded or sold to other players. There is no item database; ownership is a signed Nostr event.
+
+### The oracle
+
+Items are minted and transferred by an **oracle** — a Nostr keypair whose private key lives only on the server (`ORACLE_PRIVATE_KEY`, never client-side). Every item is a `kind:30078` event (`t=nditem`, `d={instanceId}`) **signed by the oracle**; clients trust only items signed by the baked-in oracle pubkey, so items can't be forged. Because 30078 is addressable, a **transfer** is just a re-publish under the same `d` with a new `p` (owner) tag, and a **burn** is a `burned` tombstone — relays keep only the latest. See [ORACLE_SETUP.md](ORACLE_SETUP.md) for key generation and deployment.
+
+The oracle is a **scarcity notary, not a bank** — it never holds funds. The only trust placed in it is "don't counterfeit items, stay online to process trades." If it goes offline, every existing item remains valid and viewable from relays; only new mints/trades pause.
+
+### Selling (escrow + Lightning, no custody)
+
+Listing an item escrows it (re-owned to the oracle, same `d`) and publishes a `kind:30402` (NIP-99) market listing. A buyer's sats go **directly to the seller** via their LNURL/Lightning address — the oracle polls **LNURL-verify** and only releases the item (transfers oracle → buyer) once payment is confirmed. Funds never touch the oracle. The sale memo rides on the payment (LUD-12), and both parties get a NIP-17 DM.
+
+### Bidding
+
+Listings accept relay-backed bids (`kind:30078`, `t=ndbid`). Accepting a bid stamps the escrow `awaiting_winner` and publishes a durable win marker (`t=ndwin`, `p=winner`); the winner is notified by NIP-17 DM and can pay to claim. Bids/wins are cancellable.
+
+### Trading & gifting
+
+Players swap items directly (oracle performs an atomic two-way transfer) or gift them one-way. A pending outgoing offer locks the item so it can't also be listed, gifted, or offered again.
+
+### Collections → cosmetics
+
+Owning items completes **sets**, and certain sets unlock **auras** (e.g. every legendary non-fish item → Gold aura); owning every non-legendary fish unlocks the **Fish Hat**. Unlocks are relay-backed (`d=nostr-district-unlocks`), so they follow the player across devices.
 
 ## In-game Wallet (Spark / Breez SDK)
 

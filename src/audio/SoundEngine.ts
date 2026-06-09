@@ -660,6 +660,23 @@ export class SoundEngine {
     this.osc(1100, 'sine', t + 0.14, 0.18, 0.11, d);
   }
 
+  // Item received / weekly drop — bright ascending arpeggio (a "reward" chime)
+  itemReward(): void {
+    const t = this.ac().currentTime; const d = this.sfx();
+    this.osc(523, 'sine',     t,        0.12, 0.07, d);  // C5
+    this.osc(659, 'sine',     t + 0.08, 0.12, 0.07, d);  // E5
+    this.osc(784, 'sine',     t + 0.16, 0.14, 0.08, d);  // G5
+    this.osc(1047,'triangle', t + 0.24, 0.22, 0.09, d);  // C6 sparkle
+  }
+
+  // Trade completed — two-note "swap" swell
+  tradeSound(): void {
+    const t = this.ac().currentTime; const d = this.sfx();
+    this.osc(587, 'triangle', t,        0.14, 0.07, d);  // D5
+    this.osc(880, 'triangle', t + 0.10, 0.18, 0.08, d);  // A5
+    this.osc(740, 'sine',     t + 0.20, 0.16, 0.06, d);  // F#5
+  }
+
   roomEnter(): void {
     const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
     const src = ctx.createBufferSource();

@@ -1,6 +1,11 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, P, hexToRgb, hexToNum } from '../../config/game.config';
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../../utils/fireworks';
+import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../../utils/bats';
+
+let loungeBats: BatEngine | null = isHalloweenPeriod()
+  ? newBatEngine(GAME_WIDTH, { yMin: 20, yMax: 160, count: 4, speedMin: 0.3, speedMax: 0.65 })
+  : null;
 
 let loungeFireworks: FireworksEngine | null = isJuly4thPeriod()
   ? new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
@@ -53,5 +58,9 @@ export function updateLoungeRoom(
   if (loungeFireworks) {
     loungeFireworks.tick(time, _delta);
     drawFireworksPhaser(graphics, loungeFireworks);
+  }
+  if (loungeBats) {
+    loungeBats.tick(time, _delta);
+    drawBatsPhaser(graphics, loungeBats, time);
   }
 }

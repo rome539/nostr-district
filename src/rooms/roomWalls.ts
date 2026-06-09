@@ -1,5 +1,6 @@
 import type { WallTheme, FloorStyle } from '../stores/roomStore';
 import { lighten, darken, type FillRect, type VoidStar } from './roomHelpers';
+import { isHalloweenPeriod } from '../utils/bats';
 
 const _wallImgs: Partial<Record<string, HTMLImageElement>> = {};
 for (const [key, src] of [
@@ -305,9 +306,19 @@ export function drawWalls(
       // Moon (center window only)
       if (wi === 1) {
         const mx = ix + iw * 0.78, my = iy + ih * 0.14;
-        x.globalAlpha = 0.88; x.fillStyle = '#e8dca8';
+        const halloween = isHalloweenPeriod();
+        const moonColor  = halloween ? '#e86010' : '#e8dca8';
+        const craterColor = halloween ? '#b04000' : '#d0c480';
+        if (halloween) {
+          // spooky orange glow
+          x.globalAlpha = 0.18; x.fillStyle = '#ff6000';
+          x.beginPath(); x.arc(mx, my, 16, 0, Math.PI * 2); x.fill();
+          x.globalAlpha = 0.10; x.fillStyle = '#ff4000';
+          x.beginPath(); x.arc(mx, my, 22, 0, Math.PI * 2); x.fill();
+        }
+        x.globalAlpha = 0.88; x.fillStyle = moonColor;
         x.beginPath(); x.arc(mx, my, 8, 0, Math.PI * 2); x.fill();
-        x.fillStyle = '#d0c480'; x.globalAlpha = 0.45;
+        x.fillStyle = craterColor; x.globalAlpha = 0.45;
         x.beginPath(); x.arc(mx - 2, my + 1, 2, 0, Math.PI * 2); x.fill();
         x.beginPath(); x.arc(mx + 3, my - 2, 1.5, 0, Math.PI * 2); x.fill();
         x.globalAlpha = 1;

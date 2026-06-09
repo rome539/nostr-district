@@ -70,12 +70,115 @@ let chatInterceptor: ChatInterceptor | null = null;
 
 export function setChatInterceptor(fn: ChatInterceptor | null): void { chatInterceptor = fn; }
 
+// ── Item minting ──────────────────────────────────────────────────────────────
+type ItemMintedHandler = (event: object) => void;
+let onItemMinted: ItemMintedHandler | null = null;
+
+export function setItemMintedHandler(handler: ItemMintedHandler | null): void { onItemMinted = handler; }
+
+export function sendItemMintRequest(itemId: string, acquiredFrom: string, attempt = 0): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'item_mint_request', itemId, acquiredFrom }));
+  } else if (attempt < 5) {
+    // WS not ready yet — retry up to 5 times, 1s apart
+    setTimeout(() => sendItemMintRequest(itemId, acquiredFrom, attempt + 1), 1000);
+  }
+}
+
+export function sendItemDiscardRequest(event: object): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'item_discard_request', event }));
+  }
+}
+
+export function sendItemGiftRequest(event: object, toPubkey: string, itemName?: string): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'item_gift_request', event, toPubkey, itemName }));
+  }
+}
+
+export function sendItemSwapRequest(myEvent: object, theirEvent: object, theirPubkey: string): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'item_swap_request', myEvent, theirEvent, theirPubkey }));
+  }
+}
+
+// ── Escrow market (list / delist / buy) ───────────────────────────────────────
+
+// List: ask the oracle to escrow the item (hold it while listed). Resolves once
+// the server confirms (item_escrowed) or fails with a reason.
+const pendingEscrow = new Map<string, (r: { ok: boolean; reason?: string }) => void>();
+export function escrowItemRequest(instanceId: string, price: number, lud16: string, itemName: string): Promise<{ ok: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingEscrow.delete(instanceId); resolve({ ok: false, reason: 'timeout' }); }, 15000);
+    pendingEscrow.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'item_escrow_request', instanceId, price, lud16, itemName }));
+  });
+}
+
+// Delist: return an escrowed item to the seller.
+const pendingUnescrow = new Map<string, (r: { ok: boolean; reason?: string }) => void>();
+export function unescrowItemRequest(instanceId: string): Promise<{ ok: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingUnescrow.delete(instanceId); resolve({ ok: false, reason: 'timeout' }); }, 15000);
+    pendingUnescrow.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'item_unescrow_request', instanceId }));
+  });
+}
+
+// Buy step 1: ask the server for an invoice to pay (server fetches it from the
+// seller's Lightning address). Resolves with the bolt11 to pay, or an error.
+const pendingPurchaseInit = new Map<string, (r: { bolt11?: string; price?: number; error?: string }) => void>();
+export function purchaseInitRequest(instanceId: string): Promise<{ bolt11?: string; price?: number; error?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ error: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingPurchaseInit.delete(instanceId); resolve({ error: 'timeout' }); }, 20000);
+    pendingPurchaseInit.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'item_purchase_init', instanceId }));
+  });
+}
+
+// ── Bidding ───────────────────────────────────────────────────────────────────
+// Bids themselves are relay-backed (see tradeItemStore). The only server op is the
+// seller accepting a bid: the oracle reads the signed bid off the relays, stamps the
+// escrow with the winner, and publishes a durable "you won" marker for the bidder.
+const pendingAcceptBid = new Map<string, (r: { ok: boolean; reason?: string }) => void>();
+export function acceptBidRequest(instanceId: string, buyer: string, itemName?: string): Promise<{ ok: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingAcceptBid.delete(instanceId); resolve({ ok: false, reason: 'timeout' }); }, 20000);
+    pendingAcceptBid.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'accept_bid', instanceId, buyer, itemName }));
+  });
+}
+
+// Winner declines a bid they won (won't pay) → server re-opens the item.
+const pendingDeclineWin = new Map<string, (r: { ok: boolean; reason?: string }) => void>();
+export function declineWinRequest(instanceId: string): Promise<{ ok: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingDeclineWin.delete(instanceId); resolve({ ok: false, reason: 'timeout' }); }, 15000);
+    pendingDeclineWin.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'decline_win', instanceId }));
+  });
+}
+
+type ItemReceivedHandler = (fromName: string, event?: any) => void;
+let onItemReceived: ItemReceivedHandler | null = null;
+export function setItemReceivedHandler(h: ItemReceivedHandler | null): void { onItemReceived = h; }
+
 let onRoomRequest: RoomRequestHandler | null = null;
 let onRoomGranted: RoomGrantedHandler | null = null;
 let onRoomDenied: RoomDeniedHandler | null = null;
 let onRoomKick: RoomKickHandler | null = null;
 let onOnlinePlayers: OnlinePlayersHandler | null = null;
 let onZoneCounts: ZoneCountsHandler | null = null;
+
+// Latest online-players snapshot, cached so panels can read it synchronously.
+let _lastOnlinePlayers: { pubkey: string; name: string; room: string }[] = [];
+export function getOnlinePlayers(): { pubkey: string; name: string; room: string }[] { return _lastOnlinePlayers; }
 
 let ws: WebSocket | null = null;
 let callbacks: PresenceCallback | null = null;
@@ -307,10 +410,96 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'room_granted') onRoomGranted?.(msg.ownerPubkey, msg.ownerName, msg.room, msg.roomConfig);
       if (msg.type === 'room_denied') onRoomDenied?.(msg.reason);
       if (msg.type === 'room_kick') onRoomKick?.(msg.reason);
-      if (msg.type === 'online_players') { onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
+      if (msg.type === 'online_players') { _lastOnlinePlayers = msg.players || []; onOnlinePlayers?.(msg.players); callbacks?.onOnlinePlayers?.(msg.players); }
       if (msg.type === 'zone_counts') onZoneCounts?.(msg as ZoneCounts);
       if (msg.type === 'game_msg') onGameMsg?.(msg);
       if (msg.type === 'incoming_zap') onIncomingZap?.(msg.senderPk, msg.senderName || '', Number(msg.amountSats) || 0, msg.comment || '');
+      if (msg.type === 'item_minted') onItemMinted?.(msg.event);
+      if (msg.type === 'oracle_pubkey') {
+        // Just store the key — inventory loads lazily when the bazaar opens
+        import('../stores/tradeItemStore').then(({ setOraclePubkey }) => setOraclePubkey(msg.pubkey));
+      }
+      if (msg.type === 'item_received') onItemReceived?.(msg.fromName || '', msg.event);
+      if (msg.type === 'item_escrowed') {
+        const cb = pendingEscrow.get(msg.instanceId);
+        if (cb) { pendingEscrow.delete(msg.instanceId); cb({ ok: true }); }
+      }
+      if (msg.type === 'item_escrow_error') {
+        const cb = pendingEscrow.get(msg.instanceId);
+        if (cb) { pendingEscrow.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
+      }
+      if (msg.type === 'item_unescrowed') {
+        const cb = pendingUnescrow.get(msg.instanceId);
+        if (cb) { pendingUnescrow.delete(msg.instanceId); cb({ ok: true }); }
+      }
+      if (msg.type === 'item_unescrow_error') {
+        const cb = pendingUnescrow.get(msg.instanceId);
+        if (cb) { pendingUnescrow.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
+      }
+      if (msg.type === 'purchase_invoice') {
+        const cb = pendingPurchaseInit.get(msg.instanceId);
+        if (cb) { pendingPurchaseInit.delete(msg.instanceId); cb({ bolt11: msg.bolt11, price: Number(msg.price) || 0 }); }
+      }
+      if (msg.type === 'purchase_timeout') {
+        const cb = pendingPurchaseInit.get(msg.instanceId);
+        if (cb) { pendingPurchaseInit.delete(msg.instanceId); cb({ error: 'timeout' }); }
+        else window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: 'Payment window expired — the item was released back to the market.', color: '#f0b040' } }));
+      }
+      // ── Bid acceptance responses (seller side) ──────────────────────────
+      if (msg.type === 'bid_accept_ok') {
+        const cb = pendingAcceptBid.get(msg.instanceId);
+        if (cb) { pendingAcceptBid.delete(msg.instanceId); cb({ ok: true }); }
+      }
+      if (msg.type === 'accept_bid_error') {
+        const cb = pendingAcceptBid.get(msg.instanceId);
+        if (cb) { pendingAcceptBid.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
+      }
+      if (msg.type === 'win_declined') {
+        const cb = pendingDeclineWin.get(msg.instanceId);
+        if (cb) { pendingDeclineWin.delete(msg.instanceId); cb({ ok: true }); }
+      }
+      if (msg.type === 'decline_win_error') {
+        const cb = pendingDeclineWin.get(msg.instanceId);
+        if (cb) { pendingDeclineWin.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
+      }
+      if (msg.type === 'sold_list' && Array.isArray(msg.ids)) {
+        import('../stores/tradeItemStore').then(({ markSoldInstances }) => markSoldInstances(msg.ids));
+      }
+      if (msg.type === 'item_sold' && typeof msg.instanceId === 'string') {
+        import('../stores/tradeItemStore').then(({ markSoldInstances }) => markSoldInstances([msg.instanceId]));
+      }
+      if (msg.type === 'reserved_list' && Array.isArray(msg.ids)) {
+        import('../stores/tradeItemStore').then(({ markReserved }) => markReserved(msg.ids, true));
+      }
+      if (msg.type === 'burned_list' && Array.isArray(msg.ids)) {
+        import('../stores/tradeItemStore').then(({ markBurnedInstances }) => markBurnedInstances(msg.ids, true));
+      }
+      if (msg.type === 'item_burned' && typeof msg.instanceId === 'string') {
+        import('../stores/tradeItemStore').then(({ markBurnedInstances }) => markBurnedInstances([msg.instanceId]));
+      }
+      if (msg.type === 'item_reserved' && typeof msg.instanceId === 'string') {
+        import('../stores/tradeItemStore').then(({ markReserved }) => markReserved([msg.instanceId]));
+      }
+      if (msg.type === 'item_unreserved' && typeof msg.instanceId === 'string') {
+        import('../stores/tradeItemStore').then(({ markUnreserved }) => markUnreserved([msg.instanceId]));
+      }
+      if (msg.type === 'item_purchase_error') {
+        // If a purchase-init is still pending, this is a PRE-payment failure —
+        // route it to the caller quietly (no scary "you paid" toast).
+        const pending = pendingPurchaseInit.get(msg.instanceId);
+        if (pending) { pendingPurchaseInit.delete(msg.instanceId); pending({ error: msg.reason || 'error' }); }
+        else {
+          // No pending init → failure happened AFTER payment (during release).
+          const reasons: Record<string, string> = {
+            item_gone: 'The item could not be found to release.',
+            transfer_failed: 'The transfer could not be completed.',
+          };
+          const why = reasons[msg.reason as string] ?? 'The transfer could not be completed.';
+          window.dispatchEvent(new CustomEvent('nd-toast', {
+            detail: { msg: `Purchase issue: ${why} Your payment went through — contact the seller if needed.`, color: '#f0b040' },
+          }));
+        }
+      }
     } catch (e) {}
   };
 

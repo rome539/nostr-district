@@ -257,7 +257,7 @@ export class MarketPanel {
     panel.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0;">
-        ${boltIcon(15)}
+        ${boltIcon(15, 'var(--nd-amber,#f0b040)')}
         <div style="flex:1;color:var(--nd-text);font-size:14px;font-weight:bold;letter-spacing:0.06em;">${ti18n('market.title')}</div>
         <button id="mp-hide-owned" title="${ti18n('market.hide_owned_tooltip')}" style="
           padding:3px 8px;border-radius:4px;cursor:pointer;
@@ -272,7 +272,7 @@ export class MarketPanel {
           background:color-mix(in srgb,var(--nd-dpurp) 18%,transparent);
           border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);
           color:var(--nd-subtext);
-        ">${MarketPanel._showSats ? `${boltIcon(11)} SATS` : '$ USD'}</button>
+        ">${MarketPanel._showSats ? `${boltIcon(11, 'var(--nd-amber,#f0b040)')} SATS` : '$ USD'}</button>
         <button id="mp-close" style="background:none;border:none;color:var(--nd-subtext);cursor:pointer;font-size:20px;line-height:1;padding:0;opacity:0.6;">×</button>
       </div>
 
@@ -354,7 +354,7 @@ export class MarketPanel {
         try { MarketPanel._btcPrice = await getBtcUsdPrice(); } catch { MarketPanel._showSats = false; }
         btn.style.opacity = '1';
       }
-      btn.innerHTML     = MarketPanel._showSats ? `${boltIcon(11)} SATS` : '$ USD';
+      btn.innerHTML     = MarketPanel._showSats ? `${boltIcon(11, 'var(--nd-amber,#f0b040)')} SATS` : '$ USD';
       btn.style.color   = MarketPanel._showSats ? 'var(--nd-amber,#f0b040)' : 'var(--nd-subtext)';
       btn.style.borderColor = MarketPanel._showSats
         ? 'color-mix(in srgb,var(--nd-amber,#f0b040) 40%,transparent)'
@@ -629,7 +629,7 @@ export class MarketPanel {
         if (!item.earn || owned) return null;
         const prog = getAuraProgress(item.value as any);
         if (prog.unlocked) return null;
-        const pct = Math.min(100, Math.round((prog.count / prog.required) * 100));
+        const pct = prog.required > 0 ? Math.min(100, Math.round((prog.count / prog.required) * 100)) : 0;
         return `
           <div style="text-align:right;max-width:110px;">
             <div style="font-size:10px;color:var(--nd-subtext);margin-bottom:3px;">${prog.count} / ${prog.required}</div>

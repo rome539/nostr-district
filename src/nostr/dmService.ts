@@ -50,6 +50,12 @@ let lastSyncTime = Math.floor(Date.now() / 1000) - 86400; // 24h ago
 // ── Initial-load state ──
 let _historyLoading = false;
 let _loadingListeners: ((loading: boolean) => void)[] = [];
+let _subStartedAt = 0;
+// Grace window after the subscription starts during which incoming DMs are treated
+// as backlog. Needed because EOSE fires PER RELAY — the first relay's EOSE clears
+// _historyLoading while slower relays are still streaming their 7-day history, which
+// would otherwise arrive as "live" and storm the screen with old trade toasts.
+const DM_BACKLOG_GRACE_MS = 12_000;
 
 function setHistoryLoading(val: boolean): void {
   if (_historyLoading === val) return;
@@ -58,6 +64,12 @@ function setHistoryLoading(val: boolean): void {
 }
 
 export function isDMHistoryLoading(): boolean { return _historyLoading; }
+
+/** True while DMs arriving are still part of the login backlog (first-relay history
+ *  load OR within the multi-relay grace window). Callers gate toasts/sounds on this. */
+export function isDMBacklogWindow(): boolean {
+  return _historyLoading || (_subStartedAt > 0 && Date.now() - _subStartedAt < DM_BACKLOG_GRACE_MS);
+}
 
 export function onDMHistoryLoading(cb: (loading: boolean) => void): () => void {
   _loadingListeners.push(cb);
@@ -133,6 +145,7 @@ export function startDMSubscription(): void {
 
   let preEoseBuffer: any[] = [];
   let eoseFired = false;
+  _subStartedAt = Date.now();
   setHistoryLoading(true);
 
   relayManager.subscribe(

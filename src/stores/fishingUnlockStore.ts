@@ -1,37 +1,27 @@
 import { SoundEngine } from '../audio/SoundEngine';
+import { hasItem, unlockItem, getLegendaryCaught, bumpLegendaryCaught } from './unlockStore';
 
-const STORAGE_PREFIX = 'nd_fishing_progress_';
+/**
+ * fishingUnlockStore.ts — fishing unlock LOGIC. State lives in unlockStore
+ * (relay-backed, kind:30078), not localStorage.
+ *
+ *   fishhat         — own every non-legendary fish at once (checkFishHat)
+ *   fishnet         — catch 5 legendary fish
+ *   coelacanthmount — catch the leviathan coelacanth
+ */
 
-interface FishingProgress {
-  legendaryCaught: number;
-  unlockedItems: string[];
-}
-
-const THRESHOLDS: Record<string, number> = {
-  fishhat: 1,
-  fishnet: 5,
-};
+const LEGENDARY_THRESHOLDS: Record<string, number> = { fishnet: 5 };
 
 const LABELS: Record<string, string> = {
   fishhat: 'Fish Hat',
   fishnet: 'Fish Net Bottoms',
+  coelacanthmount: 'Coelacanth Wall Mount',
 };
 
 let _pubkey = '';
 
-function storageKey(): string { return `${STORAGE_PREFIX}${_pubkey}`; }
-
-function load(): FishingProgress {
-  try {
-    const s = localStorage.getItem(storageKey());
-    if (s) return JSON.parse(s);
-  } catch {}
-  return { legendaryCaught: 0, unlockedItems: [] };
-}
-
-function persist(data: FishingProgress): void {
-  try { localStorage.setItem(storageKey(), JSON.stringify(data)); } catch {}
-}
+// Latest fish-collection progress (own all non-legendary fish), for display.
+let _fishHatProgress = { owned: 0, total: 0 };
 
 function showFishUnlockToast(label: string): void {
   SoundEngine.get().auraUnlock();
@@ -48,49 +38,45 @@ function showFishUnlockToast(label: string): void {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3600);
 }
 
-const COELACANTH_ITEMS: Record<string, string> = {
-  coelacanthmount: 'Coelacanth Wall Mount',
-};
-
 export function initFishingProgress(pubkey: string): void {
   _pubkey = pubkey;
 }
 
 export function incrementCoelacanth(): void {
   if (!_pubkey) return;
-  const data = load();
-  for (const [item, label] of Object.entries(COELACANTH_ITEMS)) {
-    if (!data.unlockedItems.includes(item)) {
-      data.unlockedItems.push(item);
-      showFishUnlockToast(label);
-    }
-  }
-  persist(data);
+  if (unlockItem('coelacanthmount')) showFishUnlockToast(LABELS.coelacanthmount);
 }
 
 export function incrementLegendaryCatch(): void {
   if (!_pubkey) return;
-  const data = load();
-  data.legendaryCaught = (data.legendaryCaught || 0) + 1;
-  for (const [item, threshold] of Object.entries(THRESHOLDS)) {
-    if (!data.unlockedItems.includes(item) && data.legendaryCaught >= threshold) {
-      data.unlockedItems.push(item);
-      showFishUnlockToast(LABELS[item]);
-    }
+  const total = bumpLegendaryCaught();
+  for (const [item, threshold] of Object.entries(LEGENDARY_THRESHOLDS)) {
+    if (total >= threshold && unlockItem(item)) showFishUnlockToast(LABELS[item]);
   }
-  persist(data);
+}
+
+/**
+ * Fish hat is earned by owning every non-legendary fish at once. Sticky — once
+ * unlocked it stays even if fish are later sold. Fed in from the inventory wiring.
+ */
+export function checkFishHat(owned: number, total: number): void {
+  _fishHatProgress = { owned, total };
+  if (!_pubkey) return;
+  if (total > 0 && owned >= total && unlockItem('fishhat')) showFishUnlockToast(LABELS.fishhat);
 }
 
 export function isFishingItemUnlocked(item: string): boolean {
-  if (!_pubkey) return false;
-  return load().unlockedItems.includes(item);
+  return hasItem(item);
+}
+
+/** Total legendary fish ever caught (drives the cabin leaderboard backfill). */
+export function getLegendaryCount(): number {
+  return getLegendaryCaught();
 }
 
 export function getFishingProgress(item: string): { count: number; required: number; unlocked: boolean } {
-  const data = load();
-  return {
-    count: data.legendaryCaught,
-    required: THRESHOLDS[item] ?? 1,
-    unlocked: data.unlockedItems.includes(item),
-  };
+  if (item === 'fishhat') {
+    return { count: _fishHatProgress.owned, required: _fishHatProgress.total, unlocked: hasItem('fishhat') };
+  }
+  return { count: getLegendaryCaught(), required: LEGENDARY_THRESHOLDS[item] ?? 1, unlocked: hasItem(item) };
 }

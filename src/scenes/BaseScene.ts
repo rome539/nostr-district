@@ -78,11 +78,14 @@ import {
 import { toggleMute, addBannedWord, removeBannedWord, getCustomBannedWords, shouldFilter } from '../nostr/moderationService';
 import { canUseDMs } from '../nostr/dmService';
 import { registerSenderNameHint } from '../nostr/zapService';
+import { ToastManager } from '../ui/ToastManager';
+import { receiveMintedEvent, fetchInventoryFromRelays } from '../stores/tradeItemStore';
+import { setItemMintedHandler as _setMintHandler, setItemReceivedHandler } from '../nostr/presenceService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { getRainbowColor, isAnimatedColor, getAnimatedColor } from '../stores/marketStore';
-import { incrementAuraProgress } from '../stores/auraUnlockStore';
 import { MarketPanel } from '../ui/MarketPanel';
+import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
@@ -390,6 +393,28 @@ export abstract class BaseScene extends Phaser.Scene {
    * Subclasses that override init() must call super.init(data) first.
    */
   init(_data?: object): void {
+    ToastManager.init();
+    // Wire oracle mint events → inventory (live arrivals get the "NEW" badge)
+    _setMintHandler((event) => {
+      const item = receiveMintedEvent(event, true);
+      if (item) {
+        window.dispatchEvent(new CustomEvent('nd-inventory-update'));
+        this.snd.itemReward();
+        const source = (event as any).tags?.find((t: string[]) => t[0] === 'source')?.[1];
+        if (source === 'weekly_drop') {
+          import('../stores/tradeItemStore').then(({ ITEM_CATALOG }) => {
+            const def = ITEM_CATALOG.find(d => d.id === item.itemId);
+            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Weekly drop: ${def.emoji} ${def.name}! Open /bazaar to view.`, color: '#c0a8ff' } }));
+          });
+        }
+      }
+    });
+    setItemReceivedHandler((fromName, event) => {
+      // Add the item to inventory immediately (no waiting for a relay refetch)
+      if (event) receiveMintedEvent(event, true);
+      this.snd.tradeSound();
+      window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `You received an item${fromName ? ` from ${fromName}` : ''}! Open /bazaar to view.`, color: '#c0a8ff' } }));
+    });
     this.emoteSet.stopAll();
     this.isLeavingScene = false;
     this.walkTime  = 0;
@@ -668,6 +693,14 @@ export abstract class BaseScene extends Phaser.Scene {
   }
 
   protected updateOtherPlayers(time: number, delta: number): void {
+    // Gate Phaser scene input while a full-screen DOM panel (bazaar/wallet/market)
+    // is open. Phaser processes pointer events on the NEXT frame, but a DOM panel
+    // closes synchronously on click — so a click that closes the panel would, a
+    // frame later, fire an in-world prompt (e.g. a door) and act on it. Disabling
+    // scene input means those clicks never reach the game while a panel is up.
+    const block = this.shouldBlockPanelKeys();
+    if (this.input.enabled === block) this.input.enabled = !block;
+
     const cfg = this.getOtherPlayerConfig();
     this.otherPlayers.forEach((o, pk) => {
       // Fade-in gate: hide until 500 ms after join, then snap to position
@@ -1012,6 +1045,14 @@ export abstract class BaseScene extends Phaser.Scene {
     if ('ontouchstart' in window) {
       this.chatUI.setDMButton(() => { this.crewPanel.close(); this.dmPanel.toggle(); });
     }
+
+    // Bazaar "CONTACT seller" → open a DM with that player
+    const openDmHandler = (e: Event) => {
+      const { pubkey: pk, draft } = (e as CustomEvent).detail ?? {};
+      if (pk) { this.crewPanel.close(); this.dmPanel.toggle(pk, draft); }
+    };
+    window.addEventListener('nd-open-dm', openDmHandler);
+    this.events.once('shutdown', () => window.removeEventListener('nd-open-dm', openDmHandler));
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1170,7 +1211,7 @@ export abstract class BaseScene extends Phaser.Scene {
    * Scenes can override to add their own scene-specific blockers.
    */
   protected shouldBlockPanelKeys(): boolean {
-    return WalletPanel.isOpen() || MarketPanel.isOpen();
+    return WalletPanel.isOpen() || MarketPanel.isOpen() || BazaarPanel.isOpen();
   }
 
   /**
@@ -1209,6 +1250,7 @@ export abstract class BaseScene extends Phaser.Scene {
   //   playerPicker → muteList → profile-modal (DOM) → zap-modal (DOM)
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonEsc(): boolean {
+    if (BazaarPanel.isOpen())           { bazaarPanel.close();          return true; }
     if (WalletPanel.isOpen())           { WalletPanel.destroy();        return true; }
     if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
     if (this.worldMap.isOpen())         { this.worldMap.close();        return true; }
@@ -1256,7 +1298,7 @@ export abstract class BaseScene extends Phaser.Scene {
       sendChat(`/emote ${name}_off`);
     } else {
       this.emoteSet.start(name);
-      if (name === 'smoke') { this.snd.lighterFlick(); incrementAuraProgress('smoke'); }
+      if (name === 'smoke') { this.snd.lighterFlick(); }
       const flavor = EMOTE_FLAVORS[name] ?? `*${name}*`;
       this.chatUI.addMessage('system', flavor, ac);
       sendChat(`/emote ${name}_on`);
@@ -1846,6 +1888,11 @@ export abstract class BaseScene extends Phaser.Scene {
       // ── Shop ─────────────────────────────────────────────────────────────
       case 'shop': case 'store': case 'market':
         MarketPanel.isOpen() ? MarketPanel.destroy() : MarketPanel.open();
+        return true;
+
+      // ── Bazaar (item trading market) ──────────────────────────────────────
+      case 'bazaar': case 'bag': case 'items': case 'inv': case 'inventory':
+        bazaarPanel.open();
         return true;
 
       // ── Wallet ───────────────────────────────────────────────────────────
