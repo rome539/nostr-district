@@ -170,15 +170,24 @@ export class AlleyScene extends BaseScene {
 
     // Bazaar vending machine — load the PNG and place it on the floor
     const placeVending = () => {
-      if (!this.scene.isActive()) return; // scene shut down before load finished
       this.textures.get(VENDING_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST); // crisp pixels when scaled
       const img = this.add.image(VENDING_X, FLOOR_Y, VENDING_KEY).setOrigin(0.5, 1).setDepth(2);
       img.setScale(96 / img.height); // normalize to ~96px tall regardless of source size
       img.setTint(0x7a6fa6); // dim + cool the bright PNG so it blends into the dark alley
       this.vendingSprite = img;
     };
-    if (this.textures.exists(VENDING_KEY)) placeVending();
-    else { this.load.image(VENDING_KEY, VENDING_URL); this.load.once('complete', placeVending); this.load.start(); }
+    if (this.textures.exists(VENDING_KEY)) {
+      // Cached texture (re-entering the alley) — place synchronously. This runs during
+      // create() where scene status is CREATING (NOT "active"), so we must NOT gate on
+      // isActive() or it silently no-ops on every re-entry (the machine vanishes).
+      placeVending();
+    } else {
+      // First load — place on completion, but bail if the player already left the alley
+      // (scene torn down before the async load finished).
+      this.load.image(VENDING_KEY, VENDING_URL);
+      this.load.once('complete', () => { if (this.scene.isActive()) placeVending(); });
+      this.load.start();
+    }
 
     this.vendingPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
     this.vendingPromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.open_bazaar')}`,

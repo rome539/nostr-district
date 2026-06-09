@@ -518,11 +518,17 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       ...this.buildPresenceCallbacks(myPubkey),
       onPlayersReady: (count: number) => {
         if (this.isReturning) return;
-        const total = count + 1; // include self
-        const msg = total === 1
-          ? ti18n('sys.online.one')
-          : ti18n('sys.online.many', { count: total });
-        this.chatUI.addMessage('system', msg, P.teal);
+        // Show the WORLD-WIDE online count (everyone, all rooms) — not just the hub.
+        // The server already broadcasts it (onCountUpdate -> this.onlineCount), but that
+        // 'count' message lands just AFTER this 'players' message, so wait a beat for it
+        // then greet. Falls back to hub+self if it somehow hasn't arrived.
+        this.time.delayedCall(1200, () => {
+          const total = this.onlineCount > 0 ? this.onlineCount : count + 1;
+          const msg = total === 1
+            ? ti18n('sys.online.one')
+            : ti18n('sys.online.many', { count: total });
+          this.chatUI.addMessage('system', msg, P.teal);
+        });
       },
     };
     if (!this.isReturning) connectPresence(cb);
