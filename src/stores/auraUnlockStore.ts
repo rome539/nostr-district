@@ -23,11 +23,12 @@ import {
  */
 
 const THRESHOLDS: Record<string, number> = { ice: 7, void: 30, rainbow: 4 };
-const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold'];
+const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold', 'runes', 'bats', 'snow', 'fireworks'];
 
 const LABELS: Record<string, string> = {
   smoke: 'Smoke Aura', fire: 'Fire Aura', sparkle: 'Sparkle Aura', ice: 'Ice Aura',
   electric: 'Electric Aura', void: 'Void Aura', gold: 'Gold Aura', rainbow: 'Rainbow Aura',
+  runes: 'Runes Aura', bats: 'Bat Aura', snow: 'Snowfall Aura', fireworks: 'Fireworks Aura',
 };
 
 export const AURA_HINTS: Record<string, string> = {
@@ -39,6 +40,10 @@ export const AURA_HINTS: Record<string, string> = {
   ice:      'Log in 7 days in a row',
   void:     'Log in 30 days in a row (no breaks)',
   rainbow:  'Unlock smoke, fire, sparkle, and ice auras first',
+  runes:    'Complete "The Arcane" set (every occult item)',
+  bats:     'Complete the "All Hallows" set (Halloween drops)',
+  snow:     'Complete the "Cold Storage" set (winter drops)',
+  fireworks:'Complete the "Independence" set (July 4th drops)',
 };
 
 const BASE_AURAS = ['smoke', 'fire', 'sparkle', 'ice'];
@@ -46,8 +51,12 @@ const BASE_AURAS = ['smoke', 'fire', 'sparkle', 'ice'];
 let _pubkey = '';
 let _streakListenerBound = false;
 
-// Latest set-completion progress per set-based aura (for the market-panel display).
+// Latest set-completion progress per set-based aura (for the market-panel display
+// AND the live entitlement check — set auras are POSSESSION-BASED: usable only while
+// the player currently holds the complete set; selling a piece re-locks the aura).
 const _setAuraProgress: Record<string, { count: number; required: number }> = {};
+const _wasComplete: Record<string, boolean> = {}; // session transition tracking (toasts)
+const _toasted = new Set<string>(); // at most one unlock toast per aura per session
 
 function showUnlockToast(label: string): void {
   SoundEngine.get().auraUnlock();
@@ -65,10 +74,14 @@ function showUnlockToast(label: string): void {
 }
 
 function _checkCompositeUnlocks(): void {
-  const auras = getUnlockState().auras;
-  if (!auras.includes('rainbow') && BASE_AURAS.every(a => auras.includes(a))) {
-    if (unlockAura('rainbow')) showUnlockToast(LABELS.rainbow);
+  // Rainbow is live like the set auras: available only while smoke/fire/sparkle/ice
+  // are ALL currently available. Toast on the transition into availability.
+  const nowAvailable = BASE_AURAS.every(a => isAuraUnlocked(a));
+  if (nowAvailable && _wasComplete['rainbow'] === false && !_toasted.has('rainbow')) {
+    _toasted.add('rainbow');
+    showUnlockToast(LABELS.rainbow);
   }
+  _wasComplete['rainbow'] = nowAvailable;
 }
 
 // Streak / ice / void — runs once the relay unlock state has loaded.
@@ -98,8 +111,15 @@ export function initAuraProgress(pubkey: string): void {
   if (isUnlocksLoaded()) applyLoginStreak(); // already loaded (re-login within session)
 }
 
-/** Returns true if the current player has earned this aura. */
+/** Returns true if the current player can use this aura right now.
+ *  Set-based auras + rainbow are POSSESSION-BASED (live set completion);
+ *  ice/void (login streaks) stay permanent once earned. */
 export function isAuraUnlocked(type: string): boolean {
+  if (SET_BASED_AURAS.includes(type)) {
+    const p = _setAuraProgress[type];
+    return !!p && p.required > 0 && p.count >= p.required;
+  }
+  if (type === 'rainbow') return BASE_AURAS.every(a => isAuraUnlocked(a));
   return hasAura(type);
 }
 
@@ -107,10 +127,10 @@ export function isAuraUnlocked(type: string): boolean {
 export function getAuraProgress(type: string): { count: number; required: number; unlocked: boolean; hint: string } {
   const hint = AURA_HINTS[type] ?? '';
   if (!_pubkey) return { count: 0, required: THRESHOLDS[type] ?? 0, unlocked: false, hint };
-  const unlocked = hasAura(type);
+  const unlocked = isAuraUnlocked(type); // live for set auras/rainbow, stored for ice/void
 
   if (type === 'rainbow') {
-    return { count: getUnlockState().auras.filter(a => BASE_AURAS.includes(a)).length, required: 4, unlocked, hint };
+    return { count: BASE_AURAS.filter(a => isAuraUnlocked(a)).length, required: 4, unlocked, hint };
   }
   if (type === 'ice' || type === 'void') {
     return { count: getUnlockState().loginStreak || 0, required: THRESHOLDS[type], unlocked, hint };
@@ -129,10 +149,16 @@ export function getAuraProgress(type: string): { count: number; required: number
 export function updateSetAuraProgress(progress: Record<string, { count: number; required: number }>): void {
   for (const [aura, p] of Object.entries(progress)) _setAuraProgress[aura] = p;
   if (!_pubkey) return;
+  // POSSESSION-BASED: nothing is stored — availability is the live set completion.
+  // Toast only on an incomplete→complete transition observed this session (the first
+  // update after login just records state; re-assembling a sold set toasts again).
   for (const [aura, p] of Object.entries(progress)) {
-    if (p.required > 0 && p.count >= p.required && unlockAura(aura)) {
+    const complete = p.required > 0 && p.count >= p.required;
+    if (complete && _wasComplete[aura] === false && !_toasted.has(aura)) {
+      _toasted.add(aura);
       showUnlockToast(LABELS[aura] ?? aura);
     }
+    _wasComplete[aura] = complete;
   }
   _checkCompositeUnlocks();
 }

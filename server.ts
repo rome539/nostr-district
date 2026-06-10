@@ -181,6 +181,66 @@ function recordScavenge(pubkey: string): void {
   try { writeFileSync(SCAVENGE_FILE, JSON.stringify(scavengeBuckets)); } catch {}
 }
 
+// ── Fishing: SERVER-AUTHORITATIVE catch rolls ─────────────────────────────────
+// The fishing minigame (cast → wait → bite → reel) runs in the client, but the
+// client has NO say in what was caught: it sends a bare `fish_catch_request` and
+// the server rolls the tier odds, picks the fish, rolls the keep-chance, and mints.
+// A cheater's script is therefore just a bot playing the real game — same odds,
+// same pace (rate-limited below), no way to claim legendaries directly.
+//
+// Tier odds + keep-chances mirror the original client values (WoodsScene/tradeItemStore):
+//   legendary 0.15% · junk 24.85% · rare 25% · common 50%
+//   keep: legendary 100% · rare 10% · common 5% · junk 5%
+const FISH_TIERS: Record<string, string[]> = {
+  common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed'],
+  rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter'],
+  junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern'],
+  legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor'],
+};
+const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.10, common: 0.05, junk: 0.05 };
+
+function rollFishCatch(): { itemId: string; tier: string; kept: boolean } {
+  const roll = Math.random();
+  const tier = roll < 0.0015 ? 'legendary' : roll < 0.25 ? 'junk' : roll < 0.50 ? 'rare' : 'common';
+  const pool = FISH_TIERS[tier];
+  const itemId = pool[Math.floor(Math.random() * pool.length)];
+  const kept = Math.random() < (FISH_KEEP[tier] ?? 0);
+  return { itemId, tier, kept };
+}
+
+// Per-pubkey reel rate limit. Honest pace: bite takes 4-16s + reel + recast ≈ one
+// reel per 6s at MAX luck, ~11s average — so burst 8 + refill 1 per 8s can never
+// block a human, while capping a 24/7 script at no-better-than-human speed.
+// Skipped in local dev (no ORACLE_PRIVATE_KEY) so /devset test-minting stays fast.
+const FISHING_FILE = '.fishing-buckets.json';
+const FISHING_CAPACITY = 8;
+const FISHING_REFILL_MS = 8 * 1000;
+const FISHING_LIMIT_ACTIVE = !!process.env.ORACLE_PRIVATE_KEY; // prod oracle ⇒ enforce
+let fishingBuckets: Record<string, { tokens: number; lastRefill: number }> = {};
+try { if (existsSync(FISHING_FILE)) fishingBuckets = JSON.parse(readFileSync(FISHING_FILE, 'utf8')); } catch {}
+
+function refillFishing(pubkey: string): { tokens: number; lastRefill: number } {
+  const now = Date.now();
+  let b = fishingBuckets[pubkey];
+  if (!b) { b = { tokens: FISHING_CAPACITY, lastRefill: now }; fishingBuckets[pubkey] = b; return b; }
+  const gained = Math.floor((now - b.lastRefill) / FISHING_REFILL_MS);
+  if (gained > 0) {
+    b.tokens = Math.min(FISHING_CAPACITY, b.tokens + gained);
+    b.lastRefill += gained * FISHING_REFILL_MS; // advance only by whole intervals consumed
+  }
+  return b;
+}
+function canFish(pubkey: string): boolean {
+  if (!FISHING_LIMIT_ACTIVE) return true;
+  return refillFishing(pubkey).tokens >= 1;
+}
+function recordFish(pubkey: string): void {
+  if (!FISHING_LIMIT_ACTIVE) return;
+  const b = refillFishing(pubkey);
+  b.tokens = Math.max(0, b.tokens - 1);
+  try { writeFileSync(FISHING_FILE, JSON.stringify(fishingBuckets)); } catch {}
+}
+
 // Sold instance ids — prevents the same listed item from being bought twice
 const SOLD_FILE = '.sold-instances.json';
 let soldInstances: Set<string> = new Set();
@@ -935,13 +995,20 @@ wss.on('connection', (ws) => {
             return;
           }
           // Scavenge ('found') is rate-limited server-side so the client respawn
-          // timer can't be bypassed by editing localStorage. (Fishing uses 'caught'.)
+          // timer can't be bypassed by editing localStorage.
           if (acquiredFrom === 'found') {
             if (!canScavenge(myPubkey)) {
               ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'scavenge_cooldown', itemId }));
               return;
             }
             recordScavenge(myPubkey);
+          }
+          // Fish can ONLY come from the server-rolled fish_catch_request in prod —
+          // a client-supplied "I caught X" is exactly the forgery we're preventing.
+          // Allowed in local dev (no prod oracle key) so /devset test-minting works.
+          if (acquiredFrom === 'caught' && FISHING_LIMIT_ACTIVE) {
+            ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'server_rolls_fish', itemId }));
+            return;
           }
         }
 
@@ -956,6 +1023,34 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'item_minted', event }));
 
         })().catch(() => {}); // async for the weekly relay-marker check
+        return;
+      }
+
+      // ── Fishing: server-rolled catch ──────────────────────────────────────
+      // Client says only "I reeled in" — the server decides what (if anything)
+      // was caught and mints it. See FISH_TIERS / rollFishCatch above.
+      if (msg.type === 'fish_catch_request' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (!player) return;
+        if (player.room !== 'woods') {
+          ws.send(JSON.stringify({ type: 'fish_caught', escaped: true }));
+          return;
+        }
+        if (!canFish(myPubkey)) {
+          // Over the reel rate (only scripts can get here) — the fish "gets away".
+          ws.send(JSON.stringify({ type: 'fish_caught', escaped: true }));
+          return;
+        }
+        recordFish(myPubkey);
+        const { itemId, tier, kept } = rollFishCatch();
+        let event: any = null;
+        if (kept) {
+          event = mintItem(myPubkey, itemId, 'caught');
+          if (event) publishToRelays(event);
+          if (event) console.log(`[Oracle] Fish kept: ${itemId} (${tier}) for ${player.name} (${myPubkey.slice(0,8)}…)`);
+        }
+        if (tier === 'legendary') console.log(`[Fishing] LEGENDARY ${itemId} caught by ${player.name}`);
+        ws.send(JSON.stringify({ type: 'fish_caught', itemId, tier, kept: !!(kept && event), event }));
         return;
       }
 

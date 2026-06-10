@@ -12,6 +12,7 @@
 import { authStore } from '../stores/authStore';
 import { CATALOG, MarketItem, isOwned, addToInventory, getWeeklySaleItem, getSalePrice, getSaleDaysLeft } from '../stores/marketStore';
 import { getAuraProgress } from '../stores/auraUnlockStore';
+import { getSetCosmeticProgress } from '../stores/collectionUnlocks';
 import { payLightningAddress } from '../nostr/zapService';
 import { publishAvatar } from '../nostr/nostrService';
 import { sendAvatarUpdate } from '../nostr/presenceService';
@@ -627,7 +628,11 @@ export class MarketPanel {
 
       const earnRight = (() => {
         if (!item.earn || owned) return null;
-        const prog = getAuraProgress(item.value as any);
+        // Auras have their own progress store; set cosmetics (rods, name colors) use
+        // the collectionUnlocks progress keyed by slot:value.
+        const prog = item.slot === 'aura'
+          ? getAuraProgress(item.value as any)
+          : getSetCosmeticProgress(item.slot, item.value);
         if (prog.unlocked) return null;
         const pct = prog.required > 0 ? Math.min(100, Math.round((prog.count / prog.required) * 100)) : 0;
         return `

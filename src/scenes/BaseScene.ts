@@ -232,6 +232,59 @@ function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Parti
       emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(20)) } as any,
       blendMode: 'ADD',
     };
+    case 'runes': return { // The Arcane set — slow ring of violet motes, faintly rising
+      speed:    { min: r(2), max: r(8) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 1400, max: 2600 },
+      scale:    { start: 0.9, end: 0 },
+      alpha:    { start: 0.85, end: 0 },
+      tint:     [0x9a6eff, 0xb88aff, 0x6a3aaa, 0xe0d0ff],
+      frequency: 130,
+      quantity:  1,
+      gravityY:  r(-7),
+      emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, 0, r(17)), quantity: 10 } as any,
+      blendMode: 'ADD',
+    };
+    case 'bats': return { // All Hallows set — real bat silhouettes (aura_bat texture) circling the head
+      speed:    { min: r(22), max: r(48) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 700, max: 1400 },
+      scale:    { start: s * 1.1, end: s * 0.6 }, // texture is 13px wide — scale by sprite size
+      alpha:    { start: 1, end: 0 },
+      rotate:   { min: -25, max: 25 },
+      tint:     [0x8a7ab0, 0x6a4a8a, 0x55406e, 0x9a9ac0],
+      frequency: 260, // a few distinct bats at a time, not a swarm
+      quantity:  1,
+      gravityY:  0,
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, -r(12), r(18)) } as any,
+      blendMode: 'NORMAL',
+    };
+    case 'snow': return { // Cold Storage set — flurry from above the head, fading out by the legs
+      speed:    { min: r(2), max: r(6) },
+      angle:    { min: 80, max: 100 },
+      lifespan: { min: 1400, max: 2200 },
+      scale:    { start: 1.0, end: 0.4 },
+      alpha:    { start: 1, end: 0 },
+      tint:     [0xffffff, 0xeaf2ff, 0xc8deff],
+      frequency: 80,
+      quantity:  1,
+      gravityY:  r(11),
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(r(-18), r(-34), r(36), r(8)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'fireworks': return { // Independence set — pops ABOVE the head, clear of the sprite
+      speed:    { min: r(40), max: r(75) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 450, max: 850 },
+      scale:    { start: 1.1, end: 0 },
+      alpha:    { start: 1, end: 0 },
+      tint:     [0xff5050, 0xf0f0ff, 0x5080ff, 0xffd700],
+      frequency: 1000,
+      quantity:  14,
+      gravityY:  r(12),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, -r(34), r(10)) } as any,
+      blendMode: 'ADD',
+    };
     default: return { // smoke
       speed:    { min: r(8), max: r(20) },
       angle:    { min: 255, max: 285 },
@@ -621,12 +674,25 @@ export abstract class BaseScene extends Phaser.Scene {
    * emote rendering, fade-in gate. Call once per frame from update().
    */
   private _ensureAuraDotTexture(): void {
-    if (this.textures.exists('aura_dot')) return;
-    const g = this.make.graphics(undefined, false);
-    g.fillStyle(0xffffff, 1);
-    g.fillRect(0, 0, 2, 2);
-    g.generateTexture('aura_dot', 2, 2);
-    g.destroy();
+    if (!this.textures.exists('aura_dot')) {
+      const g = this.make.graphics(undefined, false);
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(0, 0, 2, 2);
+      g.generateTexture('aura_dot', 2, 2);
+      g.destroy();
+    }
+    // Tiny bat silhouette for the bats aura — drawn white so the emitter tint colors it.
+    if (!this.textures.exists('aura_bat')) {
+      const b = this.make.graphics(undefined, false);
+      b.fillStyle(0xffffff, 1);
+      b.fillTriangle(0, 5, 5, 0, 5, 4);   // left wing
+      b.fillTriangle(13, 5, 8, 0, 8, 4);  // right wing
+      b.fillRect(5, 1, 3, 4);             // body
+      b.fillRect(5, 0, 1, 1);             // ear
+      b.fillRect(7, 0, 1, 1);             // ear
+      b.generateTexture('aura_bat', 13, 6);
+      b.destroy();
+    }
   }
 
   private _buildWaveSet(text: string, ref: Phaser.GameObjects.Text, color: string): WaveCharSet {
@@ -670,7 +736,8 @@ export abstract class BaseScene extends Phaser.Scene {
   private _makeAuraEmitter(type: string, x: number, y: number, spriteHeight: number): Phaser.GameObjects.Particles.ParticleEmitter {
     this._ensureAuraDotTexture();
     const s = Math.max(0.2, spriteHeight / 96); // 96 = room reference (32px texture × scale 3)
-    return this.add.particles(x, y, 'aura_dot', makeAuraConfig(type, s)).setDepth(13);
+    const tex = type === 'bats' ? 'aura_bat' : 'aura_dot'; // bats use a real silhouette
+    return this.add.particles(x, y, tex, makeAuraConfig(type, s)).setDepth(13);
   }
 
   /** Eye pixel offsets as fractions of displayHeight.
@@ -1250,6 +1317,9 @@ export abstract class BaseScene extends Phaser.Scene {
   //   playerPicker → muteList → profile-modal (DOM) → zap-modal (DOM)
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonEsc(): boolean {
+    // Overlays stacked on the bazaar (offer picker, partner prompt) close first —
+    // ESC peels one layer at a time instead of tearing down the whole panel.
+    if (BazaarPanel.closeTopOverlay())  {                               return true; }
     if (BazaarPanel.isOpen())           { bazaarPanel.close();          return true; }
     if (WalletPanel.isOpen())           { WalletPanel.destroy();        return true; }
     if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
@@ -1674,6 +1744,33 @@ export abstract class BaseScene extends Phaser.Scene {
           const herePart = ps.length ? ` | here: ${ps.join(', ')}` : '';
           this.chatUI.addMessage('system', `${this.onlineCount} online${herePart}`, P.teal);
         }
+        return true;
+      }
+
+      // ── Dev-only: mint a whole item set for testing (stripped from prod builds) ──
+      // Usage: /devset            → list set ids + your progress
+      //        /devset night_shift → mint every missing item of that set
+      // Goes through the REAL pipeline (server mint → relay event → inventory →
+      // entitlement recompute), so possession-based rewards are tested end-to-end.
+      // NOTE: scene-drop room rules apply — mint fish sets while standing in the woods.
+      case 'devset': {
+        if (!import.meta.env.DEV) return false; // unknown command in production
+        import('../stores/tradeItemStore').then(({ ITEM_SETS, getInventory, getSetProgress }) => {
+          if (!arg) {
+            const lines = ITEM_SETS.map(s => { const p = getSetProgress(s); return `${s.id.replace(/^set_/, '')} ${p.owned}/${p.total}`; });
+            this.chatUI.addMessage('system', `devset: ${lines.join(' · ')}`, P.amber);
+            return;
+          }
+          const set = ITEM_SETS.find(s => s.id === arg || s.id === `set_${arg}`);
+          if (!set) { this.chatUI.addMessage('system', `devset: no set "${arg}"`, P.amber); return; }
+          const owned = new Set(getInventory().map(i => i.itemId));
+          const missing = set.itemIds.filter(id => !owned.has(id));
+          if (!missing.length) { this.chatUI.addMessage('system', `devset: "${set.name}" already complete`, P.amber); return; }
+          import('../nostr/presenceService').then(({ sendItemMintRequest }) => {
+            missing.forEach((id, i) => setTimeout(() => sendItemMintRequest(id, 'caught'), i * 250));
+          });
+          this.chatUI.addMessage('system', `devset: minting ${missing.length} item(s) for "${set.name}"… (fish need the woods)`, P.amber);
+        });
         return true;
       }
 

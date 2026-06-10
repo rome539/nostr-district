@@ -76,6 +76,20 @@ let onItemMinted: ItemMintedHandler | null = null;
 
 export function setItemMintedHandler(handler: ItemMintedHandler | null): void { onItemMinted = handler; }
 
+// ── Fishing (server-rolled) ───────────────────────────────────────────────────
+// The client sends a bare "I reeled in"; the server rolls what was caught and
+// whether it's kept, and answers with fish_caught. See server.ts rollFishCatch.
+export interface FishCaughtMsg { itemId?: string; tier?: string; kept?: boolean; event?: object; escaped?: boolean }
+type FishCaughtHandler = (res: FishCaughtMsg) => void;
+let onFishCaught: FishCaughtHandler | null = null;
+
+export function setFishCaughtHandler(handler: FishCaughtHandler | null): void { onFishCaught = handler; }
+
+export function sendFishCatchRequest(): void {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'fish_catch_request' }));
+  else onFishCaught?.({ escaped: true }); // offline → the fish gets away
+}
+
 export function sendItemMintRequest(itemId: string, acquiredFrom: string, attempt = 0): void {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'item_mint_request', itemId, acquiredFrom }));
@@ -415,6 +429,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'game_msg') onGameMsg?.(msg);
       if (msg.type === 'incoming_zap') onIncomingZap?.(msg.senderPk, msg.senderName || '', Number(msg.amountSats) || 0, msg.comment || '');
       if (msg.type === 'item_minted') onItemMinted?.(msg.event);
+      if (msg.type === 'fish_caught') onFishCaught?.(msg as FishCaughtMsg);
       if (msg.type === 'oracle_pubkey') {
         // Just store the key — inventory loads lazily when the bazaar opens
         import('../stores/tradeItemStore').then(({ setOraclePubkey }) => setOraclePubkey(msg.pubkey));

@@ -206,6 +206,9 @@ export interface ItemSet {
   itemIds: string[];
   rewardLabel?: string;
   rewardAura?: string; // completing this set unlocks this aura (see collectionUnlocks.ts)
+  // Completing this set unlocks a market cosmetic (rod skin, name color, …).
+  // slot/value must match a CATALOG entry in marketStore; label is for the unlock toast.
+  rewardCosmetic?: { slot: string; value: string; label: string };
 }
 
 export const ITEM_SETS: ItemSet[] = [
@@ -215,6 +218,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every common fish.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'fish' && i.rarity === 'common').map(i => i.id),
     rewardLabel: 'Fisherman',
+    rewardCosmetic: { slot: 'rodSkin', value: 'driftwood', label: 'Driftwood Rod' },
   },
   {
     id: 'set_rare_waters',
@@ -222,6 +226,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every rare fish.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'fish' && i.rarity === 'rare').map(i => i.id),
     rewardLabel: 'Deep Fisher',
+    rewardCosmetic: { slot: 'rodSkin', value: 'abyssal', label: 'Abyssal Rod' },
   },
   {
     id: 'set_legends',
@@ -229,6 +234,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect all legendary catches.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'fish' && i.rarity === 'legendary').map(i => i.id),
     rewardLabel: 'Lake Legend',
+    rewardCosmetic: { slot: 'rodSkin', value: 'leviathan', label: 'Leviathan Rod' },
   },
   {
     id: 'set_bottom_feeder',
@@ -236,6 +242,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect all junk from the lake.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'fish' && i.rarity === 'junk').map(i => i.id),
     rewardLabel: 'Scavenger',
+    rewardCosmetic: { slot: 'rodSkin', value: 'junkyard', label: 'Junkyard Rod' },
   },
   {
     id: 'set_night_shift',
@@ -243,6 +250,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Fish that only emerge in the dark.',
     itemIds: ['fish_moonfish','fish_darkwater_bass','fish_starscale_koi','fish_midnight_sturgeon'],
     rewardLabel: 'Night Fisher',
+    rewardCosmetic: { slot: 'rodSkin', value: 'midnight', label: 'Midnight Rod' },
   },
   {
     id: 'set_cryptid_club',
@@ -257,6 +265,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Artifacts touched by the legend.',
     itemIds: ['fish_golden_satoshi','fish_love_letter','fish_enchanted_trident'],
     rewardLabel: 'Vault Keeper',
+    rewardCosmetic: { slot: 'nameColor', value: '#f7931a', label: 'Bitcoin Orange name' },
   },
   {
     id: 'set_deep_time',
@@ -311,6 +320,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Every charm, card, and cursed thing.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'occult').map(i => i.id),
     rewardLabel: 'Occultist',
+    rewardAura: 'runes',
   },
   {
     id: 'set_critters',
@@ -318,6 +328,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Every creature that calls the district home.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'critters').map(i => i.id),
     rewardLabel: 'Beast Friend',
+    rewardCosmetic: { slot: 'nameColor', value: '#9099a8', label: 'Alley Gray name' },
   },
   {
     id: 'set_spooky',
@@ -325,6 +336,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every Halloween item.',
     itemIds: ['hol_candy_corn', 'hol_skull_candle', 'hol_black_cat', 'hol_jack_o_lantern', 'hol_witch_hat', 'hol_cauldron', 'hol_phantom_key', 'hol_reaper_coin'],
     rewardLabel: 'Trick-or-Treater',
+    rewardAura: 'bats',
   },
   {
     id: 'set_fireworks',
@@ -332,6 +344,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every July 4th item.',
     itemIds: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'],
     rewardLabel: 'Patriot',
+    rewardAura: 'fireworks',
   },
   {
     id: 'set_genesis',
@@ -367,6 +380,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every Winter Holiday item.',
     itemIds: ['hol_snowflake', 'hol_pine_sprig', 'hol_warm_mittens', 'hol_gift_box', 'hol_frost_coin'],
     rewardLabel: 'Frostkeeper',
+    rewardAura: 'snow',
   },
   {
     id: 'set_nostr',
@@ -374,6 +388,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Collect every Nostr Day item.',
     itemIds: ['hol_ostrich_egg', 'hol_purple_pill', 'hol_relay_stone', 'hol_zap_bolt', 'hol_first_note'],
     rewardLabel: 'Nostrich',
+    rewardCosmetic: { slot: 'hat', value: 'ostrichhat', label: 'Ostrich Hat' },
   },
   {
     id: 'set_holiday_vault',

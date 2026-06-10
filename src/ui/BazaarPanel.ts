@@ -51,6 +51,22 @@ export class BazaarPanel {
   private myWins: WinNotice[] = [];
   private resolvedWins = new Set<string>(); // wins paid/declined this session — hide immediately
   private myBidsOut: MyBid[] = [];
+
+  // ── Overlay stack ──────────────────────────────────────────────────────────
+  // Modals layered over the bazaar (trade partner picker, offer picker) register a
+  // closer here so ESC (BaseScene.handleCommonEsc) closes the TOP overlay first
+  // instead of tearing down the whole panel underneath it.
+  private static _overlayClosers: (() => void)[] = [];
+  static registerOverlay(close: () => void): () => void {
+    BazaarPanel._overlayClosers.push(close);
+    return () => { BazaarPanel._overlayClosers = BazaarPanel._overlayClosers.filter(f => f !== close); };
+  }
+  /** Close the topmost overlay if one is open. Returns true if it consumed the ESC. */
+  static closeTopOverlay(): boolean {
+    const f = BazaarPanel._overlayClosers.pop();
+    if (f) { try { f(); } catch { /* already gone */ } return true; }
+    return false;
+  }
   private acceptedBid: Record<string, { name: string; amount: number }> = {};
   private acceptInFlight = new Set<string>();
 
@@ -874,9 +890,11 @@ export class BazaarPanel {
 
       const close = (result: { pubkey: string; name: string } | null) => {
         clearInterval(refreshTimer);
+        dereg();
         overlay.remove();
         resolve(result);
       };
+      const dereg = BazaarPanel.registerOverlay(() => close(null)); // ESC closes this, not the bazaar
 
       const renderOnline = () => {
         const wrap = box.querySelector('#tp-online')!;
@@ -994,14 +1012,22 @@ export class BazaarPanel {
       }, 4000, 650, listed);
     });
 
+    // Single close path — also registered as the ESC overlay closer so ESC closes
+    // this picker instead of the bazaar behind it.
+    const closePicker = () => {
+      dereg();
+      stopStream();
+      overlay.remove();
+      this.pendingTradePubkey = null; this.pendingTradeName = null;
+    };
+    const dereg = BazaarPanel.registerOverlay(closePicker);
+
     sendBtn.addEventListener('click', () => {
       if (!selectedId) return;
       sendBtn.disabled = true;
       const note = (box.querySelector('#want-msg') as HTMLInputElement).value.trim();
       sendTradeOffer(toPubkey, instanceId, selectedId, note || undefined).then(ok => {
-        stopStream();
-        overlay.remove();
-        this.pendingTradePubkey = null; this.pendingTradeName = null;
+        closePicker();
         if (ok) ToastManager.show(ti18n('bz.offer_sent', { name: toName }), '#d0d060');
       });
     });
@@ -1012,9 +1038,7 @@ export class BazaarPanel {
       giftBtn.disabled = true; giftBtn.textContent = ti18n('bz.gifting');
       const note = (box.querySelector('#want-msg') as HTMLInputElement).value.trim();
       const ok = await sendItemDirect(instanceId, toPubkey, note || undefined);
-      stopStream();
-      overlay.remove();
-      this.pendingTradePubkey = null; this.pendingTradeName = null;
+      closePicker();
       if (ok) ToastManager.show(ti18n('bz.gifted_ok', { item: `${offerDef.emoji} ${offerDef.name}`, name: toName }), '#70b0ff');
       else ToastManager.show(ti18n('bz.gift_failed'), '#ff7070');
       this.render();
@@ -1023,11 +1047,7 @@ export class BazaarPanel {
     (box.querySelector('#want-search') as HTMLInputElement).addEventListener('input', e => {
       renderList((e.target as HTMLInputElement).value);
     });
-    box.querySelector('#want-cancel')!.addEventListener('click', () => {
-      stopStream();
-      overlay.remove();
-      this.pendingTradePubkey = null; this.pendingTradeName = null;
-    });
+    box.querySelector('#want-cancel')!.addEventListener('click', closePicker);
 
     overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -1297,8 +1317,9 @@ export class BazaarPanel {
           </div>
           <span style="color:${done ? '#70ff70' : '#888'};font-size:12px;">${progress.owned}/${progress.total}</span>
         </div>
-        <div style="color:#666;font-size:10px;margin-bottom:${set.rewardAura ? '4px' : '8px'};">${(() => { const k = 'bz.setdesc.' + set.id; const d = ti18n(k); return d === k ? set.description : d; })()}</div>
+        <div style="color:#666;font-size:10px;margin-bottom:${(set.rewardAura || set.rewardCosmetic) ? '4px' : '8px'};">${(() => { const k = 'bz.setdesc.' + set.id; const d = ti18n(k); return d === k ? set.description : d; })()}</div>
         ${set.rewardAura ? `<div style="color:${done ? '#9aff9a' : '#9a6eff'};font-size:9px;margin-bottom:8px;letter-spacing:0.5px;">✦ ${ti18n(done ? 'bz.aura_unlocked' : 'bz.aura_unlocks', { aura: set.rewardAura.charAt(0).toUpperCase() + set.rewardAura.slice(1) })}</div>` : ''}
+        ${set.rewardCosmetic ? `<div style="color:${done ? '#9aff9a' : '#9a6eff'};font-size:9px;margin-bottom:8px;letter-spacing:0.5px;">✦ ${ti18n(done ? 'bz.reward_unlocked' : 'bz.reward_unlocks', { name: set.rewardCosmetic.label })}</div>` : ''}
         <div style="background:#0a0a18;border-radius:3px;height:4px;overflow:hidden;">
           <div style="background:${done ? '#2a8a2a' : '#4a4a8a'};height:100%;width:${pct}%;transition:width 0.3s;"></div>
         </div>

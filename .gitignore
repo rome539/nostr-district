@@ -14,3 +14,4 @@ vite.config.ts.timestamp-*.mjs
 .burned-instances.json
 .scavenge-buckets.json
 .oracle-key-dev
+.fishing-buckets.json

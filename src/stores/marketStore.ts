@@ -9,6 +9,7 @@ import { authStore } from './authStore';
 import { isAuraUnlocked } from './auraUnlockStore';
 import { isFishingItemUnlocked } from './fishingUnlockStore';
 import { isPizzaHatUnlocked } from './pizzaDayUnlockStore';
+import { isSetCosmetic, getSetCosmeticProgress } from './collectionUnlocks';
 
 const OWNER_PUBKEYS = new Set([
   '5069ea44d8977e77c6aea605d0c5386b24504a3abd0fe8a3d1cf5f4cedca40a7',
@@ -52,6 +53,12 @@ export const ROD_SKINS: Record<string, RodSkinColors> = {
   coral:      { grip: 0xc05848, tip: 0xe07060, line: 0xf0b090, bobber: 0x40b8c0 },
   gold:       { grip: 0xa07020, tip: 0xd09828, line: 0xf0d060, bobber: 0xe05028 },
   legendary:  { grip: 0x3a2810, tip: 0x4a3418, line: 0xc8b89a, bobber: 0xe05028 }, // animated rainbow
+  // Set-completion rods (earned via bazaar collections, never sold)
+  driftwood:  { grip: 0x9a8c78, tip: 0xb8ac98, line: 0xd8d0c0, bobber: 0x708090 }, // The Hatchery
+  abyssal:    { grip: 0x16324a, tip: 0x1f4a6a, line: 0x7adfff, bobber: 0x40e8ff }, // Rare Waters
+  leviathan:  { grip: 0x2a4a3a, tip: 0xe8e0d0, line: 0xc8d8c0, bobber: 0x6aa88a }, // The Legends
+  junkyard:   { grip: 0x7a4a28, tip: 0x8a8a8a, line: 0xb0a890, bobber: 0xc8b020 }, // Bottom Feeder
+  midnight:   { grip: 0x1a1430, tip: 0x2a2348, line: 0x8a86b8, bobber: 0xf0f4ff }, // Night Shift
 };
 
 /** Returns an animated rainbow hex color based on current time. */
@@ -292,6 +299,21 @@ export const CATALOG: MarketItem[] = [
   { id: 'aura_void',     name: 'Void Aura',     slot: 'aura', value: 'void',     price: 0, tier: 'rare', earn: true },
   { id: 'aura_gold',     name: 'Gold Aura',     slot: 'aura', value: 'gold',     price: 0, tier: 'rare', earn: true },
   { id: 'aura_rainbow',  name: 'Rainbow Aura',  slot: 'aura', value: 'rainbow',  price: 0, tier: 'rare', earn: true },
+  // Set-completion auras (bazaar collection rewards)
+  { id: 'aura_runes',     name: 'Runes Aura',     slot: 'aura', value: 'runes',     price: 0, tier: 'rare', earn: true },
+  { id: 'aura_bats',      name: 'Bat Aura',       slot: 'aura', value: 'bats',      price: 0, tier: 'rare', earn: true },
+  { id: 'aura_snow',      name: 'Snowfall Aura',  slot: 'aura', value: 'snow',      price: 0, tier: 'rare', earn: true },
+  { id: 'aura_fireworks', name: 'Fireworks Aura', slot: 'aura', value: 'fireworks', price: 0, tier: 'rare', earn: true },
+  // Set-completion rods + name colors (bazaar collection rewards, never sold)
+  { id: 'rod_driftwood',   name: 'Driftwood Rod',     slot: 'rodSkin',   value: 'driftwood', price: 0, tier: 'rare', earn: true },
+  { id: 'rod_abyssal',     name: 'Abyssal Rod',       slot: 'rodSkin',   value: 'abyssal',   price: 0, tier: 'rare', earn: true },
+  { id: 'rod_leviathan',   name: 'Leviathan Rod',     slot: 'rodSkin',   value: 'leviathan', price: 0, tier: 'rare', earn: true },
+  { id: 'rod_junkyard',    name: 'Junkyard Rod',      slot: 'rodSkin',   value: 'junkyard',  price: 0, tier: 'rare', earn: true },
+  { id: 'rod_midnight',    name: 'Midnight Rod',      slot: 'rodSkin',   value: 'midnight',  price: 0, tier: 'rare', earn: true },
+  { id: 'color_btcorange', name: 'Bitcoin Orange',    slot: 'nameColor', value: '#f7931a',   price: 0, tier: 'rare', earn: true },
+  { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
+  // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)
+  { id: 'hat_ostrichhat',  name: 'Ostrich Hat',       slot: 'hat',       value: 'ostrichhat', price: 0, tier: 'rare', earn: true },
 ];
 
 // ── Weekly sale ───────────────────────────────────────────────────────────────
@@ -337,6 +359,13 @@ const EARN_KEYS = new Set(CATALOG.filter(i => i.earn).map(i => `${i.slot}:${i.va
 
 let _inventory: Set<string> = new Set();
 
+/** True if this slot:value is an earn-only cosmetic (set reward / fishing / aura).
+ *  Used by the entitlement enforcer — it must never touch paid/free items. */
+export function isEarnGated(slot: string, value: string): boolean {
+  if (slot === 'chatColor') return isEarnGated('nameColor', value);
+  return EARN_KEYS.has(`${slot}:${value}`);
+}
+
 /** Returns true if the player can equip this item (free, purchased, or earned). */
 export function isOwned(slot: string, value: string): boolean {
   // Chat colors are bundled with name colors — owning one grants the other
@@ -347,10 +376,14 @@ export function isOwned(slot: string, value: string): boolean {
   if (OWNER_PUBKEYS.has(pubkey)) return true;
   if (MANUAL_GRANTS[pubkey]?.includes(key)) return true;
   if (EARN_KEYS.has(key)) {
+    // Set-completion cosmetics (rods, name colors, hats): POSSESSION-BASED — usable
+    // only while the player currently holds the full set; re-locks if a piece is sold.
+    if (isSetCosmetic(slot, value)) return getSetCosmeticProgress(slot, value).unlocked;
     // Pizza hat is a special seasonal unlock (May 22 login), not a fishing reward.
     if (slot === 'hat' && value === 'pizzahat') return isPizzaHatUnlocked(pubkey);
     if (slot === 'hat' || slot === 'bottom' || slot === 'furniture') return isFishingItemUnlocked(value);
-    return isAuraUnlocked(value);
+    if (slot === 'aura') return isAuraUnlocked(value);
+    return false; // earn-only cosmetic not yet unlocked
   }
   if (slot === 'furniture' && (PLANT_IDS as readonly string[]).includes(value) && pubkey) {
     if (getFreeFlowerForPubkey(pubkey) === value) return true;

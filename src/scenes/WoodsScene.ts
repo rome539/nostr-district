@@ -32,9 +32,9 @@ import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
 import { incrementLegendaryCatch, incrementCoelacanth } from '../stores/fishingUnlockStore';
-import { ITEM_BY_FISH_NAME, FISH_KEEP_CHANCE } from '../stores/tradeItemStore';
+import { ITEM_BY_FISH_NAME, receiveMintedEvent } from '../stores/tradeItemStore';
+import { setFishCaughtHandler, sendFishCatchRequest, FishCaughtMsg } from '../nostr/presenceService';
 import { ScavengeSystem } from './ScavengeSystem';
-import { sendItemMintRequest } from '../nostr/presenceService';
 
 const WOODS_ACCENT = '#aaff44';
 
@@ -1582,6 +1582,8 @@ export class WoodsScene extends BaseScene {
     const _lineColor   = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 80) % 360) / 360, 0.7, 0.75).color : _skin.line;
     const _bobberColor = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 120) % 360) / 360, 0.9, 0.6).color : _skin.bobber;
 
+    const _isLeviathan = _rodSkinKey === 'leviathan';
+
     this.fishingLineGraphics.lineStyle(3, _gripColor, 1);
     this.fishingLineGraphics.beginPath();
     this.fishingLineGraphics.moveTo(gripX, gripY);
@@ -1593,6 +1595,32 @@ export class WoodsScene extends BaseScene {
     this.fishingLineGraphics.lineTo(rodTipX, rodTipY);
     this.fishingLineGraphics.strokePath();
 
+    if (_isLeviathan) {
+      // Sea-monster spine: bone spikes along the rod + kelp wraps on the grip.
+      const sx = gripX - 8, sy = gripY - 20;                       // tip-segment start
+      const dx = rodTipX - sx, dy = rodTipY - sy;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;                         // normal (spike direction)
+      this.fishingLineGraphics.fillStyle(0xe8e0d0, 1);             // bone
+      for (const t of [0.25, 0.45, 0.65, 0.85]) {
+        const bx = sx + dx * t, by = sy + dy * t;
+        const sp = 5 - t * 2;                                      // spikes shrink toward the tip
+        this.fishingLineGraphics.fillTriangle(
+          bx - (dx / len) * 1.6, by - (dy / len) * 1.6,
+          bx + (dx / len) * 1.6, by + (dy / len) * 1.6,
+          bx + nx * sp, by + ny * sp,
+        );
+      }
+      this.fishingLineGraphics.lineStyle(2, 0x1e4034, 1);          // kelp wraps
+      for (const t of [0.35, 0.7]) {
+        const kx = gripX + (-8) * t, ky = gripY + (-20) * t;
+        this.fishingLineGraphics.beginPath();
+        this.fishingLineGraphics.moveTo(kx - 2.5, ky - 1);
+        this.fishingLineGraphics.lineTo(kx + 2.5, ky + 1);
+        this.fishingLineGraphics.strokePath();
+      }
+    }
+
     // Fishing line from rod tip to bobber
     this.fishingLineGraphics.lineStyle(1, _lineColor, 0.7);
     this.fishingLineGraphics.beginPath();
@@ -1602,10 +1630,21 @@ export class WoodsScene extends BaseScene {
 
     // Bobber float
     const bobColor = isBite ? 0xff4444 : _bobberColor;
-    this.fishingLineGraphics.fillStyle(bobColor, 0.9);
-    this.fishingLineGraphics.fillRect(bobberX - 2, bobberY - 4, 5, 4); // top (red/orange)
-    this.fishingLineGraphics.fillStyle(0xf0f0f0, 0.85);
-    this.fishingLineGraphics.fillRect(bobberX - 2, bobberY, 5, 4);     // bottom (white)
+    if (_isLeviathan) {
+      // Leviathan bobber: a slit-pupil eye watching the water, glow pulsing with the bob.
+      const glow = 0.22 + Math.sin(this.fishingBobPhase * 1.4) * 0.08;
+      this.fishingLineGraphics.fillStyle(isBite ? 0xff4444 : 0x40e8ff, glow);
+      this.fishingLineGraphics.fillCircle(bobberX, bobberY, 6);
+      this.fishingLineGraphics.fillStyle(0xd8efe2, 0.95);          // eyeball
+      this.fishingLineGraphics.fillCircle(bobberX, bobberY, 3.4);
+      this.fishingLineGraphics.fillStyle(isBite ? 0xc02020 : 0x0a2018, 1); // vertical slit pupil
+      this.fishingLineGraphics.fillRect(bobberX - 0.7, bobberY - 2.4, 1.5, 4.8);
+    } else {
+      this.fishingLineGraphics.fillStyle(bobColor, 0.9);
+      this.fishingLineGraphics.fillRect(bobberX - 2, bobberY - 4, 5, 4); // top (red/orange)
+      this.fishingLineGraphics.fillStyle(0xf0f0f0, 0.85);
+      this.fishingLineGraphics.fillRect(bobberX - 2, bobberY, 5, 4);     // bottom (white)
+    }
 
     // Water rings around bobber
     const ringAlpha = 0.08 + Math.sin(this.fishingBobPhase * 0.7) * 0.04;
@@ -1666,25 +1705,41 @@ export class WoodsScene extends BaseScene {
   }
 
   private reelIn(): void {
-    const table = WoodsScene.FISH_TABLE;
-    // Weighted: 0.15% legendary, 24.85% junk, 25% rare, 50% common
-    const roll = Math.random();
-    let catch_: typeof table[number];
-    if (roll < 0.0015) {
-      const legendary = table.filter(f => 'legendary' in f && f.legendary);
-      catch_ = legendary[Math.floor(Math.random() * legendary.length)];
-    } else if (roll < 0.25) {
-      const junk = table.filter(f => f.junk);
-      catch_ = junk[Math.floor(Math.random() * junk.length)];
-    } else if (roll < 0.50) {
-      const rare = table.filter(f => f.rare);
-      catch_ = rare[Math.floor(Math.random() * rare.length)];
-    } else {
-      const common = table.filter(f => !f.rare && !f.junk && !('legendary' in f && f.legendary));
-      catch_ = common[Math.floor(Math.random() * common.length)];
-    }
+    // SERVER-AUTHORITATIVE: we only tell the server "I reeled in" — it rolls the
+    // tier odds, picks the fish, rolls the keep-chance, mints, and answers with
+    // fish_caught. The client cannot influence (or forge) what was caught.
+    const timeout = this.time.delayedCall(5000, () => {
+      setFishCaughtHandler(null);
+      if (this.scene.isActive()) this.chatUI.addMessage('system', '* the fish got away...', WOODS_ACCENT);
+    });
+    setFishCaughtHandler((res) => {
+      timeout.remove(false);
+      setFishCaughtHandler(null);
+      this.handleServerCatch(res);
+    });
+    sendFishCatchRequest();
+    this.resetFishingState();
+  }
 
-    const isLegendary = 'legendary' in catch_ && catch_.legendary;
+  /** Render the server's catch verdict (message, lore, inventory add, legendary fanfare). */
+  private handleServerCatch(res: FishCaughtMsg): void {
+    // Always add a kept fish to the inventory, even if we've left the woods.
+    if (res.kept && res.event) {
+      receiveMintedEvent(res.event, true);
+      window.dispatchEvent(new CustomEvent('nd-inventory-update'));
+    }
+    if (!this.scene.isActive()) return;
+
+    if (res.escaped || !res.itemId) {
+      this.chatUI.addMessage('system', '* the fish got away...', WOODS_ACCENT);
+      return;
+    }
+    // Map the server's item id back to the display table entry (name/kg/lore).
+    const fishName = Object.keys(ITEM_BY_FISH_NAME).find(n => ITEM_BY_FISH_NAME[n].id === res.itemId);
+    const catch_ = WoodsScene.FISH_TABLE.find(f => f.name === fishName);
+    if (!catch_) { this.chatUI.addMessage('system', '* the fish got away...', WOODS_ACCENT); return; }
+
+    const isLegendary = 'legendary' in catch_ && !!catch_.legendary;
     const msg = isLegendary
       ? `* pulled a ${catch_.name} out of the lake?! (${catch_.kg}kg) ✦✦✦`
       : catch_.junk
@@ -1700,18 +1755,12 @@ export class WoodsScene extends BaseScene {
         this.chatUI.addMessage('system', `"${catch_.lore}"`, '#7a9a7a');
       });
     }
-    // ── Trade inventory: probabilistic keep ───────────────────────────────────
-    const itemDef = ITEM_BY_FISH_NAME[catch_.name];
-    if (itemDef) {
-      const rarity = isLegendary ? 'legendary' : catch_.rare ? 'rare' : catch_.junk ? 'junk' : 'common';
-      const keepChance = FISH_KEEP_CHANCE[rarity] ?? 0;
-      if (Math.random() < keepChance) {
-        sendItemMintRequest(itemDef.id, 'caught');
-        if (!isLegendary) {
-          this.time.delayedCall(800, () => {
-            this.chatUI.addMessage('system', `📦 ${catch_.name} added to your collection.`, '#80c8ff');
-          });
-        }
+    if (res.kept) {
+      this.snd.itemReward();
+      if (!isLegendary) {
+        this.time.delayedCall(800, () => {
+          this.chatUI.addMessage('system', `📦 ${catch_.name} added to your collection.`, '#80c8ff');
+        });
       }
     }
 
@@ -1723,7 +1772,6 @@ export class WoodsScene extends BaseScene {
       const lore = 'lore' in catch_ ? catch_.lore : '';
       this.showLegendaryPostPrompt(catch_.name, catch_.kg, flavor, lore);
     }
-    this.resetFishingState();
   }
 
   private showLegendaryPostPrompt(name: string, kg: string, flavor: string, lore: string): void {

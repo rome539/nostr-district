@@ -22,7 +22,7 @@ export interface AvatarConfig {
   chatColor: string;
   rodSkin: string;
   nameAnim: '' | 'bob' | 'pulse' | 'jitter' | 'zoom' | 'swing' | 'wave' | 'glow';
-  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow';
+  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow' | 'runes' | 'bats' | 'snow' | 'fireworks';
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -106,7 +106,9 @@ export const AVATAR_OPTIONS = {
   hair: ['none', 'short', 'mohawk', 'long', 'ponytail', 'spiky', 'buzz', 'afro', 'curtains', 'mullet', 'bun', 'grease', 'swept', 'pigtails', 'horseshoe', 'part', 'partbeard', 'braid'] as const,
   top: ['tshirt', 'bitcoinshirt', 'ostrichshirt', 'camoshirt', 'camolongsleeve', 'vjacket', 'travelercoat', 'twotoneshirt', 'twotonelongsleeve', 'bannercoat', 'tunic', 'pizzashirt', 'polo', 'turtleneck', 'vest', 'tank', 'croptop', 'jersey', 'longsleeve', 'flannel', 'hoodie', 'bomber', 'jacket', 'dress', 'trenchcoat', 'robe', 'skindress'] as const,
   bottom: ['pants', 'jeans', 'shorts', 'skirt', 'miniskirt', 'cargopants', 'splitlinepants', 'carnivalpants', 'explorerpants', 'camopants', 'camoshorts', 'cargoshorts', 'overalls', 'baggyjeans', 'trousers', 'utilitypants'] as const,
-  hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'safarihat', 'beasthat', 'arenahelm', 'crown', 'crown_purple', 'crown_silver', 'crown_bronze', 'wizard', 'ostrichhat', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
+  // 'ostrichhat' is intentionally absent: it's the Nostr Day set reward (earn-gated
+  // via the market CATALOG, like fishhat/pizzahat), not a free option.
+  hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'safarihat', 'beasthat', 'arenahelm', 'crown', 'crown_purple', 'crown_silver', 'crown_bronze', 'wizard', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
   accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'guyfaux', 'hockeymask', 'onimask', 'onimaskblue', 'onimaskgreen', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape', 'embercloak', 'wanderhood', 'battlecloak', 'arenaguard', 'sandcloak', 'ostirchfloatie', 'ballon', 'ballonbitcoin', 'ballonostrich'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross'] as const,
 };

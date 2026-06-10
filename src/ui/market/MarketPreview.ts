@@ -925,15 +925,45 @@ export class MarketPreview {
 
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     const S = 3;
+    const isLeviathan = rodSkin === 'leviathan';
     ctx.strokeStyle = col(0,  skin.grip);  ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(34*S, 52*S); ctx.lineTo(24*S, 32*S); ctx.stroke();
     ctx.strokeStyle = col(40, skin.tip);   ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(24*S, 32*S); ctx.lineTo(12*S, 8*S);  ctx.stroke();
+    if (isLeviathan) {
+      // Bone spines along the rod + kelp wraps (matches the in-game leviathan rod)
+      const sx = 24*S, sy = 32*S, dx = 12*S - sx, dy = 8*S - sy;
+      const len = Math.hypot(dx, dy), nx = -dy/len, ny = dx/len;
+      ctx.fillStyle = '#e8e0d0';
+      for (const t of [0.25, 0.45, 0.65, 0.85]) {
+        const bx = sx + dx*t, by = sy + dy*t, sp = (5 - t*2) * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(bx - (dx/len)*4, by - (dy/len)*4);
+        ctx.lineTo(bx + (dx/len)*4, by + (dy/len)*4);
+        ctx.lineTo(bx + nx*sp, by + ny*sp);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = '#1e4034'; ctx.lineWidth = 4;
+      for (const t of [0.35, 0.7]) {
+        const kx = 34*S - 10*S*t, ky = 52*S - 20*S*t;
+        ctx.beginPath(); ctx.moveTo(kx - 6, ky - 2); ctx.lineTo(kx + 6, ky + 2); ctx.stroke();
+      }
+    }
     ctx.strokeStyle = col(80, skin.line);  ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
     ctx.beginPath(); ctx.moveTo(12*S, 8*S);  ctx.lineTo(3*S,  46*S); ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = col(120, skin.bobber); ctx.fillRect(2*S, 43*S, 4*S, 4*S);
-    ctx.fillStyle = '#f0f0f0';             ctx.fillRect(2*S, 47*S, 4*S, 4*S);
+    if (isLeviathan) {
+      // Slit-pupil eye bobber
+      ctx.fillStyle = 'rgba(64,232,255,0.28)';
+      ctx.beginPath(); ctx.arc(4*S, 46*S, 12, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#d8efe2';
+      ctx.beginPath(); ctx.arc(4*S, 46*S, 7, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#0a2018';
+      ctx.fillRect(4*S - 1.5, 46*S - 5, 3, 10);
+    } else {
+      ctx.fillStyle = col(120, skin.bobber); ctx.fillRect(2*S, 43*S, 4*S, 4*S);
+      ctx.fillStyle = '#f0f0f0';             ctx.fillRect(2*S, 47*S, 4*S, 4*S);
+    }
     ctx.strokeStyle = '#5dcaa550'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
     ctx.beginPath(); ctx.ellipse(4*S, 51*S, 15, 4, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
