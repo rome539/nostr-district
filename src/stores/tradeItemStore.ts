@@ -1339,9 +1339,11 @@ export async function sendItemDirect(instanceId: string, toPubkey: string, _note
 
 // ── Fish keep probabilities ───────────────────────────────────────────────────
 
+// NOTE: documentation only — the AUTHORITATIVE keep-chances live in server.ts
+// (FISH_KEEP); the server rolls every catch. Kept in sync for reference.
 export const FISH_KEEP_CHANCE: Record<string, number> = {
   legendary: 1.0,
-  rare:      0.10,
+  rare:      0.05,
   common:    0.05,
   junk:      0.05,
 };

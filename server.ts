@@ -197,7 +197,9 @@ const FISH_TIERS: Record<string, string[]> = {
   junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern'],
   legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor'],
 };
-const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.10, common: 0.05, junk: 0.05 };
+// rare keep was 0.10 at launch, which made kept rares exactly as common as kept
+// commons (25%×10% = 50%×5%). Halved so rares are genuinely 2× scarcer in the bag.
+const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.05, common: 0.05, junk: 0.05 };
 
 function rollFishCatch(): { itemId: string; tier: string; kept: boolean } {
   const roll = Math.random();
