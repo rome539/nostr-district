@@ -22,7 +22,7 @@ export interface AvatarConfig {
   chatColor: string;
   rodSkin: string;
   nameAnim: '' | 'bob' | 'pulse' | 'jitter' | 'zoom' | 'swing' | 'wave' | 'glow';
-  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow' | 'runes' | 'bats' | 'snow' | 'fireworks';
+  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow' | 'runes' | 'bats' | 'snow' | 'fireworks' | 'steam';
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {

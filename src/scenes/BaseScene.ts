@@ -83,7 +83,7 @@ import { receiveMintedEvent, fetchInventoryFromRelays } from '../stores/tradeIte
 import { setItemMintedHandler as _setMintHandler, setItemReceivedHandler } from '../nostr/presenceService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
-import { getRainbowColor, isAnimatedColor, getAnimatedColor } from '../stores/marketStore';
+import { getRainbowColor, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops } from '../stores/marketStore';
 import { MarketPanel } from '../ui/MarketPanel';
 import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
@@ -136,6 +136,26 @@ function makeEyeVfxConfig(type: string, s: number): Phaser.Types.GameObjects.Par
     };
     default: return { frequency: 99999, quantity: 0 };
   }
+}
+
+// The ₿ Bullion name color (Satoshi's Vault reward) brackets the name with ₿.
+// Idempotent: strips any existing wrap first, so re-applying every frame is safe.
+export function bullionName(name: string, nameColor?: string): string {
+  const base = name.replace(/^₿ | ₿$/g, '');
+  return nameColor === 'bullion' ? `₿ ${base} ₿` : base;
+}
+
+// Paint a gradient name color (e.g. ⛏ Halving) as a horizontal gradient that flows
+// left→right across the text. Returns false if it couldn't (caller falls back).
+function applyNameGradient(text: Phaser.GameObjects.Text, value: string, time: number): boolean {
+  const w = text.width;
+  if (!w) return false;
+  const stops = getGradientStops(value, time);
+  if (!stops.length) return false;
+  const grad = text.context.createLinearGradient(0, 0, w, 0);
+  for (const s of stops) grad.addColorStop(s.pos, s.color);
+  text.setFill(grad); // Phaser Text.setFill accepts a CanvasGradient
+  return true;
 }
 
 function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
@@ -271,6 +291,19 @@ function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Parti
       gravityY:  r(11),
       emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(r(-18), r(-34), r(36), r(8)) } as any,
       blendMode: 'ADD',
+    };
+    case 'steam': return { // Greasy Spoon (Eats) set — soft ramen-steam wisps rising + spreading
+      speed:    { min: r(5), max: r(15) },
+      angle:    { min: 258, max: 282 },
+      lifespan: { min: 1000, max: 2000 },
+      scale:    { start: 0.6, end: 2.6 },
+      alpha:    { start: 0.42, end: 0 },
+      tint:     [0xffffff, 0xeaeaf2, 0xd2d2de],
+      frequency: 150,
+      quantity:  1,
+      gravityY:  r(-10),
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(r(-7), r(-3), r(14), r(6)) } as any,
+      blendMode: 'NORMAL',
     };
     case 'fireworks': return { // Independence set — pops ABOVE the head, clear of the sprite
       speed:    { min: r(40), max: r(75) },
@@ -802,8 +835,13 @@ export abstract class BaseScene extends Phaser.Scene {
       if (o.avatar) {
         const oa = deserializeAvatar(o.avatar);
         if (oa) {
+          // ₿ Bullion name wrap (before name-motion so a wave set rebuilds with it)
+          const wantN = bullionName(o.nameText.text, oa.nameColor);
+          if (o.nameText.text !== wantN) o.nameText.setText(wantN);
+
           // Color animation
-          if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
+          if (oa.nameColor && isGradientColor(oa.nameColor)) applyNameGradient(o.nameText, oa.nameColor, time);
+          else if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
 
           // Name tag motion
           if (oa.nameAnim) {
@@ -883,6 +921,7 @@ export abstract class BaseScene extends Phaser.Scene {
             } else {
               entry.emitter.setPosition(nx, ny);
             }
+            entry.emitter.setDepth(o.sprite.depth + 1); // track Y-sorted depth (room), not fixed
           } else if (!otherStill || !oa.aura || !nearEnough) {
             const entry = this._otherAuraMap.get(pk);
             if (entry) { entry.emitter.destroy(); this._otherAuraMap.delete(pk); }
@@ -939,9 +978,17 @@ export abstract class BaseScene extends Phaser.Scene {
   protected updateLocalNameColor(time: number, delta = 16): void {
     const av = getAvatar();
 
+    // ₿ Bullion name wrap (applied before name-motion so the wave set rebuilds with it)
+    if (this.playerName) {
+      const want = bullionName(this.playerName.text, av.nameColor);
+      if (this.playerName.text !== want) this.playerName.setText(want);
+    }
+
     // Color animation
     if (av.nameColor) {
-      if (isAnimatedColor(av.nameColor)) {
+      if (isGradientColor(av.nameColor) && this.playerName) {
+        applyNameGradient(this.playerName, av.nameColor, time);
+      } else if (isAnimatedColor(av.nameColor)) {
         this.playerName?.setColor(getAnimatedColor(av.nameColor, time));
       } else {
         const current = this.playerName?.style.color;
@@ -1020,6 +1067,10 @@ export abstract class BaseScene extends Phaser.Scene {
         } else {
           this._localAuraEmitter.setPosition(px, py);
         }
+        // Sit the aura just in front of the player. Scenes that depth-sort by Y (the
+        // room) put the sprite at depth≈y (~hundreds); a fixed depth would bury the
+        // aura behind the floor/furniture (smoke fogging the room, steam behind you).
+        this._localAuraEmitter.setDepth(this.playerSprite.depth + 1);
       } else if (!localStill && this._localAuraEmitter) {
         this._localAuraEmitter.destroy();
         this._localAuraEmitter = null;
@@ -1537,14 +1588,17 @@ export abstract class BaseScene extends Phaser.Scene {
           ? (isAnimatedColor(myAvatar.chatColor) ? getAnimatedColor(myAvatar.chatColor, Date.now()) : myAvatar.chatColor)
           : accent;
         let senderChatColor = P.lpurp;
+        let senderNameColor: string | undefined = myAvatar.nameColor; // mine; overwritten for others
         if (!isMe) {
           const o = this.otherPlayers.get(pk);
           if (o?.avatar) {
             const oa = deserializeAvatar(o.avatar);
             if (oa?.chatColor) senderChatColor = isAnimatedColor(oa.chatColor) ? getAnimatedColor(oa.chatColor, Date.now()) : oa.chatColor;
+            senderNameColor = oa?.nameColor;
           }
         }
-        this.chatUI.addMessage(name, text, isMe ? myChatColor : senderChatColor, pk, emojis, isMe);
+        // ₿ Bullion holders get their chat name bracketed too
+        this.chatUI.addMessage(bullionName(name, senderNameColor), text, isMe ? myChatColor : senderChatColor, pk, emojis, isMe);
         if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
         const by = this.getBubbleYOffset();
         if (isMe) {

@@ -8,7 +8,7 @@
 import { authStore } from '../../stores/authStore';
 import { getAvatar, AvatarConfig } from '../../stores/avatarStore';
 import { renderHubSprite } from '../../entities/AvatarRenderer';
-import { MarketItem, isAnimatedColor, getAnimatedColor, ROD_SKINS } from '../../stores/marketStore';
+import { MarketItem, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops, ROD_SKINS } from '../../stores/marketStore';
 
 const SLOT_BADGE = `color:var(--nd-subtext);background:color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);`;
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
@@ -170,7 +170,7 @@ export class MarketPreview {
     MarketPreview.cancelAnim();
 
     if (item.slot === 'nameColor' || item.slot === 'chatColor') {
-      const makeCanvas = (col: string) => MarketPreview._makeColorCanvas(getAvatar(), col);
+      const makeCanvas = (col: string) => MarketPreview._makeColorCanvas(getAvatar(), col, item.value);
       if (isAnimatedColor(item.value)) {
         const loop = () => {
           MarketPreview._setCanvas(makeCanvas(getAnimatedColor(item.value, Date.now())));
@@ -182,11 +182,15 @@ export class MarketPreview {
       }
     } else if (item.slot === 'nameAnim') {
       const avatar = getAvatar();
-      const color  = avatar.nameColor || '#ffffff';
+      const rawColor = avatar.nameColor || '#ffffff';
       const loop = () => {
         const t = Date.now();
+        // Resolve animated/gradient name colors (bullion/halving/fire/…) to a real CSS
+        // color — passing the raw value to canvas fillStyle renders nothing (broken tag).
+        const color = isAnimatedColor(rawColor) ? getAnimatedColor(rawColor, t) : rawColor;
         let tagTransform: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[] } = {};
-        const name = (authStore.getState().displayName ?? 'Player').slice(0, 14);
+        let name = (authStore.getState().displayName ?? 'Player').slice(0, 14);
+        if (rawColor === 'bullion') name = `₿ ${name} ₿`; // match the wrapped tag (wave offsets)
         switch (item.value) {
           case 'bob':    tagTransform = { ty: Math.sin(t / 400) * 4 }; break;
           case 'pulse':  tagTransform = { scale: 1 + Math.sin(t / 350) * 0.08 }; break;
@@ -210,7 +214,7 @@ export class MarketPreview {
             break;
           }
         }
-        MarketPreview._setCanvas(MarketPreview._makeNameTagCanvas(avatar, color, tagTransform));
+        MarketPreview._setCanvas(MarketPreview._makeNameTagCanvas(avatar, color, tagTransform, rawColor));
         MarketPreview._animId = requestAnimationFrame(loop);
       };
       loop();
@@ -705,7 +709,7 @@ export class MarketPreview {
   }
 
   /** 111×168 canvas: avatar + name-tag pill + optional chat bubble (for nameColor/chatColor). */
-  private static _makeColorCanvas(avatar: AvatarConfig, color: string): HTMLCanvasElement {
+  private static _makeColorCanvas(avatar: AvatarConfig, color: string, rawValue?: string): HTMLCanvasElement {
     const src = renderHubSprite(avatar);
     const S = 3;
     const W = src.width * S;
@@ -717,7 +721,10 @@ export class MarketPreview {
 
     const isRainbow = color === 'rainbow';
     const rawName   = authStore.getState().displayName ?? 'Player';
-    const name      = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
+    let   name      = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
+    // ₿ Bullion wraps the name — rawValue is the catalog value (animated colors are
+    // passed in pre-resolved to an hsl, so `color` alone can't reveal it's bullion).
+    if (rawValue === 'bullion') name = `₿ ${name} ₿`;
 
     const maxW = W - 8;
     let fSize  = 13;
@@ -740,8 +747,15 @@ export class MarketPreview {
         g.addColorStop(i / (a.length - 1), `hsl(${h},90%,68%)`));
       return g;
     };
+    // Flowing left→right gradient (⛏ Halving) — same traveling-gradient as in-world.
+    const gradColor = rawValue && isGradientColor(rawValue) ? rawValue : '';
+    const flowGrad = (x0: number, x1: number) => {
+      const g = ctx.createLinearGradient(x0, 0, x1, 0);
+      for (const s of getGradientStops(gradColor, Date.now())) g.addColorStop(s.pos, s.color);
+      return g;
+    };
 
-    const fill = isRainbow ? rainbowGrad(nx, nx + pw) : color;
+    const fill = isRainbow ? rainbowGrad(nx, nx + pw) : gradColor ? flowGrad(nx, nx + pw) : color;
     const isNeon = NEON_COLORS.has(color);
     ctx.fillStyle = '#0a0014ee';
     ctx.beginPath(); ctx.roundRect(nx, ny, pw, ph, 4); ctx.fill();
@@ -781,6 +795,7 @@ export class MarketPreview {
     avatar: AvatarConfig,
     color: string,
     tagTransform?: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[] },
+    rawValue?: string,
   ): HTMLCanvasElement {
     const src = renderHubSprite(avatar);
     const S = 3;
@@ -793,7 +808,8 @@ export class MarketPreview {
 
     const isRainbow = color === 'rainbow';
     const rawName   = authStore.getState().displayName ?? 'Player';
-    const name      = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
+    let   name      = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
+    if (rawValue === 'bullion') name = `₿ ${name} ₿`; // ₿ Bullion wraps the tag
 
     const maxW  = W - 8;
     let fSize   = 13;
@@ -926,6 +942,7 @@ export class MarketPreview {
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     const S = 3;
     const isLeviathan = rodSkin === 'leviathan';
+    const isCryptid   = rodSkin === 'cryptid';
     ctx.strokeStyle = col(0,  skin.grip);  ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(34*S, 52*S); ctx.lineTo(24*S, 32*S); ctx.stroke();
     ctx.strokeStyle = col(40, skin.tip);   ctx.lineWidth = 3;
@@ -960,6 +977,18 @@ export class MarketPreview {
       ctx.beginPath(); ctx.arc(4*S, 46*S, 7, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#0a2018';
       ctx.fillRect(4*S - 1.5, 46*S - 5, 3, 10);
+    } else if (isCryptid) {
+      // Bioluminescent esca lure + feeler tendrils
+      const ex = 4*S, ey = 46*S;
+      ctx.strokeStyle = '#5fff7a'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.6;
+      for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + d*7, ey + 11); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(95,255,122,0.30)';
+      ctx.beginPath(); ctx.arc(ex, ey, 14, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5fff7a';
+      ctx.beginPath(); ctx.arc(ex, ey, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(ex, ey, 2.6, 0, Math.PI*2); ctx.fill();
     } else {
       ctx.fillStyle = col(120, skin.bobber); ctx.fillRect(2*S, 43*S, 4*S, 4*S);
       ctx.fillStyle = '#f0f0f0';             ctx.fillRect(2*S, 47*S, 4*S, 4*S);

@@ -10,6 +10,7 @@ import { isAuraUnlocked } from './auraUnlockStore';
 import { isFishingItemUnlocked } from './fishingUnlockStore';
 import { isPizzaHatUnlocked } from './pizzaDayUnlockStore';
 import { isSetCosmetic, getSetCosmeticProgress } from './collectionUnlocks';
+import { hasItem as hasUnlockedItem } from './unlockStore';
 
 const OWNER_PUBKEYS = new Set([
   '5069ea44d8977e77c6aea605d0c5386b24504a3abd0fe8a3d1cf5f4cedca40a7',
@@ -59,6 +60,7 @@ export const ROD_SKINS: Record<string, RodSkinColors> = {
   leviathan:  { grip: 0x2a4a3a, tip: 0xe8e0d0, line: 0xc8d8c0, bobber: 0x6aa88a }, // The Legends
   junkyard:   { grip: 0x7a4a28, tip: 0x8a8a8a, line: 0xb0a890, bobber: 0xc8b020 }, // Bottom Feeder
   midnight:   { grip: 0x1a1430, tip: 0x2a2348, line: 0x8a86b8, bobber: 0xf0f4ff }, // Night Shift
+  cryptid:    { grip: 0x14241e, tip: 0x244a38, line: 0xa8ffce, bobber: 0x5fff7a }, // Cryptid Club — bioluminescent anglerfish lure
 };
 
 /** Returns an animated rainbow hex color based on current time. */
@@ -67,7 +69,7 @@ export function getRainbowColor(time: number): string {
   return `hsl(${hue},90%,68%)`;
 }
 
-export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', '#f0b040', '#c0c8d0']);
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', '#f0b040', '#c0c8d0']);
 
 export function isAnimatedColor(color: string): boolean {
   return ANIMATED_COLORS.has(color);
@@ -103,8 +105,64 @@ export function getAnimatedColor(color: string, time: number): string {
       const sat = 8 + t * 10;
       return `hsl(210,${sat}%,${lit}%)`;
     }
+    case 'halving': { // mempool fee colors — the gradient of pending blocks on
+      // mempool.space, drifting low-fee (teal/green) → high-fee (orange/red). A
+      // curated bitcoin-fee palette (no blues/purples), earned on the Halving.
+      const keys = [168, 110, 52, 26, 4]; // teal → green → yellow → orange → red
+      const span = (keys.length - 1) * 2; // ping-pong so teal↔red loops smoothly
+      let p = (time % 8000) / 8000 * span;
+      if (p > keys.length - 1) p = span - p;
+      p = Math.min(p, keys.length - 1 - 1e-4);
+      const i = Math.floor(p), f = p - i;
+      const hue = keys[i] + (keys[i + 1] - keys[i]) * f;
+      const lit = 52 + Math.sin(time / 200) * 7; // subtle "block settling" pulse
+      return `hsl(${hue},80%,${lit}%)`;
+    }
+    case 'bullion': { // earned bitcoin gold (Satoshi's Vault). Deep molten amber-gold
+      // with a sharp WHITE-HOT glint raking through, like light catching a coin —
+      // unmistakably treasure, and far more dramatic than the buyable Gold's matte
+      // sheen (hue stays amber-gold so it never reads as the flat Orange either).
+      const glint = Math.pow(Math.sin(time / 240) * 0.5 + 0.5, 5); // brief, sharp sparkle
+      const hue = 38 + glint * 10;  // warm amber-gold → bright gold on the flash
+      const sat = 92 - glint * 42;  // rich gold → washes toward white-gold at the glint
+      const lit = 44 + glint * 48;  // 44% deep molten → 92% white-hot glint
+      return `hsl(${hue},${sat}%,${lit}%)`;
+    }
     default: return color;
   }
+}
+
+// ── Gradient name colors ──────────────────────────────────────────────────────
+// Unlike the single-color animated set, these render as a horizontal gradient ACROSS
+// the name that FLOWS left→right over time — distinctly different from a hue cycle.
+// The name-tag (Phaser setFill) + shop preview (canvas gradient) use getGradientStops;
+// contexts that can't gradient (chat) fall back to the solid getAnimatedColor value.
+export const GRADIENT_COLORS = new Set(['halving']);
+export function isGradientColor(color: string): boolean { return GRADIENT_COLORS.has(color); }
+
+// Mempool fee hue at a continuous param t (ping-pong teal↔red, period 1).
+function feeHueAt(t: number): number {
+  const keys = [168, 110, 52, 26, 4]; // teal → green → yellow → orange → red
+  const span = (keys.length - 1) * 2;
+  let p = (((t % 1) + 1) % 1) * span;
+  if (p > keys.length - 1) p = span - p;
+  p = Math.min(p, keys.length - 1 - 1e-4);
+  const i = Math.floor(p), f = p - i;
+  return keys[i] + (keys[i + 1] - keys[i]) * f;
+}
+
+/** Fixed-position stops whose colors FLOW left→right over time — a traveling gradient.
+ *  For ⛏ Halving: mempool fee colors streaming across the name like blocks. */
+export function getGradientStops(value: string, time: number): { pos: number; color: string }[] {
+  if (value !== 'halving') return [];
+  const N = 8;
+  const out: { pos: number; color: string }[] = [];
+  for (let i = 0; i <= N; i++) {
+    const pos = i / N;
+    const hue = feeHueAt(pos * 1.3 + time / 3500); // spread across the name + time sweep
+    out.push({ pos, color: `hsl(${hue.toFixed(0)},80%,54%)` });
+  }
+  return out;
 }
 
 export const TIER_LABEL: Record<MarketItem['tier'], string> = {
@@ -304,13 +362,16 @@ export const CATALOG: MarketItem[] = [
   { id: 'aura_bats',      name: 'Bat Aura',       slot: 'aura', value: 'bats',      price: 0, tier: 'rare', earn: true },
   { id: 'aura_snow',      name: 'Snowfall Aura',  slot: 'aura', value: 'snow',      price: 0, tier: 'rare', earn: true },
   { id: 'aura_fireworks', name: 'Fireworks Aura', slot: 'aura', value: 'fireworks', price: 0, tier: 'rare', earn: true },
+  { id: 'aura_steam',     name: 'Steam Aura',     slot: 'aura', value: 'steam',     price: 0, tier: 'rare', earn: true },
   // Set-completion rods + name colors (bazaar collection rewards, never sold)
   { id: 'rod_driftwood',   name: 'Driftwood Rod',     slot: 'rodSkin',   value: 'driftwood', price: 0, tier: 'rare', earn: true },
   { id: 'rod_abyssal',     name: 'Abyssal Rod',       slot: 'rodSkin',   value: 'abyssal',   price: 0, tier: 'rare', earn: true },
   { id: 'rod_leviathan',   name: 'Leviathan Rod',     slot: 'rodSkin',   value: 'leviathan', price: 0, tier: 'rare', earn: true },
   { id: 'rod_junkyard',    name: 'Junkyard Rod',      slot: 'rodSkin',   value: 'junkyard',  price: 0, tier: 'rare', earn: true },
   { id: 'rod_midnight',    name: 'Midnight Rod',      slot: 'rodSkin',   value: 'midnight',  price: 0, tier: 'rare', earn: true },
-  { id: 'color_btcorange', name: 'Bitcoin Orange',    slot: 'nameColor', value: '#f7931a',   price: 0, tier: 'rare', earn: true },
+  { id: 'rod_cryptid',     name: 'Cryptid Rod',       slot: 'rodSkin',   value: 'cryptid',   price: 0, tier: 'rare', earn: true },
+  { id: 'color_bullion',   name: '₿ Bullion',         slot: 'nameColor', value: 'bullion',   price: 0, tier: 'rare', earn: true },
+  { id: 'color_halving',   name: '⛏ Halving',         slot: 'nameColor', value: 'halving',   price: 0, tier: 'rare', earn: true, hidden: true }, // seasonal: log in during the Halving celebration
   { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
   // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)
   { id: 'hat_ostrichhat',  name: 'Ostrich Hat',       slot: 'hat',       value: 'ostrichhat', price: 0, tier: 'rare', earn: true },
@@ -379,6 +440,8 @@ export function isOwned(slot: string, value: string): boolean {
     // Set-completion cosmetics (rods, name colors, hats): POSSESSION-BASED — usable
     // only while the player currently holds the full set; re-locks if a piece is sold.
     if (isSetCosmetic(slot, value)) return getSetCosmeticProgress(slot, value).unlocked;
+    // Permanent relay-backed seasonal unlocks (e.g. the ⛏ Halving name color).
+    if (hasUnlockedItem(key)) return true;
     // Pizza hat is a special seasonal unlock (May 22 login), not a fishing reward.
     if (slot === 'hat' && value === 'pizzahat') return isPizzaHatUnlocked(pubkey);
     if (slot === 'hat' || slot === 'bottom' || slot === 'furniture') return isFishingItemUnlocked(value);

@@ -1583,6 +1583,7 @@ export class WoodsScene extends BaseScene {
     const _bobberColor = _isLegendary ? Phaser.Display.Color.HSLToColor(((_hue + 120) % 360) / 360, 0.9, 0.6).color : _skin.bobber;
 
     const _isLeviathan = _rodSkinKey === 'leviathan';
+    const _isCryptid   = _rodSkinKey === 'cryptid';
 
     this.fishingLineGraphics.lineStyle(3, _gripColor, 1);
     this.fishingLineGraphics.beginPath();
@@ -1639,6 +1640,32 @@ export class WoodsScene extends BaseScene {
       this.fishingLineGraphics.fillCircle(bobberX, bobberY, 3.4);
       this.fishingLineGraphics.fillStyle(isBite ? 0xc02020 : 0x0a2018, 1); // vertical slit pupil
       this.fishingLineGraphics.fillRect(bobberX - 0.7, bobberY - 2.4, 1.5, 4.8);
+    } else if (_isCryptid) {
+      // Cryptid lure: a bioluminescent anglerfish esca pulsing on a drooping stalk,
+      // with two feeler tendrils. Flares red-hot on a bite.
+      const pulse  = Math.sin(this.fishingBobPhase * 1.6) * 0.5 + 0.5;
+      const escaCol = isBite ? 0xff5050 : 0x5fff7a;
+      // stalk drooping up to the line
+      this.fishingLineGraphics.lineStyle(1.2, 0x244a38, 1);
+      this.fishingLineGraphics.beginPath();
+      this.fishingLineGraphics.moveTo(bobberX, bobberY - 7);
+      this.fishingLineGraphics.lineTo(bobberX, bobberY);
+      this.fishingLineGraphics.strokePath();
+      // feeler tendrils
+      this.fishingLineGraphics.lineStyle(0.6, escaCol, 0.5 + pulse * 0.3);
+      for (const dir of [-1, 1]) {
+        this.fishingLineGraphics.beginPath();
+        this.fishingLineGraphics.moveTo(bobberX, bobberY);
+        this.fishingLineGraphics.lineTo(bobberX + dir * (3 + pulse), bobberY + 4 + pulse * 2);
+        this.fishingLineGraphics.strokePath();
+      }
+      // glowing esca bulb — outer halo + bright core
+      this.fishingLineGraphics.fillStyle(escaCol, 0.18 + pulse * 0.22);
+      this.fishingLineGraphics.fillCircle(bobberX, bobberY, 6 + pulse * 2);
+      this.fishingLineGraphics.fillStyle(escaCol, 0.85);
+      this.fishingLineGraphics.fillCircle(bobberX, bobberY, 2.6);
+      this.fishingLineGraphics.fillStyle(0xffffff, 0.9);
+      this.fishingLineGraphics.fillCircle(bobberX, bobberY, 1.1);
     } else {
       this.fishingLineGraphics.fillStyle(bobColor, 0.9);
       this.fishingLineGraphics.fillRect(bobberX - 2, bobberY - 4, 5, 4); // top (red/orange)

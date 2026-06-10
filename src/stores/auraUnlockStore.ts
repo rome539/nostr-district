@@ -23,12 +23,12 @@ import {
  */
 
 const THRESHOLDS: Record<string, number> = { ice: 7, void: 30, rainbow: 4 };
-const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold', 'runes', 'bats', 'snow', 'fireworks'];
+const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold', 'runes', 'bats', 'snow', 'fireworks', 'steam'];
 
 const LABELS: Record<string, string> = {
   smoke: 'Smoke Aura', fire: 'Fire Aura', sparkle: 'Sparkle Aura', ice: 'Ice Aura',
   electric: 'Electric Aura', void: 'Void Aura', gold: 'Gold Aura', rainbow: 'Rainbow Aura',
-  runes: 'Runes Aura', bats: 'Bat Aura', snow: 'Snowfall Aura', fireworks: 'Fireworks Aura',
+  runes: 'Runes Aura', bats: 'Bat Aura', snow: 'Snowfall Aura', fireworks: 'Fireworks Aura', steam: 'Steam Aura',
 };
 
 export const AURA_HINTS: Record<string, string> = {
@@ -44,6 +44,7 @@ export const AURA_HINTS: Record<string, string> = {
   bats:     'Complete the "All Hallows" set (Halloween drops)',
   snow:     'Complete the "Cold Storage" set (winter drops)',
   fireworks:'Complete the "Independence" set (July 4th drops)',
+  steam:    'Complete the "Greasy Spoon" set (every Eats item)',
 };
 
 const BASE_AURAS = ['smoke', 'fire', 'sparkle', 'ice'];

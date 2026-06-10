@@ -109,6 +109,7 @@ export class HubScene extends BaseScene {
     // for Bitcoin Pizza Day. Idempotent so repeat boots on the same day are
     // a no-op after the first toast.
     if (auth.pubkey) tryGrantPizzaHat(auth.pubkey);
+    import('../stores/halvingUnlockStore').then(({ tryGrantHalvingColor }) => tryGrantHalvingColor());
     this.startGame();
   }
 

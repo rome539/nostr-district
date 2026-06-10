@@ -317,6 +317,13 @@ const VALID_ITEM_IDS = new Set([
   'oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man',
   // Critters
   'cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_roost_bat','cr_night_owl',
+  // Evergreen expansion (+36)
+  'hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day',
+  'st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring',
+  'lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed',
+  'oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire',
+  'cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake',
+  'eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special',
   // Holiday items
   'hol_candy_corn','hol_skull_candle','hol_black_cat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_phantom_key','hol_reaper_coin',
   'hol_sparkler','hol_flag_pin','hol_firecracker','hol_bottle_rocket','hol_liberty_coin','hol_eagle_feather',
@@ -336,6 +343,7 @@ const ITEM_ROOM_WHITELIST: Record<string, string[]> = {
   lore:     ['woods', 'alley', 'lounge', 'relay', 'cabin'],
   occult:   ['alley', 'cabin'],
   critters: ['hub', 'alley', 'woods', 'lounge'],
+  eats:     ['hub', 'alley', 'lounge'], // street food — downtown
   holiday:  ['hub', 'alley', 'woods', 'cabin', 'lounge', 'relay'], // holiday drops spawn anywhere
 };
 
@@ -347,6 +355,7 @@ function getCategoryFromId(itemId: string): string {
   if (itemId.startsWith('lo_'))    return 'lore';
   if (itemId.startsWith('oc_'))    return 'occult';
   if (itemId.startsWith('cr_'))    return 'critters';
+  if (itemId.startsWith('eats_'))  return 'eats';
   return '';
 }
 

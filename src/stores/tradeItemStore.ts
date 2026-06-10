@@ -11,7 +11,7 @@ import { DEFAULT_RELAYS } from '../nostr/relayManager';
 // ── Item definitions ──────────────────────────────────────────────────────────
 
 export type ItemRarity = 'common' | 'rare' | 'legendary' | 'junk';
-export type ItemCategory = 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'holiday';
+export type ItemCategory = 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'eats' | 'holiday';
 
 export interface ItemDef {
   id: string;
@@ -156,6 +156,50 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'hol_relay_stone',    name: 'Relay Stone',        category: 'holiday', rarity: 'rare',      emoji: '🪨', description: 'Carries your words to every shore.' },
   { id: 'hol_zap_bolt',       name: 'Zap Bolt',           category: 'holiday', rarity: 'rare',      emoji: '💜', description: 'A tip with no middleman.' },
   { id: 'hol_first_note',     name: 'First Note',         category: 'holiday', rarity: 'legendary', emoji: '📝', description: 'kind:1 — the first words ever spoken on the network.' },
+
+  // ── Evergreen expansion (+36 across the non-holiday categories) ───────────────
+  // Hardware (+6) — feeds Dead Hardware / electric aura
+  { id: 'hw_ram_stick',       name: 'RAM Stick',          category: 'hardware', rarity: 'common',    emoji: '💿', description: "Sixteen gigs of nobody's business." },
+  { id: 'hw_capacitor',       name: 'Capacitor',          category: 'hardware', rarity: 'common',    emoji: '🔋', description: 'Still holds a charge. Careful.' },
+  { id: 'hw_ribbon_cable',    name: 'Ribbon Cable',       category: 'hardware', rarity: 'common',    emoji: '🧵', description: 'Rainbow flat. Connects the unspeakable.' },
+  { id: 'hw_gpu_card',        name: 'GPU Card',           category: 'hardware', rarity: 'rare',      emoji: '🖥️', description: 'Mined a fortune before it cooked.' },
+  { id: 'hw_oscilloscope',    name: 'Oscilloscope',       category: 'hardware', rarity: 'rare',      emoji: '📈', description: "Reads signals that shouldn't exist." },
+  { id: 'hw_zero_day',        name: 'Zero-Day',           category: 'hardware', rarity: 'legendary', emoji: '💣', description: 'Unpatched. Unpriced. Unforgiving.' },
+  // Street (+6) — feeds Off the Books / smoke aura
+  { id: 'st_brass_knuckles',  name: 'Brass Knuckles',     category: 'street',   rarity: 'common',    emoji: '🥊', description: 'Persuasion, the analog way.' },
+  { id: 'st_switchblade',     name: 'Switchblade',        category: 'street',   rarity: 'common',    emoji: '🔪', description: 'Spring-loaded. Quick conversations.' },
+  { id: 'st_burner_sim',      name: 'Burner SIM',         category: 'street',   rarity: 'common',    emoji: '📲', description: 'Fresh number. No history. Yet.' },
+  { id: 'st_stash_key',       name: 'Stash Key',          category: 'street',   rarity: 'rare',      emoji: '🗝️', description: 'Opens a locker nobody admits renting.' },
+  { id: 'st_wiretap',         name: 'Wiretap',            category: 'street',   rarity: 'rare',      emoji: '🎧', description: "You're not supposed to hear this." },
+  { id: 'st_dons_ring',       name: "Don's Ring",         category: 'street',   rarity: 'legendary', emoji: '💍', description: 'Kiss it or lose the hand.' },
+  // Lore (+6) — feeds The Canon / fire aura
+  { id: 'lo_paper_wallet',    name: 'Paper Wallet',       category: 'lore',     rarity: 'common',    emoji: '📜', description: 'Cold storage, literally.' },
+  { id: 'lo_mempool_vial',    name: 'Mempool Vial',       category: 'lore',     rarity: 'common',    emoji: '🧪', description: 'Unconfirmed. Suspended in glass.' },
+  { id: 'lo_hash_stone',      name: 'Hash Stone',         category: 'lore',     rarity: 'common',    emoji: '🪨', description: 'Two-five-six bits, carved deep.' },
+  { id: 'lo_pizza_receipt',   name: 'Pizza Receipt',      category: 'lore',     rarity: 'rare',      emoji: '🧾', description: '10,000 BTC. No refunds.' },
+  { id: 'lo_node_map',        name: 'Node Map',           category: 'lore',     rarity: 'rare',      emoji: '🗺️', description: 'Every relay, every hop, every watcher.' },
+  { id: 'lo_genesis_seed',    name: 'Genesis Seed',       category: 'lore',     rarity: 'legendary', emoji: '🌱', description: 'The twelve words that started it all.' },
+  // Occult (+5) — feeds The Arcane / runes aura
+  { id: 'oc_spirit_board',    name: 'Spirit Board',       category: 'occult',   rarity: 'common',    emoji: '🪧', description: "Spells out what you'd rather not know." },
+  { id: 'oc_bone_dice',       name: 'Bone Dice',          category: 'occult',   rarity: 'common',    emoji: '🎲', description: "Rolled from a saint's knuckle." },
+  { id: 'oc_the_tower',       name: 'The Tower',          category: 'occult',   rarity: 'common',    emoji: '🗼', description: 'Everything you built, falling.' },
+  { id: 'oc_voodoo_doll',     name: 'Voodoo Doll',        category: 'occult',   rarity: 'rare',      emoji: '🪆', description: 'Pins sold separately.' },
+  { id: 'oc_grimoire',        name: 'Grimoire',           category: 'occult',   rarity: 'rare',      emoji: '📕', description: 'Reading it is the first mistake.' },
+  // Critters (+5) — feeds Strays
+  { id: 'cr_street_pigeon',   name: 'Street Pigeon',      category: 'critters', rarity: 'common',    emoji: '🐦', description: 'Carries messages it never agreed to.' },
+  { id: 'cr_gutter_frog',     name: 'Gutter Frog',        category: 'critters', rarity: 'common',    emoji: '🐸', description: 'Croaks the lewd hour.' },
+  { id: 'cr_junkyard_dog',    name: 'Junkyard Dog',       category: 'critters', rarity: 'common',    emoji: '🐕', description: 'Guards nothing. Bites everything.' },
+  { id: 'cr_white_crow',      name: 'White Crow',         category: 'critters', rarity: 'rare',      emoji: '🕊️', description: 'Albino. The flock cast it out.' },
+  { id: 'cr_pipe_snake',      name: 'Pipe Snake',         category: 'critters', rarity: 'rare',      emoji: '🐍', description: 'Found in the pipes. Found you too.' },
+  // Eats (+8) — NEW category, Greasy Spoon set / steam aura
+  { id: 'eats_instant_ramen', name: 'Instant Ramen',      category: 'eats',     rarity: 'common',    emoji: '🍜', description: 'Three minutes to enlightenment.' },
+  { id: 'eats_dumpling',      name: 'Dumpling',           category: 'eats',     rarity: 'common',    emoji: '🥟', description: 'Steamed by a vendor with no name.' },
+  { id: 'eats_energy_drink',  name: 'Energy Drink',       category: 'eats',     rarity: 'common',    emoji: '🧃', description: 'Tastes like a copper wire. Works though.' },
+  { id: 'eats_cart_hotdog',   name: 'Cart Hot Dog',       category: 'eats',     rarity: 'common',    emoji: '🌭', description: "Don't ask what's in it." },
+  { id: 'eats_day_old_bagel', name: 'Day-Old Bagel',      category: 'eats',     rarity: 'junk',      emoji: '🥯', description: 'Technically food.' },
+  { id: 'eats_lucky_cat',     name: 'Lucky Cat Coin',     category: 'eats',     rarity: 'rare',      emoji: '🪙', description: 'Beckons sats. Sometimes works.' },
+  { id: 'eats_neon_sushi',    name: 'Neon Sushi',         category: 'eats',     rarity: 'rare',      emoji: '🍣', description: 'Glows faintly. Still raw.' },
+  { id: 'eats_midnight_special', name: 'Midnight Special', category: 'eats',    rarity: 'rare',      emoji: '🍲', description: 'The off-menu bowl. You have to know to ask.' },
 ];
 
 export const ITEM_BY_FISH_NAME: Record<string, ItemDef> = {
@@ -258,6 +302,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Creatures that shouldn\'t exist.',
     itemIds: ['fish_ghost_pike','fish_abyssal_anglerfish','fish_coelacanth'],
     rewardLabel: 'Cryptid Hunter',
+    rewardCosmetic: { slot: 'rodSkin', value: 'cryptid', label: 'Cryptid Rod' },
   },
   {
     id: 'set_satoshi_vault',
@@ -265,7 +310,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'Artifacts touched by the legend.',
     itemIds: ['fish_golden_satoshi','fish_love_letter','fish_enchanted_trident'],
     rewardLabel: 'Vault Keeper',
-    rewardCosmetic: { slot: 'nameColor', value: '#f7931a', label: 'Bitcoin Orange name' },
+    rewardCosmetic: { slot: 'nameColor', value: 'bullion', label: 'Bullion name' },
   },
   {
     id: 'set_deep_time',
@@ -329,6 +374,14 @@ export const ITEM_SETS: ItemSet[] = [
     itemIds: ITEM_CATALOG.filter(i => i.category === 'critters').map(i => i.id),
     rewardLabel: 'Beast Friend',
     rewardCosmetic: { slot: 'nameColor', value: '#9099a8', label: 'Alley Gray name' },
+  },
+  {
+    id: 'set_eats',
+    name: 'Greasy Spoon',
+    description: 'Every bite the district has to offer.',
+    itemIds: ITEM_CATALOG.filter(i => i.category === 'eats').map(i => i.id),
+    rewardLabel: 'Regular',
+    rewardAura: 'steam',
   },
   {
     id: 'set_spooky',
@@ -1419,11 +1472,11 @@ export function tryDailyDrop(): void {
 
 // Pool per scene — thematic items
 const SCENE_POOLS: Record<string, string[]> = {
-  hub:     ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl'], // hub allows street items + critters
-  alley:   ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat'],
-  woods:   ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl'],
-  rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl'],
-  cabin:   ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat'],
+  hub:     ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'], // hub allows street + critters + eats
+  alley:   ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
+  woods:   ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake'],
+  rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_gpu_card','hw_oscilloscope','hw_zero_day'],
+  cabin:   ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire'],
 };
 
 // ── Global scavenge spots ─────────────────────────────────────────────────────
