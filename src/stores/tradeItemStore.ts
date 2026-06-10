@@ -1449,9 +1449,9 @@ function pickWeightedFromPool(pool: string[], holiday = false): ItemDef | null {
 
 // ── Daily drop ────────────────────────────────────────────────────────────────
 
-// Weekly drop pool — no fish (fish come from fishing only), no legendary
+// Weekly drop pool — no fish (fishing only), no holiday (seasonal events only), no legendary
 const DAILY_POOL = ITEM_CATALOG.filter(i =>
-  i.category !== 'fish' && (i.rarity === 'common' || i.rarity === 'junk')
+  i.category !== 'fish' && i.category !== 'holiday' && (i.rarity === 'common' || i.rarity === 'junk')
 );
 
 // Requests a weekly drop from the server. The SERVER is the authoritative gate

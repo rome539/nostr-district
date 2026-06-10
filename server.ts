@@ -979,6 +979,11 @@ wss.on('connection', (ws) => {
         }
 
         if (acquiredFrom === 'weekly_drop') {
+          // Seasonal items come from holiday events only — never the generic weekly drop.
+          if (getCategoryFromId(itemId) === 'holiday') {
+            ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'seasonal_not_in_weekly', itemId }));
+            return;
+          }
           // Account-wide gate (not per-browser) — only one weekly drop per 7 days.
           // Fast path: in-memory/file cache for the current server lifetime.
           if (!canWeeklyDrop(myPubkey)) {
