@@ -222,7 +222,18 @@ function notifyListeners(msg: DMMessage): void {
 
 // ── Sending DMs — NIP-17 gift wrap ──
 
-export async function sendDirectMessage(recipientPubkey: string, content: string): Promise<void> {
+// Rumor kind for game-protocol payloads (trade offers/accepts/rejects, etc.).
+// Still rides inside the same NIP-17 gift wrap — encrypted + offline-deliverable —
+// but because it isn't kind 14 (chat), other Nostr clients (Damus/Primal/0xchat)
+// won't render it in the user's DM inbox as JSON gibberish.
+export const ND_PROTOCOL_KIND = 28078;
+
+/** Send a game-protocol payload (nd-item-*, …) — hidden from chat clients. */
+export function sendProtocolMessage(recipientPubkey: string, content: string): Promise<void> {
+  return sendDirectMessage(recipientPubkey, content, ND_PROTOCOL_KIND);
+}
+
+export async function sendDirectMessage(recipientPubkey: string, content: string, rumorKind: number = 14): Promise<void> {
   await ensureNostrTools();
 
   const state = authStore.getState();
@@ -233,10 +244,10 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
   const now = Math.floor(Date.now() / 1000);
   const myPubkey = state.pubkey;
 
-  // ── Build the rumor (kind:14, unsigned) ──
+  // ── Build the rumor (kind:14 chat, or ND_PROTOCOL_KIND for game payloads) ──
   const emojiTags = extractEmojiTags(content).map(e => ['emoji', e.code, e.url]);
   const rumor: any = {
-    kind: 14,
+    kind: rumorKind,
     created_at: now,
     tags: [['p', recipientPubkey], ...emojiTags],
     content,
@@ -475,7 +486,9 @@ async function handleGiftWrap(event: any): Promise<void> {
     }
 
     // ── Validate rumor ──
-    if (!rumor || rumor.kind !== 14) return;
+    // kind 14 = chat; ND_PROTOCOL_KIND = game payloads (trades). Older clients sent
+    // trades as kind 14, so both must be accepted for the 7-day history replay.
+    if (!rumor || (rumor.kind !== 14 && rumor.kind !== ND_PROTOCOL_KIND)) return;
     if (typeof rumor.content !== 'string') return;
     if (!rumor.pubkey) return;
 

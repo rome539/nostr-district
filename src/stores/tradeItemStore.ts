@@ -1693,8 +1693,8 @@ export function getPendingOutgoingInstanceIds(): Set<string> {
 // The offerer cancels their own outstanding offer — frees the item and tells the
 // recipient to drop their incoming copy (reusing the reject message they handle).
 export async function cancelTradeOffer(offer: TradeOffer): Promise<void> {
-  const { sendDirectMessage } = await import('../nostr/dmService');
-  await sendDirectMessage(offer.toPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  await sendProtocolMessage(offer.toPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
@@ -1736,8 +1736,8 @@ export async function sendTradeOffer(
 
   saveOffers([...loadOffers(), offer]);
 
-  const { sendDirectMessage } = await import('../nostr/dmService');
-  await sendDirectMessage(hex, `nd-item-offer:${JSON.stringify(offer)}`);
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  await sendProtocolMessage(hex, `nd-item-offer:${JSON.stringify(offer)}`);
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
   return true;
 }
@@ -1769,8 +1769,8 @@ export async function acceptTradeOffer(offer: TradeOffer, myInstanceId: string):
   removeItem(myInstanceId);
 
   // Notify offerer so they clear their outgoing offer
-  const { sendDirectMessage } = await import('../nostr/dmService');
-  await sendDirectMessage(offer.fromPubkey, `nd-item-offer-accept:${JSON.stringify({ offerId: offer.id })}`);
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  await sendProtocolMessage(offer.fromPubkey, `nd-item-offer-accept:${JSON.stringify({ offerId: offer.id })}`);
 
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
@@ -1779,8 +1779,8 @@ export async function acceptTradeOffer(offer: TradeOffer, myInstanceId: string):
 }
 
 export async function rejectTradeOffer(offer: TradeOffer): Promise<void> {
-  const { sendDirectMessage } = await import('../nostr/dmService');
-  await sendDirectMessage(offer.fromPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  await sendProtocolMessage(offer.fromPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
