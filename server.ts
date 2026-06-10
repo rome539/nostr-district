@@ -122,6 +122,32 @@ function recordWeeklyDrop(pubkey: string): void {
   try { writeFileSync(WEEKLY_FILE, JSON.stringify(weeklyDrops)); } catch {}
 }
 
+// The file/memory above is only a warm cache — the hosting filesystem is EPHEMERAL
+// and is wiped on every redeploy, which used to re-grant everyone a fresh weekly
+// drop after each deploy. The durable source of truth is a tiny oracle-signed
+// marker on the relays (kind 30078, d-tag `ndweekly_<pubkey>`, addressable so the
+// newest replaces the old). Checked only when the cache has no fresh entry, i.e.
+// right after a deploy — one relay query per player, then cached again.
+async function fetchWeeklyMarkerMs(pubkey: string): Promise<number> {
+  try {
+    const events = await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#d': [`ndweekly_${pubkey}`] });
+    let newest = 0;
+    for (const ev of events) if (ev?.created_at > newest) newest = ev.created_at;
+    return newest * 1000;
+  } catch { return 0; } // relays unreachable → cache-only behavior (same as before this fix)
+}
+function publishWeeklyMarker(pubkey: string): void {
+  if (!ORACLE_SK) return;
+  const ev = finalizeEvent({
+    kind: 30078,
+    pubkey: ORACLE_PUBKEY,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', `ndweekly_${pubkey}`], ['p', pubkey], ['t', 'ndweekly']],
+    content: '',
+  }, ORACLE_SK);
+  publishToRelays(ev);
+}
+
 // ── Scavenge rate limit (server-authoritative, keyed by pubkey) ───────────────
 // The client picks WHERE/WHEN spots appear (localStorage, random) — harmless. But
 // the RATE of scavenge mints is enforced here so clearing/editing localStorage can't
@@ -871,6 +897,7 @@ wss.on('connection', (ws) => {
       if (msg.type === 'item_mint_request' && myPubkey) {
         const player  = players.get(myPubkey);
         if (!player) return;
+        (async () => {
 
         const itemId      = typeof msg.itemId === 'string' ? msg.itemId : '';
         const acquiredFrom = typeof msg.acquiredFrom === 'string' ? msg.acquiredFrom : 'found';
@@ -881,12 +908,23 @@ wss.on('connection', (ws) => {
         }
 
         if (acquiredFrom === 'weekly_drop') {
-          // Account-wide gate (not per-browser) — only one weekly drop per 7 days
+          // Account-wide gate (not per-browser) — only one weekly drop per 7 days.
+          // Fast path: in-memory/file cache for the current server lifetime.
           if (!canWeeklyDrop(myPubkey)) {
             ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'weekly_already_claimed' }));
             return;
           }
+          // Durable path: the cache is wiped on every redeploy, so consult the
+          // relay marker before granting — this is what stops the "everyone gets
+          // a fresh weekly drop after each deploy" bug.
+          const lastMs = await fetchWeeklyMarkerMs(myPubkey);
+          if (Date.now() - lastMs < MS_7D) {
+            weeklyDrops[myPubkey] = lastMs; // re-warm the cache so the next check is instant
+            ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'weekly_already_claimed' }));
+            return;
+          }
           recordWeeklyDrop(myPubkey);
+          publishWeeklyMarker(myPubkey);
         } else {
           // Scene drops must come from the right room
           const category = getCategoryFromId(itemId);
@@ -916,6 +954,8 @@ wss.on('connection', (ws) => {
         console.log(`[Oracle] Minted ${itemId} for ${player.name} (${myPubkey.slice(0,8)}…)`);
         publishToRelays(event);  // server publishes directly — no client relay dependency
         ws.send(JSON.stringify({ type: 'item_minted', event }));
+
+        })().catch(() => {}); // async for the weekly relay-marker check
         return;
       }
 
