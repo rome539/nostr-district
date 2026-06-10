@@ -442,6 +442,7 @@
   "bz.price_min": "최소 1 sat 이상으로 가격을 정하세요. 무료로 주려면 교환 → \"선물하기\"를 사용하세요.",
   "bz.listing_progress": "{item} 등록 중…",
   "bz.listed_ok": "{item}을(를) {price} sats에 등록했습니다",
+  "bz.escrow_recovered": "중단된 등록에서 아이템 {n}개를 되찾았습니다",
   "bz.list_err.no_lightning_address": "판매하려면 Lightning 주소가 필요합니다 — 지갑을 열어 설정하세요.",
   "bz.list_err.no_verify_support": "사용 중인 Lightning 지갑이 결제 확인을 지원하지 않아 오프라인 상태에서는 판매할 수 없습니다.",
   "bz.list_err.lightning_unreachable": "Lightning 주소에 연결하지 못했습니다 — 다시 시도하세요.",

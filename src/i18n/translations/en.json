@@ -456,6 +456,7 @@
   "bz.price_min": "Set a price of at least 1 sat. To give an item away free, use TRADE → \"Or gift it\".",
   "bz.listing_progress": "Listing {item}…",
   "bz.listed_ok": "{item} listed for {price} sats",
+  "bz.escrow_recovered": "Recovered {n} item(s) from an interrupted listing",
   "bz.list_err.no_lightning_address": "You need a Lightning address to sell — open your wallet to set one up.",
   "bz.list_err.no_verify_support": "Your Lightning wallet doesn't support payment verification, so items can't sell while you're offline.",
   "bz.list_err.lightning_unreachable": "Could not reach your Lightning address — try again.",

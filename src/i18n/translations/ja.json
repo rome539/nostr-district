@@ -442,6 +442,7 @@
   "bz.price_min": "価格は1 sats以上に設定してください。無料で譲るにはTRADE →「プレゼント」を使います。",
   "bz.listing_progress": "{item} を出品中…",
   "bz.listed_ok": "{item} を {price} satsで出品しました",
+  "bz.escrow_recovered": "中断された出品から {n} 個のアイテムを回収しました",
   "bz.list_err.no_lightning_address": "販売にはLightningアドレスが必要です — ウォレットを開いて設定してください。",
   "bz.list_err.no_verify_support": "お使いのLightningウォレットは支払い確認に対応していないため、オフライン中は販売できません。",
   "bz.list_err.lightning_unreachable": "Lightningアドレスに到達できませんでした — 再試行してください。",

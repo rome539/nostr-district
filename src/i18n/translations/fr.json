@@ -442,6 +442,7 @@
   "bz.price_min": "Fixez un prix d'au moins 1 sat. Pour offrir un objet, utilisez ÉCHANGER → « Offrir ».",
   "bz.listing_progress": "Mise en vente de {item}…",
   "bz.listed_ok": "{item} mis en vente pour {price} sats",
+  "bz.escrow_recovered": "{n} objet(s) récupéré(s) d'une mise en vente interrompue",
   "bz.list_err.no_lightning_address": "Il vous faut une adresse Lightning pour vendre — ouvrez votre portefeuille pour en créer une.",
   "bz.list_err.no_verify_support": "Votre portefeuille Lightning ne prend pas en charge la vérification de paiement ; impossible de vendre hors ligne.",
   "bz.list_err.lightning_unreachable": "Impossible de joindre votre adresse Lightning — réessayez.",

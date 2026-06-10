@@ -442,6 +442,7 @@
   "bz.price_min": "حدّد سعرًا لا يقل عن 1 ساتس. لإهداء عنصر مجانًا استخدم مقايضة ← \"أهدِه\".",
   "bz.listing_progress": "جارٍ عرض {item}…",
   "bz.listed_ok": "{item} مُدرج بسعر {price} ساتس",
+  "bz.escrow_recovered": "تمت استعادة {n} عنصر/عناصر من عملية إدراج متوقّفة",
   "bz.list_err.no_lightning_address": "تحتاج إلى عنوان Lightning للبيع — افتح محفظتك لإعداده.",
   "bz.list_err.no_verify_support": "محفظة Lightning لديك لا تدعم التحقق من الدفع، لذا لا يمكن البيع بينما أنت غير متصل.",
   "bz.list_err.lightning_unreachable": "تعذّر الوصول إلى عنوان Lightning — حاول مجددًا.",

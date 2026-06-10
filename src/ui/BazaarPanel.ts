@@ -9,7 +9,7 @@ import {
   fetchMarketListings, getCachedRemoteListings, RemoteListing,
   MarketListing, purchaseListing, discardItem, fetchInventoryFromRelays, subscribeMarket, fetchMyListings,
   TradeOffer, getPendingOffers, sendTradeOffer, acceptTradeOffer, rejectTradeOffer, cancelTradeOffer,
-  getPendingOutgoingInstanceIds, streamOwnedItemsOf, normalizePubkey,
+  getPendingOutgoingInstanceIds, streamOwnedItemsOf, normalizePubkey, reclaimOrphanedEscrows,
 } from '../stores/tradeItemStore';
 import { authStore } from '../stores/authStore';
 import { t as ti18n } from '../i18n/i18n';
@@ -144,6 +144,14 @@ export class BazaarPanel {
     this.refreshMyBids();
     fetchInventoryFromRelays(pubkey)
       .finally(() => { this.loadingInventory = false; if (BazaarPanel.isOpen()) this.render(); });
+    // Self-heal: return any items stuck in escrow from an aborted listing (e.g. the
+    // signer popup was dismissed) back to inventory.
+    reclaimOrphanedEscrows().then(n => {
+      if (n > 0) {
+        ToastManager.show(ti18n('bz.escrow_recovered', { n: String(n) }), '#7fffa0');
+        fetchInventoryFromRelays(pubkey).finally(() => { if (BazaarPanel.isOpen()) this.render(); });
+      }
+    });
   }
 
   openTradeWith(toPubkey: string, toName: string): void {
@@ -462,7 +470,8 @@ export class BazaarPanel {
         </div>
       `;
 
-      const cleanup = () => overlay.remove();
+      let dereg = () => {};
+      const cleanup = () => { dereg(); overlay.remove(); };
       const collect = () => {
         const out: Record<string, string> = {};
         box.querySelectorAll('input[data-key]').forEach(el => {
@@ -477,6 +486,8 @@ export class BazaarPanel {
 
       overlay.appendChild(box);
       document.body.appendChild(overlay);
+      // ESC closes THIS modal (list/bid/etc.), not the whole bazaar.
+      dereg = BazaarPanel.registerOverlay(() => { cleanup(); resolve(null); });
       (box.querySelector('input') as HTMLInputElement)?.focus();
     });
   }
@@ -494,11 +505,15 @@ export class BazaarPanel {
           <button class="tc-ok" style="flex:1;background:#1a0a0a;border:1px solid ${color};color:${color};font-family:'Courier New',monospace;font-size:12px;font-weight:bold;cursor:pointer;padding:8px 0;border-radius:5px;">${confirmLabel}</button>
         </div>
       `;
-      box.querySelector('.tc-cancel')!.addEventListener('click', () => { overlay.remove(); resolve(false); });
-      box.querySelector('.tc-ok')!.addEventListener('click', () => { overlay.remove(); resolve(true); });
-      overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+      let dereg = () => {};
+      const close = (v: boolean) => { dereg(); overlay.remove(); resolve(v); };
+      box.querySelector('.tc-cancel')!.addEventListener('click', () => close(false));
+      box.querySelector('.tc-ok')!.addEventListener('click', () => close(true));
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
       overlay.appendChild(box);
       document.body.appendChild(overlay);
+      // ESC dismisses this confirm (= cancel), not the whole bazaar.
+      dereg = BazaarPanel.registerOverlay(() => close(false));
     });
   }
 

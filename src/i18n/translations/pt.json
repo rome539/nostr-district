@@ -442,6 +442,7 @@
   "bz.price_min": "Defina um preço de pelo menos 1 sat. Para dar de graça, use TROCAR → \"Presentear\".",
   "bz.listing_progress": "Anunciando {item}…",
   "bz.listed_ok": "{item} anunciado por {price} sats",
+  "bz.escrow_recovered": "Recuperado(s) {n} item(ns) de um anúncio interrompido",
   "bz.list_err.no_lightning_address": "Você precisa de um endereço Lightning para vender — abra sua carteira para criar um.",
   "bz.list_err.no_verify_support": "Sua carteira Lightning não suporta verificação de pagamento, então não dá para vender offline.",
   "bz.list_err.lightning_unreachable": "Não foi possível acessar seu endereço Lightning — tente de novo.",

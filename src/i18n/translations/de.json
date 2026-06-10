@@ -442,6 +442,7 @@
   "bz.price_min": "Lege einen Preis von mind. 1 Sat fest. Zum Verschenken nutze TAUSCHEN → „Verschenken\".",
   "bz.listing_progress": "{item} wird angeboten…",
   "bz.listed_ok": "{item} für {price} Sats angeboten",
+  "bz.escrow_recovered": "{n} Gegenstand/Gegenstände aus einem abgebrochenen Angebot wiederhergestellt",
   "bz.list_err.no_lightning_address": "Du brauchst eine Lightning-Adresse zum Verkaufen — öffne dein Wallet, um eine einzurichten.",
   "bz.list_err.no_verify_support": "Dein Lightning-Wallet unterstützt keine Zahlungsverifizierung, daher kann offline nicht verkauft werden.",
   "bz.list_err.lightning_unreachable": "Lightning-Adresse nicht erreichbar — erneut versuchen.",

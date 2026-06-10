@@ -442,6 +442,7 @@
   "bz.price_min": "价格至少为 1 sat。免费赠送请用 交易 →「赠送」。",
   "bz.listing_progress": "正在上架 {item}…",
   "bz.listed_ok": "{item} 已以 {price} sats 上架",
+  "bz.escrow_recovered": "已从中断的上架中恢复 {n} 件物品",
   "bz.list_err.no_lightning_address": "出售需要一个 Lightning 地址 — 打开钱包进行设置。",
   "bz.list_err.no_verify_support": "你的 Lightning 钱包不支持支付验证，因此离线时无法出售。",
   "bz.list_err.lightning_unreachable": "无法连接你的 Lightning 地址 — 请重试。",

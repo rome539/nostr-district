@@ -442,6 +442,7 @@
   "bz.price_min": "Imposta un prezzo di almeno 1 sat. Per regalare un oggetto usa SCAMBIA → \"Regalalo\".",
   "bz.listing_progress": "Pubblicazione di {item}…",
   "bz.listed_ok": "{item} in vendita per {price} sats",
+  "bz.escrow_recovered": "Recuperato/i {n} oggetto/i da un annuncio interrotto",
   "bz.list_err.no_lightning_address": "Ti serve un indirizzo Lightning per vendere — apri il portafoglio per crearne uno.",
   "bz.list_err.no_verify_support": "Il tuo portafoglio Lightning non supporta la verifica dei pagamenti, quindi non puoi vendere offline.",
   "bz.list_err.lightning_unreachable": "Impossibile raggiungere il tuo indirizzo Lightning — riprova.",

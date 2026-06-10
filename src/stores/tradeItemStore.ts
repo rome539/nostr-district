@@ -872,46 +872,56 @@ export async function listItem(instanceId: string, price: number, note?: string)
     const lud16 = await fetchSparkAddress(pubkey).catch(() => null);
     if (!lud16) return { ok: false, reason: 'no_lightning_address' };
 
-    // Escrow the item to the oracle (held safely while listed). Only if this
-    // succeeds do we publish the public listing.
-    const { escrowItemRequest } = await import('../nostr/presenceService');
+    // SIGN THE LISTING FIRST. With an extension signer this is the approval popup —
+    // and it must gate everything. Previously we escrowed the item to the oracle and
+    // removed it from inventory BEFORE signing, so dismissing/ignoring the popup left
+    // the item stranded in escrow with no public listing (invisible after re-login).
+    // Sign first → a rejected popup aborts with the item completely untouched.
+    const listingId = `ndlisting_${instanceId}_${Date.now()}`;
+    const unsigned = {
+      kind: 30402,
+      pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['d', listingId],
+        ['t', 'ndmarket'],
+        ['t', `ndcat:${def.category}`],
+        ['t', `ndrarity:${def.rarity}`],
+        ['price', String(price), 'SATS'],
+        ['item_id', def.id],
+        ['instance_id', instanceId],
+        ['client', 'Nostr District'],
+      ],
+      content: JSON.stringify({ name: def.name, emoji: def.emoji, description: def.description, note, price }),
+    };
+    let signed: any;
+    try {
+      signed = await signEvent(unsigned);
+    } catch {
+      return { ok: false, reason: 'no_signer' }; // popup dismissed — nothing escrowed, item stays
+    }
+
+    // Approved → escrow the item to the oracle (held safely while listed). If escrow
+    // fails the signed event is simply discarded; the item is still ours.
+    const { escrowItemRequest, unescrowItemRequest } = await import('../nostr/presenceService');
     const esc = await escrowItemRequest(instanceId, price, lud16, def.name);
     if (!esc.ok) return { ok: false, reason: esc.reason };
 
-    // Escrowed → it's now owned by the oracle, so drop it from our inventory.
-    removeItem(instanceId);
+    // Publish the already-signed listing. If publishing fails, REVERSE the escrow so
+    // the item returns to inventory rather than being orphaned in escrow.
+    try {
+      await publishEvent(signed);
+    } catch {
+      await unescrowItemRequest(instanceId).catch(() => {});
+      return { ok: false, reason: 'offline' };
+    }
 
-    const listingId = `ndlisting_${instanceId}_${Date.now()}`;
+    // Fully listed (escrowed + published) → drop it from our inventory and record it.
+    removeItem(instanceId);
     const listing: MarketListing = {
-      id: listingId, dTag: listingId, sellerPubkey: pubkey, item, def, price, listedAt: Date.now(), note,
+      id: signed.id, dTag: listingId, sellerPubkey: pubkey, item, def, price, listedAt: Date.now(), note,
     };
     saveListings([...loadListings(), listing]);
-
-    // Publish to Nostr as kind:30402
-    try {
-      const unsigned = {
-        kind: 30402,
-        pubkey,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['d', listingId],
-          ['t', 'ndmarket'],
-          ['t', `ndcat:${def.category}`],
-          ['t', `ndrarity:${def.rarity}`],
-          ['price', String(price), 'SATS'],
-          ['item_id', def.id],
-          ['instance_id', instanceId],
-          ['client', 'Nostr District'],
-        ],
-        content: JSON.stringify({ name: def.name, emoji: def.emoji, description: def.description, note, price }),
-      };
-      const signed = await signEvent(unsigned);
-      await publishEvent(signed);
-      listing.id = signed.id; // real event id for delisting
-      saveListings(loadListings().map(l => l.id === listingId ? { ...l, id: signed.id } : l));
-    } catch {
-      // offline or no signing — listing stays local
-    }
 
     window.dispatchEvent(new CustomEvent('nd-market-update'));
     window.dispatchEvent(new CustomEvent('nd-inventory-update'));
@@ -957,6 +967,64 @@ export async function delistItem(listingId: string): Promise<{ ok: boolean; reas
   window.dispatchEvent(new CustomEvent('nd-market-update'));
   await publishDelistTombstone(listing.dTag);
   return { ok: true };
+}
+
+// Recover items stuck in escrow with no public listing. An aborted listing (e.g. the
+// signer popup was dismissed under the old order-of-operations) escrowed the item to
+// the oracle but never published the kind:30402 — so it vanished from BOTH inventory
+// and My Listings (which is rebuilt from 30402s). This finds escrows held by the
+// oracle with escrow_seller == us and NO live listing, and returns them to inventory.
+// Safe to run on every bazaar open: legitimately-listed items have a live 30402 and
+// are skipped, and escrows < 2 min old are skipped in case a listing is mid-flight.
+export async function reclaimOrphanedEscrows(): Promise<number> {
+  const { pubkey } = authStore.getState();
+  if (!pubkey || !_oracleSet.length) return 0;
+  try {
+    const { queryEvents } = await import('../nostr/nostrService');
+    const ITEM_RELAYS = [
+      'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net',
+      'wss://offchain.pub', 'wss://nostr.mom', 'wss://relay.snort.social',
+    ];
+    // Items currently OWNED BY the oracle = the escrow pool (small set across all users).
+    const held = await queryEvents({
+      kinds: [30078], authors: _oracleSet, '#p': _oracleSet, '#t': ['nditem'],
+    }, ITEM_RELAYS);
+
+    const byD = new Map<string, any>();
+    for (const e of held) {
+      if (!isTrustedOracle(e.pubkey)) continue;
+      const d = e.tags?.find((t: string[]) => t[0] === 'd')?.[1];
+      if (!d) continue;
+      if (!byD.has(d) || e.created_at > byD.get(d).created_at) byD.set(d, e);
+    }
+
+    // Items that DO have a live public listing must never be reclaimed.
+    await fetchMyListings();
+    const listed = new Set(_myListings.map(l => l.item.instanceId));
+
+    const graceCutoff = Math.floor(Date.now() / 1000) - 120; // ignore escrows < 2 min old
+    const orphans: string[] = [];
+    for (const [instanceId, e] of byD) {
+      const source = e.tags.find((t: string[]) => t[0] === 'source')?.[1];
+      const seller = e.tags.find((t: string[]) => t[0] === 'escrow_seller')?.[1];
+      if (source !== 'escrow' || seller !== pubkey) continue;
+      if (listed.has(instanceId)) continue;
+      if ((e.created_at ?? 0) > graceCutoff) continue;
+      orphans.push(instanceId);
+    }
+    if (!orphans.length) return 0;
+
+    const { unescrowItemRequest } = await import('../nostr/presenceService');
+    let recovered = 0;
+    for (const instanceId of orphans) {
+      const r = await unescrowItemRequest(instanceId).catch(() => ({ ok: false }));
+      if (r.ok) recovered++;
+    }
+    if (recovered) window.dispatchEvent(new CustomEvent('nd-inventory-update'));
+    return recovered;
+  } catch {
+    return 0;
+  }
 }
 
 // ── Fetch market listings from relays ─────────────────────────────────────────

@@ -442,6 +442,7 @@
   "bz.price_min": "Pon un precio de al menos 1 sat. Para regalar un objeto, usa INTERCAMBIAR → \"Regalarlo\".",
   "bz.listing_progress": "Publicando {item}…",
   "bz.listed_ok": "{item} publicado por {price} sats",
+  "bz.escrow_recovered": "Se recuperó {n} objeto(s) de una publicación interrumpida",
   "bz.list_err.no_lightning_address": "Necesitas una dirección Lightning para vender — abre tu monedero para crear una.",
   "bz.list_err.no_verify_support": "Tu monedero Lightning no admite verificación de pago, así que no se puede vender estando desconectado.",
   "bz.list_err.lightning_unreachable": "No se pudo contactar tu dirección Lightning — reinténtalo.",

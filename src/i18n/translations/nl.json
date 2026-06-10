@@ -442,6 +442,7 @@
   "bz.price_min": "Stel een prijs van minstens 1 sat in. Gratis weggeven? Gebruik RUILEN → \"Schenken\".",
   "bz.listing_progress": "{item} aanbieden…",
   "bz.listed_ok": "{item} te koop voor {price} sats",
+  "bz.escrow_recovered": "{n} item(s) hersteld van een onderbroken aanbieding",
   "bz.list_err.no_lightning_address": "Je hebt een Lightning-adres nodig om te verkopen — open je wallet om er een in te stellen.",
   "bz.list_err.no_verify_support": "Je Lightning-wallet ondersteunt geen betalingsverificatie, dus offline verkopen kan niet.",
   "bz.list_err.lightning_unreachable": "Kon je Lightning-adres niet bereiken — probeer opnieuw.",
