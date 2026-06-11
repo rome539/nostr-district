@@ -19,7 +19,34 @@ const PUBLISH_RELAYS = [
   'wss://relay.snort.social',
 ];
 
+// ── Dev sandbox: keyless mode never touches public relays ─────────────────────
+// Without ORACLE_PRIVATE_KEY (local dev), oracle events used to publish to the
+// SAME public relays as prod — leaving permanent dev litter (test items, dev
+// listings, a dev oracle profile) that even showed up as ghost listings in prod.
+// In dev, events now live in an in-memory store instead: publishToRelays writes
+// here, queryRelays answers from here. Full e2e flows work (mint→gift→trade→
+// bounty) with zero pollution and no relay-propagation waits. State is
+// disposable by design — a dev restart wipes the sandbox.
+const DEV_SANDBOX = !process.env.ORACLE_PRIVATE_KEY;
+const devEvents: any[] = [];
+
+function devMatch(e: any, filter: any): boolean {
+  if (filter.kinds && !filter.kinds.includes(e.kind)) return false;
+  if (filter.authors && !filter.authors.includes(e.pubkey)) return false;
+  if (filter.since && e.created_at < filter.since) return false;
+  if (filter.until && e.created_at > filter.until) return false;
+  for (const key of Object.keys(filter)) {
+    if (!key.startsWith('#')) continue;
+    const tagName = key.slice(1);
+    const wanted: string[] = filter[key];
+    const values = e.tags.filter((t: string[]) => t[0] === tagName).map((t: string[]) => t[1]);
+    if (!values.some((v: string) => wanted.includes(v))) return false;
+  }
+  return true;
+}
+
 function publishToRelays(event: any): void {
+  if (DEV_SANDBOX) { devEvents.push(event); return; }
   for (const url of PUBLISH_RELAYS) {
     try {
       const sock = new WebSocket(url);
@@ -40,7 +67,10 @@ function publishToRelays(event: any): void {
 }
 
 // Query all relays for events matching a filter (Node WS — reliable). Dedupes by id.
+// In the dev sandbox, answers come from the in-memory store only (deterministic,
+// instant, and dev events never existed on public relays to begin with).
 function queryRelays(filter: any): Promise<any[]> {
+  if (DEV_SANDBOX) return Promise.resolve(devEvents.filter(e => devMatch(e, filter)));
   const subId = 'q' + Math.random().toString(36).slice(2, 9);
   const queryOne = (url: string): Promise<any[]> => new Promise((resolve) => {
     const collected: any[] = [];
