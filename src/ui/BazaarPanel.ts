@@ -18,7 +18,7 @@ import { boltIcon } from './icons';
 import { getCachedName, resolveNames } from '../nostr/crewService';
 import { getOnlinePlayers, requestOnlinePlayers, acceptBidRequest, declineWinRequest } from '../nostr/presenceService';
 import {
-  placeBid, withdrawBid, fetchBidsForListings, subscribeBids, fetchMyWins, subscribeWins, payWonItem,
+  placeBid, withdrawBid, declineBid, fetchBidsForListings, subscribeBids, fetchMyWins, subscribeWins, payWonItem,
   fetchMyBids, fetchListedInstanceIdsOf, isItemSold, isItemReserved, type MarketBid, type WinNotice, type MyBid,
 } from '../stores/tradeItemStore';
 
@@ -40,9 +40,11 @@ export class BazaarPanel {
   private pendingTradeName: string | null = null;
   private inventoryPage = 0;
   private readonly PAGE_SIZE = 9;
+  private invSearch = '';
+  private invCategory: 'all' | ItemDef['category'] = 'all';
   private unsub: (() => void) | null = null;
   private loadingInventory = false;
-  private marketCategory: 'all' | 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'holiday' = 'all';
+  private marketCategory: 'all' | ItemDef['category'] = 'all';
   private marketSearch = '';
   private marketView: 'browse' | 'mine' = 'browse';
   private lastRenderedTab: string | null = null; // for preserving scroll on same-tab re-renders
@@ -128,6 +130,15 @@ export class BazaarPanel {
 
   open(): void {
     if (BazaarPanel.isOpen()) { this.close(); return; }
+    this.subscribe();
+    this.refreshInventory();
+    this.render();
+  }
+
+  /** Open (or refocus) the bazaar on a specific tab — used by clickable toasts. */
+  openAt(tab: 'market' | 'inventory' | 'sets' | 'offers'): void {
+    this.tab = tab;
+    if (BazaarPanel.isOpen()) { this.render(); return; }
     this.subscribe();
     this.refreshInventory();
     this.render();
@@ -350,18 +361,75 @@ export class BazaarPanel {
       return;
     }
 
+    // Controls — category filter + name search, mirroring the Market tab
+    const controls = document.createElement('div');
+    controls.style.cssText = `display:flex;flex-direction:column;gap:8px;margin-bottom:12px;`;
+    const cats: ['all' | ItemDef['category'], string][] = [
+      ['all', ti18n('bz.cat_all')], ['fish', '🎣'], ['hardware', '💾'], ['street', '🌆'], ['lore', '📜'], ['occult', '🔮'], ['critters', '🐀'], ['eats', '🍜'], ['holiday', '🎉'],
+    ];
+    const catRow = document.createElement('div');
+    catRow.style.cssText = `display:flex;gap:4px;flex-wrap:wrap;`;
+    for (const [cat, label] of cats) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `background:${this.invCategory === cat ? '#1e1e38' : 'none'};border:1px solid ${this.invCategory === cat ? '#4a4a8a' : '#2a2a4a'};color:${this.invCategory === cat ? '#c0a8ff' : '#777'};font-family:'Courier New',monospace;font-size:11px;cursor:pointer;padding:4px 10px;border-radius:4px;`;
+      b.addEventListener('click', () => { this.invCategory = cat; this.inventoryPage = 0; this.render(); });
+      catRow.appendChild(b);
+    }
+    const search = document.createElement('input');
+    search.placeholder = ti18n('bz.search_items');
+    search.value = this.invSearch;
+    search.style.cssText = `background:#0e0e22;border:1px solid #2a2a4a;color:#c0c0e0;font-family:'Courier New',monospace;font-size:11px;padding:6px 10px;border-radius:4px;outline:none;`;
+    search.addEventListener('input', () => {
+      this.invSearch = search.value;
+      this.inventoryPage = 0;
+      this.renderInvList(body.querySelector('#bazaar-inv-list') as HTMLElement); // keep input focused
+    });
+    controls.appendChild(catRow);
+    controls.appendChild(search);
+    body.appendChild(controls);
+
+    const listEl = document.createElement('div');
+    listEl.id = 'bazaar-inv-list';
+    body.appendChild(listEl);
+    this.renderInvList(listEl);
+  }
+
+  private renderInvList(container: HTMLElement | null): void {
+    if (!container) return;
+    container.innerHTML = '';
     const { pubkey } = authStore.getState();
-    // Sort by category so same types group together, then paginate as a flat grid
-    const sorted = [...allItems].sort((a, b) => a.def.category.localeCompare(b.def.category));
-    const totalPages = Math.ceil(sorted.length / this.PAGE_SIZE);
+    const listed = new Set(getLocalListings().map(l => l.item.instanceId));
+    const offered = getPendingOutgoingInstanceIds();
+    const filtered = getInventoryWithDefs()
+      .filter(e => !listed.has(e.owned.instanceId) && !isListingInFlight(e.owned.instanceId) && !offered.has(e.owned.instanceId))
+      .filter(e => (this.invCategory === 'all' || e.def.category === this.invCategory)
+        && (!this.invSearch || e.def.name.toLowerCase().includes(this.invSearch.toLowerCase())));
+    if (filtered.length === 0) {
+      container.innerHTML = `<div style="color:#8a8aa8;text-align:center;padding:30px 0;font-size:12px;">${ti18n('bz.inv_no_match')}</div>`;
+      return;
+    }
+
+    // STACK duplicates: one card per item id, oldest instance first (trade/list/
+    // discard spend the oldest copy, keeping freshly-acquired ones "NEW").
+    const groups = new Map<string, { def: ItemDef; instances: OwnedItem[] }>();
+    for (const e of [...filtered].sort((a, b) => a.owned.acquiredAt - b.owned.acquiredAt)) {
+      const g = groups.get(e.def.id) ?? { def: e.def, instances: [] };
+      g.instances.push(e.owned);
+      groups.set(e.def.id, g);
+    }
+    const stacks = [...groups.values()].sort((a, b) =>
+      a.def.category.localeCompare(b.def.category) || a.def.name.localeCompare(b.def.name));
+
+    const totalPages = Math.max(1, Math.ceil(stacks.length / this.PAGE_SIZE));
     this.inventoryPage = Math.min(this.inventoryPage, totalPages - 1);
-    const pageItems = sorted.slice(this.inventoryPage * this.PAGE_SIZE, (this.inventoryPage + 1) * this.PAGE_SIZE);
+    const pageStacks = stacks.slice(this.inventoryPage * this.PAGE_SIZE, (this.inventoryPage + 1) * this.PAGE_SIZE);
 
     const grid = document.createElement('div');
     grid.className = 'nd-inv-grid';
     grid.style.cssText = `display:grid;grid-template-columns:repeat(3,1fr);gap:8px;`;
-    for (const { owned, def } of pageItems) grid.appendChild(this.itemCard(def, owned, pubkey ?? ''));
-    body.appendChild(grid);
+    for (const { def, instances } of pageStacks) grid.appendChild(this.itemCard(def, instances, pubkey ?? ''));
+    container.appendChild(grid);
 
     // Pagination controls
     if (totalPages > 1) {
@@ -372,13 +440,16 @@ export class BazaarPanel {
         <span style="color:#666;font-size:11px;">${this.inventoryPage + 1} / ${totalPages}</span>
         <button id="inv-next" style="background:${this.inventoryPage >= totalPages - 1 ? '#0a0a18' : '#1e1e38'};border:1px solid #2a2a4a;color:${this.inventoryPage >= totalPages - 1 ? '#333' : '#c0a8ff'};font-family:'Courier New',monospace;font-size:11px;cursor:${this.inventoryPage >= totalPages - 1 ? 'default' : 'pointer'};padding:4px 12px;border-radius:4px;">▶</button>
       `;
-      nav.querySelector('#inv-prev')!.addEventListener('click', () => { if (this.inventoryPage > 0) { this.inventoryPage--; this.render(); } });
-      nav.querySelector('#inv-next')!.addEventListener('click', () => { if (this.inventoryPage < totalPages - 1) { this.inventoryPage++; this.render(); } });
-      body.appendChild(nav);
+      nav.querySelector('#inv-prev')!.addEventListener('click', () => { if (this.inventoryPage > 0) { this.inventoryPage--; this.renderInvList(container); } });
+      nav.querySelector('#inv-next')!.addEventListener('click', () => { if (this.inventoryPage < totalPages - 1) { this.inventoryPage++; this.renderInvList(container); } });
+      container.appendChild(nav);
     }
   }
 
-  private itemCard(def: ItemDef, owned: OwnedItem, pubkey: string): HTMLElement {
+  // One card per item TYPE — duplicates stack (instances[0] is the oldest copy,
+  // which is what trade/list/discard spend).
+  private itemCard(def: ItemDef, instances: OwnedItem[], pubkey: string): HTMLElement {
+    const owned = instances[0];
     const card = document.createElement('div');
     card.style.cssText = `
       position:relative;
@@ -392,7 +463,7 @@ export class BazaarPanel {
     // "NEW" for items that arrived this session: a bright inline pill (not a corner
     // badge — the scroll container clips overflow) + a green glow. Fades a few
     // seconds after the player views it, then the flag clears so it won't show again.
-    const isNew = isNewItem(owned.instanceId);
+    const isNew = instances.some(i => isNewItem(i.instanceId));
     if (isNew) {
       card.style.borderColor = '#2a8a2a';
       card.style.boxShadow = '0 0 14px rgba(40,180,40,0.35)';
@@ -401,11 +472,14 @@ export class BazaarPanel {
       ? `<span class="nd-new-pill" style="display:inline-block;background:#2a9a2a;color:#06140a;font-size:8px;font-weight:bold;letter-spacing:1px;padding:1px 5px;border-radius:3px;margin-right:6px;vertical-align:middle;transition:opacity 0.5s;">${ti18n('bz.new')}</span>`
       : '';
 
+    const countPill = instances.length > 1
+      ? `<span style="display:inline-block;background:#1e1e3a;color:#c0a8ff;font-size:9px;font-weight:bold;padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;">×${instances.length}</span>`
+      : '';
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:18px;color:#e6e6f5;">${def.emoji}</span>
         <div style="flex:1;min-width:0;">
-          <div style="color:${RARITY_COLOR[def.rarity]};font-size:12px;font-weight:bold;">${newPill}${def.name}</div>
+          <div style="color:${RARITY_COLOR[def.rarity]};font-size:12px;font-weight:bold;">${newPill}${def.name}${countPill}</div>
           <div style="color:#555;font-size:9px;letter-spacing:1px;">${CATEGORY_LABEL[def.category] ?? def.category} · ${def.rarity.toUpperCase()}${def.kg ? ` · ${def.kg}kg` : ''}</div>
         </div>
         <button class="bazaar-discard-btn" title="${ti18n('bz.discard_item')}" style="background:none;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;cursor:pointer;padding:1px 6px;line-height:1.2;border-radius:3px;">✕</button>
@@ -424,11 +498,12 @@ export class BazaarPanel {
       if (ok) { await discardItem(owned.instanceId); this.render(); }
     });
 
-    // Fade the NEW pill + glow ~5s after it's been on screen, and clear the flag.
+    // Fade the NEW pill + glow ~5s after it's been on screen, and clear the flag
+    // for every copy in the stack (the pill represents the whole stack).
     if (isNew) {
-      const id = owned.instanceId;
+      const ids = instances.map(i => i.instanceId);
       setTimeout(() => {
-        clearNewItem(id);
+        for (const id of ids) clearNewItem(id);
         const pill = card.querySelector('.nd-new-pill') as HTMLElement | null;
         if (pill) { pill.style.opacity = '0'; setTimeout(() => pill.remove(), 500); }
         card.style.boxShadow = 'none';
@@ -596,7 +671,7 @@ export class BazaarPanel {
     controls.appendChild(viewRow);
 
     const cats: [typeof this.marketCategory, string][] = [
-      ['all', ti18n('bz.cat_all')], ['fish', '🎣'], ['hardware', '💾'], ['street', '🌆'], ['lore', '📜'], ['occult', '🔮'], ['critters', '🐀'], ['holiday', '🎉'],
+      ['all', ti18n('bz.cat_all')], ['fish', '🎣'], ['hardware', '💾'], ['street', '🌆'], ['lore', '📜'], ['occult', '🔮'], ['critters', '🐀'], ['eats', '🍜'], ['holiday', '🎉'],
     ];
     const catRow = document.createElement('div');
     catRow.style.cssText = `display:flex;gap:4px;flex-wrap:wrap;`;
@@ -1133,7 +1208,10 @@ export class BazaarPanel {
           : `<span style="color:#555;font-size:10px;margin-right:6px;">#${i + 1}</span>`;
         row.innerHTML =
           `<span style="color:#c0c0e0;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tag}${bidderName} · <span style="color:#ffd700;">${bid.amount}</span> sats</span>`
-          + `<button class="bid-accept" style="flex-shrink:0;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 10px;border-radius:4px;">${ti18n('bz.accept')}</button>`;
+          + `<div style="display:flex;gap:4px;flex-shrink:0;">`
+          + `<button class="bid-accept" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 10px;border-radius:4px;">${ti18n('bz.accept')}</button>`
+          + `<button class="bid-decline" title="${ti18n('bz.decline_bid')}" style="background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>`
+          + `</div>`;
         row.querySelector('.bid-accept')!.addEventListener('click', async () => {
           const id = listing.item.instanceId;
           if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // already accepting/accepted
@@ -1160,6 +1238,16 @@ export class BazaarPanel {
             this.render();
           }
         });
+        row.querySelector('.bid-decline')!.addEventListener('click', () => {
+          const id = listing.item.instanceId;
+          if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // mid-accept — don't race it
+          // Optimistically drop the row; the relay marker makes it durable and
+          // marks the bid declined on the bidder's side too.
+          this.bidsByInstance[id] = (this.bidsByInstance[id] ?? []).filter(b => !(b.buyer === bid.buyer && b.at === bid.at));
+          declineBid(id, bid.buyer, bid.at, listing.def.id, bid.amount);
+          ToastManager.show(ti18n('bz.bid_declined_toast', { name: bidderName }), '#c06060');
+          this.render();
+        });
         rowsWrap.appendChild(row);
       });
       card.appendChild(rowsWrap);
@@ -1179,11 +1267,14 @@ export class BazaarPanel {
       const def = ITEM_CATALOG.find(d => d.id === bid.itemId);
       const card = document.createElement('div');
       card.style.cssText = `background:#0e0e22;border:1px solid #1e1e3a;border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;`;
+      const declinedPill = bid.declined
+        ? ` · <span style="color:#ff8070;border:1px solid #5a2a2a;border-radius:3px;padding:0 4px;font-size:8px;">${ti18n('bz.bid_declined_label')}</span>`
+        : '';
       card.innerHTML = `
-        <span style="font-size:18px;color:#e6e6f5;">${def?.emoji ?? '·'}</span>
+        <span style="font-size:18px;color:#e6e6f5;${bid.declined ? 'opacity:0.6;' : ''}">${def?.emoji ?? '·'}</span>
         <div style="flex:1;min-width:0;">
-          <div style="color:#c0c0e0;font-size:12px;">${def?.name ?? ti18n('bz.item')}</div>
-          <div style="color:#555;font-size:9px;letter-spacing:1px;">${ti18n('bz.your_bid_label')} · <span style="color:#ffd700;">${bid.amount}</span> SATS</div>
+          <div style="color:#c0c0e0;font-size:12px;${bid.declined ? 'opacity:0.7;' : ''}">${def?.name ?? ti18n('bz.item')}</div>
+          <div style="color:#555;font-size:9px;letter-spacing:1px;">${ti18n('bz.your_bid_label')} · <span style="color:#ffd700;">${bid.amount}</span> SATS${declinedPill}</div>
         </div>`;
       const cancel = document.createElement('button');
       cancel.textContent = ti18n('bz.cancel_caps');

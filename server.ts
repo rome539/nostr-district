@@ -104,6 +104,22 @@ if (process.env.ORACLE_PRIVATE_KEY) {
 
 export const ORACLE_PUBKEY = getPublicKey(ORACLE_SK);
 console.log(`[Oracle] Public key: ${ORACLE_PUBKEY}`);
+
+// ── Key rotation ───────────────────────────────────────────────────────────────
+// ORACLE_PUBKEYS_OLD (comma-separated hex pubkeys) lists RETIRED oracle keys.
+// Items/markers signed by them are still recognized (queries + ownership checks
+// use the whole set), but everything NEW is signed with the current key — and
+// since transfers work by burn-old + mint-fresh, every trade/sale/gift lazily
+// re-signs an old item under the current key. To rotate:
+//   1. Set ORACLE_PRIVATE_KEY to the new key, add the old pubkey to
+//      ORACLE_PUBKEYS_OLD (Railway), and add it to VITE_ORACLE_PUBKEYS (client).
+//   2. Months later, when old-key items have churned out, drop the old key.
+const ORACLE_KEYS_OLD: string[] = (process.env.ORACLE_PUBKEYS_OLD ?? '')
+  .split(',').map(s => s.trim().toLowerCase()).filter(s => /^[0-9a-f]{64}$/.test(s));
+const ORACLE_AUTHORS: string[] = [ORACLE_PUBKEY, ...ORACLE_KEYS_OLD];
+const isOracleKey = (pk: string): boolean => ORACLE_AUTHORS.includes((pk ?? '').toLowerCase());
+if (ORACLE_KEYS_OLD.length) console.log(`[Oracle] Also honoring ${ORACLE_KEYS_OLD.length} retired key(s): ${ORACLE_KEYS_OLD.map(k => k.slice(0, 8)).join(', ')}…`);
+
 publishOracleProfile();  // announce a name so oracle DMs aren't a raw npub
 
 // ── Weekly drop tracking (account-wide, not per-browser) ──────────────────────
@@ -130,7 +146,7 @@ function recordWeeklyDrop(pubkey: string): void {
 // right after a deploy — one relay query per player, then cached again.
 async function fetchWeeklyMarkerMs(pubkey: string): Promise<number> {
   try {
-    const events = await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#d': [`ndweekly_${pubkey}`] });
+    const events = await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndweekly_${pubkey}`] });
     let newest = 0;
     for (const ev of events) if (ev?.created_at > newest) newest = ev.created_at;
     return newest * 1000;
@@ -241,6 +257,149 @@ function recordFish(pubkey: string): void {
   const b = refillFishing(pubkey);
   b.tokens = Math.max(0, b.tokens - 1);
   try { writeFileSync(FISHING_FILE, JSON.stringify(fishingBuckets)); } catch {}
+}
+
+// ── Bounty board ──────────────────────────────────────────────────────────────
+// The oracle posts weekly wants: burn N commons/junk → mint one rare. This is the
+// economy's item SINK (commons leave circulation) and a weekly reward channel —
+// ONE claim per account per bounty, no global cap, so every resident can take
+// part each week. The price of a claim is real (your own items are destroyed),
+// and the reward tier is capped at rare — rares already drop from scavenging, so
+// this adds no new scarcity class to farm.
+//
+// Bounties are DETERMINISTIC from the week number (seeded PRNG over curated
+// pools), so the server needs no storage for the board itself — every deploy
+// regenerates the identical week. Only CLAIMS need persistence: warm cache in
+// memory/file + a durable oracle-signed relay marker per bounty
+// (d-tag `ndbounty_<bountyId>`, content = JSON claimant array) checked when the
+// cache is cold — the same pattern as the weekly drop.
+
+// What the oracle asks for: commons + junk only (the sink tier). Junk fish are
+// deliberately in — it's the only thing old boots are good for.
+const BOUNTY_WANT_POOL = [
+  'fish_old_boot','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern',
+  'fish_tiny_carp','fish_silver_trout','fish_bluegill','fish_mud_catfish','fish_lake_minnow','fish_common_bream',
+  'hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','hw_ram_stick','hw_capacitor','hw_ribbon_cable',
+  'st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_brass_knuckles','st_switchblade','st_burner_sim',
+  'lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_paper_wallet','lo_mempool_vial','lo_hash_stone',
+  'oc_black_candle','oc_evil_eye','oc_spirit_board','oc_bone_dice','oc_the_tower',
+  'cr_sewer_rat','cr_alley_cat','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog',
+  'eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel',
+];
+// What the oracle pays: non-fish rares (fish stay fishing-only; legendaries are
+// never bounty rewards — rares only, per the "no free repeatable rare+" rule the
+// cap already enforces globally).
+const BOUNTY_REWARD_POOL = [
+  'hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_gpu_card','hw_oscilloscope',
+  'st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','st_stash_key','st_wiretap',
+  'lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','lo_pizza_receipt','lo_node_map',
+  'oc_the_fool','oc_scrying_mirror','oc_voodoo_doll','oc_grimoire',
+  'cr_raccoon','cr_roost_bat','cr_white_crow','cr_pipe_snake',
+  'eats_lucky_cat','eats_neon_sushi',
+];
+// Legendary weeks: ~1 in 6 weeks (seeded) the third poster offers a specific
+// legendary — but wants RARES burned, not commons, so each copy costs 3 rares
+// (a sink ladder: commons→rare, rares→legendary). No lottery on normal claims:
+// rare-tier bounties always pay exactly what the poster shows.
+const BOUNTY_LEGENDARY_POOL = [
+  'hw_quantum_key','hw_mainframe_core','st_zk_proof','st_kingpin_ledger',
+  'lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl',
+  'hw_zero_day','st_dons_ring','lo_genesis_seed',
+];
+const BOUNTY_LEGENDARY_WEEK_CHANCE = 1 / 6; // seeded; deterministic per week
+const BOUNTY_COUNT = 3;       // bounties per week
+
+// Deterministic PRNG so every server instance derives the same weekly board.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface Bounty { id: string; wants: { itemId: string; qty: number }[]; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number }
+
+function getWeekBounties(): Bounty[] {
+  const week = Math.floor(Date.now() / MS_7D);
+  const rng = mulberry32(week * 2654435761);
+  const pick = <T>(arr: T[], taken: Set<T>): T => {
+    let v: T;
+    do { v = arr[Math.floor(rng() * arr.length)]; } while (taken.has(v));
+    taken.add(v);
+    return v;
+  };
+  const usedRewards = new Set<string>();
+  const bounties: Bounty[] = [];
+  for (let n = 0; n < BOUNTY_COUNT; n++) {
+    const usedWants = new Set<string>();
+    const wants = [
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 2 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+    ];
+    bounties.push({
+      id: `bounty_${week}_${n}`,
+      wants,
+      rewardItemId: pick(BOUNTY_REWARD_POOL, usedRewards),
+      tier: 'rare',
+      endsAt: (week + 1) * MS_7D,
+    });
+  }
+  // Legendary week (seeded, after the normal picks so the rng sequence is stable):
+  // replace the last poster with a rares→legendary trade. Same id → same claims.
+  if (rng() < BOUNTY_LEGENDARY_WEEK_CHANCE) {
+    const usedWants = new Set<string>();
+    const last = bounties[BOUNTY_COUNT - 1];
+    last.wants = [
+      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 2 },
+      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
+    ];
+    last.rewardItemId = BOUNTY_LEGENDARY_POOL[Math.floor(rng() * BOUNTY_LEGENDARY_POOL.length)];
+    last.tier = 'legendary';
+  }
+  return bounties;
+}
+
+// Claims — warm cache (memory + file) with a durable relay marker per bounty.
+const BOUNTY_FILE = '.bounty-claims.json';
+let bountyClaims: Record<string, string[]> = {}; // bountyId → claimant pubkeys (ordered)
+try { if (existsSync(BOUNTY_FILE)) bountyClaims = JSON.parse(readFileSync(BOUNTY_FILE, 'utf8')); } catch {}
+const bountyMarkerFetched = new Set<string>(); // bountyIds already reconciled with relays this lifetime
+const bountyClaimsInFlight = new Set<string>(); // `${bountyId}|${pubkey}` — blocks parallel double-claims
+
+async function loadBountyClaims(bountyId: string): Promise<string[]> {
+  if (!bountyMarkerFetched.has(bountyId)) {
+    bountyMarkerFetched.add(bountyId);
+    try {
+      const events = await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndbounty_${bountyId}`] });
+      let newest: any = null;
+      for (const ev of events) if (!newest || ev.created_at > newest.created_at) newest = ev;
+      if (newest) {
+        const fromRelay: string[] = JSON.parse(newest.content || '[]');
+        const merged = [...(bountyClaims[bountyId] ?? [])];
+        for (const pk of fromRelay) if (!merged.includes(pk)) merged.push(pk);
+        bountyClaims[bountyId] = merged;
+      }
+    } catch { /* relays unreachable → cache-only (same fallback as weekly drop) */ }
+  }
+  return bountyClaims[bountyId] ?? [];
+}
+
+function recordBountyClaim(bountyId: string, pubkey: string): void {
+  const list = bountyClaims[bountyId] ?? (bountyClaims[bountyId] = []);
+  if (!list.includes(pubkey)) list.push(pubkey);
+  try { writeFileSync(BOUNTY_FILE, JSON.stringify(bountyClaims)); } catch {}
+  if (!ORACLE_SK) return;
+  publishToRelays(finalizeEvent({
+    kind: 30078,
+    pubkey: ORACLE_PUBKEY,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', `ndbounty_${bountyId}`], ['t', 'ndbounty']],
+    content: JSON.stringify(list),
+  }, ORACLE_SK));
 }
 
 // Sold instance ids — prevents the same listed item from being bought twice
@@ -403,7 +562,13 @@ function transferItem(event: any, fromPubkey: string, toPubkey: string): object 
   if (!ORACLE_SK) return null;
   const owner  = event?.tags?.find((t: string[]) => t[0] === 'p')?.[1];
   const itemId = event?.tags?.find((t: string[]) => t[0] === 'item_id')?.[1];
-  if (event?.pubkey !== ORACLE_PUBKEY || owner !== fromPubkey) return null;
+  // Items signed by ANY trusted oracle key (current or retired) are valid — the
+  // re-mint below puts the fresh copy under the CURRENT key (lazy migration).
+  if (!isOracleKey(event?.pubkey)) return null;
+  // Owner must match; when transferring out of escrow (from = the oracle), the
+  // holding p-tag may be a retired oracle key, so accept any key in the set.
+  const ownerOk = owner === fromPubkey || (isOracleKey(fromPubkey) && isOracleKey(owner));
+  if (!ownerOk) return null;
   if (!itemId || !VALID_ITEM_IDS.has(itemId)) return null;
   // Cryptographically confirm the oracle actually signed this — never trust a
   // pubkey field alone (relays don't re-verify on read, callers may pass raw JSON).
@@ -417,7 +582,7 @@ function transferItem(event: any, fromPubkey: string, toPubkey: string): object 
 // they can't be fed a forged or stale (already-spent) event by the client.
 async function fetchOwnedItem(instanceId: string, ownerPubkey: string): Promise<any | null> {
   if (!instanceId) return null;
-  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ownerPubkey], '#t': ['nditem'] }));
+  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [ownerPubkey], '#t': ['nditem'] }));
   const ev = owned.get(instanceId);
   if (!ev || isBurned(ev)) return null;
   return ev;
@@ -604,7 +769,7 @@ function pollAndRelease(instanceId: string, buyer: string, buyerWs: WebSocket | 
   const poll = async () => {
     if (soldInstances.has(instanceId)) return;
     if (await lnurlIsSettled(verifyUrl)) {
-      const held = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ORACLE_PUBKEY], '#t': ['nditem'] }));
+      const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
       const ev = held.get(instanceId);
       if (!ev || isBurned(ev)) { send({ type: 'item_purchase_error', instanceId, reason: 'item_gone' }); return; }
       const newEvent = transferItem(ev, ORACLE_PUBKEY, buyer);
@@ -658,6 +823,12 @@ interface Player {
 }
 
 const players = new Map<string, Player>();
+
+// Drift guard: the bounty pools are hand-curated copies of catalog ids — catch a
+// typo or a renamed item at boot instead of failing claims at runtime.
+for (const id of [...BOUNTY_WANT_POOL, ...BOUNTY_REWARD_POOL, ...BOUNTY_LEGENDARY_POOL]) {
+  if (!VALID_ITEM_IDS.has(id)) console.error(`[Bounty] POOL DRIFT: ${id} is not a valid item id`);
+}
 
 const wss = new WebSocketServer({ port: 3100 });
 console.log('[Presence] Server running on ws://localhost:3100');
@@ -1070,6 +1241,75 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // ── Bounty board: list this week's bounties ────────────────────────────
+      if (msg.type === 'bounty_list_request' && myPubkey) {
+        const me = myPubkey;
+        (async () => {
+          const bounties = getWeekBounties();
+          const out = [];
+          for (const b of bounties) {
+            const claims = await loadBountyClaims(b.id);
+            out.push({
+              id: b.id, wants: b.wants, rewardItemId: b.rewardItemId, tier: b.tier, endsAt: b.endsAt,
+              claimed: claims.length,
+              claimedByMe: claims.includes(me),
+            });
+          }
+          ws.send(JSON.stringify({ type: 'bounty_list', bounties: out }));
+        })().catch(() => ws.send(JSON.stringify({ type: 'bounty_list', bounties: [] })));
+        return;
+      }
+
+      // ── Bounty board: turn in items, burn them, mint the reward ───────────
+      if (msg.type === 'bounty_claim_request' && myPubkey) {
+        const me = myPubkey;
+        const bountyId = typeof msg.bountyId === 'string' ? msg.bountyId : '';
+        const instanceIds: string[] = Array.isArray(msg.instanceIds)
+          ? [...new Set(msg.instanceIds.filter((x: unknown) => typeof x === 'string'))] : [];
+        const fail = (reason: string) => ws.send(JSON.stringify({ type: 'bounty_claim_error', bountyId, reason }));
+        const bounty = getWeekBounties().find(b => b.id === bountyId);
+        if (!bounty) { fail('expired'); return; } // last week's board, or forged id
+        // In-flight lock: the already_claimed check below involves a relay fetch,
+        // so two PARALLEL claims from one account could both pass it and double-mint.
+        // The UI can't do this (button disables) — this stops scripted clients.
+        const flightKey = `${bountyId}|${me}`;
+        if (bountyClaimsInFlight.has(flightKey)) { fail('already_claimed'); return; }
+        bountyClaimsInFlight.add(flightKey);
+        (async () => {
+          const claims = await loadBountyClaims(bountyId);
+          if (claims.includes(me)) { fail('already_claimed'); return; }
+
+          // Verify the submitted instances cover the wants multiset, each one
+          // authoritative from relays (oracle-signed, owned by claimant, unburned).
+          const needed: Record<string, number> = {};
+          for (const w of bounty.wants) needed[w.itemId] = w.qty;
+          const totalNeeded = bounty.wants.reduce((s, w) => s + w.qty, 0);
+          if (instanceIds.length !== totalNeeded) { fail('wrong_items'); return; }
+          const verified: any[] = [];
+          for (const instanceId of instanceIds) {
+            const ev = await fetchOwnedItem(instanceId, me);
+            const itemId = ev?.tags?.find((t: string[]) => t[0] === 'item_id')?.[1];
+            if (!ev || !itemId || !(needed[itemId] > 0)) { fail('wrong_items'); return; }
+            needed[itemId]--;
+            verified.push(ev);
+          }
+
+          // All inputs check out → burn them, mint the posted reward, record.
+          for (const ev of verified) burnItem(ev);
+          const reward = mintItem(me, bounty.rewardItemId, 'bounty');
+          if (!reward) { fail('mint_failed'); return; }
+          publishToRelays(reward);
+          recordBountyClaim(bountyId, me);
+          const claimedNow = (bountyClaims[bountyId] ?? []).length;
+          console.log(`[Bounty] ${bountyId} claimed by ${me.slice(0,8)}… (${claimedNow} total) — burned ${instanceIds.length}, minted ${bounty.rewardItemId}`);
+          ws.send(JSON.stringify({
+            type: 'bounty_claimed', bountyId, event: reward,
+            burned: instanceIds, claimed: claimedNow,
+          }));
+        })().catch(() => fail('claim_failed')).finally(() => bountyClaimsInFlight.delete(flightKey));
+        return;
+      }
+
       // ── Item discard (replaceable-event tombstone) ────────────────────────
       // kind:30078 is addressable (keyed by kind:pubkey:d-tag). We re-publish the
       // same d-tag WITHOUT the owner's p tag, so the relay replaces the old event
@@ -1080,7 +1320,7 @@ wss.on('connection', (ws) => {
         const ev = msg.event;
         const ownerTag = ev?.tags?.find((t: string[]) => t[0] === 'p')?.[1];
         const dTag     = ev?.tags?.find((t: string[]) => t[0] === 'd')?.[1];
-        if (!dTag || ev.pubkey !== ORACLE_PUBKEY || ownerTag !== myPubkey) {
+        if (!dTag || !isOracleKey(ev.pubkey) || ownerTag !== myPubkey) {
           ws.send(JSON.stringify({ type: 'item_discard_error', reason: 'not_owner' }));
           return;
         }
@@ -1180,7 +1420,7 @@ wss.on('connection', (ws) => {
         if (!lud16) { fail('no_lightning_address'); return; }
         (async () => {
           // 1. The seller must actually own the item right now
-          const owned = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [seller], '#t': ['nditem'] }));
+          const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [seller], '#t': ['nditem'] }));
           const ev = owned.get(instanceId);
           if (!ev || isBurned(ev)) { fail('not_owned'); return; }
           // 2. Their wallet must support LNURL verify (needed to confirm offline sales)
@@ -1205,7 +1445,7 @@ wss.on('connection', (ws) => {
         if (!instanceId) { fail('bad_request'); return; }
         if (soldInstances.has(instanceId)) { fail('already_sold'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ORACLE_PUBKEY], '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('not_escrowed'); return; }
           if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
@@ -1236,7 +1476,7 @@ wss.on('connection', (ws) => {
         if (soldInstances.has(instanceId)) { fail('already_sold'); return; }
         if (isReserved(instanceId)) { fail('reserved'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ORACLE_PUBKEY], '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           const seller  = tagVal(ev, 'escrow_seller');
@@ -1284,7 +1524,7 @@ wss.on('connection', (ws) => {
         if (isReserved(instanceId)) { fail('reserved'); return; }
         (async () => {
           // Verify the seller owns the escrowed listing
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ORACLE_PUBKEY], '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
@@ -1321,7 +1561,7 @@ wss.on('connection', (ws) => {
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'decline_win_error', instanceId, reason }));
         if (!instanceId) { fail('bad_request'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: [ORACLE_PUBKEY], '#p': [ORACLE_PUBKEY], '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           if (tagVal(ev, 'awaiting_winner') !== caller) { fail('not_winner'); return; }

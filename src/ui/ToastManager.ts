@@ -24,12 +24,17 @@ export class ToastManager {
     this.container = container;
 
     window.addEventListener('nd-toast', (e: Event) => {
-      const { msg, color } = (e as CustomEvent).detail ?? {};
-      if (msg) this.show(msg, color);
+      const { msg, color, open } = (e as CustomEvent).detail ?? {};
+      // `open` makes the toast clickable: tapping it jumps straight into the
+      // bazaar at that tab ('inventory' | 'market' | 'offers' | 'sets').
+      const onClick = open
+        ? () => import('./BazaarPanel').then(({ bazaarPanel }) => bazaarPanel.openAt(open))
+        : undefined;
+      if (msg) this.show(msg, color, onClick);
     });
   }
 
-  static show(msg: string, color = '#c0a8ff'): void {
+  static show(msg: string, color = '#c0a8ff', onClick?: () => void): void {
     if (!this.container) this.init();
 
     const toast = document.createElement('div');
@@ -42,6 +47,15 @@ export class ToastManager {
       transition:opacity 0.4s ease;
     `;
     toast.textContent = msg;
+
+    if (onClick) {
+      toast.textContent = `${msg} ↗`;
+      toast.style.pointerEvents = 'auto'; // container itself is pointer-events:none
+      toast.style.cursor = 'pointer';
+      toast.addEventListener('mouseenter', () => { toast.style.background = 'rgba(26,26,48,0.96)'; });
+      toast.addEventListener('mouseleave', () => { toast.style.background = 'rgba(10,10,24,0.92)'; });
+      toast.addEventListener('click', () => { toast.remove(); onClick(); });
+    }
 
     if (!document.getElementById('nd-toast-style')) {
       const style = document.createElement('style');

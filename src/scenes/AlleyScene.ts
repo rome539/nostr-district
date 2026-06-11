@@ -29,6 +29,7 @@ import { getStatus } from '../stores/statusStore';
 import { FortuneTellerModal } from '../ui/FortuneTellerModal';
 import { TarotModal } from '../ui/TarotModal';
 import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
+import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { t as ti18n } from '../i18n/i18n';
 
 const ALLEY_ACCENT   = P.dpurp;
@@ -45,6 +46,8 @@ const VENDING_X      = 600;  // bazaar vending machine (open floor between crate
 const VENDING_RANGE  = 42;
 const VENDING_KEY    = 'vending_bazaar';
 const VENDING_URL    = 'assets/furniture/vending-machine-bazaar.png'; // web-safe name (no spaces/parens — those 404 on static hosts)
+const POSTER_X       = 706;  // oracle's wanted poster (wall right of the vending machine)
+const POSTER_RANGE   = 40;
 
 export class AlleyScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
@@ -84,6 +87,12 @@ export class AlleyScene extends BaseScene {
   private vendingPromptBg!: Phaser.GameObjects.Graphics;
   private vendingPromptText!: Phaser.GameObjects.Text;
   private vendingPromptArrow!: Phaser.GameObjects.Text;
+
+  // Bounty board (wanted poster) proximity
+  private nearPoster = false;
+  private posterPromptBg!: Phaser.GameObjects.Graphics;
+  private posterPromptText!: Phaser.GameObjects.Text;
+  private posterPromptArrow!: Phaser.GameObjects.Text;
 
   // Exit door prompt
 
@@ -199,6 +208,36 @@ export class AlleyScene extends BaseScene {
     fitPromptBubble(this.vendingPromptBg, this.vendingPromptText, { minWidth: 140, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0x7b68ee, strokeAlpha: 0.6 });
     this.vendingPromptBg.on('pointerdown', () => { if (this.nearVending && !BazaarPanel.isOpen()) bazaarPanel.open(); });
 
+    // Oracle's wanted poster — weathered paper tacked to the wall (bounty board).
+    // Colors are deliberately muted/cooled so it sits IN the dark alley instead of
+    // glowing against it (same reason the vending PNG gets a cool tint).
+    const posterG = this.add.graphics().setDepth(2);
+    const pY = FLOOR_Y - 86; // top of the paper — pinned at eye level, bottom near waist height
+    posterG.fillStyle(0x171008, 1).fillRect(POSTER_X - 19, pY - 4, 38, 52);           // backing board
+    posterG.fillStyle(0x8a7d63, 0.95).fillRect(POSTER_X - 15, pY, 30, 42);            // aged paper (dimmed)
+    posterG.fillStyle(0x6f6450, 0.95).fillRect(POSTER_X - 15, pY + 36, 30, 6);        // bottom grime
+    posterG.fillStyle(0x6e2a1e, 1).fillCircle(POSTER_X, pY + 2.5, 1.8);               // rusty tack
+    posterG.fillStyle(0x32271a, 0.9);                                                 // scribbled wants
+    posterG.fillRect(POSTER_X - 10, pY + 14, 20, 2);
+    posterG.fillRect(POSTER_X - 10, pY + 20, 14, 2);
+    posterG.fillRect(POSTER_X - 10, pY + 26, 17, 2);
+    posterG.fillStyle(0x6e3525, 0.9).fillRect(POSTER_X - 10, pY + 32, 8, 2);          // reward line (accent)
+    this.add.text(POSTER_X, pY + 8, 'WANTED', {
+      fontFamily: '"Courier New", monospace', fontSize: '7px', color: '#2e2214', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(3).setAlpha(0.85);
+    // corner curl
+    posterG.fillStyle(0x5d5343, 0.9).fillTriangle(POSTER_X + 15, pY + 42, POSTER_X + 9, pY + 42, POSTER_X + 15, pY + 36);
+
+    this.posterPromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
+    this.posterPromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.bounty_board')}`,
+      { fontFamily: '"Courier New", monospace', fontSize: '10px', color: '#e8c070', fontStyle: 'bold', align: 'center' }
+    ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    this.posterPromptArrow = this.add.text(0, 0, '▼',
+      { fontFamily: 'monospace', fontSize: '9px', color: '#c0903f' }
+    ).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
+    fitPromptBubble(this.posterPromptBg, this.posterPromptText, { minWidth: 150, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: 0xc0903f, strokeAlpha: 0.6 });
+    this.posterPromptBg.on('pointerdown', () => { if (this.nearPoster && !BountyBoardPanel.isOpen()) BountyBoardPanel.show(); });
+
     // Fortune teller prompt
     this.fortunePromptBg = this.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
     this.fortunePromptText = this.add.text(0, 0, `${isTouch ? '[TAP]' : '[E]'} ${ti18n('prompt.ask_fortune')}`,
@@ -229,6 +268,7 @@ export class AlleyScene extends BaseScene {
       if (this.nearFortune) { FortuneTellerModal.show(); return; }
       if (this.nearTarot) { TarotModal.show(); return; }
       if (this.nearVending && !BazaarPanel.isOpen()) { bazaarPanel.open(); return; }
+      if (this.nearPoster && !BountyBoardPanel.isOpen()) { BountyBoardPanel.show(); return; }
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);
@@ -768,6 +808,7 @@ export class AlleyScene extends BaseScene {
     this.updateFortuneProximity();
     this.updateTarotProximity();
     this.updateVendingProximity();
+    this.updatePosterProximity();
     this.updateSubwayProximity();
 
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -1004,6 +1045,30 @@ export class AlleyScene extends BaseScene {
       this.vendingPromptArrow.setPosition(sx, sy + 19);
       if (!this.tweens.isTweening(this.vendingPromptArrow)) {
         this.tweens.add({ targets: this.vendingPromptArrow, y: sy + 23, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
+  }
+
+  private updatePosterProximity(): void {
+    const near = Math.abs(this.player.x - POSTER_X) <= POSTER_RANGE;
+    if (near !== this.nearPoster) {
+      this.nearPoster = near;
+      const show = near && !BountyBoardPanel.isOpen();
+      this.posterPromptBg.setVisible(show);
+      this.posterPromptText.setVisible(show);
+      this.posterPromptArrow.setVisible(show);
+      if (!near) this.tweens.killTweensOf(this.posterPromptArrow);
+    }
+    if (BountyBoardPanel.isOpen()) return;
+    if (near) {
+      const zoom = this.cameras.main.zoom;
+      const sx = POSTER_X - this.cameras.main.scrollX;
+      const sy = this.player.y - this.cameras.main.scrollY - 130 / zoom;
+      positionPromptBubble(this.posterPromptBg, sx, sy - 2);
+      this.posterPromptText.setPosition(sx, sy + 7);
+      this.posterPromptArrow.setPosition(sx, sy + 19);
+      if (!this.tweens.isTweening(this.posterPromptArrow)) {
+        this.tweens.add({ targets: this.posterPromptArrow, y: sy + 23, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     }
   }

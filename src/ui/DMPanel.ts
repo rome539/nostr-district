@@ -353,17 +353,27 @@ export class DMPanel {
             const wantDef  = ITEM_CATALOG.find(d => d.id === offer.wantItemId);
             if (offerDef && wantDef) {
               SoundEngine.get().tradeSound();
-              window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer: ${offerDef.emoji} ${offerDef.name} for your ${wantDef.emoji} ${wantDef.name}. Open /bazaar → Offers.`, color: '#ffd700' } }));
+              window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer: ${offerDef.emoji} ${offerDef.name} for your ${wantDef.emoji} ${wantDef.name}`, color: '#ffd700', open: 'offers' } }));
             }
           }
         } else if (c.startsWith('nd-item-offer-accept:')) {
           if (handleOfferAccepted(c) && live) {
-            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade accepted! Open /bazaar for your new item.`, color: '#70ff70' } }));
+            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade accepted! Your new item is in the bazaar.`, color: '#70ff70', open: 'inventory' } }));
           }
         } else if (c.startsWith('nd-item-offer-reject:')) {
           if (handleOfferRejected(c) && live) {
-            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer was declined.`, color: '#ff7070' } }));
+            window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Trade offer was declined.`, color: '#ff7070', open: 'offers' } }));
           }
+        } else if (c.startsWith('nd-item-bid-decline:')) {
+          // Seller declined our market bid — refresh bid views; toast only when live.
+          if (live) {
+            try {
+              const { itemId } = JSON.parse(c.replace(/^nd-item-bid-decline:/, ''));
+              const def = ITEM_CATALOG.find(d => d.id === itemId);
+              window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Your bid on ${def?.name ?? 'an item'} was declined.`, color: '#ff9070', open: 'market' } }));
+            } catch { /* malformed — ignore */ }
+          }
+          window.dispatchEvent(new CustomEvent('nd-market-update'));
         } else if (c.startsWith('nd-item-sold:')) {
           try {
             const { instanceId, listingId, buyerPubkey } = JSON.parse(c.replace(/^nd-item-sold:/, ''));

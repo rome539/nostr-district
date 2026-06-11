@@ -82,7 +82,7 @@ export class ScavengeSystem {
       // drops. Avoids the double-ping and won't falsely chime if the server rejects
       // the mint (e.g. scavenge rate-limit).
       window.dispatchEvent(new CustomEvent('nd-toast', {
-        detail: { msg: `${def.emoji} Found a ${def.name}! Open /bazaar to view.`, color: this.accent },
+        detail: { msg: `${def.emoji} Found a ${def.name}!`, color: this.accent, open: 'inventory' },
       }));
     }
     // Remove the collected spot from this scene's view (it rerolled elsewhere)

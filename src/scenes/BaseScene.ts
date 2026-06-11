@@ -86,6 +86,7 @@ import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '..
 import { getRainbowColor, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops } from '../stores/marketStore';
 import { MarketPanel } from '../ui/MarketPanel';
 import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
+import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
@@ -490,7 +491,7 @@ export abstract class BaseScene extends Phaser.Scene {
         if (source === 'weekly_drop') {
           import('../stores/tradeItemStore').then(({ ITEM_CATALOG }) => {
             const def = ITEM_CATALOG.find(d => d.id === item.itemId);
-            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Weekly drop: ${def.emoji} ${def.name}! Open /bazaar to view.`, color: '#c0a8ff' } }));
+            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Weekly drop: ${def.emoji} ${def.name}!`, color: '#c0a8ff', open: 'inventory' } }));
           });
         }
       }
@@ -499,7 +500,7 @@ export abstract class BaseScene extends Phaser.Scene {
       // Add the item to inventory immediately (no waiting for a relay refetch)
       if (event) receiveMintedEvent(event, true);
       this.snd.tradeSound();
-      window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `You received an item${fromName ? ` from ${fromName}` : ''}! Open /bazaar to view.`, color: '#c0a8ff' } }));
+      window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `You received an item${fromName ? ` from ${fromName}` : ''}!`, color: '#c0a8ff', open: 'inventory' } }));
     });
     this.emoteSet.stopAll();
     this.isLeavingScene = false;
@@ -1372,6 +1373,7 @@ export abstract class BaseScene extends Phaser.Scene {
     // ESC peels one layer at a time instead of tearing down the whole panel.
     if (BazaarPanel.closeTopOverlay())  {                               return true; }
     if (BazaarPanel.isOpen())           { bazaarPanel.close();          return true; }
+    if (BountyBoardPanel.isOpen())      { BountyBoardPanel.destroy();   return true; }
     if (WalletPanel.isOpen())           { WalletPanel.destroy();        return true; }
     if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
     if (this.worldMap.isOpen())         { this.worldMap.close();        return true; }

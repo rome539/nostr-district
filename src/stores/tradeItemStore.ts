@@ -458,7 +458,7 @@ export interface OwnedItem {
   instanceId: string;
   itemId: string;
   acquiredAt: number;
-  acquiredFrom: 'caught' | 'found' | 'weekly_drop' | 'bought' | 'received';
+  acquiredFrom: 'caught' | 'found' | 'weekly_drop' | 'bought' | 'received' | 'bounty';
   fromPubkey?: string;
 }
 
@@ -1234,12 +1234,54 @@ export async function withdrawBid(instanceId: string, sellerPubkey: string): Pro
   } catch { /* offline */ }
 }
 
+// Seller: decline a bid. A seller-signed addressable marker on the relays — it
+// hides that bid from the seller's Offers on every device AND marks it declined
+// in the bidder's "your bids". Keyed per (item, bidder) and stamped with the
+// declined bid's timestamp, so a NEW bid placed afterwards is a fresh offer and
+// shows again.
+export async function declineBid(instanceId: string, bidderPubkey: string, bidAtMs: number, itemId?: string, amount?: number): Promise<void> {
+  const { pubkey } = authStore.getState();
+  if (!pubkey) return;
+  try {
+    const signed = await signEvent({
+      kind: 30078, pubkey, created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['d', `nddecline_${instanceId}_${bidderPubkey.slice(0, 16)}`],
+        ['t', 'ndbiddecline'], ['p', bidderPubkey],
+        ['instance_id', instanceId], ['bidder', bidderPubkey],
+        ['bid_ts', String(Math.floor(bidAtMs / 1000))],
+      ],
+      content: '',
+    });
+    await publishEvent(signed);
+    // Live-notify the bidder over the trade protocol (hidden from chat clients).
+    try {
+      const { sendProtocolMessage } = await import('../nostr/dmService');
+      sendProtocolMessage(bidderPubkey, 'nd-item-bid-decline:' + JSON.stringify({ instanceId, itemId, amount })).catch(() => {});
+    } catch { /* best-effort */ }
+  } catch { /* offline */ }
+}
+
 // Seller: fetch all live bids on their listings → { instanceId: bids[] (high→low) }.
 export async function fetchBidsForListings(sellerPubkey: string): Promise<Record<string, MarketBid[]>> {
   if (!sellerPubkey) return {};
   try {
     const { queryEvents } = await import('../nostr/nostrService');
-    const events = await queryEvents({ kinds: [30078], '#t': ['ndbid'], '#p': [sellerPubkey], limit: 300 }, MARKET_RELAYS);
+    const [events, declines] = await Promise.all([
+      queryEvents({ kinds: [30078], '#t': ['ndbid'], '#p': [sellerPubkey], limit: 300 }, MARKET_RELAYS),
+      queryEvents({ kinds: [30078], authors: [sellerPubkey], '#t': ['ndbiddecline'], limit: 300 }, MARKET_RELAYS),
+    ]);
+    // My decline markers: (instanceId|bidder) → newest declined-bid timestamp.
+    // Bids at or before that timestamp are hidden; a newer re-bid shows again.
+    const declinedTs = new Map<string, number>();
+    for (const e of declines) {
+      const inst   = e.tags.find((t: string[]) => t[0] === 'instance_id')?.[1];
+      const bidder = e.tags.find((t: string[]) => t[0] === 'bidder')?.[1];
+      const ts     = Math.floor(Number(e.tags.find((t: string[]) => t[0] === 'bid_ts')?.[1] ?? '0'));
+      if (!inst || !bidder) continue;
+      const k = inst + '|' + bidder;
+      if ((declinedTs.get(k) ?? 0) < ts) declinedTs.set(k, ts);
+    }
     const byKey = new Map<string, any>(); // newest per (bidder, item)
     for (const e of events) {
       const d = e.tags.find((t: string[]) => t[0] === 'd')?.[1];
@@ -1254,6 +1296,7 @@ export async function fetchBidsForListings(sellerPubkey: string): Promise<Record
       const amount = Math.floor(Number(e.tags.find((t: string[]) => t[0] === 'amount')?.[1] ?? '0'));
       if (!instanceId || !(amount >= 1)) continue;
       if (_soldInstances.has(instanceId)) continue;
+      if ((declinedTs.get(instanceId + '|' + e.pubkey) ?? 0) >= e.created_at) continue; // declined
       (out[instanceId] ??= []).push({ buyer: e.pubkey, amount, at: e.created_at * 1000 });
     }
     for (const id in out) out[id].sort((a, b) => b.amount - a.amount);
@@ -1271,12 +1314,25 @@ export function subscribeBids(sellerPubkey: string, onUpdate: () => void): () =>
 }
 
 // Bidder: fetch your OWN active bids (so you can see + cancel them). One per item.
-export interface MyBid { instanceId: string; itemId: string; amount: number; sellerPubkey: string }
+export interface MyBid { instanceId: string; itemId: string; amount: number; sellerPubkey: string; declined?: boolean }
 export async function fetchMyBids(myPubkey: string): Promise<MyBid[]> {
   if (!myPubkey) return [];
   try {
     const { queryEvents } = await import('../nostr/nostrService');
-    const events = await queryEvents({ kinds: [30078], authors: [myPubkey], '#t': ['ndbid'], limit: 200 }, MARKET_RELAYS);
+    const [events, declines] = await Promise.all([
+      queryEvents({ kinds: [30078], authors: [myPubkey], '#t': ['ndbid'], limit: 200 }, MARKET_RELAYS),
+      queryEvents({ kinds: [30078], '#t': ['ndbiddecline'], '#p': [myPubkey], limit: 200 }, MARKET_RELAYS),
+    ]);
+    // Declines addressed to me: (instanceId|declinerPubkey) → newest declined-bid ts.
+    // Only honored when the decliner is the listing's actual seller (checked below).
+    const declinedTs = new Map<string, number>();
+    for (const e of declines) {
+      const inst = e.tags.find((t: string[]) => t[0] === 'instance_id')?.[1];
+      const ts   = Math.floor(Number(e.tags.find((t: string[]) => t[0] === 'bid_ts')?.[1] ?? '0'));
+      if (!inst) continue;
+      const k = inst + '|' + e.pubkey;
+      if ((declinedTs.get(k) ?? 0) < ts) declinedTs.set(k, ts);
+    }
     const byD = new Map<string, any>();
     for (const e of events) {
       const d = e.tags.find((t: string[]) => t[0] === 'd')?.[1];
@@ -1291,7 +1347,8 @@ export async function fetchMyBids(myPubkey: string): Promise<MyBid[]> {
       const amount = Math.floor(Number(e.tags.find((t: string[]) => t[0] === 'amount')?.[1] ?? '0'));
       const sellerPubkey = e.tags.find((t: string[]) => t[0] === 'p')?.[1] ?? '';
       if (!instanceId || !(amount >= 1) || _soldInstances.has(instanceId)) continue;
-      out.push({ instanceId, itemId, amount, sellerPubkey });
+      const declined = (declinedTs.get(instanceId + '|' + sellerPubkey) ?? 0) >= e.created_at;
+      out.push({ instanceId, itemId, amount, sellerPubkey, declined });
     }
     return out;
   } catch { return []; }

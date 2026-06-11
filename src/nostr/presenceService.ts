@@ -117,6 +117,40 @@ export function sendItemSwapRequest(myEvent: object, theirEvent: object, theirPu
   }
 }
 
+// ── Bounty board ──────────────────────────────────────────────────────────────
+// The server is the authority for the weekly board (deterministic) and claims.
+
+export interface BountyInfo {
+  id: string;
+  wants: { itemId: string; qty: number }[];
+  rewardItemId: string;
+  tier: 'rare' | 'legendary'; // legendary weeks want rares and pay a legendary
+  endsAt: number;
+  claimed: number;      // how many residents have claimed (social proof, no cap)
+  claimedByMe: boolean; // one claim per account per bounty
+}
+
+let pendingBountyList: ((bounties: BountyInfo[]) => void) | null = null;
+export function fetchBounties(): Promise<BountyInfo[]> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve([]); return; }
+    const timer = setTimeout(() => { pendingBountyList = null; resolve([]); }, 10000);
+    pendingBountyList = (b) => { clearTimeout(timer); resolve(b); };
+    ws.send(JSON.stringify({ type: 'bounty_list_request' }));
+  });
+}
+
+export interface BountyClaimResult { ok: boolean; reason?: string; event?: object; burned?: string[]; claimed?: number }
+const pendingBountyClaims = new Map<string, (r: BountyClaimResult) => void>();
+export function claimBountyRequest(bountyId: string, instanceIds: string[]): Promise<BountyClaimResult> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingBountyClaims.delete(bountyId); resolve({ ok: false, reason: 'timeout' }); }, 20000);
+    pendingBountyClaims.set(bountyId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'bounty_claim_request', bountyId, instanceIds }));
+  });
+}
+
 // ── Escrow market (list / delist / buy) ───────────────────────────────────────
 
 // List: ask the oracle to escrow the item (hold it while listed). Resolves once
@@ -430,6 +464,19 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'incoming_zap') onIncomingZap?.(msg.senderPk, msg.senderName || '', Number(msg.amountSats) || 0, msg.comment || '');
       if (msg.type === 'item_minted') onItemMinted?.(msg.event);
       if (msg.type === 'fish_caught') onFishCaught?.(msg as FishCaughtMsg);
+      if (msg.type === 'bounty_list') {
+        if (pendingBountyList) { const cb = pendingBountyList; pendingBountyList = null; cb(msg.bounties ?? []); }
+      }
+      if (msg.type === 'bounty_claimed') {
+        const cb = pendingBountyClaims.get(msg.bountyId);
+        if (cb) { pendingBountyClaims.delete(msg.bountyId); cb({ ok: true, event: msg.event, burned: msg.burned, claimed: msg.claimed }); }
+        // The reward also lands through the normal mint plumbing (inventory add).
+        onItemMinted?.(msg.event);
+      }
+      if (msg.type === 'bounty_claim_error') {
+        const cb = pendingBountyClaims.get(msg.bountyId);
+        if (cb) { pendingBountyClaims.delete(msg.bountyId); cb({ ok: false, reason: msg.reason }); }
+      }
       if (msg.type === 'oracle_pubkey') {
         // Just store the key — inventory loads lazily when the bazaar opens
         import('../stores/tradeItemStore').then(({ setOraclePubkey }) => setOraclePubkey(msg.pubkey));
@@ -458,7 +505,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'purchase_timeout') {
         const cb = pendingPurchaseInit.get(msg.instanceId);
         if (cb) { pendingPurchaseInit.delete(msg.instanceId); cb({ error: 'timeout' }); }
-        else window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: 'Payment window expired — the item was released back to the market.', color: '#f0b040' } }));
+        else window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: 'Payment window expired — the item was released back to the market.', color: '#f0b040', open: 'market' } }));
       }
       // ── Bid acceptance responses (seller side) ──────────────────────────
       if (msg.type === 'bid_accept_ok') {
