@@ -7,7 +7,7 @@ import {
   getInventoryWithDefs, getCompletedSets, getSetProgress, isNewItem, clearNewItem, isListingInFlight,
   getLocalListings, listItem, delistItem, sendItemDirect,
   fetchMarketListings, getCachedRemoteListings, RemoteListing,
-  MarketListing, purchaseListing, discardItem, fetchInventoryFromRelays, subscribeMarket, fetchMyListings,
+  MarketListing, purchaseListing, restoreLocalListing, discardItem, fetchInventoryFromRelays, subscribeMarket, fetchMyListings,
   TradeOffer, getPendingOffers, sendTradeOffer, acceptTradeOffer, rejectTradeOffer, cancelTradeOffer,
   getPendingOutgoingInstanceIds, streamOwnedItemsOf, normalizePubkey, reclaimOrphanedEscrows,
 } from '../stores/tradeItemStore';
@@ -891,6 +891,13 @@ export class BazaarPanel {
             this.render();
           },
           listing.instanceId,
+          // Dismissed without paying → put the listing back (it was only
+          // soft-hidden while the QR was up). If they pay the saved invoice
+          // later anyway, item_sold re-hides it for good.
+          () => {
+            restoreLocalListing(listing);
+            this.render();
+          },
         );
       } else if (result.status === 'no_signer') {
         btn.textContent = ti18n('bz.login_required'); btn.disabled = false;

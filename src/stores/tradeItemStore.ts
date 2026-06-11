@@ -1138,7 +1138,9 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
       if (!byD.has(d) || e.created_at > byD.get(d).created_at) byD.set(d, e);
     }
 
-    _remoteListings = [...byD.values()]
+    // Build the candidate list PRIVATELY — _remoteListings is only assigned after
+    // the burn-verification below, so no render can ever flash a sold ghost.
+    const candidates = [...byD.values()]
       .filter(e => e.pubkey !== myPubkey)
       .filter(e => !e.tags.find((t: string[]) => t[0] === 'delisted')) // drop delisted
       .map(eventToRemoteListing)
@@ -1148,11 +1150,9 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
     // SELF-HEAL: the server's sold-list lives on an ephemeral disk and forgets
     // past sales on every deploy, so stale 30402s can resurrect. The durable
     // truth is on the relays: a live listing's instanceId is escrowed to the
-    // oracle; once sold (or otherwise spent) the oracle BURNS that event. Any
-    // listing whose item event is burned — or no longer oracle-held — is dead
-    // stock; hide it and remember it as sold.
-    if (_remoteListings.length && _oracleSet.length) {
-      const ids = [...new Set(_remoteListings.map(l => l.instanceId).filter(Boolean))];
+    // oracle; once sold (or otherwise spent) the oracle BURNS that event.
+    if (candidates.length && _oracleSet.length) {
+      const ids = [...new Set(candidates.map(l => l.instanceId).filter(Boolean))];
       const states = await queryEvents({ kinds: [30078], authors: _oracleSet, '#d': ids }, MARKET_RELAYS);
       const newest = new Map<string, any>();
       for (const e of states) {
@@ -1163,7 +1163,7 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
         if (!prev || e.created_at > prev.created_at) newest.set(d, e);
       }
       const dead: string[] = [];
-      for (const l of _remoteListings) {
+      for (const l of candidates) {
         const ev = newest.get(l.instanceId);
         if (!ev) continue; // not found on these relays — benefit of the doubt
         // ONLY a burn tombstone is trusted as "dead": burns are permanent and a
@@ -1173,9 +1173,10 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
         // which would falsely cull a live listing.
         if (ev.tags?.find((t: string[]) => t[0] === 'burned')) dead.push(l.instanceId);
       }
-      if (dead.length) markSoldInstances(dead); // hides them + strips from _remoteListings
+      if (dead.length) markSoldInstances(dead); // remembers + cleans any of MY stale state
     }
 
+    _remoteListings = candidates.filter(l => !_soldInstances.has(l.instanceId));
     _fetchedAt = Date.now();
   } catch { /* network unavailable */ } finally {
     _fetchInProgress = false;
@@ -1507,6 +1508,20 @@ function dropLocalListing(listing: RemoteListing): void {
   window.dispatchEvent(new CustomEvent('nd-market-update'));
 }
 
+// Soft-hide: remove from the local browse list WITHOUT marking sold — used while
+// a QR payment is pending. If the buyer bails out of the modal unpaid,
+// restoreLocalListing puts it back; if they pay, the server's item_sold settles it.
+function hideLocalListing(listing: RemoteListing): void {
+  _remoteListings = _remoteListings.filter(l => l.eventId !== listing.eventId);
+  window.dispatchEvent(new CustomEvent('nd-market-update'));
+}
+export function restoreLocalListing(listing: RemoteListing): void {
+  if (_soldInstances.has(listing.instanceId) || _reservedInstances.has(listing.instanceId)) return;
+  if (_remoteListings.some(l => l.eventId === listing.eventId)) return;
+  _remoteListings = [listing, ..._remoteListings];
+  window.dispatchEvent(new CustomEvent('nd-market-update'));
+}
+
 // Escrow purchase flow:
 //   1. Ask the server for an invoice (it fetches one from the SELLER's address)
 //   2. Pay the bolt11 with our wallet (Spark/WebLN/NWC) — funds go to the seller
@@ -1526,7 +1541,9 @@ export async function purchaseListing(listing: RemoteListing, onStatus?: (msg: s
     // by us right now; surface the precise reason so we don't say "payment failed".
     const unavailable = ['already_sold', 'item_gone', 'not_listed', 'reserved', 'reserved_for_winner', 'own_listing'];
     if (init.error && unavailable.includes(init.error)) {
-      if (init.error !== 'reserved_for_winner') dropLocalListing(listing); // winner-reserved item may still resolve to others if they don't pay
+      // Keep winner-reserved AND payment-pending ('reserved', ≤5 min) items visible —
+      // both can come back on the market; only definitively-gone ones get dropped.
+      if (init.error !== 'reserved_for_winner' && init.error !== 'reserved') dropLocalListing(listing);
       return { status: 'unavailable', reason: init.error };
     }
     return { status: 'payment_failed', reason: init.error };
@@ -1544,7 +1561,9 @@ export async function purchaseListing(listing: RemoteListing, onStatus?: (msg: s
 
   // Wallet couldn't cover it → hand back the invoice for a QR. The server is
   // already polling for payment and will release the item once it settles.
-  dropLocalListing(listing);
+  // SOFT-hide only: if the buyer closes the QR unpaid, the caller restores the
+  // listing (marking it SOLD here made it vanish for the whole session).
+  hideLocalListing(listing);
   return { status: 'invoice', invoice: init.bolt11 };
 }
 

@@ -39,6 +39,9 @@ export function showInvoiceModal(
   // Bazaar purchases: the SERVER polls settlement and broadcasts item_sold —
   // watching for our instanceId is how this modal learns the payment landed.
   watchInstanceId?: string,
+  // Fired when the user dismisses the modal WITHOUT the payment confirming
+  // (close button / backdrop / ESC) — lets the caller undo optimistic UI.
+  onClose?: () => void,
 ): void {
   document.getElementById('mp-invoice-modal')?.remove();
 
@@ -149,6 +152,7 @@ export function showInvoiceModal(
   const close = () => {
     removeListeners();
     overlay.remove();
+    onClose?.();
   };
 
   modal.querySelector('#mp-inv-close')!.addEventListener('click', close);
