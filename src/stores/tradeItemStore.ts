@@ -1230,8 +1230,14 @@ export async function fetchListedInstanceIdsOf(sellerPubkey: string): Promise<Se
 export function subscribeMarket(onUpdate: () => void): () => void {
   let unsub = () => {};
   const dTagSeen = new Map<string, number>(); // d-tag → newest created_at seen
+  // LIVE events only (since ≈ now): without this, relays replay their whole
+  // stored 30402 history on subscribe — including sold ghosts — straight into
+  // the list with NO burn-verification, racing ahead of the verified fetch
+  // (= the "sold items flash for a second" bug). History is fetchMarketListings'
+  // job, which verifies against oracle burn tombstones before showing anything.
+  const since = Math.floor(Date.now() / 1000) - 60; // small overlap for fresh listings
   import('../nostr/nostrService').then(({ subscribeEvents }) => {
-    unsub = subscribeEvents({ kinds: [30402], '#t': ['ndmarket'] }, (e) => {
+    unsub = subscribeEvents({ kinds: [30402], '#t': ['ndmarket'], since }, (e) => {
       const { pubkey: myPubkey } = authStore.getState();
       const d = e.tags.find((t: string[]) => t[0] === 'd')?.[1];
       if (!d) return;
