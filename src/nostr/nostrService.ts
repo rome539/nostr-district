@@ -66,6 +66,27 @@ export async function fetchContactList(pubkey: string): Promise<{ tags: string[]
  * Sign an event using whichever signer is available for the current login method.
  * Returns the fully signed event (with id + sig), or throws on failure.
  */
+// Identity guard: everything signed through THIS wrapper must be authored by the
+// logged-in session. NIP-07 extensions (and remote signers) sign with whatever
+// profile is currently ACTIVE — they ignore the pubkey in the draft — so a user
+// who switches extension profiles mid-session would otherwise publish events
+// under the wrong identity. Those are silent corruption: e.g. a bid withdrawal
+// signed by profile B can never replace a bid authored by profile A, leaving a
+// ghost bid no one can cancel. Fail loudly instead.
+// (DM gift-wraps and crew events sign with ephemeral/crew keys via finalizeEvent
+// directly — they never pass through here, so they're unaffected.)
+function assertSessionAuthor(signed: any): any {
+  const session = (authStore.getState().pubkey ?? '').toLowerCase();
+  const author  = (signed?.pubkey ?? '').toLowerCase();
+  if (session && author && author !== session) {
+    window.dispatchEvent(new CustomEvent('nd-toast', {
+      detail: { msg: 'Your signer is on a different profile than this login — switch it back and retry.', color: '#ff9070' },
+    }));
+    throw new Error(`Signer identity mismatch: session ${session.slice(0, 8)}…, signer returned ${author.slice(0, 8)}…`);
+  }
+  return signed;
+}
+
 export async function signEvent(event: any): Promise<any> {
   if (!NostrTools) await loadNostrTools();
   const loginMethod = authStore.getState().loginMethod;
@@ -73,19 +94,19 @@ export async function signEvent(event: any): Promise<any> {
   if (loginMethod === 'nsec') {
     const key = getLocalKey();
     if (!key) throw new Error('No private key available');
-    return NostrTools.finalizeEvent({ ...event }, key);
+    return assertSessionAuthor(NostrTools.finalizeEvent({ ...event }, key));
   }
 
   if (loginMethod === 'bunker') {
     if (!bunkerClient) throw new Error('Bunker signer not connected');
-    return bunkerClient.signEvent(event);
+    return assertSessionAuthor(await bunkerClient.signEvent(event));
   }
 
   // extension or fallback
   if ((window as any).nostr?.signEvent) {
     const signed = await (window as any).nostr.signEvent(event);
     if (!signed?.id || !signed?.sig) throw new Error('Extension returned invalid event');
-    return signed;
+    return assertSessionAuthor(signed);
   }
 
   throw new Error('No signer available — login with a key or extension');
