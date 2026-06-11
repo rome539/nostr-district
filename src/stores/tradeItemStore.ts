@@ -833,6 +833,39 @@ export async function fetchMyListings(): Promise<void> {
         ?? { instanceId, itemId, acquiredAt: e.created_at * 1000, acquiredFrom: 'caught' as const };
       live.push({ id: e.id, dTag, sellerPubkey: pubkey, item, def, price, note, listedAt: e.created_at * 1000 });
     }
+
+    // SELF-HEAL (seller side): the server's sold-list is wiped on every deploy,
+    // so a sale we never heard about can leave a ghost in My Listings forever.
+    // The oracle's burn tombstone on the listing's instanceId is the durable
+    // proof it sold — check the relays, drop those listings, and publish the
+    // 30402 delist tombstone so the ghost disappears for EVERY client.
+    if (live.length && _oracleSet.length) {
+      try {
+        const ids = [...new Set(live.map(l => l.item.instanceId).filter(Boolean))];
+        const states = await queryEvents({ kinds: [30078], authors: _oracleSet, '#d': ids }, MARKET_RELAYS);
+        const newest = new Map<string, any>();
+        for (const e of states) {
+          if (!isTrustedOracle(e.pubkey)) continue;
+          const d = e.tags?.find((t: string[]) => t[0] === 'd')?.[1];
+          if (!d) continue;
+          const prev = newest.get(d);
+          if (!prev || e.created_at > prev.created_at) newest.set(d, e);
+        }
+        const stillLive: MarketListing[] = [];
+        for (const l of live) {
+          const ev = newest.get(l.item.instanceId);
+          if (ev?.tags?.find((t: string[]) => t[0] === 'burned')) {
+            _soldInstances.add(l.item.instanceId);
+            publishDelistTombstone(l.dTag); // permanent network-wide cleanup
+          } else {
+            stillLive.push(l);
+          }
+        }
+        live.length = 0;
+        live.push(...stillLive);
+      } catch { /* relays flaky — keep the unfiltered list this round */ }
+    }
+
     saveListings(live);
     window.dispatchEvent(new CustomEvent('nd-market-update'));
   } catch { /* offline — keep cached listings */ }
@@ -1133,15 +1166,12 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
       for (const l of _remoteListings) {
         const ev = newest.get(l.instanceId);
         if (!ev) continue; // not found on these relays — benefit of the doubt
-        const burned = !!ev.tags?.find((t: string[]) => t[0] === 'burned');
-        const owner  = (ev.tags?.find((t: string[]) => t[0] === 'p')?.[1] ?? '').toLowerCase();
-        // Burned = definitively spent. Owner-not-oracle = returned to the seller
-        // (delist whose tombstone never published) — but only trust that signal
-        // for listings older than 2 min, so a fresh listing whose escrow event
-        // hasn't propagated yet can't be falsely culled.
-        if (burned || (!_oracleSet.includes(owner) && Date.now() - l.listedAt > 120_000)) {
-          dead.push(l.instanceId);
-        }
+        // ONLY a burn tombstone is trusted as "dead": burns are permanent and a
+        // d-tag never comes back to life (transfers re-mint under a NEW id).
+        // Any owner-based heuristic is unsafe — a relay can return the original
+        // mint (p=seller) while the newer escrow event hasn't reached it yet,
+        // which would falsely cull a live listing.
+        if (ev.tags?.find((t: string[]) => t[0] === 'burned')) dead.push(l.instanceId);
       }
       if (dead.length) markSoldInstances(dead); // hides them + strips from _remoteListings
     }
