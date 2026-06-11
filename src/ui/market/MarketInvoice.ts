@@ -36,6 +36,9 @@ export function showInvoiceModal(
   zapEventId:   string | undefined,
   _item:        MarketItem | null,
   onGrant:      () => void,
+  // Bazaar purchases: the SERVER polls settlement and broadcasts item_sold —
+  // watching for our instanceId is how this modal learns the payment landed.
+  watchInstanceId?: string,
 ): void {
   document.getElementById('mp-invoice-modal')?.remove();
 
@@ -116,20 +119,35 @@ export function showInvoiceModal(
   // Cancel any prior pending watchers before starting new ones
   _cancelPending();
 
-  const grantItem = () => {
-    _cancelPending();
-    overlay.remove();
-    onGrant();
-  };
-
   const invoiceEscHandler = (e: KeyboardEvent) => {
     if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); }
   };
   window.addEventListener('keydown', invoiceEscHandler, true);
 
+  let soldListener: ((e: Event) => void) | null = null;
+  const removeListeners = () => {
+    window.removeEventListener('keydown', invoiceEscHandler, true);
+    if (soldListener) { window.removeEventListener('nd-item-sold', soldListener); soldListener = null; }
+  };
+
+  const grantItem = () => {
+    _cancelPending();
+    removeListeners();
+    overlay.remove();
+    onGrant();
+  };
+
+  // Server-confirmed settlement (bazaar path): close when OUR item sells.
+  if (watchInstanceId) {
+    soldListener = (e: Event) => {
+      if ((e as CustomEvent).detail?.instanceId === watchInstanceId) grantItem();
+    };
+    window.addEventListener('nd-item-sold', soldListener);
+  }
+
   // Closing only dismisses the UI — pollers keep running so payment still settles.
   const close = () => {
-    window.removeEventListener('keydown', invoiceEscHandler, true);
+    removeListeners();
     overlay.remove();
   };
 

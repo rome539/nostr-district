@@ -279,7 +279,18 @@ export class BazaarPanel {
         } else if (r.status === 'invoice' && r.invoice) {
           payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
           const { showInvoiceModal } = await import('./market/MarketInvoice');
-          showInvoiceModal(r.invoice, def?.name ?? ti18n('bz.item'), win.price, undefined, undefined, undefined, null, () => {});
+          showInvoiceModal(
+            r.invoice, def?.name ?? ti18n('bz.item'), win.price, undefined, undefined, undefined, null,
+            // Server's item_sold for this win closed the modal — clean up the win UI.
+            () => {
+              ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
+              this.resolvedWins.add(win.instanceId);
+              this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+              this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
+              this.render();
+            },
+            win.instanceId,
+          );
         } else if (r.status === 'unavailable') {
           payBtn.textContent = ti18n('bz.no_longer_available');
           this.resolvedWins.add(win.instanceId);
@@ -873,7 +884,13 @@ export class BazaarPanel {
         showInvoiceModal(
           result.invoice, name, listing.price || 1, undefined,
           undefined, undefined, null,
-          () => { /* release handled server-side; item arrives via item_minted */ },
+          // Fires when the server's item_sold for this listing arrives —
+          // the modal closes itself; we just celebrate and refresh.
+          () => {
+            ToastManager.show(ti18n('bz.bought_ok', { price: String(listing.price), item: name }), '#ffd700');
+            this.render();
+          },
+          listing.instanceId,
         );
       } else if (result.status === 'no_signer') {
         btn.textContent = ti18n('bz.login_required'); btn.disabled = false;

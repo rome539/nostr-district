@@ -538,6 +538,8 @@ export function connectPresence(cb: PresenceCallback): void {
       }
       if (msg.type === 'item_sold' && typeof msg.instanceId === 'string') {
         import('../stores/tradeItemStore').then(({ markSoldInstances }) => markSoldInstances([msg.instanceId]));
+        // Lets the invoice QR modal auto-close when ITS purchase settles
+        window.dispatchEvent(new CustomEvent('nd-item-sold', { detail: { instanceId: msg.instanceId } }));
       }
       if (msg.type === 'reserved_list' && Array.isArray(msg.ids)) {
         import('../stores/tradeItemStore').then(({ markReserved }) => markReserved(msg.ids, true));
