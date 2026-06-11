@@ -1531,15 +1531,19 @@ export const FISH_KEEP_CHANCE: Record<string, number> = {
 // items in the pool. This keeps legendary/rare odds consistent regardless of how
 // many commons a given pool happens to contain. Falls back to a lower tier if the
 // pool has none of the rolled one.
-// Standard scavenge/weekly odds, and slightly more generous holiday odds.
+// Tier odds. AUTHORITATIVE rolls happen server-side (server.ts SCAVENGE_TIER_ODDS
+// — keep in sync); this client copy only drives the weekly-drop pick (commons/junk
+// pool, so the legendary weight never fires there).
+// Rebalanced 2026-06-11: legendary 6% → 1.5% (6% made Gold-set legendaries ~40×
+// easier than fishing ones and undercut the bounty board's legendary weeks).
 const TIER_ODDS: { tier: ItemRarity; p: number }[] = [
-  { tier: 'legendary', p: 0.06 },  // 6%
+  { tier: 'legendary', p: 0.015 }, // 1.5%
   { tier: 'rare',      p: 0.20 },  // 20%
-  { tier: 'common',    p: 0.74 },  // 74% (commons + junk share this tier)
+  { tier: 'common',    p: 0.785 }, // 78.5% (commons + junk share this tier)
 ];
 const HOLIDAY_TIER_ODDS: { tier: ItemRarity; p: number }[] = [
-  { tier: 'legendary', p: 0.08 },  // 8% — seasonal legendaries a touch easier
-  { tier: 'rare',      p: 0.22 },  // 22%
+  { tier: 'legendary', p: 0.08 },  // 8% — only a ~7-day window, and seasonal
+  { tier: 'rare',      p: 0.22 },  //      legendaries aren't in the Gold set
   { tier: 'common',    p: 0.70 },  // 70%
 ];
 const TIER_FALLBACK: Record<ItemRarity, ItemRarity[]> = {
@@ -1732,39 +1736,40 @@ export function getSceneScavengeSpots(scene: string): ScavengeSpot[] {
   return out;
 }
 
-// Collect a spot — mints an item and rerolls that slot with a random respawn delay.
-export function collectScavengeSlot(spotId: string): ItemDef | null {
+// Collect a spot — asks the server to roll + mint, rerolls the slot's respawn.
+export function collectScavengeSlot(spotId: string): boolean {
   const { pubkey, loginMethod } = authStore.getState();
-  if (!pubkey || loginMethod === 'guest') return null;
+  if (!pubkey || loginMethod === 'guest') return false;
   const delay = SCAVENGE_RESPAWN_MIN + Math.random() * (SCAVENGE_RESPAWN_MAX - SCAVENGE_RESPAWN_MIN);
 
   let pool: string[];
   const isHoliday = spotId.startsWith('hol');
   if (isHoliday) {
     const hol = getActiveHolidayDrop();
-    if (!hol) return null;
+    if (!hol) return false;
     const i = parseInt(spotId.replace('hol', ''));
     const slots = loadHolSlots(hol.id);
-    if (!slots[i] || slots[i].readyAt > Date.now()) return null;
+    if (!slots[i] || slots[i].readyAt > Date.now()) return false;
     pool = hol.pool;
     slots[i] = rollHolSlot(hol.id, delay);
     saveHolSlots();
   } else {
     const i = parseInt(spotId.replace('slot', ''));
     const slots = loadSlots();
-    if (!slots[i] || slots[i].readyAt > Date.now()) return null;
+    if (!slots[i] || slots[i].readyAt > Date.now()) return false;
     pool = SCENE_POOLS[slots[i].scene];
     slots[i] = rollSlot(delay);
     saveSlots();
   }
 
-  const def = pickWeightedFromPool(pool, isHoliday);
-  if (!def) return null;
-
-  import('../nostr/presenceService').then(({ sendItemMintRequest }) => {
-    sendItemMintRequest(def.id, 'found');
+  // The SERVER rolls what's in the spot (tier + item from the room's pool) and
+  // answers with item_minted — the client no longer picks the item, so a script
+  // can't request legendaries. `pool` above is only used to mark the spot spent.
+  void pool;
+  import('../nostr/presenceService').then(({ sendScavengeRequest }) => {
+    sendScavengeRequest(isHoliday);
   });
-  return def;
+  return true;
 }
 
 // ── Trade offers ──────────────────────────────────────────────────────────────

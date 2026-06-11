@@ -75,16 +75,10 @@ export class ScavengeSystem {
   tryInteract(): boolean {
     if (!this.nearSpot) return false;
     const id = this.nearSpot.id;
-    const def: ItemDef | null = collectScavengeSlot(id);
-    if (def) {
-      // No sound here — the reward chime plays from the mint handler (BaseScene)
-      // when the item_minted event actually arrives, exactly like fishing/weekly
-      // drops. Avoids the double-ping and won't falsely chime if the server rejects
-      // the mint (e.g. scavenge rate-limit).
-      window.dispatchEvent(new CustomEvent('nd-toast', {
-        detail: { msg: `${def.emoji} Found a ${def.name}!`, color: this.accent, open: 'inventory' },
-      }));
-    }
+    // The SERVER rolls what the spot contained and answers with item_minted —
+    // the toast + reward chime both come from the mint handler (BaseScene) when
+    // the result actually arrives, so nothing fires if the server rejects it.
+    collectScavengeSlot(id);
     // Remove the collected spot from this scene's view (it rerolled elsewhere)
     this.spots = this.spots.filter(s => s.id !== id);
     this.nearSpot = null;

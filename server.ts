@@ -402,6 +402,102 @@ function recordBountyClaim(bountyId: string, pubkey: string): void {
   }, ORACLE_SK));
 }
 
+
+// ── Scavenge: SERVER-AUTHORITATIVE rolls ──────────────────────────────────────
+// The client decides where/when spots appear (cosmetic, localStorage), but WHAT
+// a spot contains is rolled HERE — the client sends a bare scavenge_request and
+// the server rolls the tier + item from the room's pool. Direct 'found' mints
+// are rejected in prod (a client-supplied "I found X" is the forgery this
+// prevents — previously a script could request a legendary on every token).
+// Pools/odds mirror tradeItemStore.ts; the boot drift guard catches divergence.
+//
+// Tier odds (rebalanced 2026-06-11): legendary was 6% (!) — a Gold-set legendary
+// every ~3 active hours, undercutting fishing (0.15%/cast) and bounty legendary
+// weeks. Now 1.5% ≈ one per ~11 active hours.
+const SCAVENGE_TIER_ODDS: { tier: string; p: number }[] = [
+  { tier: 'legendary', p: 0.015 },
+  { tier: 'rare',      p: 0.20 },
+  { tier: 'common',    p: 0.785 },
+];
+// Holiday spots keep GENEROUS legendary odds on purpose: the window is only ~7
+// days, and seasonal legendaries aren't part of the Gold set — the short window
+// is the scarcity. Only the year-round (Gold-set) odds needed the rebalance.
+const HOLIDAY_SCAV_TIER_ODDS: { tier: string; p: number }[] = [
+  { tier: 'legendary', p: 0.08 },
+  { tier: 'rare',      p: 0.22 },
+  { tier: 'common',    p: 0.70 },
+];
+const SCAV_TIER_FALLBACK: Record<string, string[]> = {
+  legendary: ['legendary', 'rare', 'common', 'junk'],
+  rare:      ['rare', 'common', 'junk', 'legendary'],
+  common:    ['common', 'junk', 'rare', 'legendary'],
+  junk:      ['junk', 'common', 'rare', 'legendary'],
+};
+
+// Item rarities (must match ITEM_CATALOG in tradeItemStore.ts)
+const ITEM_RARITY = new Map<string, string>();
+{
+  const tiers: Record<string, string[]> = {
+    legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','hw_mainframe_core','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hw_zero_day','st_dons_ring','lo_genesis_seed'],
+    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_firecracker','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
+    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_sparkler','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog'],
+    junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern','eats_day_old_bagel'],
+  };
+  for (const [rarity, ids] of Object.entries(tiers)) for (const id of ids) ITEM_RARITY.set(id, rarity);
+}
+
+// Per-scene pools (must match SCENE_POOLS in tradeItemStore.ts)
+const SCAV_SCENE_POOLS: Record<string, string[]> = {
+  hub: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
+  alley: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
+  woods: ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake'],
+  rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_gpu_card','hw_oscilloscope','hw_zero_day'],
+  cabin: ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire'],
+};
+
+// Holiday drop windows (must match HOLIDAY_DROPS in tradeItemStore.ts)
+const SCAV_HOLIDAY_DROPS: { id: string; startMD: [number, number]; endMD: [number, number]; pool: string[] }[] = [
+  { id: 'genesis',    startMD: [1, 1],   endMD: [1, 6],   pool: ['hol_block_zero', 'hol_chancellor', 'hol_genesis_coin'] },
+  { id: 'finney',     startMD: [1, 9],   endMD: [1, 15],  pool: ['hol_rpow_token', 'hol_running_btc'] },
+  { id: 'pizza_day',  startMD: [5, 18],  endMD: [5, 25],  pool: ['hol_btc_pizza', 'hol_pepperoni', 'hol_pizza_coin'] },
+  { id: 'july4',      startMD: [7, 1],   endMD: [7, 7],   pool: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'] },
+  { id: 'halloween',  startMD: [10, 27], endMD: [10, 31], pool: ['hol_candy_corn', 'hol_skull_candle', 'hol_black_cat', 'hol_jack_o_lantern', 'hol_witch_hat', 'hol_cauldron', 'hol_phantom_key', 'hol_reaper_coin'] },
+  { id: 'whitepaper', startMD: [11, 1],  endMD: [11, 6],  pool: ['hol_satoshi_quill', 'hol_hashcash_stamp', 'hol_signed_paper', 'hol_double_spend'] },
+  { id: 'nostr_day',  startMD: [11, 7],  endMD: [11, 13], pool: ['hol_ostrich_egg', 'hol_purple_pill', 'hol_relay_stone', 'hol_zap_bolt', 'hol_first_note'] },
+  { id: 'winter',     startMD: [12, 20], endMD: [12, 31], pool: ['hol_snowflake', 'hol_pine_sprig', 'hol_warm_mittens', 'hol_gift_box', 'hol_frost_coin'] },
+];
+
+function activeHolidayPool(): string[] | null {
+  const now = new Date();
+  const t = (now.getMonth() + 1) * 100 + now.getDate();
+  for (const h of SCAV_HOLIDAY_DROPS) {
+    if (t >= h.startMD[0] * 100 + h.startMD[1] && t <= h.endMD[0] * 100 + h.endMD[1]) return h.pool;
+  }
+  return null;
+}
+
+// Roll a tier by the fixed odds, then a uniform item from that tier (falling
+// back through the chain when the pool has no items of the target tier).
+function rollScavenge(pool: string[], holiday: boolean): string | null {
+  if (!pool.length) return null;
+  let roll = Math.random();
+  let target = 'common';
+  for (const { tier, p } of (holiday ? HOLIDAY_SCAV_TIER_ODDS : SCAVENGE_TIER_ODDS)) {
+    if (roll < p) { target = tier; break; }
+    roll -= p;
+  }
+  for (const tier of SCAV_TIER_FALLBACK[target] ?? ['common']) {
+    // junk shares the common tier (junk-only odds would make it unobtainable —
+    // and eats_day_old_bagel is a bounty want, so it MUST be droppable)
+    const candidates = pool.filter(id => {
+      const r = ITEM_RARITY.get(id);
+      return r === tier || (tier === 'common' && r === 'junk');
+    });
+    if (candidates.length) return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // Sold instance ids — prevents the same listed item from being bought twice
 const SOLD_FILE = '.sold-instances.json';
 let soldInstances: Set<string> = new Set();
@@ -829,6 +925,10 @@ const players = new Map<string, Player>();
 for (const id of [...BOUNTY_WANT_POOL, ...BOUNTY_REWARD_POOL, ...BOUNTY_LEGENDARY_POOL]) {
   if (!VALID_ITEM_IDS.has(id)) console.error(`[Bounty] POOL DRIFT: ${id} is not a valid item id`);
 }
+for (const id of [...Object.values(SCAV_SCENE_POOLS).flat(), ...SCAV_HOLIDAY_DROPS.flatMap(h => h.pool)]) {
+  if (!VALID_ITEM_IDS.has(id)) console.error(`[Scavenge] POOL DRIFT: ${id} is not a valid item id`);
+  if (!ITEM_RARITY.has(id))   console.error(`[Scavenge] RARITY DRIFT: ${id} has no rarity entry`);
+}
 
 const wss = new WebSocketServer({ port: 3100 });
 console.log('[Presence] Server running on ws://localhost:3100');
@@ -1181,9 +1281,14 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'wrong_room', itemId, room: player.room }));
             return;
           }
-          // Scavenge ('found') is rate-limited server-side so the client respawn
-          // timer can't be bypassed by editing localStorage.
+          // Scavenges can ONLY come from the server-rolled scavenge_request in
+          // prod — a client-supplied "I found X" let scripts pick legendaries.
+          // Allowed in local dev (no prod oracle key) for test-minting.
           if (acquiredFrom === 'found') {
+            if (FISHING_LIMIT_ACTIVE) {
+              ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'server_rolls_scavenge', itemId }));
+              return;
+            }
             if (!canScavenge(myPubkey)) {
               ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'scavenge_cooldown', itemId }));
               return;
@@ -1210,6 +1315,37 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'item_minted', event }));
 
         })().catch(() => {}); // async for the weekly relay-marker check
+        return;
+      }
+
+      // ── Scavenge: server-rolled find ──────────────────────────────────────
+      // Client says only "I collected a spot" (+ whether it was a holiday spot);
+      // the server rolls the tier + item from the room's pool and mints it.
+      if (msg.type === 'scavenge_request' && myPubkey) {
+        const player = players.get(myPubkey);
+        if (!player) return;
+        const holiday = !!msg.holiday;
+        const pool = holiday
+          ? activeHolidayPool()                                 // only during a live holiday window
+          : (SCAV_SCENE_POOLS[player.room] ?? null);            // room must have a scavenge pool
+        if (!pool) {
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'wrong_room', room: player.room }));
+          return;
+        }
+        if (!canScavenge(myPubkey)) {
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'scavenge_cooldown' }));
+          return;
+        }
+        recordScavenge(myPubkey);
+        const itemId = rollScavenge(pool, holiday);
+        const event = itemId ? mintItem(myPubkey, itemId, 'found') : null;
+        if (!event) {
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'oracle_unavailable' }));
+          return;
+        }
+        console.log(`[Oracle] Scavenged ${itemId} (${ITEM_RARITY.get(itemId!) ?? '?'}) for ${player.name} (${myPubkey.slice(0,8)}…)`);
+        publishToRelays(event);
+        ws.send(JSON.stringify({ type: 'item_minted', event }));
         return;
       }
 

@@ -99,6 +99,15 @@ export function sendItemMintRequest(itemId: string, acquiredFrom: string, attemp
   }
 }
 
+// Scavenge: the server rolls WHAT was found (tier + item from the room's pool).
+// The client only reports that a spot was collected, and whether it was a
+// holiday spot. The result arrives via the normal item_minted message.
+export function sendScavengeRequest(holiday: boolean): void {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'scavenge_request', holiday }));
+  }
+}
+
 export function sendItemDiscardRequest(event: object): void {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'item_discard_request', event }));

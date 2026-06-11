@@ -493,6 +493,12 @@ export abstract class BaseScene extends Phaser.Scene {
             const def = ITEM_CATALOG.find(d => d.id === item.itemId);
             if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `Weekly drop: ${def.emoji} ${def.name}!`, color: '#c0a8ff', open: 'inventory' } }));
           });
+        } else if (source === 'found') {
+          // Scavenge result — the server rolled it, so the find is only known now.
+          import('../stores/tradeItemStore').then(({ ITEM_CATALOG }) => {
+            const def = ITEM_CATALOG.find(d => d.id === item.itemId);
+            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `${def.emoji} Found a ${def.name}!`, color: '#7fd8a0', open: 'inventory' } }));
+          });
         }
       }
     });
