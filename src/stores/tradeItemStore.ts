@@ -1112,6 +1112,40 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
       .filter((l): l is RemoteListing => !!l)
       .filter(l => !_soldInstances.has(l.instanceId)); // hide already-sold items
 
+    // SELF-HEAL: the server's sold-list lives on an ephemeral disk and forgets
+    // past sales on every deploy, so stale 30402s can resurrect. The durable
+    // truth is on the relays: a live listing's instanceId is escrowed to the
+    // oracle; once sold (or otherwise spent) the oracle BURNS that event. Any
+    // listing whose item event is burned — or no longer oracle-held — is dead
+    // stock; hide it and remember it as sold.
+    if (_remoteListings.length && _oracleSet.length) {
+      const ids = [...new Set(_remoteListings.map(l => l.instanceId).filter(Boolean))];
+      const states = await queryEvents({ kinds: [30078], authors: _oracleSet, '#d': ids }, MARKET_RELAYS);
+      const newest = new Map<string, any>();
+      for (const e of states) {
+        if (!isTrustedOracle(e.pubkey)) continue;
+        const d = e.tags?.find((t: string[]) => t[0] === 'd')?.[1];
+        if (!d) continue;
+        const prev = newest.get(d);
+        if (!prev || e.created_at > prev.created_at) newest.set(d, e);
+      }
+      const dead: string[] = [];
+      for (const l of _remoteListings) {
+        const ev = newest.get(l.instanceId);
+        if (!ev) continue; // not found on these relays — benefit of the doubt
+        const burned = !!ev.tags?.find((t: string[]) => t[0] === 'burned');
+        const owner  = (ev.tags?.find((t: string[]) => t[0] === 'p')?.[1] ?? '').toLowerCase();
+        // Burned = definitively spent. Owner-not-oracle = returned to the seller
+        // (delist whose tombstone never published) — but only trust that signal
+        // for listings older than 2 min, so a fresh listing whose escrow event
+        // hasn't propagated yet can't be falsely culled.
+        if (burned || (!_oracleSet.includes(owner) && Date.now() - l.listedAt > 120_000)) {
+          dead.push(l.instanceId);
+        }
+      }
+      if (dead.length) markSoldInstances(dead); // hides them + strips from _remoteListings
+    }
+
     _fetchedAt = Date.now();
   } catch { /* network unavailable */ } finally {
     _fetchInProgress = false;
