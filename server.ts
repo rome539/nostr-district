@@ -412,12 +412,12 @@ function recordBountyClaim(bountyId: string, pubkey: string): void {
 // Pools/odds mirror tradeItemStore.ts; the boot drift guard catches divergence.
 //
 // Tier odds (rebalanced 2026-06-11): legendary was 6% (!) — a Gold-set legendary
-// every ~3 active hours, undercutting fishing (0.15%/cast) and bounty legendary
-// weeks. Now 1.5% ≈ one per ~11 active hours.
+// every ~3 active hours, undercutting fishing and bounty legendary weeks. Now 3%
+// ≈ one per ~6-8 active hours; Gold aura ≈ a season of regular play solo.
 const SCAVENGE_TIER_ODDS: { tier: string; p: number }[] = [
-  { tier: 'legendary', p: 0.015 },
+  { tier: 'legendary', p: 0.03 },
   { tier: 'rare',      p: 0.20 },
-  { tier: 'common',    p: 0.785 },
+  { tier: 'common',    p: 0.77 },
 ];
 // Holiday spots keep GENEROUS legendary odds on purpose: the window is only ~7
 // days, and seasonal legendaries aren't part of the Gold set — the short window

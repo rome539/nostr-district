@@ -1534,12 +1534,12 @@ export const FISH_KEEP_CHANCE: Record<string, number> = {
 // Tier odds. AUTHORITATIVE rolls happen server-side (server.ts SCAVENGE_TIER_ODDS
 // — keep in sync); this client copy only drives the weekly-drop pick (commons/junk
 // pool, so the legendary weight never fires there).
-// Rebalanced 2026-06-11: legendary 6% → 1.5% (6% made Gold-set legendaries ~40×
-// easier than fishing ones and undercut the bounty board's legendary weeks).
+// Rebalanced 2026-06-11: legendary 6% → 3% (6% made Gold-set legendaries farmable
+// in days and undercut the bounty board's legendary weeks).
 const TIER_ODDS: { tier: ItemRarity; p: number }[] = [
-  { tier: 'legendary', p: 0.015 }, // 1.5%
+  { tier: 'legendary', p: 0.03 },  // 3%
   { tier: 'rare',      p: 0.20 },  // 20%
-  { tier: 'common',    p: 0.785 }, // 78.5% (commons + junk share this tier)
+  { tier: 'common',    p: 0.77 },  // 77% (commons + junk share this tier)
 ];
 const HOLIDAY_TIER_ODDS: { tier: ItemRarity; p: number }[] = [
   { tier: 'legendary', p: 0.08 },  // 8% — only a ~7-day window, and seasonal
