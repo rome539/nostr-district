@@ -463,6 +463,8 @@
   "bounty.offline": "Het bord is nu onleesbaar.",
   "bounty.footnote": "Eén inlevering per bewoner, per premie — ingeleverde items worden vernietigd.",
   "bounty.claimed_count": "Tot nu toe {n}× geclaimd",
+  "bounty.festive": "FEESTELIJK GEZOCHT",
+  "bounty.poster_down": "poster gaat weg over {time}",
   "bounty.err.full": "Te laat — alle inleveringen zijn vergeven.",
   "bounty.err.already": "Je hebt deze premie al geclaimd.",
   "bounty.err.items": "Die items horen niet bij deze premie.",

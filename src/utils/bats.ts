@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 export function isHalloweenPeriod(): boolean {
+  if (new URLSearchParams(window.location.search).get('holiday') === 'halloween') return true;
   const d = new Date(); return d.getMonth() === 9 && d.getDate() >= 29 && d.getDate() <= 31;
 }
 

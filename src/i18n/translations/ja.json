@@ -463,6 +463,8 @@
   "bounty.offline": "今は掲示板が読めません。",
   "bounty.footnote": "各依頼は1人1回まで — 納品したアイテムは消滅します。",
   "bounty.claimed_count": "これまでに {n} 人が受領",
+  "bounty.festive": "祝祭の求ム",
+  "bounty.poster_down": "あと {time} で撤去",
   "bounty.err.full": "遅すぎました — すべて受領済みです。",
   "bounty.err.already": "この依頼はすでに受領済みです。",
   "bounty.err.items": "そのアイテムは依頼と一致しません。",

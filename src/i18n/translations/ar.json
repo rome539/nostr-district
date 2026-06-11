@@ -463,6 +463,8 @@
   "bounty.offline": "تعذّرت قراءة اللوحة الآن.",
   "bounty.footnote": "تسليم واحد لكل مقيم لكل مكافأة — العناصر المسلَّمة تُتلف.",
   "bounty.claimed_count": "استلمها {n} حتى الآن",
+  "bounty.festive": "مطلوب احتفالي",
+  "bounty.poster_down": "يُنزع الملصق بعد {time}",
   "bounty.err.full": "فات الأوان — اكتملت التسليمات.",
   "bounty.err.already": "لقد استلمت هذه المكافأة بالفعل.",
   "bounty.err.items": "هذه العناصر لا تطابق المكافأة.",

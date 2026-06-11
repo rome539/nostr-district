@@ -463,6 +463,8 @@
   "bounty.offline": "지금은 게시판을 읽을 수 없습니다.",
   "bounty.footnote": "의뢰당 1인 1회 — 납품한 아이템은 사라집니다.",
   "bounty.claimed_count": "지금까지 {n}명 수령",
+  "bounty.festive": "축제 구함",
+  "bounty.poster_down": "{time} 후 포스터 내려감",
   "bounty.err.full": "늦었습니다 — 모두 마감되었습니다.",
   "bounty.err.already": "이미 이 의뢰를 수령했습니다.",
   "bounty.err.items": "해당 아이템이 의뢰와 일치하지 않습니다.",

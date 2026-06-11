@@ -463,6 +463,8 @@
   "bounty.offline": "暂时无法读取悬赏板。",
   "bounty.footnote": "每条悬赏每人限领一次 — 上交的物品将被销毁。",
   "bounty.claimed_count": "已有 {n} 人领取",
+  "bounty.festive": "节日通缉",
+  "bounty.poster_down": "海报将于 {time} 后撤下",
   "bounty.err.full": "来晚了 — 名额已被领完。",
   "bounty.err.already": "你已领取过此悬赏。",
   "bounty.err.items": "这些物品与悬赏不符。",

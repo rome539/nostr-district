@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 export function isJuly4thPeriod(): boolean {
+  if (new URLSearchParams(window.location.search).get('holiday') === 'july4') return true;
   const d = new Date();
   return d.getMonth() === 6 && d.getDate() >= 3 && d.getDate() <= 6;
 }

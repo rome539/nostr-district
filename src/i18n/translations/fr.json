@@ -463,6 +463,8 @@
   "bounty.offline": "Le tableau est illisible pour le moment.",
   "bounty.footnote": "Une remise par résident et par prime — les objets remis sont détruits.",
   "bounty.claimed_count": "Réclamée par {n} jusqu'ici",
+  "bounty.festive": "RECHERCHÉ FESTIF",
+  "bounty.poster_down": "l'affiche est retirée dans {time}",
   "bounty.err.full": "Trop tard — toutes les remises sont prises.",
   "bounty.err.already": "Vous avez déjà réclamé cette prime.",
   "bounty.err.items": "Ces objets ne correspondent pas à la prime.",

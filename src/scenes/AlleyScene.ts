@@ -1050,7 +1050,11 @@ export class AlleyScene extends BaseScene {
   }
 
   private updatePosterProximity(): void {
-    const near = Math.abs(this.player.x - POSTER_X) <= POSTER_RANGE;
+    const dist = Math.abs(this.player.x - POSTER_X);
+    const near = dist <= POSTER_RANGE;
+    // The board is pinned to the wall, not to you — walking off closes it.
+    // (+30px of slack so a single step at the threshold doesn't slam it shut.)
+    if (BountyBoardPanel.isOpen() && dist > POSTER_RANGE + 30) BountyBoardPanel.destroy();
     if (near !== this.nearPoster) {
       this.nearPoster = near;
       const show = near && !BountyBoardPanel.isOpen();

@@ -1611,8 +1611,8 @@ export async function sendItemDirect(instanceId: string, toPubkey: string, _note
 export const FISH_KEEP_CHANCE: Record<string, number> = {
   legendary: 1.0,
   rare:      0.05,
-  common:    0.05,
-  junk:      0.05,
+  common:    0.10,
+  junk:      0.25, // junk is bounty fodder — at 5% a specific boot took ~11h to land
 };
 
 // ── Rarity-weighted item selection ────────────────────────────────────────────
@@ -1770,6 +1770,12 @@ const HOLIDAY_DROPS: HolidayDrop[] = [
 const mdNum = (m: number, d: number) => m * 100 + d;
 
 export function getActiveHolidayDrop(): HolidayDrop | null {
+  // ?holiday=halloween simulates the window (holiday scavenge spots etc.).
+  // Safe ungated: in prod the SERVER gates holiday mints by the real calendar,
+  // so out-of-season spots are cosmetic only. The dev sandbox honors the same
+  // param (forwarded in the join message), making one URL drive everything.
+  const ov = new URLSearchParams(window.location.search).get('holiday');
+  if (ov) return HOLIDAY_DROPS.find(h => h.id === ov) ?? null;
   const now = new Date();
   const t = mdNum(now.getMonth() + 1, now.getDate());
   for (const h of HOLIDAY_DROPS) {

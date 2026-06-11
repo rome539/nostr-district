@@ -463,6 +463,8 @@
   "bounty.offline": "O quadro está ilegível no momento.",
   "bounty.footnote": "Uma entrega por residente, por recompensa — itens entregues são destruídos.",
   "bounty.claimed_count": "Resgatada por {n} até agora",
+  "bounty.festive": "PROCURA-SE FESTIVO",
+  "bounty.poster_down": "o cartaz sai em {time}",
   "bounty.err.full": "Tarde demais — todas as entregas foram feitas.",
   "bounty.err.already": "Você já resgatou esta recompensa.",
   "bounty.err.items": "Esses itens não correspondem à recompensa.",

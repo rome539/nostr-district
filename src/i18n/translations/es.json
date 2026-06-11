@@ -463,6 +463,8 @@
   "bounty.offline": "El tablón no se puede leer ahora mismo.",
   "bounty.footnote": "Una entrega por residente y por recompensa — los objetos entregados se destruyen.",
   "bounty.claimed_count": "Reclamada por {n} hasta ahora",
+  "bounty.festive": "SE BUSCA FESTIVO",
+  "bounty.poster_down": "el cartel se retira en {time}",
   "bounty.err.full": "Demasiado tarde — ya no quedan entregas.",
   "bounty.err.already": "Ya reclamaste esta recompensa.",
   "bounty.err.items": "Esos objetos no coinciden con la recompensa.",

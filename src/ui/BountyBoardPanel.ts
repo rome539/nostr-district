@@ -87,9 +87,10 @@ function rowHtml(b: BountyInfo, idx: number): string {
 
   return `
     <div style="position:relative;transform:rotate(${tilt}deg);${inactive ? 'opacity:0.78;' : ''}">
-      <div style="position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#a8402a,#5e1c10);box-shadow:0 1px 2px rgba(0,0,0,0.6);z-index:2;"></div>
-      <div style="background:linear-gradient(172deg,#8e8470 0%,#837862 55%,#716650 100%);border-radius:2px;box-shadow:0 3px 10px rgba(0,0,0,0.6), inset 0 0 26px rgba(48,34,76,0.30)${b.tier === 'legendary' ? ', 0 0 20px rgba(190,150,50,0.30)' : ''};padding:13px 16px 14px;text-align:center;${b.tier === 'legendary' ? 'outline:1px solid #8a6a2a66;' : ''}">
-        <div style="font-size:15px;font-weight:bold;letter-spacing:7px;color:#2e2214;border-top:2px solid #2e2214;border-bottom:2px solid #2e2214;padding:3px 0;margin:0 8px 9px;">${ti18n('bounty.wanted')}</div>
+      <div style="position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,${b.holiday ? '#3a8a4a,#14401e' : '#a8402a,#5e1c10'});box-shadow:0 1px 2px rgba(0,0,0,0.6);z-index:2;"></div>
+      <div style="background:linear-gradient(172deg,${b.holiday ? '#9a8460 0%,#8e7650 55%,#7a6440 100%' : '#8e8470 0%,#837862 55%,#716650 100%'});border-radius:2px;box-shadow:0 3px 10px rgba(0,0,0,0.6), inset 0 0 26px rgba(48,34,76,0.30)${b.tier === 'legendary' ? ', 0 0 20px rgba(190,150,50,0.30)' : ''};padding:13px 16px 14px;text-align:center;${b.tier === 'legendary' ? 'outline:1px solid #8a6a2a66;' : ''}">
+        <div style="font-size:${b.holiday ? '13px' : '15px'};font-weight:bold;letter-spacing:${b.holiday ? '4px' : '7px'};color:#2e2214;border-top:2px solid #2e2214;border-bottom:2px solid #2e2214;padding:3px 0;margin:0 8px ${b.holiday ? '4px' : '9px'};">${b.holiday ? `✦ ${ti18n('bounty.festive')} ✦` : ti18n('bounty.wanted')}</div>
+        ${b.holiday ? `<div style="font-size:9px;letter-spacing:1px;color:#6e4a1e;margin-bottom:7px;">${ti18n('bounty.poster_down', { time: timeLeft(b.endsAt) })}</div>` : ''}
         ${wantsHtml}
         <div style="border-top:1px dashed #2e221455;margin:9px 14px 8px;"></div>
         <div style="font-size:9px;letter-spacing:2px;color:#5a4a34;margin-bottom:2px;">${ti18n('bounty.reward').toUpperCase()}</div>

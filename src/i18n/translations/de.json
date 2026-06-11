@@ -463,6 +463,8 @@
   "bounty.offline": "Die Tafel ist gerade nicht lesbar.",
   "bounty.footnote": "Eine Abgabe pro Bewohner und Auftrag — abgegebene Gegenstände werden zerstört.",
   "bounty.claimed_count": "Bisher {n}× eingelöst",
+  "bounty.festive": "FESTLICH GESUCHT",
+  "bounty.poster_down": "Plakat wird in {time} abgenommen",
   "bounty.err.full": "Zu spät — alle Abgaben sind vergeben.",
   "bounty.err.already": "Du hast diesen Auftrag bereits eingelöst.",
   "bounty.err.items": "Diese Gegenstände passen nicht zum Auftrag.",

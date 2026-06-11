@@ -463,6 +463,8 @@
   "bounty.offline": "La bacheca è illeggibile al momento.",
   "bounty.footnote": "Una consegna per residente per ogni taglia — gli oggetti consegnati vengono distrutti.",
   "bounty.claimed_count": "Riscossa da {n} finora",
+  "bounty.festive": "CERCASI FESTIVO",
+  "bounty.poster_down": "il manifesto viene rimosso tra {time}",
   "bounty.err.full": "Troppo tardi — consegne esaurite.",
   "bounty.err.already": "Hai già riscosso questa taglia.",
   "bounty.err.items": "Quegli oggetti non corrispondono alla taglia.",

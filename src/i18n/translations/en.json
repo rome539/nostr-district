@@ -477,6 +477,8 @@
   "bounty.offline": "The board is unreadable right now.",
   "bounty.footnote": "One claim per resident, per bounty — turned-in items are destroyed.",
   "bounty.claimed_count": "{n} claimed so far",
+  "bounty.festive": "FESTIVE WANTED",
+  "bounty.poster_down": "poster comes down in {time}",
   "bounty.err.full": "Too late — all claims are taken.",
   "bounty.err.already": "You already claimed this bounty.",
   "bounty.err.items": "Those items don't match the bounty.",

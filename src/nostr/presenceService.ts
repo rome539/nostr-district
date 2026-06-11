@@ -135,6 +135,7 @@ export interface BountyInfo {
   rewardItemId: string;
   tier: 'rare' | 'legendary'; // legendary weeks want rares and pay a legendary
   endsAt: number;
+  holiday?: boolean;    // festive poster — hangs for the holiday window, not the week
   claimed: number;      // how many residents have claimed (social proof, no cap)
   claimedByMe: boolean; // one claim per account per bounty
 }
@@ -425,6 +426,9 @@ export function connectPresence(cb: PresenceCallback): void {
       room: currentRoom,
       avatar: serializeAvatar(getAvatar()),
       status: getStatus(),
+      // Forward the ?holiday= URL override; only the keyless dev sandbox honors
+      // it (the prod server ignores this field and uses the real calendar).
+      testHoliday: new URLSearchParams(window.location.search).get('holiday') ?? null,
     }));
   };
 

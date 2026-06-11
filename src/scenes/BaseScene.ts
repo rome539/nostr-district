@@ -1836,6 +1836,24 @@ export abstract class BaseScene extends Phaser.Scene {
         return true;
       }
 
+      // Usage: /devitem hol_black_cat     → mint 1 copy
+      //        /devitem hol_black_cat 2   → mint 2 copies (e.g. bounty wants 2×)
+      // Dev-only like devset; prod's server rejects raw mints regardless.
+      case 'devitem': {
+        if (!import.meta.env.DEV) return false; // unknown command in production
+        const [itemId, countStr] = (arg ?? '').split(/\s+/);
+        const count = Math.min(10, Math.max(1, parseInt(countStr) || 1));
+        import('../stores/tradeItemStore').then(({ ITEM_CATALOG }) => {
+          const def = ITEM_CATALOG.find(d => d.id === itemId);
+          if (!def) { this.chatUI.addMessage('system', `devitem: no item "${itemId}" (use catalog ids, e.g. hol_black_cat)`, P.amber); return; }
+          import('../nostr/presenceService').then(({ sendItemMintRequest }) => {
+            for (let i = 0; i < count; i++) setTimeout(() => sendItemMintRequest(def.id, 'caught'), i * 250);
+          });
+          this.chatUI.addMessage('system', `devitem: minting ${count}× ${def.emoji} ${def.name}`, P.amber);
+        });
+        return true;
+      }
+
       // ── Emotes ────────────────────────────────────────────────────────────
       case 'smoke':
       case 'coffee': case 'music': case 'zzz': case 'think': case 'hearts':

@@ -475,6 +475,13 @@ export function findHoliday(id: string): Holiday | null {
 }
 
 export function getActiveHoliday(now: Date = new Date()): Holiday | null {
+  // Simulate any holiday with a URL param — http://localhost:3000/?holiday=halloween
+  // Drives the banner/theme (and the matching overrides cover scavenge spots +
+  // world decorations). Cosmetic-only in prod: item drops are server-gated by
+  // the real calendar, so the param can't mint anything out of season.
+  const ov = new URLSearchParams(window.location.search).get('holiday');
+  if (ov) return findHoliday(ov);
+
   // Trigger an async fetch of block-height data the first time anyone asks
   // for the active holiday. If it's already cached and fresh, this is a no-op.
   refreshHalvingLive();

@@ -245,7 +245,10 @@ const FISH_TIERS: Record<string, string[]> = {
 };
 // rare keep was 0.10 at launch, which made kept rares exactly as common as kept
 // commons (25%×10% = 50%×5%). Halved so rares are genuinely 2× scarcer in the bag.
-const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.05, common: 0.05, junk: 0.05 };
+// junk keep raised 5% → 25% (2026-06-12): junk fish are bounty wants, and at a
+// 5% keep a specific junk fish took ~11h of fishing — absurd for an Old Boot.
+// Junk is sink fodder, not a prize; keeping a quarter of it is still "junk-feeling".
+const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.05, common: 0.10, junk: 0.25 };
 
 function rollFishCatch(): { itemId: string; tier: string; kept: boolean } {
   const roll = Math.random();
@@ -351,7 +354,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface Bounty { id: string; wants: { itemId: string; qty: number }[]; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number }
+interface Bounty { id: string; wants: { itemId: string; qty: number }[]; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number; holiday?: boolean }
 
 function getWeekBounties(): Bounty[] {
   const week = Math.floor(Date.now() / MS_7D);
@@ -389,6 +392,44 @@ function getWeekBounties(): Bounty[] {
     ];
     last.rewardItemId = BOUNTY_LEGENDARY_POOL[Math.floor(rng() * BOUNTY_LEGENDARY_POOL.length)];
     last.tier = 'legendary';
+  }
+
+  // Festive poster: during a holiday window, a 4th bounty hangs for the WHOLE
+  // window — burn the holiday's lower-tier items, get one of its legendaries.
+  // Seeded by (holiday, year): identical all window, fresh claims every year
+  // (the year is in the id, so the claims marker resets annually). It expires
+  // with the window itself, not the weekly cycle.
+  const hol = activeHolidayDrop();
+  if (hol) {
+    const year = new Date().getFullYear();
+    let seed = year * 7919;
+    for (const ch of hol.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const hrng = mulberry32(seed);
+    const legends = hol.pool.filter(id => ITEM_RARITY.get(id) === 'legendary');
+    const reward = legends.length
+      ? legends[Math.floor(hrng() * legends.length)]
+      : hol.pool[hol.pool.length - 1]; // no legendary in pool (shouldn't happen) — pay the last item
+    // Wants come from the pool's lower tiers: commons when the holiday has them,
+    // otherwise its rares (minus the reward). Tiny pools (Finney = 2 items) fall
+    // back to 3× the single remaining item.
+    const commons = hol.pool.filter(id => ITEM_RARITY.get(id) === 'common');
+    const lower = commons.length
+      ? commons
+      : hol.pool.filter(id => id !== reward && ITEM_RARITY.get(id) !== 'legendary');
+    const pickFrom = lower.length ? lower : hol.pool.filter(id => id !== reward);
+    const a = pickFrom[Math.floor(hrng() * pickFrom.length)];
+    const rest = pickFrom.filter(id => id !== a);
+    const wants = rest.length
+      ? [{ itemId: a, qty: 2 }, { itemId: rest[Math.floor(hrng() * rest.length)], qty: 1 }]
+      : [{ itemId: a, qty: 3 }];
+    bounties.push({
+      id: `bounty_hol_${hol.id}_${year}`,
+      wants,
+      rewardItemId: reward,
+      tier: 'legendary',
+      endsAt: Date.UTC(year, hol.endMD[0] - 1, hol.endMD[1], 23, 59, 59),
+      holiday: true,
+    });
   }
   return bounties;
 }
@@ -497,14 +538,24 @@ const SCAV_HOLIDAY_DROPS: { id: string; startMD: [number, number]; endMD: [numbe
   { id: 'winter',     startMD: [12, 20], endMD: [12, 31], pool: ['hol_snowflake', 'hol_pine_sprig', 'hol_warm_mittens', 'hol_gift_box', 'hol_frost_coin'] },
 ];
 
-function activeHolidayPool(): string[] | null {
+// Dev-only holiday simulation. Set by the URL param on the CLIENT — in dev the
+// client forwards ?holiday=<id> in its join message and the sandbox adopts it,
+// so `http://localhost:5173/?holiday=halloween` is the ONLY step needed.
+// (TEST_HOLIDAY env still works as a boot-time default.)
+let devTestHoliday: string | null = process.env.TEST_HOLIDAY ?? null;
+
+function activeHolidayDrop(): { id: string; startMD: [number, number]; endMD: [number, number]; pool: string[] } | null {
+  if (DEV_SANDBOX && devTestHoliday) {
+    return SCAV_HOLIDAY_DROPS.find(h => h.id === devTestHoliday) ?? null;
+  }
   const now = new Date();
   const t = (now.getMonth() + 1) * 100 + now.getDate();
   for (const h of SCAV_HOLIDAY_DROPS) {
-    if (t >= h.startMD[0] * 100 + h.startMD[1] && t <= h.endMD[0] * 100 + h.endMD[1]) return h.pool;
+    if (t >= h.startMD[0] * 100 + h.startMD[1] && t <= h.endMD[0] * 100 + h.endMD[1]) return h;
   }
   return null;
 }
+function activeHolidayPool(): string[] | null { return activeHolidayDrop()?.pool ?? null; }
 
 // Roll a tier by the fixed odds, then a uniform item from that tier (falling
 // back through the chain when the pool has no items of the target tier).
@@ -995,6 +1046,11 @@ wss.on('connection', (ws) => {
 
       if (msg.type === 'join') {
         myPubkey = msg.pubkey || `guest_${Math.random().toString(36).slice(2, 8)}`;
+        // Dev sandbox: adopt the joining client's ?holiday= override (null clears it).
+        if (DEV_SANDBOX && 'testHoliday' in msg) {
+          devTestHoliday = typeof msg.testHoliday === 'string' && msg.testHoliday ? msg.testHoliday : null;
+          if (devTestHoliday) console.log(`[Dev] Simulating holiday: ${devTestHoliday}`);
+        }
         // Send oracle pubkey so client can verify items without env var config
         ws.send(JSON.stringify({ type: 'oracle_pubkey', pubkey: ORACLE_PUBKEY }));
         // Send sold-item ids so clients can hide already-sold listings from the market
@@ -1417,6 +1473,7 @@ wss.on('connection', (ws) => {
             const claims = await loadBountyClaims(b.id);
             out.push({
               id: b.id, wants: b.wants, rewardItemId: b.rewardItemId, tier: b.tier, endsAt: b.endsAt,
+              holiday: !!b.holiday,
               claimed: claims.length,
               claimedByMe: claims.includes(me),
             });
