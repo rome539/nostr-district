@@ -919,16 +919,13 @@ export class CrewPanel {
         const status = composer.querySelector('.cp-composer-status') as HTMLElement;
         ta.addEventListener('keydown', e => e.stopPropagation());
 
-        // Upload a blob to nostr.build and append the URL to the textarea
+        // Upload a blob via the shared Blossom helper. Crew posts are PUBLIC, so
+        // this is the PLAINTEXT path (not the encrypted DM one). nostr.build was
+        // failing; Blossom is the working host the DM images already use.
         const uploadBlob = async (blob: Blob) => {
           status.textContent = 'Uploading image…';
-          const ext = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
-          const form = new FormData();
-          form.append('fileToUpload', new File([blob], `paste.${ext}`, { type: blob.type }));
-          const res = await fetch('https://nostr.build/api/v2/upload/files', { method: 'POST', body: form });
-          const json = await res.json();
-          const url: string = json?.data?.[0]?.url ?? '';
-          if (!url) throw new Error('No URL in response');
+          const { uploadPlainImage } = await import('./imageUpload');
+          const url = await uploadPlainImage(blob);
           ta.value = ta.value ? `${ta.value}\n${url}` : url;
           status.textContent = '';
         };

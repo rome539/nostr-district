@@ -370,9 +370,13 @@ function getWeekBounties(): Bounty[] {
   const bounties: Bounty[] = [];
   for (let n = 0; n < BOUNTY_COUNT; n++) {
     const usedWants = new Set<string>();
+    // 3+2 = 5 commons burned per claim (was 2+1). The faucet (~25-50 low-tier
+    // items/wk for an active player) outran a 9/wk sink ~3-5×; 15/wk max burn
+    // puts the board near parity for casual players. Legendary-week (rares) and
+    // festive (holiday window) posters keep their own smaller quantities.
     const wants = [
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 3 },
       { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 2 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
     ];
     bounties.push({
       id: `bounty_${week}_${n}`,

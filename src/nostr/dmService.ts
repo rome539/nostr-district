@@ -35,6 +35,9 @@ export interface DMMessage {
   conversationPubkey: string;
   deliveryStatus?: 'sending' | 'sent' | 'failed';
   emojis?: { code: string; url: string }[];
+  /** kind:15 encrypted file message (Wisp/Amethyst-compatible): content is the
+   *  ciphertext URL; key + nonce rode inside the gift-wrapped rumor's tags. */
+  encFile?: { url: string; mime: string; key: string; nonce: string };
 }
 
 type DMListener = (msg: DMMessage) => void;
@@ -233,7 +236,7 @@ export function sendProtocolMessage(recipientPubkey: string, content: string): P
   return sendDirectMessage(recipientPubkey, content, ND_PROTOCOL_KIND);
 }
 
-export async function sendDirectMessage(recipientPubkey: string, content: string, rumorKind: number = 14): Promise<void> {
+export async function sendDirectMessage(recipientPubkey: string, content: string, rumorKind: number = 14, extraTags: string[][] = []): Promise<void> {
   await ensureNostrTools();
 
   const state = authStore.getState();
@@ -244,12 +247,15 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
   const now = Math.floor(Date.now() / 1000);
   const myPubkey = state.pubkey;
 
-  // ── Build the rumor (kind:14 chat, or ND_PROTOCOL_KIND for game payloads) ──
+  // ── Build the rumor (kind:14 chat, kind:15 encrypted file, or
+  //    ND_PROTOCOL_KIND for game payloads). extraTags carries the kind:15
+  //    decryption secrets — safe ONLY because the rumor rides NIP-44-encrypted
+  //    inside the gift wrap; never put secrets on plain signed events. ──
   const emojiTags = extractEmojiTags(content).map(e => ['emoji', e.code, e.url]);
   const rumor: any = {
     kind: rumorKind,
     created_at: now,
-    tags: [['p', recipientPubkey], ...emojiTags],
+    tags: [['p', recipientPubkey], ...emojiTags, ...extraTags],
     content,
     pubkey: myPubkey,
   };
@@ -270,7 +276,10 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
     }
   }
   // ── Path 2: NIP-07 extension ──
-  else if ((window as any).nostr?.nip44?.encrypt && (window as any).nostr?.signEvent) {
+  // Gate on the chosen login method, NOT mere capability: a bunker user may also
+  // have an extension installed, and routing through it would sign/encrypt under
+  // the wrong identity.
+  else if (authStore.getState().loginMethod === 'extension' && (window as any).nostr?.nip44?.encrypt && (window as any).nostr?.signEvent) {
     const nostrExt = (window as any).nostr;
 
     // Seal via extension
@@ -407,7 +416,15 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
   }
 
   // ── Notify UI optimistically ──
+  // For kind:15, rebuild encFile from extraTags so our OWN sent image renders
+  // immediately — otherwise the optimistic copy (no encFile) shows as a link and
+  // dedup blocks the real encFile-bearing self-copy from replacing it.
   const sentEmojis = emojiTags.map(t => ({ code: t[1], url: t[2] }));
+  let sentEncFile: DMMessage['encFile'];
+  if (rumorKind === 15) {
+    const tag = (n: string) => extraTags.find(t => t[0] === n)?.[1] ?? '';
+    sentEncFile = { url: content.trim(), mime: tag('file-type') || 'image/png', key: tag('decryption-key'), nonce: tag('decryption-nonce') };
+  }
   notifyListeners({
     id: eventId,
     senderPubkey: myPubkey,
@@ -418,6 +435,7 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
     conversationPubkey: recipientPubkey,
     deliveryStatus: 'sent',
     ...(sentEmojis.length ? { emojis: sentEmojis } : {}),
+    ...(sentEncFile ? { encFile: sentEncFile } : {}),
   });
 }
 
@@ -463,8 +481,10 @@ async function handleGiftWrap(event: any): Promise<void> {
       const ckSeal = NT.nip44.getConversationKey(localKey, seal.pubkey);
       const rumorJson = NT.nip44.decrypt(seal.content, ckSeal);
       rumor = JSON.parse(rumorJson);
-    } else if ((window as any).nostr?.nip44?.decrypt) {
-      // Extension path
+    } else if (authStore.getState().loginMethod === 'extension' && (window as any).nostr?.nip44?.decrypt) {
+      // Extension path — gated on login method so a bunker user with an
+      // extension installed doesn't decrypt under the wrong identity (silent
+      // failure that would swallow incoming trades/DMs).
       const nostrExt = (window as any).nostr;
       const sealJson = await nostrExt.nip44.decrypt(event.pubkey, event.content);
       seal = JSON.parse(sealJson);
@@ -486,9 +506,10 @@ async function handleGiftWrap(event: any): Promise<void> {
     }
 
     // ── Validate rumor ──
-    // kind 14 = chat; ND_PROTOCOL_KIND = game payloads (trades). Older clients sent
-    // trades as kind 14, so both must be accepted for the 7-day history replay.
-    if (!rumor || (rumor.kind !== 14 && rumor.kind !== ND_PROTOCOL_KIND)) return;
+    // kind 14 = chat; kind 15 = encrypted file (image); ND_PROTOCOL_KIND = game
+    // payloads (trades). Older clients sent trades as kind 14, so all are
+    // accepted for the 7-day history replay.
+    if (!rumor || (rumor.kind !== 14 && rumor.kind !== 15 && rumor.kind !== ND_PROTOCOL_KIND)) return;
     if (typeof rumor.content !== 'string') return;
     if (!rumor.pubkey) return;
 
@@ -528,6 +549,21 @@ async function handleGiftWrap(event: any): Promise<void> {
       .filter((t: string[]) => t[0] === 'emoji' && t[1] && t[2])
       .map((t: string[]) => ({ code: t[1], url: t[2] }));
 
+    // kind:15 encrypted file — pull the decryption secrets from the rumor tags
+    // (Wisp/Amethyst scheme). Content is the ciphertext URL.
+    let encFile: DMMessage['encFile'];
+    if (rumor.kind === 15) {
+      const tag = (name: string) => (rumor.tags || []).find((t: string[]) => t[0] === name)?.[1] ?? '';
+      const algo = tag('encryption-algorithm');
+      const key = tag('decryption-key');
+      const nonce = tag('decryption-nonce');
+      if (algo === 'aes-gcm' && key && nonce && /^https?:\/\//i.test(rumor.content)) {
+        encFile = { url: rumor.content.trim(), mime: tag('file-type') || 'image/png', key, nonce };
+      } else {
+        return; // unsupported kind:15 variant — drop rather than render a raw URL
+      }
+    }
+
     // ── Notify listeners ──
     notifyListeners({
       id: event.id,
@@ -537,6 +573,7 @@ async function handleGiftWrap(event: any): Promise<void> {
       createdAt: rumor.created_at || event.created_at || Math.floor(Date.now() / 1000),
       isOwn,
       conversationPubkey,
+      encFile,
       deliveryStatus: 'sent',
       ...(emojis.length ? { emojis } : {}),
     });

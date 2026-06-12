@@ -18,6 +18,7 @@ import { maybeTranslate, isTranslatorSupported } from '../i18n/translator';
 import { t as ti18n, onLangChange } from '../i18n/i18n';
 import { ProfileModal } from './ProfileModal';
 import { isPlainUrl, renderLinkWithPreview } from './LinkPreview';
+import { attachImagePaste, pickAndUploadImage, IMAGE_URL_RE } from './imageUpload';
 import { nip19 } from 'nostr-tools';
 import { receiveTradeOffer, handleOfferAccepted, handleOfferRejected, ITEM_CATALOG } from '../stores/tradeItemStore';
 
@@ -37,6 +38,10 @@ export class DMPanel {
 
   private conversations = new Map<string, Conversation>();
   private messages = new Map<string, DMMessage[]>(); // keyed by pubkey
+  // Decrypted kind:15 images: msg.id → object URL (so re-renders don't refetch
+  // + re-decrypt). Object URLs live for the session; the browser reclaims them.
+  private encImgCache = new Map<string, string>();
+  private encImgPending = new Set<string>();
   private activePubkey: string | null = null;
   isOpen = false;
   private unsubscribe: (() => void) | null = null;
@@ -302,6 +307,40 @@ export class DMPanel {
 
   // Debounce renders during bulk history load — coalesces many rapid handleMessage
   // calls into a single render pass instead of re-rendering for every event.
+  /** Swap encrypted-image placeholder slots for decrypted <img> elements. */
+  private _hydrateEncryptedImages(msgs: DMMessage[]): void {
+    const byId = new Map(msgs.filter(m => m.encFile).map(m => [m.id, m] as const));
+    const mount = (slot: Element, objUrl: string) => {
+      const img = document.createElement('img');
+      img.src = objUrl;
+      img.style.cssText = 'max-width:220px;max-height:200px;border-radius:6px;display:block;cursor:pointer;';
+      img.addEventListener('click', () => window.open(objUrl, '_blank'));
+      slot.replaceWith(img);
+    };
+    this.messagesEl?.querySelectorAll('.dm-encimg-slot').forEach(slot => {
+      const id = (slot as HTMLElement).dataset.msgid ?? '';
+      const msg = byId.get(id);
+      if (!msg?.encFile) return;
+      const cached = this.encImgCache.get(id);
+      if (cached) { mount(slot, cached); return; }
+      if (this.encImgPending.has(id)) return; // in flight — the next render mounts it
+      this.encImgPending.add(id);
+      const ef = msg.encFile;
+      import('./imageUpload')
+        .then(({ decryptImageToObjectUrl }) => decryptImageToObjectUrl(ef.url, ef.key, ef.nonce, ef.mime))
+        .then(objUrl => {
+          this.encImgCache.set(id, objUrl);
+          const live = this.messagesEl?.querySelector(`.dm-encimg-slot[data-msgid="${CSS.escape(id)}"]`);
+          if (live) mount(live, objUrl);
+        })
+        .catch(() => {
+          const live = this.messagesEl?.querySelector(`.dm-encimg-slot[data-msgid="${CSS.escape(id)}"]`) as HTMLElement | null;
+          if (live) live.textContent = 'image unavailable';
+        })
+        .finally(() => this.encImgPending.delete(id));
+    });
+  }
+
   private showSendError(msg: string): void {
     const el = this.container?.querySelector('#dm-send-error') as HTMLElement | null;
     if (!el) return;
@@ -424,6 +463,7 @@ export class DMPanel {
       pubkey: convPubkey,
       name: msg.senderName || existing?.name || this.toNpub(convPubkey),
       lastMessage: (() => {
+        if (msg.encFile) return '[Image]';
         const t = msg.content.trim();
         if (isGifUrl(t)) return '[GIF]';
         if (/^nd-invite:/.test(t)) return '[Crew Invite]';
@@ -584,8 +624,10 @@ export class DMPanel {
           <div class="dm-chat-header"></div>
           <div class="dm-messages"></div>
           <div id="dm-send-error" style="display:none;padding:6px 14px 0;font-family:'Courier New',monospace;font-size:11px;color:#e85454;"></div>
+          <div id="dm-upload-status" style="display:none;padding:2px 14px 0;font-family:'Courier New',monospace;font-size:10px;color:var(--nd-subtext);"></div>
           <div class="dm-input-row">
             <input type="text" class="dm-input" placeholder="${ti18n('dm.input_placeholder')}" maxlength="500" />
+            <button class="dm-attach-btn" title="${ti18n('dm.send_image')}">IMG</button>
             <button class="dm-gif-btn">GIF</button>
           </div>
         </div>
@@ -617,6 +659,24 @@ export class DMPanel {
       });
       this.gifPicker.open(gifBtn);
     });
+
+    // Image sending — paste (clipboard) or the IMG file picker. Pasted/picked
+    // image FILES go through the encrypted pipeline (AES-GCM → Blossom → kind:15
+    // DM carrying the key in its gift-wrapped tags). Pasted public image URLs
+    // send as normal text (they were already public).
+    const setStatus = (m: string) => {
+      const el = this.container?.querySelector('#dm-upload-status') as HTMLElement | null;
+      if (el) { el.textContent = m; el.style.display = m ? 'block' : 'none'; }
+    };
+    const sendEncrypted = ({ url, tags }: { url: string; tags: string[][] }) => {
+      if (this.activePubkey) sendDirectMessage(this.activePubkey, url, 15, tags).catch(() => this.showSendError('Failed to send image'));
+    };
+    const sendPublicUrl = (url: string) => {
+      if (this.activePubkey) sendDirectMessage(this.activePubkey, url).catch(() => {});
+    };
+    attachImagePaste(this.inputEl, { onEncrypted: sendEncrypted, onPublicUrl: sendPublicUrl, onStatus: setStatus });
+    const attachBtn = this.container.querySelector('.dm-attach-btn') as HTMLButtonElement;
+    attachBtn?.addEventListener('click', () => pickAndUploadImage({ onEncrypted: sendEncrypted, onStatus: setStatus }));
 
     this.inputEl.addEventListener('focus', () => {
       this.inputEl!.style.borderColor = `color-mix(in srgb,var(--nd-accent) 65%,transparent)`;
@@ -740,13 +800,19 @@ export class DMPanel {
       const time = new Date(msg.createdAt * 1000);
       const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const t = msg.content.trim();
-      const isGif = isGifUrl(t);
-      const isLink = !isGif && isPlainUrl(t);
-      const inviteMatch = !isGif && !isLink && t.match(/^nd-invite:([^:]+):([^:]+):([^:]+)$/);
-      const declineMatch = !isGif && !isLink && !inviteMatch && t.match(/^nd-decline:([^:]+):(.+)$/);
+      const isEnc = !!msg.encFile;
+      const isGif = !isEnc && isGifUrl(t);
+      const isImage = !isEnc && !isGif && IMAGE_URL_RE.test(t);
+      const isLink = !isEnc && !isGif && !isImage && isPlainUrl(t);
+      const inviteMatch = !isEnc && !isGif && !isImage && !isLink && t.match(/^nd-invite:([^:]+):([^:]+):([^:]+)$/);
+      const declineMatch = !isEnc && !isGif && !isImage && !isLink && !inviteMatch && t.match(/^nd-decline:([^:]+):(.+)$/);
       const isCrewCard = !!(inviteMatch || declineMatch);
-      const contentHtml = isGif
-        ? `<img src="${gifSrcAttr(t)}" style="max-width:200px;max-height:160px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
+      const contentHtml = isEnc
+        // Encrypted image (kind:15): placeholder slot, hydrated post-render by
+        // an async fetch+decrypt (see _hydrateEncryptedImages below).
+        ? `<span class="dm-encimg-slot" data-msgid="${this.escapeHtml(msg.id)}" style="display:block;width:180px;height:90px;border:1px dashed color-mix(in srgb,var(--nd-text) 25%,transparent);border-radius:6px;color:var(--nd-subtext);font-size:10px;display:flex;align-items:center;justify-content:center;">…</span>`
+        : (isGif || isImage)
+        ? `<img src="${isGif ? gifSrcAttr(t) : t.replace(/"/g, '%22')}" style="max-width:220px;max-height:200px;border-radius:6px;display:block;cursor:pointer;" loading="lazy" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')">`
         : isLink
           ? `<span class="dm-link-preview-slot" data-url="${t.replace(/"/g, '%22')}" data-own="${msg.isOwn ? '1' : '0'}"></span>`
           : inviteMatch
@@ -773,14 +839,14 @@ export class DMPanel {
       // (no text), links (auto-rendered as previews), and crew invite cards
       // (structured, not freeform). Mid-rerender translation runs against
       // these post-mount; see `_translateVisibleMessages` below.
-      const translatable = !isGif && !isLink && !isCrewCard;
+      const translatable = !isEnc && !isGif && !isImage && !isLink && !isCrewCard;
       const dataAttrs    = translatable
         ? ` data-translatable="1" data-original="${this.escapeHtml(msg.content)}"`
         : '';
 
       return `
         <div class="dm-msg ${msg.isOwn ? 'dm-msg-own' : 'dm-msg-other'}">
-          <div class="dm-msg-content${isGif ? ' dm-msg-gif' : ''}${isCrewCard ? ' dm-msg-invite' : ''}"${dataAttrs}>${contentHtml}</div>
+          <div class="dm-msg-content${(isGif || isImage || isEnc) ? ' dm-msg-gif' : ''}${isCrewCard ? ' dm-msg-invite' : ''}"${dataAttrs}>${contentHtml}</div>
           <div class="dm-msg-time">${timeStr}</div>
         </div>
       `;
@@ -799,6 +865,10 @@ export class DMPanel {
       const preview = renderLinkWithPreview(url, isOwn);
       slot.replaceWith(preview);
     });
+
+    // Hydrate encrypted images: fetch ciphertext + decrypt → object URL.
+    // Decrypted URLs are cached per message id so re-renders don't refetch.
+    this._hydrateEncryptedImages(slice);
 
     // Fire off on-device translation for plain-text messages. Each call is
     // cached by the translator module, so re-renders (load-older, new-msg)
@@ -1208,7 +1278,7 @@ export class DMPanel {
       }
       .dm-input:focus { border-color: color-mix(in srgb,var(--nd-accent) 65%,transparent); }
       .dm-input::placeholder { color: var(--nd-subtext); opacity: 0.55; }
-      .dm-gif-btn {
+      .dm-gif-btn, .dm-attach-btn {
         flex-shrink: 0; padding: 8px 10px;
         background: color-mix(in srgb, black 45%, var(--nd-bg));
         border: 1px solid color-mix(in srgb,var(--nd-text) 22%,transparent);
@@ -1216,7 +1286,7 @@ export class DMPanel {
         font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold;
         cursor: pointer; transition: color 0.15s, border-color 0.15s;
       }
-      .dm-gif-btn:hover { color: var(--nd-accent); border-color: color-mix(in srgb,var(--nd-accent) 50%,transparent); }
+      .dm-gif-btn:hover, .dm-attach-btn:hover { color: var(--nd-accent); border-color: color-mix(in srgb,var(--nd-accent) 50%,transparent); }
       .dm-msg-gif { background: none !important; border: none !important; padding: 0 !important; }
       .dm-empty {
         color: var(--nd-subtext); font-size: 13px; text-align: center;
