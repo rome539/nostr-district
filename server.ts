@@ -291,9 +291,31 @@ function publishFishRecord(pubkey: string): void {
   }, ORACLE_SK));
 }
 
-function recordLegendaryCatch(pubkey: string, itemId: string): void {
+// Reconcile the warm cache with the DURABLE relay record before mutating it.
+// Railway has no volume, so .fish-records.json is wiped on every redeploy — and
+// without this, the next append would publish total:1 and clobber a player's real
+// record. The oracle-signed ndfishrec on relays is the source of truth; never
+// shrink below it. Once per pubkey per lifetime (the relay copy can only grow via
+// us, so the in-memory cache stays current after the first load).
+const fishRecLoaded = new Set<string>();
+async function loadFishRecord(pubkey: string): Promise<void> {
+  if (fishRecLoaded.has(pubkey)) return;
+  fishRecLoaded.add(pubkey);
+  try {
+    const ev = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndfishrec_${pubkey}`] })).get(`ndfishrec_${pubkey}`);
+    if (ev?.content) {
+      const relayCatches = JSON.parse(ev.content).catches;
+      if (Array.isArray(relayCatches) && relayCatches.length > (fishRecords[pubkey]?.length ?? 0)) {
+        fishRecords[pubkey] = relayCatches;
+      }
+    }
+  } catch { /* relays unreachable — cache-only, same as before */ }
+}
+
+async function recordLegendaryCatch(pubkey: string, itemId: string): Promise<void> {
   const meta = LEGENDARY_FISH_META[itemId];
   if (!meta) return;
+  await loadFishRecord(pubkey); // don't clobber the durable record after a cache wipe
   const list = fishRecords[pubkey] ?? (fishRecords[pubkey] = []);
   list.push({ name: meta.name, kg: meta.kg, ts: Math.floor(Date.now() / 1000) });
   try { writeFileSync(FISH_REC_FILE, JSON.stringify(fishRecords)); } catch {}
@@ -308,6 +330,7 @@ function recordLegendaryCatch(pubkey: string, itemId: string): void {
 async function backfillFishRecord(pubkey: string, name: string): Promise<void> {
   if (fishBackfilled.has(pubkey)) return;
   fishBackfilled.add(pubkey);
+  await loadFishRecord(pubkey); // start from the durable record so we only ever add
   const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [pubkey], '#t': ['nditem'] }));
   let caught = 0;
   for (const ev of owned.values()) {
@@ -1532,7 +1555,7 @@ wss.on('connection', (ws) => {
         }
         if (tier === 'legendary') {
           console.log(`[Fishing] LEGENDARY ${itemId} caught by ${player.name}`);
-          recordLegendaryCatch(myPubkey, itemId); // oracle logs the catch — no player signature needed
+          recordLegendaryCatch(myPubkey, itemId).catch(() => {}); // oracle logs the catch — no player signature needed
         }
         ws.send(JSON.stringify({ type: 'fish_caught', itemId, tier, kept: !!(kept && event), event }));
         return;
