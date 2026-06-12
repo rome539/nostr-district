@@ -245,10 +245,10 @@ const FISH_TIERS: Record<string, string[]> = {
 };
 // rare keep was 0.10 at launch, which made kept rares exactly as common as kept
 // commons (25%×10% = 50%×5%). Halved so rares are genuinely 2× scarcer in the bag.
-// junk keep raised 5% → 25% (2026-06-12): junk fish are bounty wants, and at a
+// junk keep raised 5% → 15% (2026-06-12): junk fish are bounty wants, and at a
 // 5% keep a specific junk fish took ~11h of fishing — absurd for an Old Boot.
 // Junk is sink fodder, not a prize; keeping a quarter of it is still "junk-feeling".
-const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.05, common: 0.10, junk: 0.25 };
+const FISH_KEEP: Record<string, number> = { legendary: 1.0, rare: 0.05, common: 0.10, junk: 0.15 };
 
 function rollFishCatch(): { itemId: string; tier: string; kept: boolean } {
   const roll = Math.random();

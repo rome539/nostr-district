@@ -1612,7 +1612,7 @@ export const FISH_KEEP_CHANCE: Record<string, number> = {
   legendary: 1.0,
   rare:      0.05,
   common:    0.10,
-  junk:      0.25, // junk is bounty fodder — at 5% a specific boot took ~11h to land
+  junk:      0.15, // junk is bounty fodder — at 5% a specific boot took ~11h to land
 };
 
 // ── Rarity-weighted item selection ────────────────────────────────────────────
