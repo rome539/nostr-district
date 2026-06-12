@@ -955,9 +955,11 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     if (this.isLeavingScene) return;
     if (this.shouldBlockPanelKeys()) return; // full-screen panels (wallet, market, etc.)
     if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay, #zap-modal, #sp-keys-modal, #player-context-menu, #profile-modal')) return;
+    // Scavenge first: ephemeral drops reroll on collect, so one overlapping a
+    // fixture would otherwise be uncollectable. Fixtures stay reachable next press.
+    if (this.scavenge?.tryInteract()) return;
     if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
     if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
-    if (this.scavenge?.tryInteract()) return;
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;

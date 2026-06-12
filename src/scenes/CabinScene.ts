@@ -152,11 +152,13 @@ export class CabinScene extends BaseScene {
       if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
       if (this.bookOverlay) { this.closeBookOverlay(); return; }
+      // Scavenge first: ephemeral drops reroll on collect, so one overlapping a
+      // fixture would otherwise be uncollectable. Fixtures stay reachable next press.
+      if (this.scavenge?.tryInteract()) return;
       if (this.nearDoor && !this.isLeavingScene) { this.isLeavingScene = true; this.leaveToWoods(); return; }
       if (this.nearFireplace && this.stokedTimer <= 0) { this.stokedTimer = 5000; this.snd.stokeFireplace(); sendChat('/stoke'); return; }
       if (this.nearBookshelf) { this.showBookQuote(); return; }
       if (this.nearLeaderboard) { this.openFishLeaderboard(); return; }
-      if (this.scavenge?.tryInteract()) return;
     });
     this.setupEscHandler();
     this.setupPresenceCallbacks(myPubkey);

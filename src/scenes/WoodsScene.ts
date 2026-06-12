@@ -278,11 +278,15 @@ export class WoodsScene extends BaseScene {
     this.input.keyboard?.on('keydown-E', () => {
       if (document.activeElement === this.chatInput) return;
       if (document.querySelector('.dm-panel.dm-open, .cp-panel.cp-open, .cp-modal-overlay')) return;
+      // Scavenge drops get first priority: they're ephemeral and reroll away on
+      // collect, so a drop overlapping a fixture would otherwise be uncollectable
+      // (the fixture's early return swallows the press). Fixtures are permanent
+      // and still reachable on the next press.
+      if (this.scavenge?.tryInteract()) return;
       if (this.nearCabin && !this.isLeavingScene) { this.isLeavingScene = true; this.enterCabin(); return; }
       if (this.nearTelescope) { this.openTelescopeView(); return; }
       if (this.nearFishBoard) { this.openFishGuide(); return; }
       if (this.nearDockTip) { this.handleFishingPress(); return; }
-      if (this.scavenge?.tryInteract()) return;
     });
 
     // Telescope prompt

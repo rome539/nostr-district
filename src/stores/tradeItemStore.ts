@@ -2001,12 +2001,13 @@ export function getPendingOutgoingInstanceIds(): Set<string> {
 // The offerer cancels their own outstanding offer — frees the item and tells the
 // recipient to drop their incoming copy (reusing the reject message they handle).
 export async function cancelTradeOffer(offer: TradeOffer): Promise<void> {
-  const { sendProtocolMessage } = await import('../nostr/dmService');
-  await sendProtocolMessage(offer.toPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
+  // Resolve locally first so a bad relay connection can't strand the offer on-screen.
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
   window.dispatchEvent(new CustomEvent('nd-inventory-update')); // item returns to inventory
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  sendProtocolMessage(offer.toPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`).catch(() => {});
 }
 
 export async function sendTradeOffer(
@@ -2076,22 +2077,26 @@ export async function acceptTradeOffer(offer: TradeOffer, myInstanceId: string):
   sendItemSwapRequest(myEvent, theirEvent, offer.fromPubkey);
   removeItem(myInstanceId);
 
-  // Notify offerer so they clear their outgoing offer
-  const { sendProtocolMessage } = await import('../nostr/dmService');
-  await sendProtocolMessage(offer.fromPubkey, `nd-item-offer-accept:${JSON.stringify({ offerId: offer.id })}`);
-
+  // Clear the offer locally FIRST — never gate the UI on the relay round-trip. A
+  // bad relay connection (Brave/Safari throttling WebSockets) must not leave the
+  // just-accepted offer stuck on the accepter's bazaar.
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
+
+  // Notify the offerer so they clear their outgoing copy — best-effort, not awaited.
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  sendProtocolMessage(offer.fromPubkey, `nd-item-offer-accept:${JSON.stringify({ offerId: offer.id })}`).catch(() => {});
   return true;
 }
 
 export async function rejectTradeOffer(offer: TradeOffer): Promise<void> {
-  const { sendProtocolMessage } = await import('../nostr/dmService');
-  await sendProtocolMessage(offer.fromPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`);
+  // Resolve locally first so a bad relay connection can't strand the offer on-screen.
   markResolved(offer.id);
   saveOffers(loadOffers().filter(o => o.id !== offer.id));
   window.dispatchEvent(new CustomEvent('nd-offers-update'));
+  const { sendProtocolMessage } = await import('../nostr/dmService');
+  sendProtocolMessage(offer.fromPubkey, `nd-item-offer-reject:${JSON.stringify({ offerId: offer.id })}`).catch(() => {});
 }
 
 // Returns true only the FIRST time an accept is seen — so DM-history replay on
