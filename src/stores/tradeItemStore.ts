@@ -689,6 +689,7 @@ export async function fetchInventoryFromRelays(ownerPubkey: string): Promise<voi
       receiveMintedEvent(event);
     }
     console.log(`[Items] Inventory: ${_inventory.length} items (${burned} burned) from ${_itemEventsByDTag.size} known events`);
+    reconcileOutgoingOffers(); // self-heal: clear offers whose staked item burned away
     window.dispatchEvent(new CustomEvent('nd-inventory-update'));
   } catch (e) {
     console.warn('[Items] fetchInventory failed:', e);
@@ -1969,6 +1970,7 @@ export function initTradeOffers(pubkey: string): void {
     // re-adds during the pre-load window can't survive.
     _offers = _offers.filter(o => !_resolvedOffers.has(o.id));
     _offersLoaded = true;
+    reconcileOutgoingOffers(); // self-heal in case inventory already synced first
     if (migrated || !remote) scheduleOffersPublish(); // persist the recovered/initial set
     window.dispatchEvent(new CustomEvent('nd-offers-update'));
     window.dispatchEvent(new CustomEvent('nd-inventory-update')); // re-apply offer locks
@@ -1986,6 +1988,34 @@ export function resetTradeOffers(): void {
 export function getPendingOffers(): TradeOffer[] {
   const resolved = loadResolved();
   return loadOffers().filter(o => !resolved.has(o.id));
+}
+
+/**
+ * Self-healing: drop any pending OUTGOING offer whose staked item is no longer
+ * owned (it swapped/burned away). The relay-backed burn tombstone is the source
+ * of truth, so this closes the loop even when the accepter's notification DM
+ * never arrived (e.g. they dismissed the extension signing prompt). Runs on the
+ * inventory relay-sync, like every other bazaar operation that self-corrects.
+ *
+ * Only judges items we have POSITIVE knowledge of — the item's event is in our
+ * known-events map but it's gone from inventory (burned). A merely-absent item
+ * (incomplete relay coverage) is left alone so a partial sync can't drop a live
+ * offer.
+ */
+function reconcileOutgoingOffers(): void {
+  if (!_offersLoaded) return;
+  const dead = _offers.filter(o =>
+    o.direction === 'outgoing' &&
+    !_resolvedOffers.has(o.id) &&
+    _itemEventsByDTag.has(o.offerInstanceId) &&                  // we know this item…
+    !_inventory.some(i => i.instanceId === o.offerInstanceId),   // …and it's burned/gone
+  );
+  if (!dead.length) return;
+  for (const o of dead) _resolvedOffers.add(o.id);
+  if (_resolvedOffers.size > 500) _resolvedOffers = new Set([..._resolvedOffers].slice(-500));
+  _offers = _offers.filter(o => !_resolvedOffers.has(o.id));
+  flushOffersPublish();                                          // persist the resolution
+  window.dispatchEvent(new CustomEvent('nd-offers-update'));
 }
 
 // An item with a pending OUTGOING offer is spoken for — it can't also be listed,
