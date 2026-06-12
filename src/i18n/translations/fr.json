@@ -355,6 +355,8 @@
   "tutorial.moving.body": "Utilisez les touches fléchées <b></b> ou <b>cliquez n'importe où</b> sur le sol pour marcher. Vous pouvez explorer tout le quartier depuis le hub.",
   "tutorial.chat.title": "Chat",
   "tutorial.chat.body": "Appuyez sur <b>Entrée</b> pour concentrer la barre de discussion et parler avec tout le monde dans le quartier. Tapez <b>/help</b> pour voir toutes les commandes disponibles.",
+  "tutorial.players.title": "Les autres joueurs",
+  "tutorial.players.body": "Cliquez sur n'importe quel joueur pour ouvrir son menu : voir son profil, envoyer un MP, lui zapper des sats, visiter sa chambre ou échanger des objets.",
   "tutorial.buildings.title": "Entrer dans les bâtiments",
   "tutorial.buildings.body": "Approchez-vous d'une porte d'immeuble et appuyez sur <b>E</b> ou <b>Space</b> pour entrer. Vous verrez une invite apparaître lorsque vous serez suffisamment proche. Appuyez sur <b>Esc</b> pour quitter et revenir dans le quartier.",
   "tutorial.room.title": "Votre chambre",

@@ -355,6 +355,8 @@
   "tutorial.moving.body": "<b>화살표 키</b> 또는 <b>지상 아무 곳이나 클릭</b>하여 걸어보세요. 허브에서 지구 전체를 탐색할 수 있습니다.",
   "tutorial.chat.title": "채팅",
   "tutorial.chat.body": "<b>Enter</b>를 눌러 채팅 표시줄에 초점을 맞추고 학구의 모든 사람과 대화하세요. 사용 가능한 모든 명령을 보려면 <b>/help</b>를 입력하세요.",
+  "tutorial.players.title": "다른 플레이어",
+  "tutorial.players.body": "플레이어를 클릭하면 메뉴가 열립니다 — 프로필 보기, DM 보내기, sats 잽하기, 방 방문하기, 아이템 교환하기.",
   "tutorial.buildings.title": "건물 진입",
   "tutorial.buildings.body": "건물 문으로 다가가서 <b>E</b> 또는 <b>Space</b>를 눌러 들어가세요. 충분히 가까워지면 메시지가 표시됩니다. <b>Esc</b>를 눌러 지구를 떠나고 돌아오세요.",
   "tutorial.room.title": "당신의 방",

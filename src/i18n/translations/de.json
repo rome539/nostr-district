@@ -355,6 +355,8 @@
   "tutorial.moving.body": "Benutzen Sie die <b>Pfeiltasten</b> oder <b>klicken Sie irgendwo</b> auf dem Boden, um zu gehen. Vom Hub aus können Sie den gesamten Stadtteil erkunden.",
   "tutorial.chat.title": "Chatten",
   "tutorial.chat.body": "Drücken Sie <b>Enter</b>, um die Chatleiste zu fokussieren und mit allen im Bezirk zu sprechen. Geben Sie <b>/help</b> ein, um alle verfügbaren Befehle anzuzeigen.",
+  "tutorial.players.title": "Andere Spieler",
+  "tutorial.players.body": "Klicke auf einen Spieler, um sein Menü zu öffnen — Profil ansehen, DM senden, Sats zappen, sein Zimmer besuchen oder Gegenstände tauschen.",
   "tutorial.buildings.title": "Betreten von Gebäuden",
   "tutorial.buildings.body": "Gehen Sie zu einer Gebäudetür und drücken Sie <b>E</b> oder <b>Leertaste</b>, um einzutreten. Sobald Sie nah genug dran sind, wird eine Eingabeaufforderung angezeigt. Drücken Sie <b>Esc</b>, um den Bezirk zu verlassen und in ihn zurückzukehren.",
   "tutorial.room.title": "Dein Zimmer",

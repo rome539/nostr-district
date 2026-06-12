@@ -355,6 +355,8 @@
   "tutorial.moving.body": "Usa i <b>tasti freccia</b> o <b>fai clic in un punto qualsiasi</b> del terreno per camminare. Puoi esplorare l'intero distretto dall'hub.",
   "tutorial.chat.title": "Chiacchierata",
   "tutorial.chat.body": "Premi <b>Invio</b> per focalizzare la barra della chat e parlare con tutti nel distretto. Digita <b>/help</b> per vedere tutti i comandi disponibili.",
+  "tutorial.players.title": "Altri giocatori",
+  "tutorial.players.body": "Clicca su un giocatore per aprire il suo menu: vedere il profilo, inviare un DM, zappargli sats, visitare la sua stanza o scambiare oggetti.",
   "tutorial.buildings.title": "Entrando negli edifici",
   "tutorial.buildings.body": "Avvicinati alla porta di un edificio e premi <b>E</b> o <b>Spazio</b> per entrare. Vedrai apparire un messaggio quando sarai abbastanza vicino. Premi <b>Esc</b> per uscire e tornare al distretto.",
   "tutorial.room.title": "La tua stanza",

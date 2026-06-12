@@ -34,6 +34,7 @@ const STEPS: Step[] = [
   { titleKey: 'tutorial.welcome.title',     bodyKey: 'tutorial.welcome.body'                                 },
   { titleKey: 'tutorial.moving.title',      bodyKey: 'tutorial.moving.body',      key: '← →'                 },
   { titleKey: 'tutorial.chat.title',        bodyKey: 'tutorial.chat.body',        key: 'Enter'               },
+  { titleKey: 'tutorial.players.title',     bodyKey: 'tutorial.players.body'                                 },
   { titleKey: 'tutorial.buildings.title',   bodyKey: 'tutorial.buildings.body',   key: 'E'                   },
   { titleKey: 'tutorial.room.title',        bodyKey: 'tutorial.room.body',        key: 'T'                   },
   { titleKey: 'tutorial.hotkeys.title',     bodyKey: 'tutorial.hotkeys.body'                                 },

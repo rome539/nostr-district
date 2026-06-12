@@ -355,6 +355,8 @@
   "tutorial.moving.body": "Use as teclas de seta <b></b> ou <b>clique em qualquer lugar</b> no chão para andar. Você pode explorar todo o distrito a partir do centro.",
   "tutorial.chat.title": "Bater papo",
   "tutorial.chat.body": "Pressione <b>Enter</b> para focar a barra de bate-papo e conversar com todos no distrito. Digite <b>/help</b> para ver todos os comandos disponíveis.",
+  "tutorial.players.title": "Outros jogadores",
+  "tutorial.players.body": "Clique em qualquer jogador para abrir o menu dele — ver o perfil, mandar DM, dar zap em sats, visitar o quarto ou trocar itens.",
   "tutorial.buildings.title": "Entrando em edifícios",
   "tutorial.buildings.body": "Caminhe até a porta de um prédio e pressione <b>E</b> ou <b>Space</b> para entrar. Você verá um aviso aparecer quando estiver perto o suficiente. Pressione <b>Esc</b> para sair e retornar ao distrito.",
   "tutorial.room.title": "Seu quarto",

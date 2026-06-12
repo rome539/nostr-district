@@ -197,13 +197,14 @@ function publishWeeklyMarker(pubkey: string): void {
 // ── Scavenge rate limit (server-authoritative, keyed by pubkey) ───────────────
 // The client picks WHERE/WHEN spots appear (localStorage, random) — harmless. But
 // the RATE of scavenge mints is enforced here so clearing/editing localStorage can't
-// farm the loop. Token bucket: burst up to 3 (the spot count), refill 1 per 10 min.
-// Refill is set to the LEGIT ceiling (3 spots × ~30-min min respawn ≈ 6/hr) so a
-// normal player is never falsely blocked, while a cheater can't beat that ceiling.
+// farm the loop. Token bucket: burst up to 3 (the spot count), refill 1 per 8 min.
+// Refill is set above the LEGIT ceiling (3 spots × 20–60-min respawn averages
+// ~4.5/hr, lucky fast-respawn streaks peak ~9/hr briefly) so a normal player is
+// never falsely blocked, while a cheater can't beat ~7.5/hr sustained.
 // Per-account, survives restarts + syncs across devices.
 const SCAVENGE_FILE = '.scavenge-buckets.json';
 const SCAVENGE_CAPACITY = 3;
-const SCAVENGE_REFILL_MS = 10 * 60 * 1000;
+const SCAVENGE_REFILL_MS = 8 * 60 * 1000;
 let scavengeBuckets: Record<string, { tokens: number; lastRefill: number }> = {};
 try { if (existsSync(SCAVENGE_FILE)) scavengeBuckets = JSON.parse(readFileSync(SCAVENGE_FILE, 'utf8')); } catch {}
 

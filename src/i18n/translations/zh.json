@@ -355,6 +355,8 @@
   "tutorial.moving.body": "使用<b>箭头键</b>或<b>单击地面上的任意位置</b>行走。您可以从中心探索整个地区。",
   "tutorial.chat.title": "聊天",
   "tutorial.chat.body": "按<b>Enter</b>聚焦聊天栏并与区内的每个人交谈。输入 <b>/help</b> 查看所有可用命令。",
+  "tutorial.players.title": "其他玩家",
+  "tutorial.players.body": "点击任意玩家即可打开菜单 — 查看资料、发私信、zap 给 sats、参观房间或交换物品。",
   "tutorial.buildings.title": "进入建筑物",
   "tutorial.buildings.body": "走到建筑物门口，按<b>E</b>或<b>Space</b>进入。当您足够接近时，您会看到出现提示。按<b>Esc</b> 离开和返回小区。",
   "tutorial.room.title": "你的房间",

@@ -355,6 +355,8 @@
   "tutorial.moving.body": "<b>矢印キー</b>または<b>地面上の任意の場所をクリック</b>を使用して歩きます。ハブから地区全体を探索できます。",
   "tutorial.chat.title": "チャット",
   "tutorial.chat.body": "<b>Enter</b> を押してチャット バーをフォーカスし、地区内の全員と会話します。 「<b>/help</b>」と入力すると、使用可能なコマンドがすべて表示されます。",
+  "tutorial.players.title": "ほかのプレイヤー",
+  "tutorial.players.body": "プレイヤーをクリックするとメニューが開きます — プロフィールを見る、DMを送る、satsをzapする、部屋を訪ねる、アイテムを交換する。",
   "tutorial.buildings.title": "建物への立ち入り",
   "tutorial.buildings.body": "建物のドアまで歩き、<b>E</b>または<b>スペース</b>を押して入ります。十分に近づくとプロンプトが表示されます。 <b>Esc</b>を押して地区を離れ、地区に戻ります。",
   "tutorial.room.title": "あなたの部屋",

@@ -355,6 +355,8 @@
   "tutorial.moving.body": "Gebruik de <b>pijltoetsen</b> of <b>klik ergens</b> op de grond om te lopen. Vanuit de hub kun je de hele wijk verkennen.",
   "tutorial.chat.title": "Chatten",
   "tutorial.chat.body": "Druk op <b>Enter</b> om de chatbalk scherp te stellen en met iedereen in de wijk te praten. Typ <b>/help</b> om alle beschikbare opdrachten te bekijken.",
+  "tutorial.players.title": "Andere spelers",
+  "tutorial.players.body": "Klik op een speler om hun menu te openen — profiel bekijken, DM sturen, sats zappen, hun kamer bezoeken of items ruilen.",
   "tutorial.buildings.title": "Gebouwen betreden",
   "tutorial.buildings.body": "Loop naar de deur van een gebouw en druk op <b>E</b> of <b>Spatiebalk</b> om naar binnen te gaan. Je ziet een prompt verschijnen als je dichtbij genoeg bent. Druk op <b>Esc</b> om te vertrekken en terug te keren naar de wijk.",
   "tutorial.room.title": "Jouw kamer",

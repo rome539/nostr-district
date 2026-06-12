@@ -450,6 +450,17 @@ export const ITEM_SETS: ItemSet[] = [
     itemIds: ITEM_CATALOG.filter(i => i.category === 'holiday').map(i => i.id),
     rewardLabel: 'Collector of Seasons',
   },
+  {
+    // The apex set: hold EVERY evergreen item at once (possession-based, like
+    // all set cosmetics — sell a single piece and the crown comes off).
+    // Auto-grows as the catalog grows.
+    id: 'set_district_royalty',
+    name: 'District Royalty',
+    description: 'Own every non-seasonal item in the district — all of it, at once. Heavy is the head.',
+    itemIds: ITEM_CATALOG.filter(i => i.category !== 'holiday').map(i => i.id),
+    rewardLabel: 'Royalty',
+    rewardCosmetic: { slot: 'hat', value: 'crown_purple', label: 'Purple Crown' },
+  },
 ];
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
@@ -1711,8 +1722,10 @@ const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: number[]
 };
 const SCAVENGE_SCENES = Object.keys(SCAVENGE_SPAWN);
 
-// Respawn delay after a spot is collected — random 30min … 1h
-const SCAVENGE_RESPAWN_MIN = 30 * 60 * 1000;
+// Respawn delay after a spot is collected — random 20min … 1h (avg 40 →
+// ~4.5 pickups/hr across 3 spots). The server bucket refills 1/8min (~7.5/hr)
+// so honest fast-respawn streaks never hit the cooldown.
+const SCAVENGE_RESPAWN_MIN = 20 * 60 * 1000;
 const SCAVENGE_RESPAWN_MAX = 60 * 60 * 1000;
 
 interface ScavSlot { scene: string; x: number; readyAt: number; }

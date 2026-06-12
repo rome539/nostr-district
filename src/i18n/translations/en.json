@@ -369,6 +369,8 @@
   "tutorial.moving.body": "Use the <b>Arrow Keys</b> or <b>click anywhere</b> on the ground to walk. You can explore the entire district from the hub.",
   "tutorial.chat.title": "Chat",
   "tutorial.chat.body": "Press <b>Enter</b> to focus the chat bar and talk with everyone in the district. Type <b>/help</b> to see all available commands.",
+  "tutorial.players.title": "Other players",
+  "tutorial.players.body": "Click on any player to open their menu — view their profile, send a DM, zap them sats, visit their room, or trade items with them.",
   "tutorial.buildings.title": "Entering Buildings",
   "tutorial.buildings.body": "Walk up to a building door and press <b>E</b> or <b>Space</b> to enter. You'll see a prompt appear when you're close enough. Press <b>Esc</b> to leave and return to the district.",
   "tutorial.room.title": "Your Room",

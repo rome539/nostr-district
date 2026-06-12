@@ -212,7 +212,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'hat_horns',       name: 'Horns',            slot: 'hat',       value: 'horns',          price: 1.50, tier: 'premium' },
   { id: 'hat_hornsspiral', name: 'Spiral Horns',     slot: 'hat',       value: 'hornsspiral',    price: 0.50, tier: 'basic' },
   { id: 'hat_crown',       name: 'Crown',            slot: 'hat',       value: 'crown',          price: 8.00, tier: 'rare' },
-  { id: 'hat_crown_purple',name: 'Purple Crown',     slot: 'hat',       value: 'crown_purple',   price: 8.00, tier: 'rare' },
+  // Purple Crown is no longer purchasable — it's the District Royalty set reward
+  // (own EVERY non-seasonal item at once; possession-based like all set cosmetics).
+  { id: 'hat_crown_purple',name: 'Purple Crown',     slot: 'hat',       value: 'crown_purple',   price: 0,    tier: 'rare', earn: true },
   { id: 'hat_crown_silver',name: 'Silver Crown',     slot: 'hat',       value: 'crown_silver',   price: 8.00, tier: 'rare' },
   { id: 'hat_crown_bronze',name: 'Bronze Crown',     slot: 'hat',       value: 'crown_bronze',   price: 8.00, tier: 'rare' },
   { id: 'hat_beasthat',    name: 'Beast Hat',        slot: 'hat',       value: 'beasthat',       price: 1.50, tier: 'premium' },
