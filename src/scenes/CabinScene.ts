@@ -14,6 +14,7 @@ import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync, fetchFishingRecords, fetchProfile } from '../nostr/nostrService';
 import { getSeenPubkeys } from '../stores/seenPlayersStore';
 import { getOraclePubkeys } from '../stores/tradeItemStore';
+import { authStore } from '../stores/authStore';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
@@ -704,7 +705,11 @@ export class CabinScene extends BaseScene {
         ],
       };
 
-      const seen = [...new Set([...getSeenPubkeys(), ...Object.keys(PRE_BOARD)])];
+      // Include YOUR OWN pubkey — getSeenPubkeys() is only other players (you're
+      // added to "seen" when someone else renders you), so without this your own
+      // client would never query your own record and you'd never see yourself.
+      const me = authStore.getState().pubkey;
+      const seen = [...new Set([...(me ? [me] : []), ...getSeenPubkeys(), ...Object.keys(PRE_BOARD)])];
       const records = await fetchFishingRecords(seen, getOraclePubkeys());
 
       // Merge pre-board catches: always add them unless already tracked by timestamp
