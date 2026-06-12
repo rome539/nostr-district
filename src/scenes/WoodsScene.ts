@@ -16,7 +16,7 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync, signEvent, publishEvent, publishFishingRecord } from '../nostr/nostrService';
+import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
@@ -1798,7 +1798,8 @@ export class WoodsScene extends BaseScene {
     if (isLegendary) {
       if (catch_.name === 'leviathan coelacanth') incrementCoelacanth();
       incrementLegendaryCatch();
-      publishFishingRecord({ name: catch_.name, kg: catch_.kg, ts: Math.floor(Date.now() / 1000) }).catch(() => {});
+      // The oracle logs the catch server-side (see recordLegendaryCatch in
+      // server.ts) — no player signature / extension popup in the catch path.
       const flavor = 'flavor' in catch_ ? catch_.flavor : '';
       const lore = 'lore' in catch_ ? catch_.lore : '';
       this.showLegendaryPostPrompt(catch_.name, catch_.kg, flavor, lore);

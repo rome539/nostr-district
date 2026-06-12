@@ -1181,23 +1181,36 @@ export function cancelBunkerFlow(): void {
 export interface FishCatch { name: string; kg: string; ts: number; }
 export interface FishingRecord { pubkey: string; catches: FishCatch[]; total: number; }
 
-/** Fetch nd-fishing-record events for a set of pubkeys (one event per player). */
-export async function fetchFishingRecords(pubkeys: string[]): Promise<Map<string, FishingRecord>> {
-  if (!pubkeys.length) return new Map();
+/**
+ * Fetch the legendary catch records for a set of players. These are now ORACLE-
+ * authored (kind:30078, #t=ndfishrec, #p=<player>) — the oracle logs each catch
+ * at the moment it happens, so the board is trade-proof and needs no player
+ * signature. `oracleKeys` is the trusted oracle set; records from any other
+ * author are ignored so a record can't be forged.
+ */
+export async function fetchFishingRecords(pubkeys: string[], oracleKeys: string[]): Promise<Map<string, FishingRecord>> {
+  if (!pubkeys.length || !oracleKeys.length) return new Map();
   if (!pool) await loadNostrTools();
+  const trusted = new Set(oracleKeys.map(k => k.toLowerCase()));
   const result = new Map<string, FishingRecord>();
+  const newest = new Map<string, number>(); // player pubkey → created_at of kept record
   const BATCH = 50;
   for (let i = 0; i < pubkeys.length; i += BATCH) {
     const batch = pubkeys.slice(i, i + BATCH);
     const events: any[] = await pool.querySync(
       RELAYS,
-      { kinds: [30078], '#d': ['nd-fishing-record'], authors: batch },
+      { kinds: [30078], '#t': ['ndfishrec'], '#p': batch, authors: oracleKeys },
       { maxWait: 5000 },
     );
     for (const ev of events) {
+      if (!trusted.has((ev.pubkey || '').toLowerCase())) continue; // oracle-signed only
+      const pk = ev.tags?.find((t: string[]) => t[0] === 'p')?.[1];
+      if (!pk) continue;
+      if ((newest.get(pk) ?? -1) >= (ev.created_at ?? 0)) continue; // keep newest per player
       try {
         const data = JSON.parse(ev.content);
-        result.set(ev.pubkey, { pubkey: ev.pubkey, catches: data.catches || [], total: data.total || 0 });
+        result.set(pk, { pubkey: pk, catches: data.catches || [], total: data.total || 0 });
+        newest.set(pk, ev.created_at ?? 0);
       } catch {}
     }
   }

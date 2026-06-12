@@ -11,10 +11,9 @@ import { BaseScene } from './BaseScene';
 import { ScavengeSystem } from './ScavengeSystem';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync, fetchFishingRecords, fetchProfile, publishFishingRecord } from '../nostr/nostrService';
+import { onNextAvatarSync, fetchFishingRecords, fetchProfile } from '../nostr/nostrService';
 import { getSeenPubkeys } from '../stores/seenPlayersStore';
-import { getLegendaryCount } from '../stores/fishingUnlockStore';
-import { authStore } from '../stores/authStore';
+import { getOraclePubkeys } from '../stores/tradeItemStore';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
@@ -693,29 +692,9 @@ export class CabinScene extends BaseScene {
     window.addEventListener('keydown', onKey);
     this.events.once('shutdown', () => { panel.remove(); window.removeEventListener('keydown', onKey); });
 
-    // Silently backfill local user's record if they have local catches but nothing published yet
-    const { pubkey, loginMethod } = authStore.getState();
-    if (pubkey && loginMethod !== 'guest') {
-      const legendaryCount = getLegendaryCount();
-      if (legendaryCount > 0) {
-        fetchFishingRecords([pubkey]).then(existing => {
-          const record = existing.get(pubkey);
-          const publishedTotal = record?.total ?? 0;
-          if (publishedTotal < legendaryCount) {
-            const gap = legendaryCount - publishedTotal;
-            const ts = Math.floor(Date.now() / 1000);
-            const backfillCatches = Array.from({ length: gap }, (_, i) => ({
-              name: 'legendary catch (backfilled)', kg: '?', ts: ts - i,
-            }));
-            // Publish all at once: first catch triggers fetch+append, rest chain sequentially
-            backfillCatches.reduce(
-              (chain, c) => chain.then(() => publishFishingRecord(c)),
-              Promise.resolve(),
-            ).catch(() => {});
-          }
-        }).catch(() => {});
-      }
-    }
+    // Backfill is now server-side: the oracle reconciles each player's catch log
+    // against the legendary fish they still own when they join (see backfillFishRecord
+    // in server.ts), so no client-side publish (and no extension popup) is needed.
 
     try {
       // Pre-board catches that predate the record system — merged into Nostr records, never replaced
@@ -726,7 +705,7 @@ export class CabinScene extends BaseScene {
       };
 
       const seen = [...new Set([...getSeenPubkeys(), ...Object.keys(PRE_BOARD)])];
-      const records = await fetchFishingRecords(seen);
+      const records = await fetchFishingRecords(seen, getOraclePubkeys());
 
       // Merge pre-board catches: always add them unless already tracked by timestamp
       for (const [pk, manual] of Object.entries(PRE_BOARD)) {

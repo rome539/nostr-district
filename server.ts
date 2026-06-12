@@ -260,6 +260,70 @@ function rollFishCatch(): { itemId: string; tier: string; kept: boolean } {
   return { itemId, tier, kept };
 }
 
+// ── Legendary catch leaderboard (oracle-authored, trade-proof) ─────────────────
+// The board records WHO CAUGHT a legendary at the moment it happens, signed by
+// the ORACLE — not the player. This means (a) a buried extension popup can never
+// cost a catch (no player signature in the path), and (b) trading/selling the
+// fish later doesn't move the credit: the catch is a past event, logged once.
+// Per-player record: kind:30078, oracle-authored, d-tag ndfishrec_<pubkey>,
+// content { catches:[{name,kg,ts}], total }. File-backed so it survives restarts.
+const LEGENDARY_FISH_META: Record<string, { name: string; kg: string }> = {
+  fish_ostrich:           { name: 'Ostrich',               kg: '63.5' },
+  fish_golden_satoshi:    { name: 'Golden Satoshi Coin',   kg: '0.01' },
+  fish_enchanted_trident: { name: 'Enchanted Trident',     kg: '8.4'  },
+  fish_coelacanth:        { name: 'Leviathan Coelacanth',  kg: '91.2' },
+  fish_meteor:            { name: 'Meteor from Andromeda',  kg: '???'  },
+};
+const FISH_REC_FILE = '.fish-records.json';
+let fishRecords: Record<string, { name: string; kg: string; ts: number }[]> = {};
+try { if (existsSync(FISH_REC_FILE)) fishRecords = JSON.parse(readFileSync(FISH_REC_FILE, 'utf8')); } catch {}
+const fishBackfilled = new Set<string>(); // pubkeys reconciled against owned legendaries this lifetime
+
+function publishFishRecord(pubkey: string): void {
+  if (!ORACLE_SK) return;
+  const catches = fishRecords[pubkey] ?? [];
+  publishToRelays(finalizeEvent({
+    kind: 30078,
+    pubkey: ORACLE_PUBKEY,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['d', `ndfishrec_${pubkey}`], ['p', pubkey], ['t', 'ndfishrec']],
+    content: JSON.stringify({ catches, total: catches.length }),
+  }, ORACLE_SK));
+}
+
+function recordLegendaryCatch(pubkey: string, itemId: string): void {
+  const meta = LEGENDARY_FISH_META[itemId];
+  if (!meta) return;
+  const list = fishRecords[pubkey] ?? (fishRecords[pubkey] = []);
+  list.push({ name: meta.name, kg: meta.kg, ts: Math.floor(Date.now() / 1000) });
+  try { writeFileSync(FISH_REC_FILE, JSON.stringify(fishRecords)); } catch {}
+  publishFishRecord(pubkey);
+}
+
+// One-time per-lifetime backfill: catches that predate this log (e.g. the
+// missed-popup era) are recovered from legendary fish the player STILL owns and
+// caught (oracle-minted, source=caught). Can't recover ones already traded away
+// before the log existed — that evidence is gone — but it puts current holders
+// back on the board.
+async function backfillFishRecord(pubkey: string, name: string): Promise<void> {
+  if (fishBackfilled.has(pubkey)) return;
+  fishBackfilled.add(pubkey);
+  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [pubkey], '#t': ['nditem'] }));
+  let caught = 0;
+  for (const ev of owned.values()) {
+    if (isBurned(ev)) continue;
+    if (tagVal(ev, 'source') === 'caught' && LEGENDARY_FISH_META[tagVal(ev, 'item_id') ?? '']) caught++;
+  }
+  const have = (fishRecords[pubkey] ?? []).length;
+  if (caught <= have) return;
+  const list = fishRecords[pubkey] ?? (fishRecords[pubkey] = []);
+  const ts = Math.floor(Date.now() / 1000);
+  for (let i = have; i < caught; i++) list.push({ name: 'legendary catch', kg: '?', ts: ts - (i - have) });
+  try { writeFileSync(FISH_REC_FILE, JSON.stringify(fishRecords)); } catch {}
+  publishFishRecord(pubkey);
+  console.log(`[Fishing] Backfilled ${caught - have} legendary catch(es) for ${name} (${pubkey.slice(0, 8)}…)`);
+}
+
 // Per-pubkey reel rate limit. Honest pace: bite takes 4-16s + reel + recast ≈ one
 // reel per 6s at MAX luck, ~11s average — so burst 8 + refill 1 per 8s can never
 // block a human, while capping a 24/7 script at no-better-than-human speed.
@@ -1074,6 +1138,9 @@ wss.on('connection', (ws) => {
           ws,
         });
         console.log(`[Presence] ${msg.name} joined ${room} (${players.size} online)`);
+        // Recover legendary catches that predate the oracle catch-log (missed-popup
+        // era) from fish the player still owns. Once per lifetime, best-effort.
+        backfillFishRecord(myPubkey!, msg.name || 'anon').catch(() => {});
 
         const others: any[] = [];
         players.forEach((p, key) => {
@@ -1463,7 +1530,10 @@ wss.on('connection', (ws) => {
           if (event) publishToRelays(event);
           if (event) console.log(`[Oracle] Fish kept: ${itemId} (${tier}) for ${player.name} (${myPubkey.slice(0,8)}…)`);
         }
-        if (tier === 'legendary') console.log(`[Fishing] LEGENDARY ${itemId} caught by ${player.name}`);
+        if (tier === 'legendary') {
+          console.log(`[Fishing] LEGENDARY ${itemId} caught by ${player.name}`);
+          recordLegendaryCatch(myPubkey, itemId); // oracle logs the catch — no player signature needed
+        }
         ws.send(JSON.stringify({ type: 'fish_caught', itemId, tier, kept: !!(kept && event), event }));
         return;
       }
