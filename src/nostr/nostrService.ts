@@ -1217,6 +1217,35 @@ export async function fetchFishingRecords(pubkeys: string[], oracleKeys: string[
   return result;
 }
 
+/**
+ * Fetch ALL oracle-authored catch records — a true global leaderboard, no longer
+ * limited to players you've personally seen. Newest record per player wins.
+ */
+export async function fetchAllFishingRecords(oracleKeys: string[]): Promise<Map<string, FishingRecord>> {
+  if (!oracleKeys.length) return new Map();
+  if (!pool) await loadNostrTools();
+  const trusted = new Set(oracleKeys.map(k => k.toLowerCase()));
+  const result = new Map<string, FishingRecord>();
+  const newest = new Map<string, number>();
+  const events: any[] = await pool.querySync(
+    RELAYS,
+    { kinds: [30078], authors: oracleKeys, '#t': ['ndfishrec'], limit: 500 },
+    { maxWait: 5000 },
+  );
+  for (const ev of events) {
+    if (!trusted.has((ev.pubkey || '').toLowerCase())) continue;
+    const pk = ev.tags?.find((t: string[]) => t[0] === 'p')?.[1];
+    if (!pk) continue;
+    if ((newest.get(pk) ?? -1) >= (ev.created_at ?? 0)) continue;
+    try {
+      const data = JSON.parse(ev.content);
+      result.set(pk, { pubkey: pk, catches: data.catches || [], total: data.total || 0 });
+      newest.set(pk, ev.created_at ?? 0);
+    } catch {}
+  }
+  return result;
+}
+
 /** Append a legendary catch to this player's fishing record and republish. */
 export async function publishFishingRecord(newCatch: FishCatch): Promise<void> {
   if (!pool) await loadNostrTools();

@@ -11,10 +11,8 @@ import { BaseScene } from './BaseScene';
 import { ScavengeSystem } from './ScavengeSystem';
 import { captureThumb } from '../stores/sceneThumbs';
 import { getStatus } from '../stores/statusStore';
-import { onNextAvatarSync, fetchFishingRecords, fetchProfile } from '../nostr/nostrService';
-import { getSeenPubkeys } from '../stores/seenPlayersStore';
+import { onNextAvatarSync, fetchAllFishingRecords, fetchProfile } from '../nostr/nostrService';
 import { getOraclePubkeys } from '../stores/tradeItemStore';
-import { authStore } from '../stores/authStore';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
 import {
   sendPosition, sendChat, sendRoomChange, isPresenceReady,
@@ -667,7 +665,7 @@ export class CabinScene extends BaseScene {
 
     const sub = document.createElement('div');
     sub.style.cssText = `color:#8a7030;font-size:10px;text-align:center;margin-bottom:16px;`;
-    sub.textContent = 'Players seen in Nostr District';
+    sub.textContent = 'Top legendary anglers in Nostr District';
 
     const list = document.createElement('div');
     list.style.cssText = `color:#c0a030;font-size:12px;text-align:center;min-height:60px;`;
@@ -705,12 +703,10 @@ export class CabinScene extends BaseScene {
         ],
       };
 
-      // Include YOUR OWN pubkey — getSeenPubkeys() is only other players (you're
-      // added to "seen" when someone else renders you), so without this your own
-      // client would never query your own record and you'd never see yourself.
-      const me = authStore.getState().pubkey;
-      const seen = [...new Set([...(me ? [me] : []), ...getSeenPubkeys(), ...Object.keys(PRE_BOARD)])];
-      const records = await fetchFishingRecords(seen, getOraclePubkeys());
+      // Global board: fetch ALL oracle-authored catch records, not just players
+      // you've personally seen — so your main (and everyone) shows regardless of
+      // who's crossed paths with whom.
+      const records = await fetchAllFishingRecords(getOraclePubkeys());
 
       // Merge pre-board catches: always add them unless already tracked by timestamp
       for (const [pk, manual] of Object.entries(PRE_BOARD)) {
@@ -738,11 +734,10 @@ export class CabinScene extends BaseScene {
       const names = new Map<string, string>();
       await Promise.allSettled(sorted.map(async r => {
         try {
+          // fetchProfile already returns the PARSED kind:0 content — don't parse again.
           const profile = await fetchProfile(r.pubkey);
-          if (profile) {
-            const data = JSON.parse(profile.content);
-            names.set(r.pubkey, data.display_name || data.name || r.pubkey.slice(0, 10) + '…');
-          }
+          const name = profile?.display_name || profile?.name;
+          if (name) names.set(r.pubkey, name);
         } catch {}
       }));
 
@@ -1209,6 +1204,8 @@ export class CabinScene extends BaseScene {
   }
   protected override handleSceneEsc(): boolean {
     if (this.bookOverlay) { this.closeBookOverlay(); return true; }
+    // Close the leaderboard on Esc instead of falling through to leaveToWoods.
+    if (this.leaderBoardPanel) { this.leaderBoardPanel.remove(); this.leaderBoardPanel = null; return true; }
     return false;
   }
   protected override onEscFallthrough(): void {
