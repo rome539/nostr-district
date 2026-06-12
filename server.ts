@@ -330,21 +330,28 @@ async function recordLegendaryCatch(pubkey: string, itemId: string): Promise<voi
 async function backfillFishRecord(pubkey: string, name: string): Promise<void> {
   if (fishBackfilled.has(pubkey)) return;
   fishBackfilled.add(pubkey);
-  await loadFishRecord(pubkey); // start from the durable record so we only ever add
+  await loadFishRecord(pubkey);
+  // Build ACCURATE entries from the legendary fish the player still owns: the real
+  // fish name + its mint timestamp (= when it was caught), not a generic placeholder.
   const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [pubkey], '#t': ['nditem'] }));
-  let caught = 0;
+  const caught: { name: string; kg: string; ts: number }[] = [];
   for (const ev of owned.values()) {
     if (isBurned(ev)) continue;
-    if (tagVal(ev, 'source') === 'caught' && LEGENDARY_FISH_META[tagVal(ev, 'item_id') ?? '']) caught++;
+    const meta = LEGENDARY_FISH_META[tagVal(ev, 'item_id') ?? ''];
+    if (tagVal(ev, 'source') === 'caught' && meta) {
+      caught.push({ name: meta.name, kg: meta.kg, ts: ev.created_at ?? Math.floor(Date.now() / 1000) });
+    }
   }
-  const have = (fishRecords[pubkey] ?? []).length;
-  if (caught <= have) return;
-  const list = fishRecords[pubkey] ?? (fishRecords[pubkey] = []);
-  const ts = Math.floor(Date.now() / 1000);
-  for (let i = have; i < caught; i++) list.push({ name: 'legendary catch', kg: '?', ts: ts - (i - have) });
+  // Overwrite only when this is at least as full as the stored record — upgrades
+  // generic placeholders to real names/dates without ever shrinking a record that
+  // holds catches already traded away (those aren't in `owned` anymore).
+  const have = fishRecords[pubkey]?.length ?? 0;
+  if (!caught.length || caught.length < have) return;
+  caught.sort((a, b) => a.ts - b.ts);
+  fishRecords[pubkey] = caught;
   try { writeFileSync(FISH_REC_FILE, JSON.stringify(fishRecords)); } catch {}
   publishFishRecord(pubkey);
-  console.log(`[Fishing] Backfilled ${caught - have} legendary catch(es) for ${name} (${pubkey.slice(0, 8)}…)`);
+  console.log(`[Fishing] Backfilled ${caught.length} legendary catch(es) for ${name} (${pubkey.slice(0, 8)}…)`);
 }
 
 // Per-pubkey reel rate limit. Honest pace: bite takes 4-16s + reel + recast ≈ one
