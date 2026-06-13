@@ -619,8 +619,8 @@ const ITEM_RARITY = new Map<string, string>();
 // Per-scene pools (must match SCENE_POOLS in tradeItemStore.ts)
 const SCAV_SCENE_POOLS: Record<string, string[]> = {
   hub: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
-  alley: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
-  woods: ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake'],
+  alley: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
+  woods: ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
   rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_gpu_card','hw_oscilloscope','hw_zero_day'],
   cabin: ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire'],
 };
@@ -676,6 +676,22 @@ function rollScavenge(pool: string[], holiday: boolean): string | null {
     if (candidates.length) return candidates[Math.floor(Math.random() * candidates.length)];
   }
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Each roll is independent, so the same item legitimately lands back-to-back a few
+// percent of the time — which reads as a bug to players. Suppress immediate repeats
+// for a given player by re-rolling (whole tier+item, so aggregate odds are unchanged)
+// when the result matches their previous drop. In-memory + per-pubkey; resetting on
+// restart is fine for an immediate-repeat guard. Skipped if the pool is effectively
+// one item (the retry cap bounds it).
+const lastScavengeItem: Record<string, string> = {};
+function rollScavengeNoRepeat(pool: string[], holiday: boolean, pubkey: string): string | null {
+  let itemId = rollScavenge(pool, holiday);
+  for (let i = 0; i < 5 && itemId && itemId === lastScavengeItem[pubkey]; i++) {
+    itemId = rollScavenge(pool, holiday);
+  }
+  if (itemId) lastScavengeItem[pubkey] = itemId;
+  return itemId;
 }
 
 // Sold instance ids — prevents the same listed item from being bought twice
@@ -1525,7 +1541,7 @@ wss.on('connection', (ws) => {
           return;
         }
         recordScavenge(myPubkey);
-        const itemId = rollScavenge(pool, holiday);
+        const itemId = rollScavengeNoRepeat(pool, holiday, myPubkey);
         const event = itemId ? mintItem(myPubkey, itemId, 'found') : null;
         if (!event) {
           ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'oracle_unavailable' }));
