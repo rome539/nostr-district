@@ -66,6 +66,36 @@ export function setLoginStreak(streak: number, date: string): void {
   schedulePublish();
 }
 
+// ── Local cache (per pubkey) ──────────────────────────────────────────────────
+// A synchronous mirror of the unlock state in localStorage. The relay copy is the
+// cross-device source of truth, but its write is debounced, cancellable by a quick
+// logout, and (for extension users) gated behind a signing popup — so it can't be
+// relied on to record "I already counted a login today" or "ice is unlocked" before
+// the next login reads it. That unreliability is what made the streak re-count and
+// the ice aura re-"unlock" on every login. The cache is written synchronously on
+// every change and unioned back in on load; unlock state only ever grows, so merging
+// it is always safe.
+const cacheKey = (pubkey: string) => `nd_unlocks_cache_${pubkey}`;
+
+function loadLocalCache(pubkey: string): UnlockState | null {
+  try {
+    const o = JSON.parse(localStorage.getItem(cacheKey(pubkey)) || 'null');
+    if (o && Array.isArray(o.auras)) {
+      return {
+        auras: o.auras || [], items: o.items || [],
+        loginStreak: o.loginStreak || 0, lastLoginDate: o.lastLoginDate || '',
+        legendaryCaught: o.legendaryCaught || 0,
+      };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveLocalCache(): void {
+  if (!_pubkey) return;
+  try { localStorage.setItem(cacheKey(_pubkey), JSON.stringify(_state)); } catch { /* ignore */ }
+}
+
 export function getLegendaryCaught(): number { return _state.legendaryCaught; }
 
 export function bumpLegendaryCaught(): number {
@@ -76,6 +106,7 @@ export function bumpLegendaryCaught(): number {
 
 function schedulePublish(): void {
   if (!_loaded || !_pubkey) return; // never write before we've merged the relay copy
+  saveLocalCache();                 // synchronous local mirror — survives logout, no popup
   if (_publishTimer) clearTimeout(_publishTimer);
   _publishTimer = setTimeout(flush, 800);
 }
@@ -151,7 +182,25 @@ export function initUnlocks(pubkey: string): void {
       };
     }
     const migrated = migrateLocalStorage(pubkey);
+    // Fold in the synchronous local cache. It can be MORE current than the relay copy
+    // (whose write is debounced/cancellable and may need a signing popup), so this is
+    // what makes the streak day-guard reliable and keeps a freshly-unlocked aura (ice)
+    // from re-toasting on the next login. auras/items union; counters take the max; the
+    // streak follows whichever source has the later lastLoginDate.
+    const cached = loadLocalCache(pubkey);
+    if (cached) {
+      _state.auras = union(_state.auras, cached.auras);
+      _state.items = union(_state.items, cached.items);
+      _state.legendaryCaught = Math.max(_state.legendaryCaught, cached.legendaryCaught);
+      if (cached.lastLoginDate > _state.lastLoginDate) {
+        _state.lastLoginDate = cached.lastLoginDate;
+        _state.loginStreak = cached.loginStreak;
+      } else if (cached.lastLoginDate === _state.lastLoginDate) {
+        _state.loginStreak = Math.max(_state.loginStreak, cached.loginStreak);
+      }
+    }
     _loaded = true;
+    saveLocalCache(); // seed/refresh the synchronous local mirror from the merged state
     // Only write on init if we actually folded in old localStorage data. We must NOT
     // publish just because the relay read came back empty (`!remote`) — that's often a
     // slow/timed-out query, not a genuinely new player, and writing our thin local copy
