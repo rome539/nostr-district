@@ -426,15 +426,16 @@ export async function publishUnlocks(state: unknown): Promise<boolean> {
 }
 
 export async function fetchUnlocks(pubkey: string): Promise<any | null> {
-  if (!pool) await loadNostrTools();
   try {
-    const event = await pool.get(RELAYS, {
-      kinds: [30078],
-      authors: [pubkey],
-      '#d': [UNLOCKS_D_TAG],
-    });
-    if (!event?.content) return null;
-    return JSON.parse(event.content);
+    // Collect from all relays and take the NEWEST version. pool.get() resolves with
+    // the first relay to answer, which can be a stale copy of this addressable event
+    // (e.g. from before the latest aura unlock) — that made unlocks like the ice aura
+    // re-fire on every login. queryEvents also reads the same relays publishEvent
+    // writes to, closing the write/read relay gap.
+    const events = await queryEvents({ kinds: [30078], authors: [pubkey], '#d': [UNLOCKS_D_TAG] });
+    if (!events.length) return null;
+    const newest = events.reduce((a, b) => ((b.created_at ?? 0) > (a.created_at ?? 0) ? b : a));
+    return newest?.content ? JSON.parse(newest.content) : null;
   } catch (e) {
     console.warn('[Nostr] fetchUnlocks failed:', e);
     return null;
