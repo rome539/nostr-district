@@ -82,8 +82,26 @@ function schedulePublish(): void {
 
 async function flush(): Promise<void> {
   _publishTimer = null;
+  const pubkey = _pubkey;
+  if (!pubkey) return;
   try {
-    const { publishUnlocks } = await import('../nostr/nostrService');
+    const { publishUnlocks, fetchUnlocks } = await import('../nostr/nostrService');
+    // MONOTONIC WRITE: re-read the newest relay copy and fold it in before publishing.
+    // Unlock state only ever grows (auras/items add, counters climb), so a stale or
+    // blank in-memory _state must never be allowed to clobber a richer relay copy.
+    // Without this, a login that started from a slow/empty relay read would write the
+    // thinner copy back as the newest event — dropping e.g. the ice aura and making it
+    // re-"unlock" (toast) on the next login.
+    let remote: UnlockState | null = null;
+    try { remote = await fetchUnlocks(pubkey); } catch { /* offline → publish what we have */ }
+    if (remote && _pubkey === pubkey) {
+      _state.auras = union(_state.auras, remote.auras);
+      _state.items = union(_state.items, remote.items);
+      _state.loginStreak = Math.max(_state.loginStreak, remote.loginStreak ?? 0);
+      if ((remote.lastLoginDate || '') > _state.lastLoginDate) _state.lastLoginDate = remote.lastLoginDate;
+      _state.legendaryCaught = Math.max(_state.legendaryCaught, remote.legendaryCaught ?? 0);
+    }
+    if (_pubkey !== pubkey) return; // account switched mid-flush — don't write stale state
     await publishUnlocks(_state);
   } catch { /* best effort */ }
 }
@@ -134,8 +152,12 @@ export function initUnlocks(pubkey: string): void {
     }
     const migrated = migrateLocalStorage(pubkey);
     _loaded = true;
-    // If we migrated old data or had nothing on relays, push the consolidated copy up.
-    if (migrated || !remote) schedulePublish();
+    // Only write on init if we actually folded in old localStorage data. We must NOT
+    // publish just because the relay read came back empty (`!remote`) — that's often a
+    // slow/timed-out query, not a genuinely new player, and writing our thin local copy
+    // back as the newest event would clobber the real relay state (the ice-aura re-unlock
+    // bug). Real new players have nothing to lose, and their first unlock will publish.
+    if (migrated) schedulePublish();
     window.dispatchEvent(new CustomEvent('nd-unlocks-loaded'));
   });
 }
