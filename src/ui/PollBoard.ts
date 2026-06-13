@@ -157,7 +157,7 @@ export class PollBoard {
                   ${authorPic ? `<img src="${this.esc(authorPic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
                   <span class="pb-author-name">${this.esc(authorName)}</span>
                 </div>
-                <div class="pb-poll-q">${this.esc(p.content)}</div>
+                <div class="pb-poll-q">${this.esc(this.splitMedia(p.content).text || '📷 image')}</div>
                 <div class="pb-poll-meta">
                   <span class="pb-badge ${p.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${p.polltype === 'multiplechoice' ? 'multi' : 'single'}</span>
                   ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
@@ -253,6 +253,8 @@ export class PollBoard {
       }).catch(() => {});
     }
 
+    const media = this.splitMedia(poll.content);
+
     return `
       <div class="pb-panel">
         <div class="pb-header">
@@ -265,7 +267,8 @@ export class PollBoard {
             ${authorPic ? `<img src="${this.esc(authorPic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
             <span class="pb-author-name">${this.esc(authorName)}</span>
           </div>
-          <div class="pb-detail-question">${this.esc(poll.content)}</div>
+          ${media.text ? `<div class="pb-detail-question">${this.esc(media.text)}</div>` : ''}
+          ${this.mediaHtml(media.images)}
           <div class="pb-detail-meta">
             <span class="pb-badge ${poll.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${poll.polltype === 'multiplechoice' ? 'multiple choice' : 'single choice'}</span>
             ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
@@ -530,6 +533,33 @@ export class PollBoard {
     const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
   }
 
+  // Pull image URLs out of the poll text so they render as photos instead of raw
+  // links. Matches image-extension URLs and Blossom/hash-style URLs (host + 64-hex
+  // sha256); anything that turns out not to be an image is hidden via onerror.
+  private splitMedia(content: string): { text: string; images: string[] } {
+    const images: string[] = [];
+    const isImg = (u: string) =>
+      /\.(jpe?g|png|gif|webp|avif|bmp|svg)(\?\S*)?$/i.test(u) ||
+      /^https?:\/\/[^\s/]+\/[0-9a-f]{64}(\.\w+)?$/i.test(u);
+    const text = content
+      .replace(/https?:\/\/\S+/gi, (raw) => {
+        const url = raw.replace(/[)\].,;!?]+$/, '');
+        if (isImg(url)) { images.push(url); return ''; }
+        return raw;
+      })
+      .replace(/[^\S\n]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return { text, images };
+  }
+
+  private mediaHtml(images: string[]): string {
+    if (!images.length) return '';
+    return `<div class="pb-media">${images.map(u =>
+      `<a href="${this.esc(u)}" target="_blank" rel="noopener"><img src="${this.esc(u)}" class="pb-media-img" loading="lazy" onerror="this.parentElement.style.display='none'"></a>`,
+    ).join('')}</div>`;
+  }
+
   // ── Styles ───────────────────────────────────────────────────────────────────
 
   private injectStyles(): void {
@@ -654,6 +684,12 @@ export class PollBoard {
         color: var(--nd-text); font-size: 15px; font-weight: bold;
         margin-bottom: 10px; line-height: 1.4;
         text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      }
+      .pb-media { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+      .pb-media a { display: inline-flex; max-width: 100%; line-height: 0; }
+      .pb-media-img {
+        max-width: 100%; max-height: 260px; border-radius: 8px; object-fit: cover;
+        cursor: zoom-in; border: 1px solid rgba(255,255,255,0.08); display: block;
       }
       .pb-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
       .pb-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
