@@ -204,6 +204,75 @@ export function attachImagePaste(el: HTMLElement, { onEncrypted, onPublicUrl, on
   });
 }
 
+/**
+ * Attach clipboard-image handling to a PUBLIC input/textarea (polls, etc.): pasted
+ * screenshots are uploaded as plaintext to Blossom and the hosted URL is handed back
+ * via onUrl. Mirrors attachImagePaste but without the DM encryption. preventDefault
+ * stops the browser from inserting its image placeholder (the "little white box").
+ */
+export function attachPlainImagePaste(
+  el: HTMLElement,
+  { onUrl, onStatus }: { onUrl: (url: string) => void; onStatus?: (msg: string) => void },
+): void {
+  const status = (m: string) => onStatus?.(m);
+  const upload = async (blob: Blob) => {
+    status('Uploading…');
+    try { onUrl(await uploadPlainImage(blob)); status(''); }
+    catch { status('Upload failed — try again.'); setTimeout(() => status(''), 3500); }
+  };
+
+  el.addEventListener('paste', async (e) => {
+    const ev = e as ClipboardEvent;
+    const items = Array.from(ev.clipboardData?.items ?? []);
+
+    // 1. Binary image file (screenshot / direct paste) → upload
+    const fileItem = items.find(i => i.kind === 'file' && i.type.startsWith('image/'));
+    if (fileItem) {
+      ev.preventDefault();
+      const file = fileItem.getAsFile();
+      if (file) await upload(file);
+      return;
+    }
+
+    // 2. HTML clipboard (image copied from a webpage — its URL is already public)
+    const html = ev.clipboardData?.getData('text/html') ?? '';
+    if (html) {
+      const src = html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+      if (src && src.startsWith('http') && !src.startsWith('data:')) { ev.preventDefault(); onUrl(src); return; }
+    }
+
+    // 3. Plain-text image URLs paste fine as text — let the default run.
+    // 4. Async Clipboard API fallback (iPhone/iPad Universal Clipboard)
+    try {
+      for (const clipItem of await navigator.clipboard.read()) {
+        const imageType = clipItem.types.find(t => t.startsWith('image/'));
+        if (imageType) { await upload(await clipItem.getType(imageType)); return; }
+      }
+    } catch { /* permission denied — default paste already ran */ }
+  });
+}
+
+/** Open a file picker, upload the chosen image as a PUBLIC plaintext blob, and
+ *  return its hosted URL. For public posts (polls, crew) — never for DMs. */
+export function pickAndUploadPlainImage(
+  { onUrl, onStatus }: { onUrl: (url: string) => void; onStatus?: (msg: string) => void },
+): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.style.display = 'none';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return; // dialog cancelled — leave the caller's UI untouched
+    onStatus?.('Uploading…');
+    try { onUrl(await uploadPlainImage(file)); onStatus?.(''); }
+    catch { onStatus?.('Upload failed — try again.'); setTimeout(() => onStatus?.(''), 3500); }
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
 /** Open a file picker, encrypt + upload the chosen image. */
 export function pickAndUploadImage({ onEncrypted, onStatus }: Pick<PasteHandlers, 'onEncrypted' | 'onStatus'>): void {
   const input = document.createElement('input');

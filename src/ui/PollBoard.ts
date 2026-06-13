@@ -9,6 +9,7 @@ import { authStore } from '../stores/authStore';
 import { fetchProfile, queryEvents } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { t as ti18n } from '../i18n/i18n';
+import { pickAndUploadPlainImage, attachPlainImagePaste } from './imageUpload';
 import { nip19 } from 'nostr-tools';
 
 // Matches a bech32 nostr entity, with or without the `nostr:` URI prefix.
@@ -178,7 +179,7 @@ export class PollBoard {
                   ${authorPic ? `<img src="${this.esc(authorPic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
                   <span class="pb-author-name">${this.esc(authorName)}</span>
                 </div>
-                <div class="pb-poll-q">${this.esc(this.previewText(p.content) || '📷 image')}</div>
+                <div class="pb-poll-q">${this.esc(this.previewText(p.content) || '[image]')}</div>
                 <div class="pb-poll-meta">
                   <span class="pb-badge ${p.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${p.polltype === 'multiplechoice' ? 'multi' : 'single'}</span>
                   ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
@@ -232,14 +233,20 @@ export class PollBoard {
       const isMine = myVote?.includes(opt.id);
       const isSelected = this.selectedOptions.has(opt.id);
 
+      // An option label can itself be an image URL (e.g. "vote on the logo" polls).
+      const media = this.splitMedia(opt.label);
+      const labelText = media.text ? this.esc(media.text) : '';
+      const optImgs = this.optionImagesHtml(media.images);
+
       if (showResults) {
         return `
           <div class="pb-opt-result ${isMine ? 'pb-opt-mine' : ''}">
             <div class="pb-opt-label">
               ${isMine ? '<span class="pb-opt-check">✓</span>' : ''}
-              ${this.esc(opt.label)}
+              <span class="pb-opt-label-text">${labelText}</span>
               <span class="pb-opt-pct">${pct}%</span>
             </div>
+            ${optImgs}
             <div class="pb-opt-bar-wrap">
               <div class="pb-opt-bar ${isMine ? 'pb-opt-bar-mine' : ''}" style="width:${pct}%"></div>
             </div>
@@ -253,13 +260,77 @@ export class PollBoard {
         return `
           <label class="pb-opt-vote ${isSelected ? 'pb-opt-selected' : ''}">
             <input type="${type}" name="poll-opt" value="${opt.id}" ${isSelected ? 'checked' : ''} class="pb-opt-input">
-            <span class="pb-opt-text">${this.esc(opt.label)}</span>
+            <span class="pb-opt-content">
+              ${labelText ? `<span class="pb-opt-text">${labelText}</span>` : ''}
+              ${optImgs}
+            </span>
           </label>
         `;
       }
 
-      return `<div class="pb-opt-result"><div class="pb-opt-label">${this.esc(opt.label)}</div></div>`;
+      return `<div class="pb-opt-result"><div class="pb-opt-label"><span class="pb-opt-label-text">${labelText}</span></div>${optImgs}</div>`;
     }).join('');
+  }
+
+  /** Thumbnails for image-URL option labels. Plain <img> (no anchor) so a click still
+   *  selects the option rather than navigating away. */
+  private optionImagesHtml(images: string[]): string {
+    if (!images.length) return '';
+    return `<span class="pb-opt-media">${images.map(u =>
+      `<img src="${this.esc(u)}" class="pb-opt-img" loading="lazy" onerror="this.style.display='none'">`,
+    ).join('')}</span>`;
+  }
+
+  /** Thumbnail <img>s for any image URLs in a create-form field (inner HTML of the
+   *  preview container, which is always rendered so it can be updated live on input). */
+  private previewThumbs(text: string): string {
+    return this.splitMedia(text).images.map(u =>
+      `<img src="${this.esc(u)}" class="pb-create-thumb" onerror="this.style.display='none'">`,
+    ).join('');
+  }
+
+  /** Append an uploaded image URL to the question, then re-render so the preview
+   *  thumbnail shows. State (cQuestion/cOptions) is preserved across the re-render. */
+  private appendQuestionImageUrl(url: string): void {
+    const cur = this.cQuestion.trimEnd();
+    this.cQuestion = cur ? `${cur}\n${url}` : url;
+    if (this.view === 'create') this.renderView();
+  }
+
+  private appendOptionImageUrl(idx: number, url: string): void {
+    const cur = (this.cOptions[idx] || '').trim();
+    this.cOptions[idx] = cur ? `${cur} ${url}` : url;
+    if (this.view === 'create') this.renderView();
+  }
+
+  /** Upload an image (file picker) and append its URL to the question. */
+  private attachImageToQuestion(): void {
+    const btn = this.container?.querySelector('#pb-attach-q') as HTMLButtonElement | null;
+    pickAndUploadPlainImage({
+      onUrl: (url) => this.appendQuestionImageUrl(url),
+      onStatus: (m) => {
+        if (!btn) return;
+        if (m === 'Uploading…') { btn.disabled = true; btn.textContent = 'Uploading…'; }
+        else { btn.disabled = false; btn.textContent = 'Add image'; if (m) this.showCreateError(m); }
+      },
+    });
+  }
+
+  /** Upload an image (file picker) and append it to option `idx`. */
+  private attachImageToOption(idx: number, btn: HTMLButtonElement | null): void {
+    pickAndUploadPlainImage({
+      onUrl: (url) => this.appendOptionImageUrl(idx, url),
+      onStatus: (m) => {
+        if (!btn) return;
+        if (m === 'Uploading…') { btn.disabled = true; btn.textContent = '…'; }
+        else { btn.disabled = false; btn.textContent = 'Image'; if (m) this.showCreateError(m); }
+      },
+    });
+  }
+
+  private showCreateError(msg: string): void {
+    const el = this.container?.querySelector('#pb-create-err') as HTMLElement | null;
+    if (el) el.textContent = msg;
   }
 
   private buildMetaHtml(s: ReturnType<PollBoard['detailState']>): string {
@@ -367,9 +438,11 @@ export class PollBoard {
   private renderCreate(): string {
     const optInputs = this.cOptions.map((val, i) => `
       <div class="pb-create-opt-row">
-        <input type="text" class="pb-create-opt-input" data-idx="${i}" placeholder="Option ${i + 1}" value="${this.esc(val)}" maxlength="80">
+        <input type="text" class="pb-create-opt-input" data-idx="${i}" placeholder="Option ${i + 1}" value="${this.esc(val)}" maxlength="600">
+        <button class="pb-attach-opt" data-idx="${i}" type="button" title="Add image">Image</button>
         ${this.cOptions.length > 2 ? `<button class="pb-opt-remove" data-idx="${i}">✕</button>` : ''}
       </div>
+      <div class="pb-create-preview" data-preview-idx="${i}">${this.previewThumbs(val)}</div>
     `).join('');
 
     const durBtns = DURATIONS.map(d => `
@@ -385,7 +458,11 @@ export class PollBoard {
         </div>
         <div class="pb-body pb-body-create">
           <label class="pb-label">${ti18n('polls.question')}</label>
-          <textarea id="pb-create-q" class="pb-create-q" placeholder="${ti18n('polls.question_placeholder')}" maxlength="280">${this.esc(this.cQuestion)}</textarea>
+          <textarea id="pb-create-q" class="pb-create-q" placeholder="${ti18n('polls.question_placeholder')}" maxlength="1000">${this.esc(this.cQuestion)}</textarea>
+          <div class="pb-create-attach-row">
+            <button class="pb-attach-btn" id="pb-attach-q" type="button">Add image</button>
+          </div>
+          <div class="pb-create-preview" id="pb-q-preview">${this.previewThumbs(this.cQuestion)}</div>
 
           <label class="pb-label">${ti18n('polls.options')}</label>
           <div id="pb-opts-wrap">${optInputs}</div>
@@ -459,16 +536,42 @@ export class PollBoard {
     // Detail: vote inputs + cast vote (also re-bound after an in-place refresh)
     this.bindDetailDynamic();
 
-    // Create: question
-    this.container.querySelector('#pb-create-q')?.addEventListener('input', (e) => {
-      this.cQuestion = (e.target as HTMLTextAreaElement).value;
+    // Create: question (typing + paste-to-upload)
+    const qEl = this.container.querySelector('#pb-create-q');
+    if (qEl) {
+      qEl.addEventListener('input', (e) => {
+        this.cQuestion = (e.target as HTMLTextAreaElement).value;
+        const prev = this.container?.querySelector('#pb-q-preview');
+        if (prev) prev.innerHTML = this.previewThumbs(this.cQuestion); // keep preview in sync as you edit
+      });
+      attachPlainImagePaste(qEl as HTMLElement, {
+        onUrl: (url) => this.appendQuestionImageUrl(url),
+        onStatus: (m) => { if (m) this.showCreateError(m === 'Uploading…' ? 'Uploading image…' : m); },
+      });
+    }
+
+    // Create: option inputs (typing + paste-to-upload)
+    this.container.querySelectorAll('.pb-create-opt-input').forEach(el => {
+      const idx = parseInt((el as HTMLElement).dataset.idx!);
+      el.addEventListener('input', (e) => {
+        this.cOptions[idx] = (e.target as HTMLInputElement).value;
+        const prev = this.container?.querySelector(`.pb-create-preview[data-preview-idx="${idx}"]`);
+        if (prev) prev.innerHTML = this.previewThumbs(this.cOptions[idx]);
+      });
+      attachPlainImagePaste(el as HTMLElement, {
+        onUrl: (url) => this.appendOptionImageUrl(idx, url),
+        onStatus: (m) => { if (m) this.showCreateError(m === 'Uploading…' ? 'Uploading image…' : m); },
+      });
     });
 
-    // Create: option inputs
-    this.container.querySelectorAll('.pb-create-opt-input').forEach(el => {
-      el.addEventListener('input', (e) => {
-        const idx = parseInt((e.target as HTMLElement).dataset.idx!);
-        this.cOptions[idx] = (e.target as HTMLInputElement).value;
+    // Create: attach image to the question
+    this.container.querySelector('#pb-attach-q')?.addEventListener('click', () => this.attachImageToQuestion());
+
+    // Create: attach image to an option
+    this.container.querySelectorAll('.pb-attach-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.idx!);
+        this.attachImageToOption(idx, btn as HTMLButtonElement);
       });
     });
 
@@ -977,6 +1080,16 @@ export class PollBoard {
       .pb-opt-input { accent-color: var(--nd-accent); width: 15px; height: 15px; flex-shrink: 0; }
       .pb-opt-text { flex: 1; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 
+      /* Image-URL option labels */
+      .pb-opt-content { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+      .pb-opt-label-text { min-width: 0; word-break: break-word; }
+      .pb-opt-media { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
+      .pb-opt-img {
+        max-width: 100%; max-height: 170px; border-radius: 6px; object-fit: cover;
+        border: 1px solid rgba(255,255,255,0.08); display: block;
+      }
+      .pb-opt-result .pb-opt-media { margin: 0 0 8px; }
+
       /* Results bars */
       .pb-opt-result {
         padding: 8px 12px; border-radius: 7px;
@@ -1060,6 +1173,31 @@ export class PollBoard {
         transition: color 0.15s, border-color 0.15s;
       }
       .pb-add-opt:hover { color: var(--nd-text); border-color: color-mix(in srgb, var(--nd-text) 35%, transparent); }
+
+      /* Image attach (create form) */
+      .pb-create-attach-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+      .pb-attach-btn {
+        background: color-mix(in srgb, var(--nd-accent) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 38%, transparent);
+        border-radius: 6px; color: var(--nd-accent);
+        font-family: 'Courier New', monospace; font-size: 11px;
+        padding: 6px 11px; cursor: pointer; transition: background 0.15s;
+      }
+      .pb-attach-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--nd-accent) 22%, transparent); }
+      .pb-attach-btn:disabled { opacity: 0.6; cursor: default; }
+      .pb-attach-opt {
+        background: none; border: 1px solid color-mix(in srgb, var(--nd-text) 15%, transparent);
+        border-radius: 5px; color: var(--nd-subtext); cursor: pointer;
+        font-size: 12px; padding: 6px 9px; flex-shrink: 0; transition: border-color 0.15s;
+      }
+      .pb-attach-opt:hover:not(:disabled) { border-color: color-mix(in srgb, var(--nd-accent) 45%, transparent); }
+      .pb-attach-opt:disabled { opacity: 0.6; cursor: default; }
+      .pb-create-preview { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+      .pb-create-preview:empty { display: none; margin: 0; }
+      .pb-create-thumb {
+        max-width: 120px; max-height: 120px; border-radius: 6px; object-fit: cover;
+        border: 1px solid color-mix(in srgb, var(--nd-text) 14%, transparent);
+      }
       .pb-type-row, .pb-dur-row { display: flex; flex-wrap: wrap; gap: 6px; }
       .pb-type-btn, .pb-dur-btn {
         padding: 7px 12px; border-radius: 6px; cursor: pointer;
