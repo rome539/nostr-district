@@ -57,7 +57,15 @@ let _streakListenerBound = false;
 // the player currently holds the complete set; selling a piece re-locks the aura).
 const _setAuraProgress: Record<string, { count: number; required: number }> = {};
 const _wasComplete: Record<string, boolean> = {}; // session transition tracking (toasts)
-const _toasted = new Set<string>(); // at most one unlock toast per aura per session
+const _toasted = new Set<string>(); // aura keys already toasted — PERSISTED per pubkey.
+// Set auras are possession-based and the inventory rebuilds incrementally on reload, so a
+// complete set momentarily flaps incomplete→complete and would re-announce every login.
+// Persisting which auras have been toasted suppresses that across reloads.
+
+function persistAuraToasts(): void {
+  if (!_pubkey) return;
+  try { localStorage.setItem(`nd_aura_toasts_${_pubkey}`, JSON.stringify([..._toasted])); } catch { /* ignore */ }
+}
 
 function showUnlockToast(label: string): void {
   SoundEngine.get().auraUnlock();
@@ -80,6 +88,7 @@ function _checkCompositeUnlocks(): void {
   const nowAvailable = BASE_AURAS.every(a => isAuraUnlocked(a));
   if (nowAvailable && _wasComplete['rainbow'] === false && !_toasted.has('rainbow')) {
     _toasted.add('rainbow');
+    persistAuraToasts();
     showUnlockToast(LABELS.rainbow);
   }
   _wasComplete['rainbow'] = nowAvailable;
@@ -104,6 +113,16 @@ function applyLoginStreak(): void {
 
 /** Call once on every real (non-guest) login. */
 export function initAuraProgress(pubkey: string): void {
+  if (pubkey !== _pubkey) {
+    // Hydrate persisted unlock toasts for this account so reloads don't re-announce
+    // set auras whose inventory momentarily reads incomplete during the relay rebuild.
+    _toasted.clear();
+    for (const k of Object.keys(_wasComplete)) delete _wasComplete[k];
+    try {
+      const arr = JSON.parse(localStorage.getItem(`nd_aura_toasts_${pubkey}`) || '[]');
+      if (Array.isArray(arr)) arr.forEach((k: string) => _toasted.add(k));
+    } catch { /* ignore */ }
+  }
   _pubkey = pubkey;
   if (!_streakListenerBound) {
     _streakListenerBound = true;
@@ -157,6 +176,7 @@ export function updateSetAuraProgress(progress: Record<string, { count: number; 
     const complete = p.required > 0 && p.count >= p.required;
     if (complete && _wasComplete[aura] === false && !_toasted.has(aura)) {
       _toasted.add(aura);
+      persistAuraToasts();
       showUnlockToast(LABELS[aura] ?? aura);
     }
     _wasComplete[aura] = complete;

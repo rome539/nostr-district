@@ -63,6 +63,9 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
     drawHubAccessory(x, 'headphones', cx, headY, s);
   }
 
+  // ── Eyes (before hair + hat so both always cover the eyes) ──
+  drawHubEyes(x, a, cx, headY, s);
+
   // ── Hair ──
   const hasHat = a.hat !== 'none';
   const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
@@ -76,9 +79,6 @@ export function renderHubSprite(a: AvatarConfig, walkFrame = -1): HTMLCanvasElem
       drawHubHairSidesOnly(x, a.hair, cx, headY, s);
     }
   }
-
-  // ── Eyes (before hat so hat always covers eyes) ──
-  drawHubEyes(x, a, cx, headY, s);
 
   // ── Face mask PNG (over eyes, under hat) ──
   drawHubPngAccFace(x, a.accessory, a.accessoryColor, cx, headY, s);
@@ -148,6 +148,9 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
     drawRoomAccessory(x, 'headphones', oY);
   }
 
+  // ── Eyes (before hair + hat so both always cover the eyes) ──
+  drawRoomEyes(x, a, oY);
+
   // ── Hair ──
   const hasHat = a.hat !== 'none';
   const hatAllowsFullHair = ['halo', 'catears', 'horns', 'hornsspiral', 'knightsheadband'].includes(a.hat);
@@ -161,9 +164,6 @@ export function renderRoomSprite(a: AvatarConfig, walkFrame = 0): HTMLCanvasElem
       drawRoomHairSidesOnly(x, a.hair, oY);
     }
   }
-
-  // ── Eyes (before hat so hat always covers eyes) ──
-  drawRoomEyes(x, a, oY);
 
   // ── Face mask PNG (over eyes, under hat) ──
   drawRoomPngAccFace(x, a.accessory, a.accessoryColor, oY);

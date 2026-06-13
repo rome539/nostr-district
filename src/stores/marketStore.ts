@@ -254,7 +254,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'eye_glow',   name: '✦ Glow Eyes',   slot: 'eyes', value: 'glow',   price: 1.50, tier: 'premium' },
   { id: 'eye_blaze',  name: '🔥 Blaze Eyes',  slot: 'eyes', value: 'blaze',  price: 3.00, tier: 'rare' },
   { id: 'eye_frost',  name: '❄️ Frost Eyes',  slot: 'eyes', value: 'frost',  price: 3.00, tier: 'rare' },
-  { id: 'eye_cosmic', name: '✨ Cosmic Eyes', slot: 'eyes', value: 'cosmic', price: 3.00, tier: 'rare' },
+  { id: 'eye_cosmic', name: '✨ Cosmic Eyes', slot: 'eyes', value: 'cosmic', price: 3.00, tier: 'rare', hidden: true }, // legacy — swapped for Galaxy; renders as Galaxy, kept ownable for past buyers
+  { id: 'eye_galaxy', name: '🌌 Galaxy Eyes', slot: 'eyes', value: 'galaxy', price: 3.00, tier: 'rare' },
+  { id: 'eye_slit',   name: '🐾 Slit Eyes',   slot: 'eyes', value: 'slit',   price: 0,    tier: 'rare', earn: true }, // unlock: complete the Strays (critters) set
   // { id: 'eye_cry', name: '💧 Cry Eyes', slot: 'eyes', value: 'cry', price: 3.00, tier: 'rare' }, // TODO: convert to emote
   // ── Name colors ───────────────────────────────────────────────────────────────
   { id: 'color_orange',    name: 'Orange',           slot: 'nameColor', value: '#f07020',  price: 0.50, tier: 'basic' },

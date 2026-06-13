@@ -334,15 +334,39 @@ export function drawHubEyes(x: CanvasRenderingContext2D, a: AvatarConfig, cx: nu
       x.fillRect(cx - 3, ey + 2, 1, 1); // left base
       x.fillRect(cx + 2, ey + 2, 1, 1); // right base
       break;
-    case 'cosmic':
+    case 'slit':
+      // Cat-eye — mirrors the room look: 3-wide almond, centered dark vertical
+      // pupil, white catchlight on the inner edge, faint pointed outer corners.
+      x.globalAlpha = 0.92;
+      x.fillRect(cx - 4, ey, 3, 2); // left almond (cols cx-4..cx-2)
+      x.fillRect(cx + 2, ey, 3, 2); // right almond (cols cx+2..cx+4)
+      x.globalAlpha = 0.5;          // pointed outer corners
+      x.fillRect(cx - 4, ey + 1, 1, 1); x.fillRect(cx + 4, ey + 1, 1, 1);
+      x.fillStyle = darken(col, 60); // centered vertical slit pupil
+      x.globalAlpha = 1;
+      x.fillRect(cx - 3, ey, 1, 2);
+      x.fillRect(cx + 3, ey, 1, 2);
+      x.fillStyle = '#ffffff';       // catchlight (inner edge)
+      x.globalAlpha = 0.9;
+      x.fillRect(cx - 2, ey, 1, 1);
+      x.fillRect(cx + 2, ey, 1, 1);
+      x.fillStyle = col;
+      break;
+    case 'cosmic': // legacy value — swapped for galaxy, renders identically
+    case 'galaxy':
+      // Galaxy at hub scale: faint halo, bright iris, white catchlight.
+      x.globalAlpha = 0.3;
+      x.fillRect(cx - 4, ey,     1, 2); x.fillRect(cx - 1, ey,     1, 2);
+      x.fillRect(cx + 1, ey,     1, 2); x.fillRect(cx + 4, ey,     1, 2);
+      x.fillRect(cx - 3, ey - 1, 2, 1); x.fillRect(cx + 2, ey - 1, 2, 1);
       x.globalAlpha = 1.0;
-      x.fillRect(cx - 3, ey,     2, 2); // left iris
-      x.fillRect(cx + 2, ey,     2, 2); // right iris
-      x.globalAlpha = 0.35;
-      x.fillRect(cx - 4, ey - 1, 1, 1); x.fillRect(cx - 1, ey - 1, 1, 1);
-      x.fillRect(cx - 4, ey + 2, 1, 1); x.fillRect(cx - 1, ey + 2, 1, 1);
-      x.fillRect(cx + 1, ey - 1, 1, 1); x.fillRect(cx + 4, ey - 1, 1, 1);
-      x.fillRect(cx + 1, ey + 2, 1, 1); x.fillRect(cx + 4, ey + 2, 1, 1);
+      x.fillRect(cx - 3, ey, 2, 2); // left iris
+      x.fillRect(cx + 2, ey, 2, 2); // right iris
+      x.fillStyle = '#ffffff';
+      x.globalAlpha = 0.9;
+      x.fillRect(cx - 3, ey, 1, 1); // left catchlight
+      x.fillRect(cx + 2, ey, 1, 1); // right catchlight
+      x.fillStyle = col;
       break;
     case 'cry':
       x.globalAlpha = 0.9;

@@ -98,14 +98,15 @@ import { addSeenPubkey } from '../stores/seenPlayersStore';
 // s = spriteHeight / 96  (room at scale 3 is the reference; hub/woods=0.33, alley/cabin=0.67)
 const EYE_VFX_TYPES   = new Set(['cry']); // particle emitter eyes
 const NEON_COLORS     = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
-const EYE_COLOR_TYPES = new Set(['blaze', 'frost', 'cosmic']); // color-cycling eyes (no particles)
+const EYE_COLOR_TYPES = new Set(['blaze', 'frost', 'cosmic', 'galaxy']); // color-cycling eyes (no particles)
 
 const EYE_CYCLE_HEX: Record<string, string[]> = {
   blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
   frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
-  cosmic: ['#ffffff', '#aa88ff', '#ff88ff', '#88ffff', '#ffff88'],
+  cosmic: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'], // legacy: swapped for galaxy
+  galaxy: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'],
 };
-const EYE_CYCLE_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 360 };
+const EYE_CYCLE_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
 
 function makeEyeVfxConfig(type: string, s: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
   const r = (n: number) => Math.round(n * s);

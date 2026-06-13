@@ -218,7 +218,7 @@ export class MarketPreview {
         MarketPreview._animId = requestAnimationFrame(loop);
       };
       loop();
-    } else if (item.slot === 'eyes' && ['blaze', 'frost', 'cosmic', 'cry'].includes(item.value)) {
+    } else if (item.slot === 'eyes' && ['blaze', 'frost', 'cosmic', 'galaxy', 'cry'].includes(item.value)) {
       const src = renderHubSprite({ ...getAvatar(), eyes: item.value } as AvatarConfig);
       const W = 111, H = 168;
       const c = document.createElement('canvas');
@@ -266,9 +266,10 @@ export class MarketPreview {
         const PALETTES: Record<string, string[]> = {
           blaze:  ['#ff6600','#ff3300','#ffaa00','#ffdd00','#ff4400'],
           frost:  ['#aaddff','#ffffff','#88ccff','#cceeff','#44aaff'],
-          cosmic: ['#ffffff','#aa88ff','#ff88ff','#88ffff','#ffff88'],
+          cosmic: ['#7a3cff','#c84cff','#ff6ad5','#4ad8ff','#9a6eff','#ffffff'], // legacy: swapped for galaxy
+          galaxy: ['#7a3cff','#c84cff','#ff6ad5','#4ad8ff','#9a6eff','#ffffff'],
         };
-        const SPEED_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 360 };
+        const SPEED_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
         const pal = PALETTES[item.value];
         const spd = SPEED_MS[item.value];
         let lastStep = -1;

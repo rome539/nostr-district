@@ -94,13 +94,14 @@ export class WardrobeTab {
     preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;';
     container.appendChild(preview);
 
-    const EYE_CYCLE_TYPES = new Set(['blaze', 'frost', 'cosmic']);
+    const EYE_CYCLE_TYPES = new Set(['blaze', 'frost', 'cosmic', 'galaxy']);
     const EYE_PALETTES: Record<string, string[]> = {
       blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
       frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
-      cosmic: ['#ffffff', '#aa88ff', '#ff88ff', '#88ffff', '#ffff88'],
+      cosmic: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'], // legacy: swapped for galaxy
+      galaxy: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'],
     };
-    const EYE_SPEED: Record<string, number> = { blaze: 100, frost: 280, cosmic: 360 };
+    const EYE_SPEED: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
 
     if (this.currentSlot === 'eyes' && EYE_CYCLE_TYPES.has(avatar.eyes ?? '')) {
       const pal = EYE_PALETTES[avatar.eyes!];
@@ -212,7 +213,7 @@ export class WardrobeTab {
       bottom: [...AVATAR_OPTIONS.bottom, ...CATALOG.filter(i => i.slot === 'bottom' && i.earn).map(i => i.value as any)],
       hat:    [...AVATAR_OPTIONS.hat,    ...CATALOG.filter(i => i.slot === 'hat'    && i.earn).map(i => i.value as any)],
       accessory: AVATAR_OPTIONS.accessory,
-      eyes: [...AVATAR_OPTIONS.eyes, ...CATALOG.filter(i => i.slot === 'eyes' && i.value !== 'cry').map(i => i.value as any)],
+      eyes: [...AVATAR_OPTIONS.eyes, ...CATALOG.filter(i => i.slot === 'eyes' && i.value !== 'cry' && !i.hidden).map(i => i.value as any)],
     };
     const valMap: Record<string, string> = {
       hair: avatar.hair, top: avatar.top,
@@ -281,7 +282,7 @@ export class WardrobeTab {
     };
     const colorKey = keyMap[this.currentSlot];
     if (!colorKey) { container.innerHTML = ''; return; }
-    const eyeCycleTypes = new Set(['blaze', 'frost', 'cosmic']);
+    const eyeCycleTypes = new Set(['blaze', 'frost', 'cosmic', 'galaxy']);
     if (this.currentSlot === 'eyes' && eyeCycleTypes.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
     const noColorAcc = new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']);
     if (this.currentSlot === 'accessory' && noColorAcc.has(avatar.accessory ?? '')) { container.innerHTML = ''; return; }

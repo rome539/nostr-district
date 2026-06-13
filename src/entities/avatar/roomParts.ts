@@ -331,16 +331,44 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       x.fillRect(8,  oY + 7, 2, 1); // left base
       x.fillRect(15, oY + 7, 2, 1); // right base
       break;
-    case 'cosmic':
-      x.globalAlpha = 1.0;
-      x.fillRect(8,  oY + 5, 2, 2); // left iris
-      x.fillRect(15, oY + 5, 2, 2); // right iris
-      x.globalAlpha = 0.3;
-      x.fillRect(7,  oY + 4, 1, 1); x.fillRect(10, oY + 4, 1, 1);
-      x.fillRect(7,  oY + 7, 1, 1); x.fillRect(10, oY + 7, 1, 1);
-      x.fillRect(14, oY + 4, 1, 1); x.fillRect(17, oY + 4, 1, 1);
-      x.fillRect(14, oY + 7, 1, 1); x.fillRect(17, oY + 7, 1, 1);
+    case 'slit': {
+      // Cat-eye: bright almond in eyeColor, dark vertical pupil, white catchlight.
+      x.globalAlpha = 0.92;
+      x.fillRect(7,  oY + 5, 3, 2);   // left almond (cols 7-9)
+      x.fillRect(14, oY + 5, 3, 2);   // right almond (cols 14-16)
+      x.globalAlpha = 0.6;            // pointed outer corners
+      x.fillRect(6,  oY + 5, 1, 1); x.fillRect(10, oY + 6, 1, 1);
+      x.fillRect(17, oY + 5, 1, 1); x.fillRect(13, oY + 6, 1, 1);
+      x.fillStyle = darken(col, 60);  // vertical slit pupil
+      x.globalAlpha = 1;
+      x.fillRect(8,  oY + 5, 1, 2);
+      x.fillRect(15, oY + 5, 1, 2);
+      x.fillStyle = '#ffffff';        // catchlight (glossy highlight)
+      x.globalAlpha = 0.9;
+      x.fillRect(9,  oY + 5, 1, 1);
+      x.fillRect(16, oY + 5, 1, 1);
+      x.fillStyle = col;
       break;
+    }
+    case 'cosmic': // legacy value — swapped for galaxy, renders identically
+    case 'galaxy': {
+      // Galaxy: dim halo ring + glowing iris + white catchlight + twinkle.
+      x.globalAlpha = 0.28;           // halo ring (cycling color, faint)
+      x.fillRect(7,  oY + 4, 3, 1); x.fillRect(7,  oY + 7, 3, 1);
+      x.fillRect(6,  oY + 5, 1, 2); x.fillRect(10, oY + 5, 1, 2);
+      x.fillRect(14, oY + 4, 3, 1); x.fillRect(14, oY + 7, 3, 1);
+      x.fillRect(13, oY + 5, 1, 2); x.fillRect(17, oY + 5, 1, 2);
+      x.globalAlpha = 1.0;            // iris core (3x2, bright cycling color)
+      x.fillRect(7,  oY + 5, 3, 2);
+      x.fillRect(14, oY + 5, 3, 2);
+      x.fillStyle = '#ffffff';        // catchlight + twinkle (fixed white = depth)
+      x.globalAlpha = 0.95;
+      x.fillRect(7,  oY + 5, 1, 1); x.fillRect(14, oY + 5, 1, 1);
+      x.globalAlpha = 0.5;
+      x.fillRect(10, oY + 4, 1, 1); x.fillRect(17, oY + 4, 1, 1);
+      x.fillStyle = col;
+      break;
+    }
     case 'cry':
       x.globalAlpha = 0.9;
       x.fillRect(8,  oY + 4, 2, 3); // left pupil

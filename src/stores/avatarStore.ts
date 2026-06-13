@@ -16,7 +16,7 @@ export interface AvatarConfig {
   hatColor: string;
   accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie' | 'ballon' | 'ballonbitcoin' | 'ballonostrich' | 'guyfaux' | 'hockeymask' | 'onimask' | 'onimaskblue' | 'onimaskgreen' | 'embercloak' | 'wanderhood' | 'battlecloak' | 'arenaguard' | 'sandcloak';
   accessoryColor: string;
-  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'blaze' | 'frost' | 'cosmic' | 'cry';
+  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'slit' | 'blaze' | 'frost' | 'cosmic' | 'galaxy' | 'cry';
   eyeColor: string;
   nameColor: string;
   chatColor: string;

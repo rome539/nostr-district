@@ -96,7 +96,7 @@ const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
  * EQUIP click instead of opening a useless color picker.
  */
 const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
-  eyes: new Set(['blaze', 'frost', 'cosmic']),
+  eyes: new Set(['blaze', 'frost', 'cosmic', 'galaxy']),
   accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']),
   top: new Set(['vjacket']),
   hat: new Set(['beasthat', 'arenahelm']),

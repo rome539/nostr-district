@@ -2,6 +2,7 @@ import { getInventory, getSetProgress, ITEM_SETS, ITEM_CATALOG } from './tradeIt
 import { updateSetAuraProgress } from './auraUnlockStore';
 import { checkFishHat } from './fishingUnlockStore';
 import { isUnlocksLoaded } from './unlockStore';
+import { authStore } from './authStore';
 import { SoundEngine } from '../audio/SoundEngine';
 
 /**
@@ -26,9 +27,33 @@ let _wired = false;
 // locks again until the set is reassembled — keeps set items liquid on the market.
 const _cosmeticProgress: Record<string, { count: number; required: number; hint: string }> = {};
 const _wasComplete: Record<string, boolean> = {}; // session transition tracking (toasts)
-const _toasted = new Set<string>(); // toast each reward at most ONCE per session —
-// inventory rebuilds (bazaar open, relay refetch) can flap progress transiently and
-// would otherwise re-fire the unlock toast every time.
+const _toasted = new Set<string>(); // reward keys already toasted — PERSISTED per pubkey.
+// On reload the inventory rebuilds incrementally (relay refetch), so a complete set
+// momentarily reads incomplete→complete and would re-fire the unlock toast every login.
+// Persisting which rewards have been announced suppresses that across reloads, while a
+// genuine first-time completion during play still toasts (then gets persisted).
+let _toastedPk = '';
+
+function toastedStorageKey(pk: string): string { return `nd_set_toasts_${pk}`; }
+
+/** Load the persisted toasted-rewards set for the current pubkey (once per account). */
+function ensureToastedLoaded(): void {
+  const pk = authStore.getState().pubkey || '';
+  if (pk === _toastedPk) return;
+  _toastedPk = pk;
+  _toasted.clear();
+  for (const k of Object.keys(_wasComplete)) delete _wasComplete[k]; // reset transitions for the new account
+  if (!pk) return;
+  try {
+    const arr = JSON.parse(localStorage.getItem(toastedStorageKey(pk)) || '[]');
+    if (Array.isArray(arr)) arr.forEach((k: string) => _toasted.add(k));
+  } catch { /* ignore */ }
+}
+
+function persistToasted(): void {
+  if (!_toastedPk) return;
+  try { localStorage.setItem(toastedStorageKey(_toastedPk), JSON.stringify([..._toasted])); } catch { /* ignore */ }
+}
 
 /** Live progress/entitlement for a set cosmetic. unlocked = currently holds the full set. */
 export function getSetCosmeticProgress(slot: string, value: string): { count: number; required: number; unlocked: boolean; hint: string } {
@@ -81,6 +106,7 @@ async function enforceEquipped(): Promise<void> {
     };
     check('hat', 'none');
     check('bottom', 'pants');
+    check('eyes', 'default');
     check('aura', '');
     check('rodSkin', '');
     check('nameColor', '');
@@ -93,6 +119,7 @@ async function enforceEquipped(): Promise<void> {
 
 function recompute(): void {
   if (!isUnlocksLoaded()) return; // wait until the relay unlock state has merged in
+  ensureToastedLoaded();          // hydrate persisted toasts so reloads don't re-announce
   // Set-based auras — each set that declares a rewardAura drives that aura's progress.
   const progress: Record<string, { count: number; required: number }> = {};
   for (const set of ITEM_SETS) {
@@ -106,19 +133,22 @@ function recompute(): void {
   // No permanent unlock is stored: ownership is recomputed live from the inventory,
   // so trading away a set piece re-locks the cosmetic until the set is whole again.
   for (const set of ITEM_SETS) {
-    if (!set.rewardCosmetic) continue;
-    const { slot, value, label } = set.rewardCosmetic;
-    const key = `${slot}:${value}`;
+    const rewards = [set.rewardCosmetic, ...(set.rewardCosmetics ?? [])].filter(Boolean) as { slot: string; value: string; label: string }[];
+    if (!rewards.length) continue;
     const p = getSetProgress(set);
-    _cosmeticProgress[key] = { count: p.owned, required: p.total, hint: `Complete the "${set.name}" set` };
     const complete = p.total > 0 && p.owned >= p.total;
-    // Toast only on an incomplete→complete transition, at most once per session
-    // (rebuild flaps would otherwise re-fire it on every bazaar open).
-    if (complete && _wasComplete[key] === false && !_toasted.has(key)) {
-      _toasted.add(key);
-      showCosmeticToast(label);
+    for (const { slot, value, label } of rewards) {
+      const key = `${slot}:${value}`;
+      _cosmeticProgress[key] = { count: p.owned, required: p.total, hint: `Complete the "${set.name}" set` };
+      // Toast only on an incomplete→complete transition, at most once per session
+      // (rebuild flaps would otherwise re-fire it on every bazaar open).
+      if (complete && _wasComplete[key] === false && !_toasted.has(key)) {
+        _toasted.add(key);
+        persistToasted();
+        showCosmeticToast(label);
+      }
+      _wasComplete[key] = complete;
     }
-    _wasComplete[key] = complete;
   }
 
   // Fish hat: own every non-legendary fish at once
