@@ -71,6 +71,10 @@ export class HubScene extends BaseScene {
   ];
   private nearBulletinBoard = false;
   private nearCrewBoard = false;
+  // True only when the panel was opened by walking up to the board (not via the
+  // /crew or /polls command) — so only those auto-close when you walk away.
+  private crewFromBoard = false;
+  private pollsFromBoard = false;
   private fwGraphics: Phaser.GameObjects.Graphics | null = null;
   private fwEngine: FireworksEngine | null = null;
   private batGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -783,6 +787,20 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
   }
 
   private updateProximity(): void {
+    // Walk too far from a board and its panel closes (it's a spot you stand at,
+    // not a window you carry around). Buffer past the open zone so small shuffles
+    // don't dismiss it. Only board-opened panels — /crew and /polls aren't tied to
+    // a spot, so they're left alone (and the flag clears if closed another way).
+    const PANEL_CLOSE_DIST = 120;
+    if (this.crewFromBoard) {
+      if (!this.crewPanel.isVisible()) this.crewFromBoard = false;
+      else if (Math.abs(this.player.x - this.CREW_BOARD_X) > PANEL_CLOSE_DIST) { this.crewPanel.close(); this.crewFromBoard = false; }
+    }
+    if (this.pollsFromBoard) {
+      if (!this.pollBoard.isVisible()) this.pollsFromBoard = false;
+      else if (Math.abs(this.player.x - this.BULLETIN_X) > PANEL_CLOSE_DIST) { this.pollBoard.close(); this.pollsFromBoard = false; }
+    }
+
     const cdist = Math.abs(this.player.x - this.CREW_BOARD_X);
     const wasNearCrew = this.nearCrewBoard;
     this.nearCrewBoard = cdist < 52;
@@ -958,8 +976,8 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     // Scavenge first: ephemeral drops reroll on collect, so one overlapping a
     // fixture would otherwise be uncollectable. Fixtures stay reachable next press.
     if (this.scavenge?.tryInteract()) return;
-    if (this.nearCrewBoard) { this.crewPanel.toggle(); return; }
-    if (this.nearBulletinBoard) { this.pollBoard.toggle(); return; }
+    if (this.nearCrewBoard) { this.crewPanel.toggle(); this.crewFromBoard = this.crewPanel.isVisible(); return; }
+    if (this.nearBulletinBoard) { this.pollBoard.toggle(); this.pollsFromBoard = this.pollBoard.isVisible(); return; }
     if (this.nearAlley && !this.isLeavingToAlley) { this.enterAlley(); return; }
     if (!this.nearBuilding) return;
     this.isMoving = false; this.targetX = null;
