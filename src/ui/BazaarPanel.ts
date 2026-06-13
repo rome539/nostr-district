@@ -1447,9 +1447,9 @@ export class BazaarPanel {
           </div>
           <span style="color:${done ? '#70ff70' : '#888'};font-size:12px;">${progress.owned}/${progress.total}</span>
         </div>
-        <div style="color:#666;font-size:10px;margin-bottom:${(set.rewardAura || set.rewardCosmetic) ? '4px' : '8px'};">${(() => { const k = 'bz.setdesc.' + set.id; const d = ti18n(k); return d === k ? set.description : d; })()}</div>
+        <div style="color:#666;font-size:10px;margin-bottom:${(set.rewardAura || set.rewardCosmetic || set.rewardCosmetics?.length) ? '4px' : '8px'};">${(() => { const k = 'bz.setdesc.' + set.id; const d = ti18n(k); return d === k ? set.description : d; })()}</div>
         ${set.rewardAura ? `<div style="color:${done ? '#9aff9a' : '#9a6eff'};font-size:9px;margin-bottom:8px;letter-spacing:0.5px;">✦ ${ti18n(done ? 'bz.aura_unlocked' : 'bz.aura_unlocks', { aura: set.rewardAura.charAt(0).toUpperCase() + set.rewardAura.slice(1) })}</div>` : ''}
-        ${set.rewardCosmetic ? `<div style="color:${done ? '#9aff9a' : '#9a6eff'};font-size:9px;margin-bottom:8px;letter-spacing:0.5px;">✦ ${ti18n(done ? 'bz.reward_unlocked' : 'bz.reward_unlocks', { name: set.rewardCosmetic.label })}</div>` : ''}
+        ${[set.rewardCosmetic, ...(set.rewardCosmetics ?? [])].filter(Boolean).map(rc => `<div style="color:${done ? '#9aff9a' : '#9a6eff'};font-size:9px;margin-bottom:8px;letter-spacing:0.5px;">✦ ${ti18n(done ? 'bz.reward_unlocked' : 'bz.reward_unlocks', { name: rc!.label })}</div>`).join('')}
         <div style="background:#0a0a18;border-radius:3px;height:4px;overflow:hidden;">
           <div style="background:${done ? '#2a8a2a' : '#4a4a8a'};height:100%;width:${pct}%;transition:width 0.3s;"></div>
         </div>

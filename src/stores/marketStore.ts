@@ -36,6 +36,7 @@ export interface MarketItem {
   subcat?: string; // sub-category for grouping within a slot (e.g. 'lounge', 'decor', 'tech')
   earn?: boolean;   // earned in-world, never purchased
   hidden?: boolean; // exists for ownership gating but never shown in the shop
+  earnHint?: string; // seasonal/non-collection earn items: how to unlock (shown instead of a progress bar)
 }
 
 export interface RodSkinColors {
@@ -69,7 +70,7 @@ export function getRainbowColor(time: number): string {
   return `hsl(${hue},90%,68%)`;
 }
 
-export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', '#f0b040', '#c0c8d0']);
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', '#f0b040', '#c0c8d0']);
 
 export function isAnimatedColor(color: string): boolean {
   return ANIMATED_COLORS.has(color);
@@ -128,6 +129,14 @@ export function getAnimatedColor(color: string, time: number): string {
       const lit = 44 + glint * 48;  // 44% deep molten → 92% white-hot glint
       return `hsl(${hue},${sat}%,${lit}%)`;
     }
+    case 'vhs': { // retro VHS chroma — magenta↔cyan bleed with brief tracking-error glints
+      const drift = Math.sin(time / 600) * 0.5 + 0.5;             // magenta↔cyan
+      const hue = 300 - drift * 120;                              // 300 magenta → 180 cyan
+      const glitch = Math.pow(Math.sin(time / 130) * 0.5 + 0.5, 8); // sharp, brief flicker
+      const sat = 85 - glitch * 60;
+      const lit = 60 + glitch * 30;
+      return `hsl(${hue},${sat}%,${lit}%)`;
+    }
     default: return color;
   }
 }
@@ -137,7 +146,7 @@ export function getAnimatedColor(color: string, time: number): string {
 // the name that FLOWS left→right over time — distinctly different from a hue cycle.
 // The name-tag (Phaser setFill) + shop preview (canvas gradient) use getGradientStops;
 // contexts that can't gradient (chat) fall back to the solid getAnimatedColor value.
-export const GRADIENT_COLORS = new Set(['halving']);
+export const GRADIENT_COLORS = new Set(['halving', 'vhs']);
 export function isGradientColor(color: string): boolean { return GRADIENT_COLORS.has(color); }
 
 // Mempool fee hue at a continuous param t (ping-pong teal↔red, period 1).
@@ -154,13 +163,29 @@ function feeHueAt(t: number): number {
 /** Fixed-position stops whose colors FLOW left→right over time — a traveling gradient.
  *  For ⛏ Halving: mempool fee colors streaming across the name like blocks. */
 export function getGradientStops(value: string, time: number): { pos: number; color: string }[] {
-  if (value !== 'halving') return [];
-  const N = 8;
   const out: { pos: number; color: string }[] = [];
-  for (let i = 0; i <= N; i++) {
-    const pos = i / N;
-    const hue = feeHueAt(pos * 1.3 + time / 3500); // spread across the name + time sweep
-    out.push({ pos, color: `hsl(${hue.toFixed(0)},80%,54%)` });
+  if (value === 'halving') {
+    const N = 8;
+    for (let i = 0; i <= N; i++) {
+      const pos = i / N;
+      const hue = feeHueAt(pos * 1.3 + time / 3500); // spread across the name + time sweep
+      out.push({ pos, color: `hsl(${hue.toFixed(0)},80%,54%)` });
+    }
+    return out;
+  }
+  if (value === 'vhs') {
+    // Magenta↔cyan chroma bands flowing left→right, raked by brief white tracking streaks.
+    const N = 10;
+    for (let i = 0; i <= N; i++) {
+      const pos = i / N;
+      const band = Math.sin((pos * 3 + time / 1400) * Math.PI * 2) * 0.5 + 0.5; // magenta↔cyan
+      const hue = 300 - band * 120;
+      const streak = Math.pow(Math.sin((pos * 6 - time / 600) * Math.PI) * 0.5 + 0.5, 10);
+      const sat = 90 - streak * 70;
+      const lit = 58 + streak * 32;
+      out.push({ pos, color: `hsl(${hue.toFixed(0)},${sat.toFixed(0)}%,${lit.toFixed(0)}%)` });
+    }
+    return out;
   }
   return out;
 }
@@ -257,6 +282,16 @@ export const CATALOG: MarketItem[] = [
   { id: 'eye_cosmic', name: '✨ Cosmic Eyes', slot: 'eyes', value: 'cosmic', price: 3.00, tier: 'rare', hidden: true }, // legacy — swapped for Galaxy; renders as Galaxy, kept ownable for past buyers
   { id: 'eye_galaxy', name: '🌌 Galaxy Eyes', slot: 'eyes', value: 'galaxy', price: 3.00, tier: 'rare' },
   { id: 'eye_slit',   name: '🐾 Slit Eyes',   slot: 'eyes', value: 'slit',   price: 0,    tier: 'rare', earn: true }, // unlock: complete the Strays (critters) set
+  // New specials — PROVISIONAL pricing/gating (rare $3), finalize per-eye after in-game review
+  { id: 'eye_laser',    name: '⚡ Laser Eyes',    slot: 'eyes', value: 'laser',    price: 3.00, tier: 'rare' },
+  { id: 'eye_aurora',   name: '🌌 Aurora Eyes',   slot: 'eyes', value: 'aurora',   price: 3.00, tier: 'rare' },
+  { id: 'eye_matrix',   name: '🟩 Matrix Eyes',   slot: 'eyes', value: 'matrix',   price: 3.00, tier: 'rare' },
+  { id: 'eye_toxic',    name: '☢️ Toxic Eyes',    slot: 'eyes', value: 'toxic',    price: 3.00, tier: 'rare' },
+  { id: 'eye_electric', name: '🔌 Electric Eyes', slot: 'eyes', value: 'electric', price: 3.00, tier: 'rare' },
+  { id: 'eye_visor',    name: '🤖 Visor Eyes',    slot: 'eyes', value: 'visor',    price: 3.00, tier: 'rare' },
+  { id: 'eye_void',     name: '🕳️ Void Eyes',     slot: 'eyes', value: 'void',     price: 3.00, tier: 'rare' },
+  { id: 'eye_dizzy',    name: '💢 Dizzy Eyes',    slot: 'eyes', value: 'dizzy',    price: 3.00, tier: 'rare' },
+  { id: 'eye_shifty',   name: '👀 Shifty Eyes',   slot: 'eyes', value: 'shifty',   price: 3.00, tier: 'rare' },
   // { id: 'eye_cry', name: '💧 Cry Eyes', slot: 'eyes', value: 'cry', price: 3.00, tier: 'rare' }, // TODO: convert to emote
   // ── Name colors ───────────────────────────────────────────────────────────────
   { id: 'color_orange',    name: 'Orange',           slot: 'nameColor', value: '#f07020',  price: 0.50, tier: 'basic' },
@@ -283,6 +318,14 @@ export const CATALOG: MarketItem[] = [
   { id: 'anim_swing',      name: 'Swing',            slot: 'nameAnim',  value: 'swing',    price: 2.00, tier: 'premium' },
   { id: 'anim_wave',       name: 'Wave',             slot: 'nameAnim',  value: 'wave',     price: 3.00, tier: 'premium' },
   { id: 'anim_glow',       name: 'Glow',             slot: 'nameAnim',  value: 'glow',     price: 3.00, tier: 'premium' },
+  { id: 'anim_glitch',     name: 'Glitch',           slot: 'nameAnim',  value: 'glitch',   price: 5.00, tier: 'rare' },
+  { id: 'anim_decode',     name: 'Decode',           slot: 'nameAnim',  value: 'decode',   price: 3.00, tier: 'rare' },
+  { id: 'anim_splitflap',  name: 'Split-Flap',       slot: 'nameAnim',  value: 'splitflap',price: 3.00, tier: 'rare' },
+  { id: 'anim_shimmer',    name: 'Shimmer',          slot: 'nameAnim',  value: 'shimmer',  price: 3.00, tier: 'rare' },
+  { id: 'anim_typewriter', name: 'Typewriter',       slot: 'nameAnim',  value: 'typewriter',price: 5.00, tier: 'rare' },
+  { id: 'anim_hologram',   name: 'Hologram',         slot: 'nameAnim',  value: 'hologram', price: 3.00, tier: 'rare' },
+  { id: 'anim_neon',       name: 'Neon Flicker',     slot: 'nameAnim',  value: 'neonflicker',price: 3.00, tier: 'rare' },
+  { id: 'anim_ember',      name: 'Ember',            slot: 'nameAnim',  value: 'ember',    price: 5.00, tier: 'rare' },
   // ── Fishing rod skins ────────────────────────────────────────────────────────
   { id: 'rod_silver',      name: 'Silver Rod',       slot: 'rodSkin',   value: 'silver',   price: 1.50, tier: 'premium' },
   { id: 'rod_bamboo',      name: 'Bamboo Rod',       slot: 'rodSkin',   value: 'bamboo',   price: 0.50, tier: 'basic' },
@@ -367,6 +410,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'aura_snow',      name: 'Snowfall Aura',  slot: 'aura', value: 'snow',      price: 0, tier: 'rare', earn: true },
   { id: 'aura_fireworks', name: 'Fireworks Aura', slot: 'aura', value: 'fireworks', price: 0, tier: 'rare', earn: true },
   { id: 'aura_steam',     name: 'Steam Aura',     slot: 'aura', value: 'steam',     price: 0, tier: 'rare', earn: true },
+  { id: 'aura_spores',    name: 'Spores Aura',    slot: 'aura', value: 'spores',    price: 0, tier: 'rare', earn: true },
+  { id: 'aura_nebula',    name: 'Nebula Aura',    slot: 'aura', value: 'nebula',    price: 0, tier: 'rare', earn: true },
   // Set-completion rods + name colors (bazaar collection rewards, never sold)
   { id: 'rod_driftwood',   name: 'Driftwood Rod',     slot: 'rodSkin',   value: 'driftwood', price: 0, tier: 'rare', earn: true },
   { id: 'rod_abyssal',     name: 'Abyssal Rod',       slot: 'rodSkin',   value: 'abyssal',   price: 0, tier: 'rare', earn: true },
@@ -375,8 +420,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'rod_midnight',    name: 'Midnight Rod',      slot: 'rodSkin',   value: 'midnight',  price: 0, tier: 'rare', earn: true },
   { id: 'rod_cryptid',     name: 'Cryptid Rod',       slot: 'rodSkin',   value: 'cryptid',   price: 0, tier: 'rare', earn: true },
   { id: 'color_bullion',   name: '₿ Bullion',         slot: 'nameColor', value: 'bullion',   price: 0, tier: 'rare', earn: true },
-  { id: 'color_halving',   name: '⛏ Halving',         slot: 'nameColor', value: 'halving',   price: 0, tier: 'rare', earn: true, hidden: true }, // seasonal: log in during the Halving celebration
+  { id: 'color_halving',   name: '⛏ Halving',         slot: 'nameColor', value: 'halving',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during Halving week' }, // seasonal: only obtainable in the Halving celebration window
   { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
+  { id: 'color_vhs',       name: 'VHS',               slot: 'nameColor', value: 'vhs',       price: 0, tier: 'rare', earn: true },
   // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)
   { id: 'hat_ostrichhat',  name: 'Ostrich Hat',       slot: 'hat',       value: 'ostrichhat', price: 0, tier: 'rare', earn: true },
 ];

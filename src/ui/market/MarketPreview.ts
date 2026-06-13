@@ -8,6 +8,8 @@
 import { authStore } from '../../stores/authStore';
 import { getAvatar, AvatarConfig } from '../../stores/avatarStore';
 import { renderHubSprite } from '../../entities/AvatarRenderer';
+import { EYE_PALETTES as EYE_CYCLE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../../entities/avatar/eyeCycles';
+import { CHAR_ANIMS, charAnimStates, NameCharState } from '../../entities/nameAnim';
 import { MarketItem, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops, ROD_SKINS } from '../../stores/marketStore';
 
 const SLOT_BADGE = `color:var(--nd-subtext);background:color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);`;
@@ -188,9 +190,12 @@ export class MarketPreview {
         // Resolve animated/gradient name colors (bullion/halving/fire/…) to a real CSS
         // color — passing the raw value to canvas fillStyle renders nothing (broken tag).
         const color = isAnimatedColor(rawColor) ? getAnimatedColor(rawColor, t) : rawColor;
-        let tagTransform: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[] } = {};
+        let tagTransform: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[]; charStates?: NameCharState[] } = {};
         let name = (authStore.getState().displayName ?? 'Player').slice(0, 14);
         if (rawColor === 'bullion') name = `₿ ${name} ₿`; // match the wrapped tag (wave offsets)
+        if (CHAR_ANIMS.has(item.value) && item.value !== 'wave') {
+          tagTransform = { charStates: charAnimStates(item.value, name, t, color) };
+        }
         switch (item.value) {
           case 'bob':    tagTransform = { ty: Math.sin(t / 400) * 4 }; break;
           case 'pulse':  tagTransform = { scale: 1 + Math.sin(t / 350) * 0.08 }; break;
@@ -218,7 +223,7 @@ export class MarketPreview {
         MarketPreview._animId = requestAnimationFrame(loop);
       };
       loop();
-    } else if (item.slot === 'eyes' && ['blaze', 'frost', 'cosmic', 'galaxy', 'cry'].includes(item.value)) {
+    } else if (item.slot === 'eyes' && (EYE_CYCLE_TYPES.has(item.value) || item.value === 'cry')) {
       const src = renderHubSprite({ ...getAvatar(), eyes: item.value } as AvatarConfig);
       const W = 111, H = 168;
       const c = document.createElement('canvas');
@@ -263,13 +268,8 @@ export class MarketPreview {
         MarketPreview._setCanvas(c);
         loop();
       } else {
-        const PALETTES: Record<string, string[]> = {
-          blaze:  ['#ff6600','#ff3300','#ffaa00','#ffdd00','#ff4400'],
-          frost:  ['#aaddff','#ffffff','#88ccff','#cceeff','#44aaff'],
-          cosmic: ['#7a3cff','#c84cff','#ff6ad5','#4ad8ff','#9a6eff','#ffffff'], // legacy: swapped for galaxy
-          galaxy: ['#7a3cff','#c84cff','#ff6ad5','#4ad8ff','#9a6eff','#ffffff'],
-        };
-        const SPEED_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
+        const PALETTES = EYE_CYCLE_PALETTES;
+        const SPEED_MS = EYE_CYCLE_MS;
         const pal = PALETTES[item.value];
         const spd = SPEED_MS[item.value];
         let lastStep = -1;
@@ -287,6 +287,19 @@ export class MarketPreview {
         MarketPreview._setCanvas(c);
         loop();
       }
+    } else if (item.slot === 'eyes' && EYE_MOTION_TYPES.has(item.value)) {
+      // Motion eyes (shifty/dizzy/heart) — re-render the sprite on their frame cadence;
+      // the draw self-animates from the clock.
+      let lastStep = -1;
+      const loop = () => {
+        const step = eyeMotionStep(item.value);
+        if (step !== lastStep) {
+          lastStep = step;
+          MarketPreview._setCanvas(renderHubSprite({ ...getAvatar(), eyes: item.value } as AvatarConfig));
+        }
+        MarketPreview._animId = requestAnimationFrame(loop);
+      };
+      loop();
     } else if (item.slot === 'rodSkin') {
       if (item.value === 'legendary') {
         const loop = () => {
@@ -795,7 +808,7 @@ export class MarketPreview {
   private static _makeNameTagCanvas(
     avatar: AvatarConfig,
     color: string,
-    tagTransform?: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[] },
+    tagTransform?: { tx?: number; ty?: number; scale?: number; angle?: number; alpha?: number; shadowColor?: string; shadowBlur?: number; charOffsets?: number[]; charStates?: NameCharState[] },
     rawValue?: string,
   ): HTMLCanvasElement {
     const src = renderHubSprite(avatar);
@@ -847,6 +860,7 @@ export class MarketPreview {
     const shadowColor = tagTransform?.shadowColor ?? null;
     const shadowBlur  = tagTransform?.shadowBlur  ?? 0;
     const charOffsets = tagTransform?.charOffsets ?? null;
+    const charStates  = tagTransform?.charStates  ?? null;
     const cx          = nx + pw / 2;
     const cy          = ny + ph / 2;
 
@@ -863,7 +877,23 @@ export class MarketPreview {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (shadowColor) { ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur; }
 
-    if (charOffsets && charOffsets.length > 0) {
+    if (charStates && charStates.length > 0) {
+      const charW  = ctx.measureText('W').width;
+      const startX = W / 2 - (charStates.length * charW) / 2 + charW / 2;
+      const baseY  = ny + ph / 2 + 0.5;
+      ctx.textAlign = 'center';
+      for (let i = 0; i < charStates.length; i++) {
+        const s = charStates[i];
+        ctx.save();
+        ctx.globalAlpha = alpha * s.alpha;
+        ctx.translate(startX + i * charW + s.dx, baseY + s.dy);
+        ctx.scale(s.sx, s.sy);
+        if (s.glow > 0) { ctx.shadowColor = s.glowColor ?? s.color; ctx.shadowBlur = s.glow; }
+        ctx.fillStyle = isRainbow && s.color !== '#ffffff' ? rainbowGrad(-charW / 2, charW / 2) : s.color;
+        ctx.fillText(s.glyph, 0, 0);
+        ctx.restore();
+      }
+    } else if (charOffsets && charOffsets.length > 0) {
       const charW  = ctx.measureText('W').width;
       const startX = W / 2 - (name.length * charW) / 2 + charW / 2;
       ctx.fillStyle = isRainbow ? rainbowGrad(nx, nx + pw) : color;

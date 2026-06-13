@@ -100,8 +100,8 @@ function rowHtml(b: BountyInfo, idx: number): string {
             ? `<span style="display:inline-block;transform:rotate(-3deg);font-size:8px;letter-spacing:2px;color:#7a5410;border:1.5px solid #7a5410bb;border-radius:3px;padding:1px 5px;margin-left:5px;">LEGENDARY</span>`
             : `<span style="display:inline-block;transform:rotate(-3deg);font-size:8px;letter-spacing:2px;color:#4a2e7e;border:1.5px solid #4a2e7eaa;border-radius:3px;padding:1px 5px;margin-left:5px;">RARE</span>`}
         </div>
-        ${b.claimed > 0 ? `<div style="font-size:9px;letter-spacing:1px;color:#6e5e44;margin-bottom:${btn ? '10px' : '0'};">${ti18n('bounty.claimed_count', { n: String(b.claimed) })}</div>` : ''}
-        ${btn ? `<div style="margin-top:${b.claimed > 0 ? '0' : '8px'};">${btn}</div>` : ''}
+        ${b.holiday && b.claimed > 0 ? `<div style="font-size:9px;letter-spacing:1px;color:#6e5e44;margin-bottom:${btn ? '10px' : '0'};">${ti18n('bounty.claimed_count', { n: String(b.claimed) })}</div>` : ''}
+        ${btn ? `<div style="margin-top:${b.holiday && b.claimed > 0 ? '0' : '8px'};">${btn}</div>` : ''}
       </div>
       ${stamp}
     </div>`;

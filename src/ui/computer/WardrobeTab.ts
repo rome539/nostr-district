@@ -1,6 +1,7 @@
 import { AvatarConfig, getAvatar, setAvatar, AVATAR_OPTIONS, COLOR_PRESETS, getOutfits, saveOutfit, deleteOutfit } from '../../stores/avatarStore';
 import { isOwned, CATALOG } from '../../stores/marketStore';
 import { renderRoomSprite } from '../../entities/AvatarRenderer';
+import { EYE_PALETTES as EYE_CYCLE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../../entities/avatar/eyeCycles';
 import { authStore } from '../../stores/authStore';
 import { publishOutfits, publishAvatar } from '../../nostr/nostrService';
 import type { TabCtx } from './types';
@@ -94,14 +95,8 @@ export class WardrobeTab {
     preview.style.cssText = 'image-rendering:pixelated;position:relative;z-index:1;';
     container.appendChild(preview);
 
-    const EYE_CYCLE_TYPES = new Set(['blaze', 'frost', 'cosmic', 'galaxy']);
-    const EYE_PALETTES: Record<string, string[]> = {
-      blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
-      frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
-      cosmic: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'], // legacy: swapped for galaxy
-      galaxy: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'],
-    };
-    const EYE_SPEED: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
+    const EYE_PALETTES = EYE_CYCLE_PALETTES;
+    const EYE_SPEED = EYE_CYCLE_MS;
 
     if (this.currentSlot === 'eyes' && EYE_CYCLE_TYPES.has(avatar.eyes ?? '')) {
       const pal = EYE_PALETTES[avatar.eyes!];
@@ -112,6 +107,23 @@ export class WardrobeTab {
         if (step !== lastStep) {
           lastStep = step;
           const src = renderRoomSprite({ ...avatar, eyeColor: pal[step] });
+          preview.width = src.width * 3; preview.height = src.height * 3;
+          const px = preview.getContext('2d')!;
+          px.imageSmoothingEnabled = false;
+          px.drawImage(src, 0, 0, src.width, src.height, 0, 0, src.width * 3, src.height * 3);
+        }
+        this._previewAnimId = requestAnimationFrame(loop);
+      };
+      loop();
+    } else if (this.currentSlot === 'eyes' && EYE_MOTION_TYPES.has(avatar.eyes ?? '')) {
+      // Motion eyes (shifty/dizzy/heart) — re-render on their frame cadence; the draw
+      // self-animates from the clock, so we just push a fresh sprite each step.
+      let lastStep = -1;
+      const loop = () => {
+        const step = eyeMotionStep(avatar.eyes!);
+        if (step !== lastStep) {
+          lastStep = step;
+          const src = renderRoomSprite(avatar);
           preview.width = src.width * 3; preview.height = src.height * 3;
           const px = preview.getContext('2d')!;
           px.imageSmoothingEnabled = false;
@@ -282,8 +294,7 @@ export class WardrobeTab {
     };
     const colorKey = keyMap[this.currentSlot];
     if (!colorKey) { container.innerHTML = ''; return; }
-    const eyeCycleTypes = new Set(['blaze', 'frost', 'cosmic', 'galaxy']);
-    if (this.currentSlot === 'eyes' && eyeCycleTypes.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
+    if (this.currentSlot === 'eyes' && EYE_CYCLE_TYPES.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
     const noColorAcc = new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']);
     if (this.currentSlot === 'accessory' && noColorAcc.has(avatar.accessory ?? '')) { container.innerHTML = ''; return; }
     const noColorTop = new Set(['vjacket']);

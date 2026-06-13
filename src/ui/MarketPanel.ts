@@ -19,6 +19,7 @@ import { sendAvatarUpdate } from '../nostr/presenceService';
 import { getAvatar, setAvatar, AvatarConfig, COLOR_PRESETS } from '../stores/avatarStore';
 import { usdToSats, getBtcUsdPrice } from '../stores/priceService';
 import { MarketPreview } from './market/MarketPreview';
+import { EYE_CYCLE_TYPES } from '../entities/avatar/eyeCycles';
 import { showInvoiceModal } from './market/MarketInvoice';
 import { boltIcon } from './icons';
 import { t as ti18n } from '../i18n/i18n';
@@ -96,7 +97,8 @@ const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
  * EQUIP click instead of opening a useless color picker.
  */
 const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
-  eyes: new Set(['blaze', 'frost', 'cosmic', 'galaxy']),
+  // Color-cycling eyes drive their own palette, so no manual color picker.
+  eyes: new Set(EYE_CYCLE_TYPES),
   accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']),
   top: new Set(['vjacket']),
   hat: new Set(['beasthat', 'arenahelm']),
@@ -628,6 +630,14 @@ export class MarketPanel {
 
       const earnRight = (() => {
         if (!item.earn || owned) return null;
+        // Seasonal / non-collection earn items (e.g. the ⛏ Halving color) have no count
+        // target — show how to unlock, not a 0/0 progress bar.
+        if (item.earnHint) {
+          return `
+            <div style="text-align:right;max-width:120px;">
+              <div style="font-size:10px;color:#9a6eff;opacity:0.9;line-height:1.3;">${esc(item.earnHint)}</div>
+            </div>`;
+        }
         // Auras have their own progress store; set cosmetics (rods, name colors) use
         // the collectionUnlocks progress keyed by slot:value.
         const prog = item.slot === 'aura'

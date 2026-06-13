@@ -16,13 +16,13 @@ export interface AvatarConfig {
   hatColor: string;
   accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie' | 'ballon' | 'ballonbitcoin' | 'ballonostrich' | 'guyfaux' | 'hockeymask' | 'onimask' | 'onimaskblue' | 'onimaskgreen' | 'embercloak' | 'wanderhood' | 'battlecloak' | 'arenaguard' | 'sandcloak';
   accessoryColor: string;
-  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'slit' | 'blaze' | 'frost' | 'cosmic' | 'galaxy' | 'cry';
+  eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'slit' | 'visor' | 'void' | 'dizzy' | 'shifty' | 'blaze' | 'frost' | 'cosmic' | 'galaxy' | 'laser' | 'aurora' | 'matrix' | 'toxic' | 'electric' | 'cry';
   eyeColor: string;
   nameColor: string;
   chatColor: string;
   rodSkin: string;
-  nameAnim: '' | 'bob' | 'pulse' | 'jitter' | 'zoom' | 'swing' | 'wave' | 'glow';
-  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow' | 'runes' | 'bats' | 'snow' | 'fireworks' | 'steam';
+  nameAnim: '' | 'bob' | 'pulse' | 'jitter' | 'zoom' | 'swing' | 'wave' | 'glow' | 'glitch' | 'decode' | 'splitflap' | 'shimmer' | 'typewriter' | 'hologram' | 'neonflicker' | 'ember';
+  aura: '' | 'sparkle' | 'fire' | 'ice' | 'smoke' | 'electric' | 'void' | 'gold' | 'rainbow' | 'runes' | 'bats' | 'snow' | 'fireworks' | 'steam' | 'spores' | 'nebula';
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {

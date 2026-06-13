@@ -1509,6 +1509,8 @@ export class WoodsScene extends BaseScene {
     { name: 'flathead chub',              kg: '0.8', rare: false, junk: false },
     { name: 'golden shiner',              kg: '0.3', rare: false, junk: false },
     { name: 'pumpkinseed',                kg: '0.5', rare: false, junk: false },
+    { name: 'reed perch',                 kg: '0.5', rare: false, junk: false },
+    { name: 'glass minnow',               kg: '0.1', rare: false, junk: false },
     // Rare
     { name: 'darkwater bass',      kg: '2.3', rare: true, junk: false, lore: 'It only surfaces when the moon is hidden. Its scales absorb light rather than reflect it.' },
     { name: 'luminous eel',        kg: '0.5', rare: true, junk: false, lore: 'Locals once used them as lanterns. They stopped when the eels started remembering the way home.' },
@@ -1519,6 +1521,7 @@ export class WoodsScene extends BaseScene {
     { name: 'abyssal anglerfish',  kg: '2.7', rare: true, junk: false, lore: 'The lake is not supposed to be deep enough for this. You decide not to think about that too long.' },
     { name: 'ancient goldfish',    kg: '0.9', rare: true, junk: false, lore: 'Carnival goldfish live two years. This one has rings like a tree. You count thirty-seven.' },
     { name: 'love letter',         kg: '0.0', rare: true, junk: false, lore: 'Sealed in a glass vial, perfectly dry. No signature. You put it in your pocket and don\'t say why.' },
+    { name: 'aurora lungfish',     kg: '2.1', rare: true, junk: false, lore: 'It surfaced to breathe the night air, gills flaring with faint color. Some fish never forgot they once had lungs.' },
     // Junk
     { name: 'old boot',                     kg: '?',   rare: false, junk: true  },
     { name: 'soggy message in a bottle',    kg: '0.3', rare: false, junk: true  },

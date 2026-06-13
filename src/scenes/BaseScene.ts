@@ -59,6 +59,8 @@ import { WalletPanel } from '../ui/WalletPanel';
 import { HotkeyModal } from '../ui/HotkeyModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { SoundEngine } from '../audio/SoundEngine';
+import { EYE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../entities/avatar/eyeCycles';
+import { CHAR_ANIMS, charAnimStates } from '../entities/nameAnim';
 import { ComputerUI } from '../ui/ComputerUI';
 import { MuteList } from '../ui/MuteList';
 import { PlayerPicker } from '../ui/PlayerPicker';
@@ -98,15 +100,9 @@ import { addSeenPubkey } from '../stores/seenPlayersStore';
 // s = spriteHeight / 96  (room at scale 3 is the reference; hub/woods=0.33, alley/cabin=0.67)
 const EYE_VFX_TYPES   = new Set(['cry']); // particle emitter eyes
 const NEON_COLORS     = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
-const EYE_COLOR_TYPES = new Set(['blaze', 'frost', 'cosmic', 'galaxy']); // color-cycling eyes (no particles)
-
-const EYE_CYCLE_HEX: Record<string, string[]> = {
-  blaze:  ['#ff6600', '#ff3300', '#ffaa00', '#ffdd00', '#ff4400'],
-  frost:  ['#aaddff', '#ffffff', '#88ccff', '#cceeff', '#44aaff'],
-  cosmic: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'], // legacy: swapped for galaxy
-  galaxy: ['#7a3cff', '#c84cff', '#ff6ad5', '#4ad8ff', '#9a6eff', '#ffffff'],
-};
-const EYE_CYCLE_MS: Record<string, number> = { blaze: 100, frost: 280, cosmic: 300, galaxy: 300 };
+// Color-cycling eyes (palettes + speeds) — single source of truth in eyeCycles.ts.
+const EYE_COLOR_TYPES = EYE_CYCLE_TYPES;
+const EYE_CYCLE_HEX   = EYE_PALETTES;
 
 function makeEyeVfxConfig(type: string, s: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
   const r = (n: number) => Math.round(n * s);
@@ -320,6 +316,32 @@ function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Parti
       emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, -r(34), r(10)) } as any,
       blendMode: 'ADD',
     };
+    case 'spores': return { // Undergrowth (Flora) set — slow drifting green spores, gently rising
+      speed:    { min: r(2), max: r(9) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 1600, max: 3000 },
+      scale:    { start: 0.7, end: 0 },
+      alpha:    { start: 0.7, end: 0 },
+      tint:     [0x88cc44, 0xaaff66, 0x66aa33, 0xd0f0a0],
+      frequency: 150,
+      quantity:  1,
+      gravityY:  r(-4),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(18)) } as any,
+      blendMode: 'ADD',
+    };
+    case 'nebula': return { // Falling Sky (Celestial) set — expanding cosmic cloud in galaxy hues
+      speed:    { min: r(2), max: r(8) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 1800, max: 3400 },
+      scale:    { start: 1.0, end: 2.8 },
+      alpha:    { start: 0.5, end: 0 },
+      tint:     [0x7a3cff, 0xc84cff, 0xff6ad5, 0x4ad8ff, 0xffffff],
+      frequency: 130,
+      quantity:  1,
+      gravityY:  r(-2),
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(18)) } as any,
+      blendMode: 'ADD',
+    };
     default: return { // smoke
       speed:    { min: r(8), max: r(20) },
       angle:    { min: 255, max: 285 },
@@ -434,8 +456,10 @@ export abstract class BaseScene extends Phaser.Scene {
   private _localEyeR: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private _localEyeType = '';
   private _localEyeColorStep = -1;
+  private _localEyeMotionStep = -1;
   private _otherEyeMap  = new Map<string, { left: Phaser.GameObjects.Particles.ParticleEmitter; right: Phaser.GameObjects.Particles.ParticleEmitter; type: string }>();
   private _otherEyeColorStepMap = new Map<string, number>();
+  private _otherEyeMotionStepMap = new Map<string, number>();
   private _waveCharsMap = new Map<string, WaveCharSet>();
   private _playerWaveSet: WaveCharSet | null = null;
   protected _localPlayerTexKey = 'player';
@@ -758,14 +782,23 @@ export abstract class BaseScene extends Phaser.Scene {
     return { chars, charW, text, bg };
   }
 
-  private _applyWaveSet(ws: WaveCharSet, cx: number, cy: number, time: number, color: string): void {
+  /** Drives any per-character name anim (wave/glitch/decode/splitflap/shimmer) from its state set. */
+  private _applyCharAnim(ws: WaveCharSet, cx: number, cy: number, time: number, color: string, type: string): void {
     const { chars, charW, bg } = ws;
+    const states = charAnimStates(type, ws.text, time, color);
     const totalW = charW * chars.length;
     bg.setPosition(cx, cy);
     chars.forEach((c, i) => {
-      c.setColor(color);
-      c.x = cx - totalW / 2 + i * charW + charW / 2;
-      c.y = cy + Math.sin(time / 280 + i * 0.7) * 4;
+      const s = states[i];
+      if (!s) return;
+      if (c.text !== s.glyph) c.setText(s.glyph);
+      c.setColor(s.color);
+      c.setScale(s.sx, s.sy);
+      c.setAlpha(s.alpha);
+      if (s.glow > 0) c.setShadow(0, 0, s.glowColor ?? s.color, s.glow, false, true);
+      else c.setShadow(0, 0, 'transparent', 0);
+      c.x = cx - totalW / 2 + i * charW + charW / 2 + s.dx;
+      c.y = cy + s.dy;
     });
   }
 
@@ -853,50 +886,50 @@ export abstract class BaseScene extends Phaser.Scene {
 
           // Name tag motion
           if (oa.nameAnim) {
-            if (oa.nameAnim !== 'wave') {
+            if (!CHAR_ANIMS.has(oa.nameAnim)) {
               const ws = this._waveCharsMap.get(pk);
               if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
             }
-            o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
-            switch (oa.nameAnim) {
-              case 'bob':   o.nameText.y += Math.sin(time / 400) * 3; break;
-              case 'pulse': o.nameText.setScale(1 + Math.sin(time / 350) * 0.08); break;
-              case 'jitter':
-                o.nameText.x += (Math.random() - 0.5) * 1.5;
-                o.nameText.y += (Math.random() - 0.5) * 0.8;
-                break;
-              case 'zoom': {
-                const p = (time % 900) / 900;
-                const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
-                const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
-                o.nameText.setScale(1 + b1 * 0.2 + b2 * 0.12);
-                break;
+            if (CHAR_ANIMS.has(oa.nameAnim)) {
+              const currentColor = o.nameText.style.color as string;
+              let ws = this._waveCharsMap.get(pk);
+              if (!ws || ws.text !== o.nameText.text) {
+                if (ws) this._clearWaveSet(ws);
+                o.nameText.setVisible(false);
+                ws = this._buildWaveSet(o.nameText.text, o.nameText, currentColor);
+                this._waveCharsMap.set(pk, ws);
               }
-              case 'swing':
-                o.nameText.setAngle(Math.sin(time / 550) * 10);
-                break;
-              case 'wave': {
-                const currentColor = o.nameText.style.color as string;
-                let ws = this._waveCharsMap.get(pk);
-                if (!ws || ws.text !== o.nameText.text) {
-                  if (ws) this._clearWaveSet(ws);
-                  o.nameText.setVisible(false);
-                  ws = this._buildWaveSet(o.nameText.text, o.nameText, currentColor);
-                  this._waveCharsMap.set(pk, ws);
+              this._applyCharAnim(ws, o.nameText.x, o.nameText.y, time, currentColor, oa.nameAnim);
+            } else {
+              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+              switch (oa.nameAnim) {
+                case 'bob':   o.nameText.y += Math.sin(time / 400) * 3; break;
+                case 'pulse': o.nameText.setScale(1 + Math.sin(time / 350) * 0.08); break;
+                case 'jitter':
+                  o.nameText.x += (Math.random() - 0.5) * 1.5;
+                  o.nameText.y += (Math.random() - 0.5) * 0.8;
+                  break;
+                case 'zoom': {
+                  const p = (time % 900) / 900;
+                  const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
+                  const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
+                  o.nameText.setScale(1 + b1 * 0.2 + b2 * 0.12);
+                  break;
                 }
-                this._applyWaveSet(ws, o.nameText.x, o.nameText.y, time, currentColor);
-                break;
+                case 'swing':
+                  o.nameText.setAngle(Math.sin(time / 550) * 10);
+                  break;
+                case 'glow': {
+                  const glowColor = o.nameText.style.color as string;
+                  const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
+                  const blur = 10 + Math.sin(time / 600) * 4;
+                  o.nameText.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
+                  break;
+                }
               }
-              case 'glow': {
-                const glowColor = o.nameText.style.color as string;
-                const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
-                const blur = 10 + Math.sin(time / 600) * 4;
-                o.nameText.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
-                break;
+              if (NEON_COLORS.has(oa.nameColor) && oa.nameAnim !== 'glow') {
+                o.nameText.setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
               }
-            }
-            if (NEON_COLORS.has(oa.nameColor) && oa.nameAnim !== 'glow') {
-              o.nameText.setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
             }
           } else {
             const ws = this._waveCharsMap.get(pk);
@@ -935,8 +968,9 @@ export abstract class BaseScene extends Phaser.Scene {
             if (entry) { entry.emitter.destroy(); this._otherAuraMap.delete(pk); }
           }
 
-          // Eye VFX — cry uses particles; blaze/frost/cosmic cycle eyeColor on the avatar texture
-          const otherEyeType = (EYE_VFX_TYPES.has(oa.eyes) || EYE_COLOR_TYPES.has(oa.eyes)) ? oa.eyes : '';
+          // Eye VFX — cry uses particles; color-cycle steps eyeColor; motion eyes
+          // (shifty/dizzy/heart) re-render on a frame cadence (the draw self-animates).
+          const otherEyeType = (EYE_VFX_TYPES.has(oa.eyes) || EYE_COLOR_TYPES.has(oa.eyes) || EYE_MOTION_TYPES.has(oa.eyes)) ? oa.eyes : '';
           if (otherEyeType && nearEnough) {
             if (EYE_COLOR_TYPES.has(otherEyeType)) {
               const pal  = EYE_CYCLE_HEX[otherEyeType];
@@ -948,6 +982,17 @@ export abstract class BaseScene extends Phaser.Scene {
                 const texKey = `${cfg2.texKeyPrefix}${pk}`;
                 if (this.textures.exists(texKey)) this.textures.remove(texKey);
                 this.textures.addCanvas(texKey, this.renderOtherAvatar({ ...oa, eyeColor: pal[step] }));
+                o.sprite.setTexture(texKey);
+              }
+            } else if (EYE_MOTION_TYPES.has(otherEyeType)) {
+              const step = eyeMotionStep(otherEyeType);
+              const prev = this._otherEyeMotionStepMap.get(pk) ?? -1;
+              if (step !== prev) {
+                this._otherEyeMotionStepMap.set(pk, step);
+                const cfg2 = this.getOtherPlayerConfig();
+                const texKey = `${cfg2.texKeyPrefix}${pk}`;
+                if (this.textures.exists(texKey)) this.textures.remove(texKey);
+                this.textures.addCanvas(texKey, this.renderOtherAvatar(oa));
                 o.sprite.setTexture(texKey);
               }
             } else {
@@ -974,6 +1019,7 @@ export abstract class BaseScene extends Phaser.Scene {
             const eyeEntry = this._otherEyeMap.get(pk);
             if (eyeEntry) { eyeEntry.left.destroy(); eyeEntry.right.destroy(); this._otherEyeMap.delete(pk); }
             this._otherEyeColorStepMap.delete(pk);
+            this._otherEyeMotionStepMap.delete(pk);
           }
         }
       }
@@ -1006,47 +1052,47 @@ export abstract class BaseScene extends Phaser.Scene {
 
     // Name tag motion
     if (this.playerName && av.nameAnim) {
-      if (av.nameAnim !== 'wave') {
+      if (!CHAR_ANIMS.has(av.nameAnim)) {
         if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName.setVisible(true); }
       }
-      this.playerName.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
-      switch (av.nameAnim) {
-        case 'bob':   this.playerName.y += Math.sin(time / 400) * 3; break;
-        case 'pulse': this.playerName.setScale(1 + Math.sin(time / 350) * 0.08); break;
-        case 'jitter':
-          this.playerName.x += (Math.random() - 0.5) * 1.5;
-          this.playerName.y += (Math.random() - 0.5) * 0.8;
-          break;
-        case 'zoom': {
-          const p = (time % 900) / 900;
-          const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
-          const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
-          this.playerName.setScale(1 + b1 * 0.2 + b2 * 0.12);
-          break;
+      if (CHAR_ANIMS.has(av.nameAnim)) {
+        const color = this.playerName.style.color as string;
+        if (!this._playerWaveSet || this._playerWaveSet.text !== this.playerName.text) {
+          if (this._playerWaveSet) this._clearWaveSet(this._playerWaveSet);
+          this.playerName.setVisible(false);
+          this._playerWaveSet = this._buildWaveSet(this.playerName.text, this.playerName, color);
         }
-        case 'swing':
-          this.playerName.setAngle(Math.sin(time / 550) * 10);
-          break;
-        case 'wave': {
-          const color = this.playerName.style.color as string;
-          if (!this._playerWaveSet || this._playerWaveSet.text !== this.playerName.text) {
-            if (this._playerWaveSet) this._clearWaveSet(this._playerWaveSet);
-            this.playerName.setVisible(false);
-            this._playerWaveSet = this._buildWaveSet(this.playerName.text, this.playerName, color);
+        this._applyCharAnim(this._playerWaveSet, this.playerName.x, this.playerName.y, time, color, av.nameAnim);
+      } else {
+        this.playerName.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+        switch (av.nameAnim) {
+          case 'bob':   this.playerName.y += Math.sin(time / 400) * 3; break;
+          case 'pulse': this.playerName.setScale(1 + Math.sin(time / 350) * 0.08); break;
+          case 'jitter':
+            this.playerName.x += (Math.random() - 0.5) * 1.5;
+            this.playerName.y += (Math.random() - 0.5) * 0.8;
+            break;
+          case 'zoom': {
+            const p = (time % 900) / 900;
+            const b1 = p < 0.22 ? Math.sin((p / 0.22) * Math.PI) : 0;
+            const b2 = p >= 0.28 && p < 0.46 ? Math.sin(((p - 0.28) / 0.18) * Math.PI) : 0;
+            this.playerName.setScale(1 + b1 * 0.2 + b2 * 0.12);
+            break;
           }
-          this._applyWaveSet(this._playerWaveSet, this.playerName.x, this.playerName.y, time, color);
-          break;
+          case 'swing':
+            this.playerName.setAngle(Math.sin(time / 550) * 10);
+            break;
+          case 'glow': {
+            const glowColor = this.playerName.style.color as string;
+            const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
+            const blur = 10 + Math.sin(time / 600) * 4;
+            this.playerName.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
+            break;
+          }
         }
-        case 'glow': {
-          const glowColor = this.playerName.style.color as string;
-          const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
-          const blur = 10 + Math.sin(time / 600) * 4;
-          this.playerName.setAlpha(flicker).setShadow(0, 0, glowColor, blur, false, true);
-          break;
+        if (NEON_COLORS.has(av.nameColor) && av.nameAnim !== 'glow') {
+          this.playerName.setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
         }
-      }
-      if (NEON_COLORS.has(av.nameColor) && av.nameAnim !== 'glow') {
-        this.playerName.setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
       }
     } else {
       if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName?.setVisible(true); }
@@ -1091,8 +1137,9 @@ export abstract class BaseScene extends Phaser.Scene {
       this._auraLastX = NaN;
     }
 
-    // Eye VFX — cry uses particles; blaze/frost/cosmic cycle eyeColor on the avatar texture
-    const eyeType = (EYE_VFX_TYPES.has(av.eyes) || EYE_COLOR_TYPES.has(av.eyes)) ? av.eyes : '';
+    // Eye VFX — cry uses particles; color-cycle eyes step eyeColor; motion eyes
+    // (shifty/dizzy/heart) re-render on a frame cadence (the draw self-animates).
+    const eyeType = (EYE_VFX_TYPES.has(av.eyes) || EYE_COLOR_TYPES.has(av.eyes) || EYE_MOTION_TYPES.has(av.eyes)) ? av.eyes : '';
     if (EYE_COLOR_TYPES.has(eyeType) && this.playerSprite) {
       const pal  = EYE_CYCLE_HEX[eyeType];
       const step = Math.floor(time / EYE_CYCLE_MS[eyeType]) % pal.length;
@@ -1103,7 +1150,16 @@ export abstract class BaseScene extends Phaser.Scene {
         this.textures.addCanvas(this._localPlayerTexKey, canvas);
         this.playerSprite.setTexture(this._localPlayerTexKey);
       }
-    } else if (eyeType && this.playerSprite) {
+    } else if (EYE_MOTION_TYPES.has(eyeType) && this.playerSprite) {
+      const step = eyeMotionStep(eyeType);
+      if (step !== this._localEyeMotionStep) {
+        this._localEyeMotionStep = step;
+        const canvas = this.renderOtherAvatar(av); // draw computes the frame from the clock
+        if (this.textures.exists(this._localPlayerTexKey)) this.textures.remove(this._localPlayerTexKey);
+        this.textures.addCanvas(this._localPlayerTexKey, canvas);
+        this.playerSprite.setTexture(this._localPlayerTexKey);
+      }
+    } else if (eyeType && EYE_VFX_TYPES.has(eyeType) && this.playerSprite) {
       // cry — particle emitters at eye positions
       const { lx, rx, yFrac } = this.getEyePixelOffsets();
       const { dx, dy, dleft } = BaseScene.EYE_ADJUST[eyeType] ?? { dx: 0, dy: 0 };
@@ -1132,6 +1188,7 @@ export abstract class BaseScene extends Phaser.Scene {
         this._localEyeType = '';
       }
       this._localEyeColorStep = -1;
+      this._localEyeMotionStep = -1;
     }
   }
 
@@ -2244,6 +2301,8 @@ export abstract class BaseScene extends Phaser.Scene {
     this._otherEyeMap.forEach(e => { e.left.destroy(); e.right.destroy(); });
     this._otherEyeMap.clear();
     this._otherEyeColorStepMap.clear();
+    this._otherEyeMotionStepMap.clear();
     this._localEyeColorStep = -1;
+    this._localEyeMotionStep = -1;
   }
 }

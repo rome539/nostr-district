@@ -197,14 +197,14 @@ function publishWeeklyMarker(pubkey: string): void {
 // ── Scavenge rate limit (server-authoritative, keyed by pubkey) ───────────────
 // The client picks WHERE/WHEN spots appear (localStorage, random) — harmless. But
 // the RATE of scavenge mints is enforced here so clearing/editing localStorage can't
-// farm the loop. Token bucket: burst up to 3 (the spot count), refill 1 per 8 min.
-// Refill is set above the LEGIT ceiling (3 spots × 20–60-min respawn averages
-// ~4.5/hr, lucky fast-respawn streaks peak ~9/hr briefly) so a normal player is
-// never falsely blocked, while a cheater can't beat ~7.5/hr sustained.
+// farm the loop. Token bucket: burst up to 3 (the spot count), refill 1 per 5 min.
+// Refill is set above the LEGIT ceiling (3 spots × 12–36-min respawn averages
+// ~7.4/hr, lucky fast-respawn streaks peak higher briefly) so a normal player is
+// never falsely blocked, while a cheater can't beat ~12/hr sustained.
 // Per-account, survives restarts + syncs across devices.
 const SCAVENGE_FILE = '.scavenge-buckets.json';
 const SCAVENGE_CAPACITY = 3;
-const SCAVENGE_REFILL_MS = 8 * 60 * 1000;
+const SCAVENGE_REFILL_MS = 5 * 60 * 1000;
 let scavengeBuckets: Record<string, { tokens: number; lastRefill: number }> = {};
 try { if (existsSync(SCAVENGE_FILE)) scavengeBuckets = JSON.parse(readFileSync(SCAVENGE_FILE, 'utf8')); } catch {}
 
@@ -388,19 +388,19 @@ function recordFish(pubkey: string): void {
 }
 
 // ── Bounty board ──────────────────────────────────────────────────────────────
-// The oracle posts weekly wants: burn N commons/junk → mint one rare. This is the
-// economy's item SINK (commons leave circulation) and a weekly reward channel —
-// ONE claim per account per bounty, no global cap, so every resident can take
-// part each week. The price of a claim is real (your own items are destroyed),
-// and the reward tier is capped at rare — rares already drop from scavenging, so
-// this adds no new scarcity class to farm.
+// The oracle posts wants: burn N commons/junk → mint one rare. This is the
+// economy's item SINK (commons leave circulation) and a reward channel — ONE claim
+// per account per bounty. The price of a claim is real (your own items are
+// destroyed), and the reward tier is capped at rare — rares already drop from
+// scavenging, so this adds no new scarcity class to farm.
 //
-// Bounties are DETERMINISTIC from the week number (seeded PRNG over curated
-// pools), so the server needs no storage for the board itself — every deploy
-// regenerates the identical week. Only CLAIMS need persistence: warm cache in
-// memory/file + a durable oracle-signed relay marker per bounty
-// (d-tag `ndbounty_<bountyId>`, content = JSON claimant array) checked when the
-// cache is cold — the same pattern as the weekly drop.
+// The 3 regular bounties are PER-NPUB: deterministic from (period, pubkey), so each
+// player gets their own board (no two residents race for the same Pizza Receipt),
+// refreshing every 4 days. The festive holiday poster stays SHARED (seeded by
+// holiday+year). Deterministic ⇒ the server needs no storage for the board itself;
+// only CLAIMS persist: warm cache in memory/file + a durable oracle-signed relay
+// marker per bounty (d-tag `ndbounty_<bountyId>`, the bountyId now carrying the
+// pubkey so per-player claims never collide) — the same pattern as the weekly drop.
 
 // What the oracle asks for: commons + junk only (the sink tier). Junk fish are
 // deliberately in — it's the only thing old boots are good for.
@@ -413,6 +413,16 @@ const BOUNTY_WANT_POOL = [
   'oc_black_candle','oc_evil_eye','oc_spirit_board','oc_bone_dice','oc_the_tower',
   'cr_sewer_rat','cr_alley_cat','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog',
   'eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel',
+  // Expansion commons (sink for the +50 items)
+  'fish_reed_perch','fish_glass_minnow',
+  'hw_trackball','hw_vacuum_tube',
+  'st_pawn_ticket','st_numbers_slip',
+  'oc_salt_circle','oc_the_moon','oc_pendulum',
+  'cr_fire_squirrel','cr_subway_possum','cr_alley_roach',
+  'eats_vending_sandwich','eats_street_skewer','eats_cold_brew',
+  'fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone',
+  'rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid',
+  'ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass',
 ];
 // What the oracle pays: non-fish rares (fish stay fishing-only; legendaries are
 // never bounty rewards — rares only, per the "no free repeatable rare+" rule the
@@ -424,18 +434,38 @@ const BOUNTY_REWARD_POOL = [
   'oc_the_fool','oc_scrying_mirror','oc_voodoo_doll','oc_grimoire',
   'cr_raccoon','cr_roost_bat','cr_white_crow','cr_pipe_snake',
   'eats_lucky_cat','eats_neon_sushi',
+  // Expansion rares (incl. the 5 demoted from legendary) — gives the new sets the
+  // same weekly bounty faucet the old sets have. Fish rares stay fishing-only.
+  'hw_logic_analyzer','hw_asic_miner',
+  'st_getaway_key','st_kingpin_cigar',
+  'hw_mainframe_core',
+  'oc_the_devil','oc_cursed_doubloon','oc_eldritch_idol',
+  'cr_gutter_crab','cr_moth_swarm','cr_sewer_gator',
+  'eats_greasy_taco','eats_fortune_cookie',
+  'fl_wild_honeycomb','fl_moonpetal','fl_mandrake','fl_elderwood_seed',
+  'rl_vinyl','rl_cartridge','rl_crt_remote',
+  'ce_blackhole_marble','ce_constellation_map','ce_comet_fragment',
 ];
 // Legendary weeks: ~1 in 6 weeks (seeded) the third poster offers a specific
 // legendary — but wants RARES burned, not commons, so each copy costs 3 rares
 // (a sink ladder: commons→rare, rares→legendary). No lottery on normal claims:
 // rare-tier bounties always pay exactly what the poster shows.
 const BOUNTY_LEGENDARY_POOL = [
-  'hw_quantum_key','hw_mainframe_core','st_zk_proof','st_kingpin_ledger',
+  'hw_quantum_key','st_zk_proof','st_kingpin_ledger',
   'lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl',
   'hw_zero_day','st_dons_ring','lo_genesis_seed',
+  'ce_fallen_star',      // Falling Sky capstone
+  'eats_chefs_special',  // eats capstone (moved here from hardware's Mainframe Core)
+  'rl_rotary_phone',     // Analog Era capstone
 ];
-const BOUNTY_LEGENDARY_WEEK_CHANCE = 1 / 6; // seeded; deterministic per week
-const BOUNTY_COUNT = 3;       // bounties per week
+// The board refreshes every 4 DAYS (not weekly): faucet + sink both run ~1.75× faster,
+// which fixes casual common-overflow and speeds casual completion. Uses its own period
+// constant — MS_7D still drives the weekly item drop.
+const BOUNTY_PERIOD_MS = 4 * 24 * 60 * 60 * 1000;
+// ~1 in 10.5 periods keeps the legendary bounty at its original ~42-day cadence
+// (4 days × 10.5 = 42) even though the board itself now turns over every 4 days.
+const BOUNTY_LEGENDARY_WEEK_CHANCE = 1 / 10.5; // seeded; deterministic per period
+const BOUNTY_COUNT = 3;       // bounties per period
 
 // Deterministic PRNG so every server instance derives the same weekly board.
 function mulberry32(seed: number): () => number {
@@ -451,9 +481,20 @@ function mulberry32(seed: number): () => number {
 
 interface Bounty { id: string; wants: { itemId: string; qty: number }[]; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number; holiday?: boolean }
 
-function getWeekBounties(): Bounty[] {
-  const week = Math.floor(Date.now() / MS_7D);
-  const rng = mulberry32(week * 2654435761);
+// FNV-1a hash of a pubkey → 32-bit seed component, so each npub gets its own board.
+function pkHash(pk: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < pk.length; i++) { h ^= pk.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+function getWeekBounties(pubkey: string): Bounty[] {
+  const period = Math.floor(Date.now() / BOUNTY_PERIOD_MS);
+  // Per-npub board: the seed mixes the period with a hash of the pubkey, so every
+  // player gets their OWN deterministic set of bounties each period (the regular 3).
+  // No storage needed — identical for a given (period, npub) on any server instance.
+  // The festive holiday poster below stays SHARED (seeded by holiday+year, not pubkey).
+  const rng = mulberry32(((period * 2654435761) ^ pkHash(pubkey)) >>> 0);
   const pick = <T>(arr: T[], taken: Set<T>): T => {
     let v: T;
     do { v = arr[Math.floor(rng() * arr.length)]; } while (taken.has(v));
@@ -464,29 +505,35 @@ function getWeekBounties(): Bounty[] {
   const bounties: Bounty[] = [];
   for (let n = 0; n < BOUNTY_COUNT; n++) {
     const usedWants = new Set<string>();
-    // 3+2 = 5 commons burned per claim (was 2+1). The faucet (~25-50 low-tier
-    // items/wk for an active player) outran a 9/wk sink ~3-5×; 15/wk max burn
-    // puts the board near parity for casual players. Legendary-week (rares) and
-    // festive (holiday window) posters keep their own smaller quantities.
+    // 5 DISTINCT commons, 1 each (still 5 burned/claim, ~26/wk at the 4-day cadence).
+    // A scavenger's stash is a broad spread — 1-2 of many commons, rarely 3 of one —
+    // so "3× of one specific item" was often unclaimable even with a full inventory.
+    // Asking 1× each of five different items matches what people actually hold, so the
+    // sink fires far more often and drains variety instead of grinding one item.
     const wants = [
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 3 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 2 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
     ];
     bounties.push({
-      id: `bounty_${week}_${n}`,
+      id: `bounty_${period}_${pubkey}_${n}`,
       wants,
       rewardItemId: pick(BOUNTY_REWARD_POOL, usedRewards),
       tier: 'rare',
-      endsAt: (week + 1) * MS_7D,
+      endsAt: (period + 1) * BOUNTY_PERIOD_MS,
     });
   }
-  // Legendary week (seeded, after the normal picks so the rng sequence is stable):
+  // Legendary period (seeded, after the normal picks so the rng sequence is stable):
   // replace the last poster with a rares→legendary trade. Same id → same claims.
   if (rng() < BOUNTY_LEGENDARY_WEEK_CHANCE) {
     const usedWants = new Set<string>();
     const last = bounties[BOUNTY_COUNT - 1];
+    // 3 distinct rares, 1 each (same logic — you rarely hold 2 of one specific rare).
     last.wants = [
-      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 2 },
+      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
+      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
       { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
     ];
     last.rewardItemId = BOUNTY_LEGENDARY_POOL[Math.floor(rng() * BOUNTY_LEGENDARY_POOL.length)];
@@ -497,7 +544,7 @@ function getWeekBounties(): Bounty[] {
   // window — burn the holiday's lower-tier items, get one of its legendaries.
   // Seeded by (holiday, year): identical all window, fresh claims every year
   // (the year is in the id, so the claims marker resets annually). It expires
-  // with the window itself, not the weekly cycle.
+  // with the window itself, not the 4-day cycle.
   const hol = activeHolidayDrop();
   if (hol) {
     const year = new Date().getFullYear();
@@ -558,18 +605,50 @@ async function loadBountyClaims(bountyId: string): Promise<string[]> {
   return bountyClaims[bountyId] ?? [];
 }
 
-function recordBountyClaim(bountyId: string, pubkey: string): void {
+function recordBountyClaim(bountyId: string, pubkey: string, expiresAtMs: number): void {
   const list = bountyClaims[bountyId] ?? (bountyClaims[bountyId] = []);
   if (!list.includes(pubkey)) list.push(pubkey);
   try { writeFileSync(BOUNTY_FILE, JSON.stringify(bountyClaims)); } catch {}
   if (!ORACLE_SK) return;
+  // The marker is only read while the bounty is still claimable (past-period ids are
+  // rejected before loadBountyClaims runs), so tag it to expire at the bounty's end
+  // (+1d skew buffer). NIP-40-aware relays then drop it automatically — this is what
+  // actually bounds the DURABLE store, since per-npub markers would otherwise pile up
+  // forever (the local .bounty-claims.json is wiped on each redeploy anyway).
+  const expirationSec = Math.floor(expiresAtMs / 1000) + 86400;
   publishToRelays(finalizeEvent({
     kind: 30078,
     pubkey: ORACLE_PUBKEY,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', `ndbounty_${bountyId}`], ['t', 'ndbounty']],
+    tags: [['d', `ndbounty_${bountyId}`], ['t', 'ndbounty'], ['expiration', String(expirationSec)]],
     content: JSON.stringify(list),
   }, ORACLE_SK));
+}
+
+// Drop claim records for bounties whose period has already ended — they can never be
+// claimed again (a fresh (period, npub) board has replaced them), so the record is dead
+// weight. Per-npub boards make these accumulate ~3 per player per period; pruning keeps
+// .bounty-claims.json bounded. Regular id = `bounty_<period>_<pubkey>_<n>`; festive id =
+// `bounty_hol_<holidayId>_<year>` (pruned once its year is in the past).
+function pruneBountyClaims(): void {
+  const curPeriod = Math.floor(Date.now() / BOUNTY_PERIOD_MS);
+  const curYear = new Date().getFullYear();
+  let removed = 0;
+  for (const id of Object.keys(bountyClaims)) {
+    let dead = false;
+    if (id.startsWith('bounty_hol_')) {
+      const year = parseInt(id.slice(id.lastIndexOf('_') + 1), 10);
+      dead = Number.isFinite(year) && year < curYear;
+    } else {
+      const period = parseInt(id.split('_')[1] ?? '', 10);
+      dead = Number.isFinite(period) && period < curPeriod;
+    }
+    if (dead) { delete bountyClaims[id]; bountyMarkerFetched.delete(id); removed++; }
+  }
+  if (removed) {
+    try { writeFileSync(BOUNTY_FILE, JSON.stringify(bountyClaims)); } catch {}
+    console.log(`[Bounty] pruned ${removed} expired claim record(s)`);
+  }
 }
 
 
@@ -585,9 +664,9 @@ function recordBountyClaim(bountyId: string, pubkey: string): void {
 // every ~3 active hours, undercutting fishing and bounty legendary weeks. Now 3%
 // ≈ one per ~6-8 active hours; Gold aura ≈ a season of regular play solo.
 const SCAVENGE_TIER_ODDS: { tier: string; p: number }[] = [
-  { tier: 'legendary', p: 0.03 },
+  { tier: 'legendary', p: 0.04 },
   { tier: 'rare',      p: 0.20 },
-  { tier: 'common',    p: 0.77 },
+  { tier: 'common',    p: 0.76 },
 ];
 // Holiday spots keep GENEROUS legendary odds on purpose: the window is only ~7
 // days, and seasonal legendaries aren't part of the Gold set — the short window
@@ -608,9 +687,9 @@ const SCAV_TIER_FALLBACK: Record<string, string[]> = {
 const ITEM_RARITY = new Map<string, string>();
 {
   const tiers: Record<string, string[]> = {
-    legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','hw_mainframe_core','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hw_zero_day','st_dons_ring','lo_genesis_seed'],
-    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_firecracker','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
-    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_sparkler','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog'],
+    legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hw_zero_day','st_dons_ring','lo_genesis_seed','ce_fallen_star','eats_chefs_special','rl_rotary_phone'],
+    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_firecracker','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','eats_greasy_taco','eats_fortune_cookie','oc_the_devil','oc_cursed_doubloon','cr_gutter_crab','cr_moth_swarm','st_getaway_key','hw_logic_analyzer','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','rl_vinyl','rl_cartridge','rl_crt_remote','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','fish_aurora_lungfish','oc_eldritch_idol','cr_sewer_gator','hw_asic_miner','fl_elderwood_seed','hw_mainframe_core','st_kingpin_cigar'],
+    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_sparkler','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_vending_sandwich','eats_street_skewer','eats_cold_brew','oc_salt_circle','oc_the_moon','oc_pendulum','cr_fire_squirrel','cr_subway_possum','cr_alley_roach','st_pawn_ticket','st_numbers_slip','hw_trackball','hw_vacuum_tube','fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','fish_reed_perch','fish_glass_minnow'],
     junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern','eats_day_old_bagel'],
   };
   for (const [rarity, ids] of Object.entries(tiers)) for (const id of ids) ITEM_RARITY.set(id, rarity);
@@ -618,11 +697,11 @@ const ITEM_RARITY = new Map<string, string>();
 
 // Per-scene pools (must match SCENE_POOLS in tradeItemStore.ts)
 const SCAV_SCENE_POOLS: Record<string, string[]> = {
-  hub: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'],
-  alley: ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
-  woods: ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
+  hub: ['eats_chefs_special','st_dons_ring','st_kingpin_ledger','st_zk_proof','eats_fortune_cookie','eats_greasy_taco','eats_lucky_cat','eats_midnight_special','eats_neon_sushi','rl_cartridge','rl_crt_remote','rl_rotary_phone','rl_vinyl','st_blackmarket_map','st_contraband_pkg','st_forged_id','st_getaway_key','st_kingpin_cigar','st_skeleton_key','st_stash_key','st_wiretap','eats_cart_hotdog','eats_cold_brew','eats_day_old_bagel','eats_dumpling','eats_energy_drink','eats_instant_ramen','eats_street_skewer','eats_vending_sandwich','rl_arcade_token','rl_cassette','rl_floppy','rl_polaroid','st_brass_knuckles','st_burner_phone','st_burner_sim','st_counterfeit_bill','st_ghost_token','st_lockpick_set','st_numbers_slip','st_pawn_ticket','st_switchblade','cr_night_owl','cr_gutter_crab','cr_moth_swarm','cr_raccoon','cr_roost_bat','cr_white_crow','cr_alley_cat','cr_fire_squirrel','cr_junkyard_dog','cr_sewer_rat','cr_street_pigeon'],
+  alley: ['eats_chefs_special','hw_quantum_key','hw_zero_day','oc_hanged_man','st_dons_ring','st_kingpin_ledger','st_zk_proof','eats_fortune_cookie','eats_greasy_taco','eats_lucky_cat','eats_midnight_special','eats_neon_sushi','hw_asic_miner','hw_burner_pager','hw_encrypted_drive','hw_gpu_card','hw_logic_analyzer','hw_oscilloscope','hw_rogue_dish','hw_signal_relay','oc_cursed_doubloon','oc_eldritch_idol','oc_grimoire','oc_scrying_mirror','oc_the_devil','oc_the_fool','oc_voodoo_doll','st_blackmarket_map','st_contraband_pkg','st_forged_id','st_getaway_key','st_kingpin_cigar','st_skeleton_key','st_stash_key','st_wiretap','eats_cart_hotdog','eats_cold_brew','eats_day_old_bagel','eats_dumpling','eats_energy_drink','eats_instant_ramen','eats_street_skewer','eats_vending_sandwich','hw_capacitor','hw_data_chip','hw_ram_stick','hw_ribbon_cable','hw_solder_iron','hw_trackball','hw_vacuum_tube','oc_black_candle','oc_bone_dice','oc_evil_eye','oc_pendulum','oc_salt_circle','oc_spirit_board','oc_the_moon','oc_the_tower','st_brass_knuckles','st_burner_phone','st_burner_sim','st_counterfeit_bill','st_ghost_token','st_lockpick_set','st_numbers_slip','st_pawn_ticket','st_switchblade','lo_manifesto','lo_relay_key'],
+  woods: ['ce_fallen_star','hw_quantum_key','hw_zero_day','ce_comet_fragment','fl_elderwood_seed','fl_moonpetal','fl_wild_honeycomb','hw_asic_miner','hw_burner_pager','hw_encrypted_drive','hw_gpu_card','hw_logic_analyzer','hw_mainframe_core','hw_oscilloscope','hw_rogue_dish','hw_signal_relay','ce_moonstone','ce_stardust','fl_glowcap','fl_pinecone','hw_capacitor','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_ram_stick','hw_ribbon_cable','hw_solder_iron','hw_trackball','hw_vacuum_tube','lo_genesis_seed','lo_manifesto','lo_satoshi_email','lo_genesis_fragment','lo_node_map','lo_pizza_receipt','lo_pow_relic','lo_whitepaper_page','lo_hash_stone','lo_mempool_vial','lo_paper_wallet','lo_relay_key','lo_satoshi_coin','lo_seed_phrase','cr_gutter_crab','cr_pipe_snake','cr_raccoon','cr_sewer_gator','cr_white_crow','cr_alley_cat','cr_alley_roach','cr_fire_squirrel','cr_gutter_frog','cr_sewer_rat','cr_street_pigeon','cr_subway_possum'],
   rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_gpu_card','hw_oscilloscope','hw_zero_day'],
-  cabin: ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire'],
+  cabin: ['ce_fallen_star','oc_hanged_man','ce_blackhole_marble','ce_constellation_map','fl_mandrake','fl_wild_honeycomb','oc_cursed_doubloon','oc_eldritch_idol','oc_grimoire','oc_scrying_mirror','oc_the_devil','oc_the_fool','oc_voodoo_doll','rl_vinyl','ce_meteor_shard','ce_solar_glass','fl_fox_fern','fl_nettle_sprig','oc_black_candle','oc_bone_dice','oc_evil_eye','oc_pendulum','oc_salt_circle','oc_spirit_board','oc_the_moon','oc_the_tower','lo_genesis_seed','lo_manifesto','lo_satoshi_email','lo_block_plaque','lo_genesis_fragment','lo_node_map','lo_pizza_receipt','lo_pow_relic','lo_whitepaper_page','lo_hash_stone','lo_lightning_bolt','lo_mempool_vial','lo_node_badge','lo_paper_wallet','lo_relay_key','lo_satoshi_coin','lo_seed_phrase','cr_night_owl','cr_moth_swarm','cr_pipe_snake','cr_roost_bat','cr_sewer_gator','cr_alley_cat','cr_alley_roach','cr_gutter_frog','cr_junkyard_dog','cr_sewer_rat','cr_subway_possum'],
 };
 
 // Holiday drop windows (must match HOLIDAY_DROPS in tradeItemStore.ts)
@@ -784,6 +863,16 @@ const VALID_ITEM_IDS = new Set([
   'hol_rpow_token','hol_running_btc',
   'hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_gift_box','hol_frost_coin',
   'hol_ostrich_egg','hol_purple_pill','hol_relay_stone','hol_zap_bolt','hol_first_note',
+  // Evergreen expansion II (+50 across 5 deepened categories + Flora/Relics/Celestial) and +3 fish
+  'fish_reed_perch','fish_glass_minnow','fish_aurora_lungfish',
+  'hw_trackball','hw_vacuum_tube','hw_logic_analyzer','hw_asic_miner',
+  'st_pawn_ticket','st_numbers_slip','st_getaway_key','st_kingpin_cigar',
+  'oc_salt_circle','oc_the_moon','oc_pendulum','oc_the_devil','oc_cursed_doubloon','oc_eldritch_idol',
+  'cr_fire_squirrel','cr_subway_possum','cr_alley_roach','cr_gutter_crab','cr_moth_swarm','cr_sewer_gator',
+  'eats_vending_sandwich','eats_street_skewer','eats_cold_brew','eats_greasy_taco','eats_fortune_cookie','eats_chefs_special',
+  'fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','fl_elderwood_seed',
+  'rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','rl_vinyl','rl_cartridge','rl_crt_remote','rl_rotary_phone',
+  'ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','ce_fallen_star',
 ]);
 
 // Valid rooms each item category can be minted from
@@ -793,8 +882,11 @@ const ITEM_ROOM_WHITELIST: Record<string, string[]> = {
   street:   ['alley', 'hub'],
   lore:     ['woods', 'alley', 'lounge', 'relay', 'cabin'],
   occult:   ['alley', 'cabin'],
-  critters: ['hub', 'alley', 'woods', 'lounge'],
+  critters: ['hub', 'alley', 'woods', 'cabin', 'lounge'],
   eats:     ['hub', 'alley', 'lounge'], // street food — downtown
+  flora:    ['woods', 'cabin'],   // forage in the woods
+  relics:   ['hub', 'cabin'],     // analog junk
+  celestial:['woods', 'cabin'],   // fallen from the sky
   holiday:  ['hub', 'alley', 'woods', 'cabin', 'lounge', 'relay'], // holiday drops spawn anywhere
 };
 
@@ -807,6 +899,9 @@ function getCategoryFromId(itemId: string): string {
   if (itemId.startsWith('oc_'))    return 'occult';
   if (itemId.startsWith('cr_'))    return 'critters';
   if (itemId.startsWith('eats_'))  return 'eats';
+  if (itemId.startsWith('fl_'))    return 'flora';
+  if (itemId.startsWith('rl_'))    return 'relics';
+  if (itemId.startsWith('ce_'))    return 'celestial';
   return '';
 }
 
@@ -1128,6 +1223,10 @@ for (const id of [...Object.values(SCAV_SCENE_POOLS).flat(), ...SCAV_HOLIDAY_DRO
 
 const wss = new WebSocketServer({ port: 3100 });
 console.log('[Presence] Server running on ws://localhost:3100');
+
+// Bounty claim ledger cleanup — on boot (covers restart-heavy deploys) + every 8 days.
+pruneBountyClaims();
+setInterval(pruneBountyClaims, 8 * 24 * 60 * 60 * 1000);
 
 // Track which connections have responded to the last ping.
 // When a mobile client kills the app without sending a close frame the OS drops
@@ -1588,7 +1687,7 @@ wss.on('connection', (ws) => {
       if (msg.type === 'bounty_list_request' && myPubkey) {
         const me = myPubkey;
         (async () => {
-          const bounties = getWeekBounties();
+          const bounties = getWeekBounties(me);
           const out = [];
           for (const b of bounties) {
             const claims = await loadBountyClaims(b.id);
@@ -1611,8 +1710,8 @@ wss.on('connection', (ws) => {
         const instanceIds: string[] = Array.isArray(msg.instanceIds)
           ? [...new Set(msg.instanceIds.filter((x: unknown) => typeof x === 'string'))] : [];
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'bounty_claim_error', bountyId, reason }));
-        const bounty = getWeekBounties().find(b => b.id === bountyId);
-        if (!bounty) { fail('expired'); return; } // last week's board, or forged id
+        const bounty = getWeekBounties(me).find(b => b.id === bountyId);
+        if (!bounty) { fail('expired'); return; } // last period's board, another npub's, or forged id
         // In-flight lock: the already_claimed check below involves a relay fetch,
         // so two PARALLEL claims from one account could both pass it and double-mint.
         // The UI can't do this (button disables) — this stops scripted clients.
@@ -1643,7 +1742,7 @@ wss.on('connection', (ws) => {
           const reward = mintItem(me, bounty.rewardItemId, 'bounty');
           if (!reward) { fail('mint_failed'); return; }
           publishToRelays(reward);
-          recordBountyClaim(bountyId, me);
+          recordBountyClaim(bountyId, me, bounty.endsAt);
           const claimedNow = (bountyClaims[bountyId] ?? []).length;
           console.log(`[Bounty] ${bountyId} claimed by ${me.slice(0,8)}… (${claimedNow} total) — burned ${instanceIds.length}, minted ${bounty.rewardItemId}`);
           ws.send(JSON.stringify({

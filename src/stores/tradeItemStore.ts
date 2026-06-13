@@ -11,7 +11,7 @@ import { DEFAULT_RELAYS } from '../nostr/relayManager';
 // ── Item definitions ──────────────────────────────────────────────────────────
 
 export type ItemRarity = 'common' | 'rare' | 'legendary' | 'junk';
-export type ItemCategory = 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'eats' | 'holiday';
+export type ItemCategory = 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'eats' | 'holiday' | 'flora' | 'relics' | 'celestial';
 
 export interface ItemDef {
   id: string;
@@ -64,6 +64,10 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'fish_enchanted_trident', name: 'Enchanted Trident',  category: 'fish', rarity: 'legendary', emoji: '🔱', kg: '8.4',  description: 'The prongs glow under moonlight.' },
   { id: 'fish_coelacanth',        name: 'Leviathan Coelacanth',category:'fish', rarity: 'legendary', emoji: '🐟', kg: '91.2', description: 'A living fossil, 65 million years old.' },
   { id: 'fish_meteor',            name: 'Meteor from Andromeda',category:'fish',rarity: 'legendary', emoji: '☄️', kg: '???',  description: '2.5 million light years of it.' },
+  // ── Fish: Expansion ─────────────────────────────────────────────────────────
+  { id: 'fish_reed_perch',        name: 'Reed Perch',         category: 'fish', rarity: 'common',    emoji: '🐟', kg: '0.5', description: 'Hides in the shallows.' },
+  { id: 'fish_glass_minnow',      name: 'Glass Minnow',       category: 'fish', rarity: 'common',    emoji: '🐟', kg: '0.1', description: 'You can see its heartbeat.' },
+  { id: 'fish_aurora_lungfish',   name: 'Aurora Lungfish',    category: 'fish', rarity: 'rare',      emoji: '🐠', kg: '2.1', description: 'Breathes the night air.' },
   // ── Hardware ────────────────────────────────────────────────────────────────
   { id: 'hw_data_chip',       name: 'Data Chip',          category: 'hardware', rarity: 'common',    emoji: '💾', description: 'Encrypted. Contents unknown.' },
   { id: 'hw_circuit_board',   name: 'Circuit Board',      category: 'hardware', rarity: 'common',    emoji: '🔌', description: 'Salvaged from a relay node.' },
@@ -74,7 +78,7 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'hw_burner_pager',    name: 'Burner Pager',       category: 'hardware', rarity: 'rare',      emoji: '📟', description: 'Buzzes with numbers that don\'t exist.' },
   { id: 'hw_rogue_dish',      name: 'Rogue Dish',         category: 'hardware', rarity: 'rare',      emoji: '🛰️', description: 'Pointed at no satellite anyone admits to.' },
   { id: 'hw_quantum_key',     name: 'Quantum Key',        category: 'hardware', rarity: 'legendary', emoji: '🔑', description: 'Opens things that have no lock.' },
-  { id: 'hw_mainframe_core',  name: 'Mainframe Core',     category: 'hardware', rarity: 'legendary', emoji: '🖥️', description: 'The district\'s first node, still humming under the street.' },
+  { id: 'hw_mainframe_core',  name: 'Mainframe Core',     category: 'hardware', rarity: 'rare',      emoji: '🖥️', description: 'The district\'s first node, still humming under the street.' },
   // ── Street ──────────────────────────────────────────────────────────────────
   { id: 'st_burner_phone',    name: 'Burner Phone',       category: 'street',   rarity: 'common',    emoji: '📱', description: 'Prepaid. Untraceable. Already warm.' },
   { id: 'st_ghost_token',     name: 'Ghost Token',        category: 'street',   rarity: 'common',    emoji: '👻', description: 'Proof of nothing. That\'s the point.' },
@@ -200,6 +204,69 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'eats_lucky_cat',     name: 'Lucky Cat Coin',     category: 'eats',     rarity: 'rare',      emoji: '🪙', description: 'Beckons sats. Sometimes works.' },
   { id: 'eats_neon_sushi',    name: 'Neon Sushi',         category: 'eats',     rarity: 'rare',      emoji: '🍣', description: 'Glows faintly. Still raw.' },
   { id: 'eats_midnight_special', name: 'Midnight Special', category: 'eats',    rarity: 'rare',      emoji: '🍲', description: 'The off-menu bowl. You have to know to ask.' },
+
+  // ── Evergreen expansion II (+50: deepen 5 categories, add Flora/Relics/Celestial) ──
+  // Eats (+6) — Greasy Spoon
+  { id: 'eats_vending_sandwich', name: 'Vending Sandwich',  category: 'eats',     rarity: 'common',    emoji: '🥪', description: 'Mystery filling. Machine slot C4.' },
+  { id: 'eats_street_skewer',   name: 'Street Skewer',      category: 'eats',     rarity: 'common',    emoji: '🍢', description: 'Grilled over a trash-can fire.' },
+  { id: 'eats_cold_brew',       name: 'Cold Brew Can',      category: 'eats',     rarity: 'common',    emoji: '🥤', description: 'Caffeine with a side of regret.' },
+  { id: 'eats_greasy_taco',     name: 'Greasy Taco',        category: 'eats',     rarity: 'rare',      emoji: '🌮', description: 'Three napkins, minimum.' },
+  { id: 'eats_fortune_cookie',  name: 'Fortune Cookie',     category: 'eats',     rarity: 'rare',      emoji: '🥠', description: 'The slip just reads: HODL.' },
+  { id: 'eats_chefs_special',   name: "Chef's Special",     category: 'eats',     rarity: 'legendary', emoji: '🍱', description: 'Off-menu. Nobody knows what\'s in it.' },
+  // Occult (+6) — The Arcane
+  { id: 'oc_salt_circle',       name: 'Salt Circle',        category: 'occult',   rarity: 'common',    emoji: '🧂', description: 'Keeps things out. Or in.' },
+  { id: 'oc_the_moon',          name: 'The Moon',           category: 'occult',   rarity: 'common',    emoji: '🌙', description: 'Card XVIII. Nothing is as it seems.' },
+  { id: 'oc_pendulum',          name: 'Pendulum',           category: 'occult',   rarity: 'common',    emoji: '⚖️', description: 'It swings on its own.' },
+  { id: 'oc_the_devil',         name: 'The Devil',          category: 'occult',   rarity: 'rare',      emoji: '😈', description: 'Card XV. The chains are loose. You stay anyway.' },
+  { id: 'oc_cursed_doubloon',   name: 'Cursed Doubloon',    category: 'occult',   rarity: 'rare',      emoji: '🪙', description: 'Spend it, and it\'s back by morning.' },
+  { id: 'oc_eldritch_idol',     name: 'Eldritch Idol',      category: 'occult',   rarity: 'rare',      emoji: '🗿', description: 'Do not look directly at it.' },
+  // Critters (+6) — Strays
+  { id: 'cr_fire_squirrel',     name: 'Fire-Escape Squirrel',category: 'critters',rarity: 'common',   emoji: '🐿️', description: 'Lives six floors up. Pays no rent.' },
+  { id: 'cr_subway_possum',     name: 'Subway Possum',      category: 'critters', rarity: 'common',    emoji: '🐀', description: 'Rides the late train. Plays dead at your stop.' },
+  { id: 'cr_alley_roach',       name: 'Alley Roach',        category: 'critters', rarity: 'common',    emoji: '🪳', description: 'It\'ll outlive the district.' },
+  { id: 'cr_gutter_crab',       name: 'Gutter Crab',        category: 'critters', rarity: 'rare',      emoji: '🦀', description: 'Came up the storm drain. Stayed.' },
+  { id: 'cr_moth_swarm',        name: 'Neon Moth Swarm',    category: 'critters', rarity: 'rare',      emoji: '🦋', description: 'Drawn to every sign in the city.' },
+  { id: 'cr_sewer_gator',       name: 'Sewer Gator',        category: 'critters', rarity: 'rare',      emoji: '🐊', description: 'Urban legend, confirmed.' },
+  // Street (+4) — Off the Books
+  { id: 'st_pawn_ticket',       name: 'Pawn Ticket',        category: 'street',   rarity: 'common',    emoji: '🎫', description: 'Claim by Friday or it\'s gone.' },
+  { id: 'st_numbers_slip',      name: 'Numbers Slip',       category: 'street',   rarity: 'common',    emoji: '🎰', description: 'Today\'s rigged odds.' },
+  { id: 'st_getaway_key',       name: 'Getaway Key',        category: 'street',   rarity: 'rare',      emoji: '🔑', description: 'Engine\'s still warm.' },
+  { id: 'st_kingpin_cigar',     name: "Kingpin's Cigar",    category: 'street',   rarity: 'rare',      emoji: '🚬', description: 'Lit only for closed deals.' },
+  // Hardware (+4) — Dead Hardware
+  { id: 'hw_trackball',         name: 'Trackball Mouse',    category: 'hardware', rarity: 'common',    emoji: '🖲️', description: 'Roll the ball. Pray.' },
+  { id: 'hw_vacuum_tube',       name: 'Vacuum Tube',        category: 'hardware', rarity: 'common',    emoji: '🔦', description: 'Glows when it works.' },
+  { id: 'hw_logic_analyzer',    name: 'Logic Analyzer',     category: 'hardware', rarity: 'rare',      emoji: '📟', description: 'Reads the bus nobody documents.' },
+  { id: 'hw_asic_miner',        name: 'ASIC Miner',         category: 'hardware', rarity: 'rare',      emoji: '⛏️', description: 'Still warm. Still hashing.' },
+
+  // ── Flora 🌿 (NEW) — Undergrowth set / Spores aura — drops in woods ───────────
+  { id: 'fl_glowcap',           name: 'Glowcap Mushroom',   category: 'flora',    rarity: 'common',    emoji: '🍄', description: 'Lights the path it grows along.' },
+  { id: 'fl_fox_fern',          name: 'Fox Fern',           category: 'flora',    rarity: 'common',    emoji: '🌿', description: 'Curls shut when you reach for it.' },
+  { id: 'fl_nettle_sprig',      name: 'Nettle Sprig',       category: 'flora',    rarity: 'common',    emoji: '🌱', description: 'Stings on principle.' },
+  { id: 'fl_pinecone',          name: 'Resin Pinecone',     category: 'flora',    rarity: 'common',    emoji: '🌲', description: 'Sticky with old sap.' },
+  { id: 'fl_wild_honeycomb',    name: 'Wild Honeycomb',     category: 'flora',    rarity: 'rare',      emoji: '🍯', description: 'Still guarded. Move slow.' },
+  { id: 'fl_moonpetal',         name: 'Moonpetal Bloom',    category: 'flora',    rarity: 'rare',      emoji: '🌸', description: 'Opens only at midnight.' },
+  { id: 'fl_mandrake',          name: 'Mandrake Root',      category: 'flora',    rarity: 'rare',      emoji: '🪵', description: 'It screamed when pulled.' },
+  { id: 'fl_elderwood_seed',    name: 'Elderwood Seed',     category: 'flora',    rarity: 'rare',      emoji: '🌰', description: 'Older than the district itself.' },
+
+  // ── Relics 🎞 (NEW) — Analog Era set / VHS name color — drops in hub + cabin ──
+  { id: 'rl_cassette',          name: 'Cassette Tape',      category: 'relics',   rarity: 'common',    emoji: '📼', description: 'Side B, rewound and ready.' },
+  { id: 'rl_arcade_token',      name: 'Arcade Token',       category: 'relics',   rarity: 'common',    emoji: '🕹️', description: 'One more credit. Always one more.' },
+  { id: 'rl_floppy',            name: 'Floppy Disk',        category: 'relics',   rarity: 'common',    emoji: '💾', description: '1.44 MB of forgotten secrets.' },
+  { id: 'rl_polaroid',          name: 'Polaroid Photo',     category: 'relics',   rarity: 'common',    emoji: '📷', description: 'Faded faces, no names.' },
+  { id: 'rl_vinyl',             name: 'Vinyl Record',       category: 'relics',   rarity: 'rare',      emoji: '💿', description: 'Crackles like a warm fire.' },
+  { id: 'rl_cartridge',         name: 'Game Cartridge',     category: 'relics',   rarity: 'rare',      emoji: '🎮', description: 'Blow on it. Always works.' },
+  { id: 'rl_crt_remote',        name: 'CRT Remote',         category: 'relics',   rarity: 'rare',      emoji: '📺', description: 'Channel knob worn smooth.' },
+  { id: 'rl_rotary_phone',      name: 'Rotary Phone',       category: 'relics',   rarity: 'legendary', emoji: '☎️', description: 'It still rings sometimes. Don\'t answer.' },
+
+  // ── Celestial ✦ (NEW) — Falling Sky set / Nebula aura — drops in woods + cabin ─
+  { id: 'ce_stardust',          name: 'Stardust Vial',      category: 'celestial',rarity: 'common',    emoji: '✨', description: 'A pinch of somewhere else.' },
+  { id: 'ce_moonstone',         name: 'Moonstone',          category: 'celestial',rarity: 'common',    emoji: '🌑', description: 'Glows brighter as the moon wanes.' },
+  { id: 'ce_meteor_shard',      name: 'Meteor Shard',       category: 'celestial',rarity: 'common',    emoji: '☄️', description: 'Pitted from the fall.' },
+  { id: 'ce_solar_glass',       name: 'Solar Flare Glass',  category: 'celestial',rarity: 'common',    emoji: '🌞', description: 'Fused in a heat you can\'t imagine.' },
+  { id: 'ce_blackhole_marble',  name: 'Black Hole Marble',  category: 'celestial',rarity: 'rare',      emoji: '⚫', description: 'Heavier than it has any right to be.' },
+  { id: 'ce_constellation_map', name: 'Constellation Map',  category: 'celestial',rarity: 'rare',      emoji: '🗺️', description: 'Charts stars that aren\'t there anymore.' },
+  { id: 'ce_comet_fragment',    name: 'Comet Fragment',     category: 'celestial',rarity: 'rare',      emoji: '💫', description: 'Trails a faint, cold tail.' },
+  { id: 'ce_fallen_star',       name: 'Fallen Star',        category: 'celestial',rarity: 'legendary', emoji: '⭐', description: 'Still warm from the fall.' },
 ];
 
 export const ITEM_BY_FISH_NAME: Record<string, ItemDef> = {
@@ -239,6 +306,9 @@ export const ITEM_BY_FISH_NAME: Record<string, ItemDef> = {
   'enchanted trident':      ITEM_CATALOG.find(i => i.id === 'fish_enchanted_trident')!,
   'leviathan coelacanth':   ITEM_CATALOG.find(i => i.id === 'fish_coelacanth')!,
   'meteor from Andromeda':  ITEM_CATALOG.find(i => i.id === 'fish_meteor')!,
+  'reed perch':             ITEM_CATALOG.find(i => i.id === 'fish_reed_perch')!,
+  'glass minnow':           ITEM_CATALOG.find(i => i.id === 'fish_glass_minnow')!,
+  'aurora lungfish':        ITEM_CATALOG.find(i => i.id === 'fish_aurora_lungfish')!,
 };
 
 // ── Sets ──────────────────────────────────────────────────────────────────────
@@ -336,6 +406,30 @@ export const ITEM_SETS: ItemSet[] = [
     itemIds: ITEM_CATALOG.filter(i => i.rarity === 'legendary' && i.category !== 'fish' && i.category !== 'holiday').map(i => i.id),
     rewardLabel: 'Artifact Hunter',
     rewardAura: 'gold',
+  },
+  {
+    id: 'set_flora',
+    name: 'Undergrowth',
+    description: 'Every growing thing the woods will give up.',
+    itemIds: ITEM_CATALOG.filter(i => i.category === 'flora').map(i => i.id),
+    rewardLabel: 'Forager',
+    rewardAura: 'spores',
+  },
+  {
+    id: 'set_relics',
+    name: 'Analog Era',
+    description: 'Salvaged tech from before the network.',
+    itemIds: ITEM_CATALOG.filter(i => i.category === 'relics').map(i => i.id),
+    rewardLabel: 'Collector',
+    rewardCosmetic: { slot: 'nameColor', value: 'vhs', label: 'VHS name' },
+  },
+  {
+    id: 'set_celestial',
+    name: 'Falling Sky',
+    description: 'Fragments that fell from somewhere far away.',
+    itemIds: ITEM_CATALOG.filter(i => i.category === 'celestial').map(i => i.id),
+    rewardLabel: 'Stargazer',
+    rewardAura: 'nebula',
   },
   {
     id: 'set_hardware',
@@ -1641,9 +1735,9 @@ export const FISH_KEEP_CHANCE: Record<string, number> = {
 // Rebalanced 2026-06-11: legendary 6% → 3% (6% made Gold-set legendaries farmable
 // in days and undercut the bounty board's legendary weeks).
 const TIER_ODDS: { tier: ItemRarity; p: number }[] = [
-  { tier: 'legendary', p: 0.03 },  // 3%
+  { tier: 'legendary', p: 0.04 },  // 4% (bumped from 3% — the extra 1% comes off commons)
   { tier: 'rare',      p: 0.20 },  // 20%
-  { tier: 'common',    p: 0.77 },  // 77% (commons + junk share this tier)
+  { tier: 'common',    p: 0.76 },  // 76% (commons + junk share this tier)
 ];
 const HOLIDAY_TIER_ODDS: { tier: ItemRarity; p: number }[] = [
   { tier: 'legendary', p: 0.08 },  // 8% — only a ~7-day window, and seasonal
@@ -1705,11 +1799,11 @@ export function tryDailyDrop(): void {
 
 // Pool per scene — thematic items
 const SCENE_POOLS: Record<string, string[]> = {
-  hub:     ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_blackmarket_map','st_zk_proof','st_kingpin_ledger','cr_sewer_rat','cr_alley_cat','cr_raccoon','cr_night_owl','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','cr_white_crow','cr_pipe_snake','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special'], // hub allows street + critters + eats
-  alley:   ['st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','hw_data_chip','lo_relay_key','st_zk_proof','st_kingpin_ledger','hw_quantum_key','lo_manifesto','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_sewer_rat','cr_alley_cat','cr_roost_bat','st_brass_knuckles','st_switchblade','st_burner_sim','st_stash_key','st_wiretap','st_dons_ring','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_day_old_bagel','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
-  woods:   ['lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','lo_pow_relic','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_quantum_key','hw_mainframe_core','lo_manifesto','lo_satoshi_email','cr_sewer_rat','cr_raccoon','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_ribbon_cable','hw_gpu_card','hw_oscilloscope','hw_zero_day','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','cr_white_crow','cr_pipe_snake','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron'],
+  hub:     ['eats_chefs_special','st_dons_ring','st_kingpin_ledger','st_zk_proof','eats_fortune_cookie','eats_greasy_taco','eats_lucky_cat','eats_midnight_special','eats_neon_sushi','rl_cartridge','rl_crt_remote','rl_rotary_phone','rl_vinyl','st_blackmarket_map','st_contraband_pkg','st_forged_id','st_getaway_key','st_kingpin_cigar','st_skeleton_key','st_stash_key','st_wiretap','eats_cart_hotdog','eats_cold_brew','eats_day_old_bagel','eats_dumpling','eats_energy_drink','eats_instant_ramen','eats_street_skewer','eats_vending_sandwich','rl_arcade_token','rl_cassette','rl_floppy','rl_polaroid','st_brass_knuckles','st_burner_phone','st_burner_sim','st_counterfeit_bill','st_ghost_token','st_lockpick_set','st_numbers_slip','st_pawn_ticket','st_switchblade','cr_night_owl','cr_gutter_crab','cr_moth_swarm','cr_raccoon','cr_roost_bat','cr_white_crow','cr_alley_cat','cr_fire_squirrel','cr_junkyard_dog','cr_sewer_rat','cr_street_pigeon'], // hub allows street + critters + eats + relics (+ spread gates)
+  alley:   ['eats_chefs_special','hw_quantum_key','hw_zero_day','oc_hanged_man','st_dons_ring','st_kingpin_ledger','st_zk_proof','eats_fortune_cookie','eats_greasy_taco','eats_lucky_cat','eats_midnight_special','eats_neon_sushi','hw_asic_miner','hw_burner_pager','hw_encrypted_drive','hw_gpu_card','hw_logic_analyzer','hw_oscilloscope','hw_rogue_dish','hw_signal_relay','oc_cursed_doubloon','oc_eldritch_idol','oc_grimoire','oc_scrying_mirror','oc_the_devil','oc_the_fool','oc_voodoo_doll','st_blackmarket_map','st_contraband_pkg','st_forged_id','st_getaway_key','st_kingpin_cigar','st_skeleton_key','st_stash_key','st_wiretap','eats_cart_hotdog','eats_cold_brew','eats_day_old_bagel','eats_dumpling','eats_energy_drink','eats_instant_ramen','eats_street_skewer','eats_vending_sandwich','hw_capacitor','hw_data_chip','hw_ram_stick','hw_ribbon_cable','hw_solder_iron','hw_trackball','hw_vacuum_tube','oc_black_candle','oc_bone_dice','oc_evil_eye','oc_pendulum','oc_salt_circle','oc_spirit_board','oc_the_moon','oc_the_tower','st_brass_knuckles','st_burner_phone','st_burner_sim','st_counterfeit_bill','st_ghost_token','st_lockpick_set','st_numbers_slip','st_pawn_ticket','st_switchblade','lo_manifesto','lo_relay_key'],
+  woods:   ['ce_fallen_star','hw_quantum_key','hw_zero_day','ce_comet_fragment','fl_elderwood_seed','fl_moonpetal','fl_wild_honeycomb','hw_asic_miner','hw_burner_pager','hw_encrypted_drive','hw_gpu_card','hw_logic_analyzer','hw_mainframe_core','hw_oscilloscope','hw_rogue_dish','hw_signal_relay','ce_moonstone','ce_stardust','fl_glowcap','fl_pinecone','hw_capacitor','hw_circuit_board','hw_cooling_fan','hw_data_chip','hw_ram_stick','hw_ribbon_cable','hw_solder_iron','hw_trackball','hw_vacuum_tube','lo_genesis_seed','lo_manifesto','lo_satoshi_email','lo_genesis_fragment','lo_node_map','lo_pizza_receipt','lo_pow_relic','lo_whitepaper_page','lo_hash_stone','lo_mempool_vial','lo_paper_wallet','lo_relay_key','lo_satoshi_coin','lo_seed_phrase','cr_gutter_crab','cr_pipe_snake','cr_raccoon','cr_sewer_gator','cr_white_crow','cr_alley_cat','cr_alley_roach','cr_fire_squirrel','cr_gutter_frog','cr_sewer_rat','cr_street_pigeon','cr_subway_possum'],
   rooftop: ['hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','hw_solder_iron','hw_data_chip','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','hw_quantum_key','hw_mainframe_core','cr_roost_bat','cr_night_owl','hw_ram_stick','hw_capacitor','hw_gpu_card','hw_oscilloscope','hw_zero_day'],
-  cabin:   ['lo_satoshi_coin','lo_genesis_fragment','lo_whitepaper_page','lo_seed_phrase','lo_block_plaque','lo_pow_relic','lo_relay_key','lo_manifesto','lo_satoshi_email','oc_black_candle','oc_evil_eye','oc_the_fool','oc_scrying_mirror','oc_hanged_man','cr_alley_cat','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','lo_pizza_receipt','lo_node_map','lo_genesis_seed','oc_spirit_board','oc_bone_dice','oc_the_tower','oc_voodoo_doll','oc_grimoire'],
+  cabin:   ['ce_fallen_star','oc_hanged_man','ce_blackhole_marble','ce_constellation_map','fl_mandrake','fl_wild_honeycomb','oc_cursed_doubloon','oc_eldritch_idol','oc_grimoire','oc_scrying_mirror','oc_the_devil','oc_the_fool','oc_voodoo_doll','rl_vinyl','ce_meteor_shard','ce_solar_glass','fl_fox_fern','fl_nettle_sprig','oc_black_candle','oc_bone_dice','oc_evil_eye','oc_pendulum','oc_salt_circle','oc_spirit_board','oc_the_moon','oc_the_tower','lo_genesis_seed','lo_manifesto','lo_satoshi_email','lo_block_plaque','lo_genesis_fragment','lo_node_map','lo_pizza_receipt','lo_pow_relic','lo_whitepaper_page','lo_hash_stone','lo_lightning_bolt','lo_mempool_vial','lo_node_badge','lo_paper_wallet','lo_relay_key','lo_satoshi_coin','lo_seed_phrase','cr_night_owl','cr_moth_swarm','cr_pipe_snake','cr_roost_bat','cr_sewer_gator','cr_alley_cat','cr_alley_roach','cr_gutter_frog','cr_junkyard_dog','cr_sewer_rat','cr_subway_possum'],
 };
 
 // ── Global scavenge spots ─────────────────────────────────────────────────────
@@ -1726,11 +1820,13 @@ const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: number[]
 };
 const SCAVENGE_SCENES = Object.keys(SCAVENGE_SPAWN);
 
-// Respawn delay after a spot is collected — random 20min … 1h (avg 40 →
-// ~4.5 pickups/hr across 3 spots). The server bucket refills 1/8min (~7.5/hr)
-// so honest fast-respawn streaks never hit the cooldown.
+// Respawn delay after a spot is collected — random 20min … 50min (avg 35 →
+// ~5.1 pickups/hr across 3 spots). Slowed from 12-36min so the faucet sits near
+// the bounty sink (~26 commons/wk) for moderate players instead of overflowing it;
+// the 4% legendary odds keep legendary-gated sets on pace despite fewer pickups.
+// The server bucket refills 1/5min (~12/hr) so honest streaks never hit the cooldown.
 const SCAVENGE_RESPAWN_MIN = 20 * 60 * 1000;
-const SCAVENGE_RESPAWN_MAX = 60 * 60 * 1000;
+const SCAVENGE_RESPAWN_MAX = 50 * 60 * 1000;
 
 interface ScavSlot { scene: string; x: number; readyAt: number; }
 const SLOTS_KEY = 'nd_scavenge_slots_v2';

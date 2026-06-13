@@ -2,6 +2,7 @@ import type { AvatarConfig } from '../../stores/avatarStore';
 import { imgCache, ITEM_DEFS, HAIR_DEFS, ROOM_HEAD_W, SPRITE_HAT_HEADROOM, ROOM_SPRITE_XPAD } from './assets';
 import { drawHairImg, drawHairNative, drawImgItemAuto, restorePantsThroughSkinReveals } from './drawCore';
 import { lighten, darken } from './helpers';
+import { eyeMotionStep, DIZZY_CORNERS, HEARTBEAT_PULSE, SHIFTY_DX } from './eyeCycles';
 
 // ══════════════════════════════════════
 // HAIR — room scale
@@ -299,8 +300,11 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       x.fillRect(14, oY + 5, 2, 2);
       x.shadowBlur = 0;
       break;
-    case 'heart':
-      x.globalAlpha = 0.9;
+    case 'heart': {
+      // Heartbeat: the heart's glow pulses (beat-beat-rest) via the motion phase.
+      const beat = HEARTBEAT_PULSE[eyeMotionStep('heart')];
+      x.shadowColor = col; x.shadowBlur = 1 + beat * 2.5;
+      x.globalAlpha = 0.6 + beat * 0.35;
       // left heart (3x3): two bumps on top row, full middle row, point at bottom
       x.fillRect(7, oY + 5, 1, 1); x.fillRect(9, oY + 5, 1, 1);
       x.fillRect(7, oY + 6, 3, 1);
@@ -309,7 +313,9 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       x.fillRect(14, oY + 5, 1, 1); x.fillRect(16, oY + 5, 1, 1);
       x.fillRect(14, oY + 6, 3, 1);
       x.fillRect(15, oY + 7, 1, 1);
+      x.shadowBlur = 0;
       break;
+    }
     case 'blaze':
       // Bright 2x2 pupils with flame tip row above
       x.globalAlpha = 0.65;
@@ -377,6 +383,87 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       x.fillRect(8,  oY + 7, 2, 1); // left tear
       x.fillRect(15, oY + 7, 2, 1); // right tear
       break;
+    // ── Cycling specials (col cycles via eyeColor) ──
+    case 'laser':
+      // Bright horizontal beam + glow (cycles red→orange).
+      x.shadowColor = col; x.shadowBlur = 2.5;
+      x.globalAlpha = 1;
+      x.fillRect(6, oY + 5, 4, 1); x.fillRect(14, oY + 5, 4, 1); // beams
+      x.globalAlpha = 0.55;
+      x.fillRect(6, oY + 6, 4, 1); x.fillRect(14, oY + 6, 4, 1); // under-glow
+      x.shadowBlur = 0;
+      break;
+    case 'aurora':
+      // Soft iris with faint bands above/below (cycles teal→violet).
+      x.globalAlpha = 0.9;
+      x.fillRect(8, oY + 5, 2, 2); x.fillRect(15, oY + 5, 2, 2);
+      x.globalAlpha = 0.4;
+      x.fillRect(8, oY + 4, 2, 1); x.fillRect(8, oY + 7, 2, 1);
+      x.fillRect(15, oY + 4, 2, 1); x.fillRect(15, oY + 7, 2, 1);
+      break;
+    case 'matrix':
+      // Dark cell + scattered bright code bits that flicker as the color cycles.
+      x.fillStyle = darken(col, 70); x.globalAlpha = 1;
+      x.fillRect(7, oY + 4, 3, 4); x.fillRect(14, oY + 4, 3, 4);
+      x.fillStyle = col;
+      x.fillRect(8, oY + 4, 1, 1); x.fillRect(9, oY + 5, 1, 1); x.fillRect(7, oY + 6, 1, 1); x.fillRect(8, oY + 7, 1, 1);
+      x.fillRect(15, oY + 4, 1, 1); x.fillRect(14, oY + 5, 1, 1); x.fillRect(16, oY + 6, 1, 1); x.fillRect(15, oY + 7, 1, 1);
+      break;
+    case 'toxic':
+      // Glowing acid iris with a drip (cycles green→yellow).
+      x.shadowColor = col; x.shadowBlur = 2; x.globalAlpha = 1;
+      x.fillRect(8, oY + 5, 2, 2); x.fillRect(15, oY + 5, 2, 2);
+      x.shadowBlur = 0; x.globalAlpha = 0.5;
+      x.fillRect(8, oY + 7, 1, 1); x.fillRect(15, oY + 7, 1, 1);
+      break;
+    case 'electric':
+      // Bright pupil + jagged spark above (cycles blue→white).
+      x.shadowColor = col; x.shadowBlur = 1.5; x.globalAlpha = 1;
+      x.fillRect(8, oY + 5, 2, 2); x.fillRect(15, oY + 5, 2, 2);
+      x.globalAlpha = 0.7;
+      x.fillRect(8, oY + 4, 1, 1); x.fillRect(9, oY + 3, 1, 1);
+      x.fillRect(16, oY + 4, 1, 1); x.fillRect(15, oY + 3, 1, 1);
+      x.shadowBlur = 0;
+      break;
+    // ── Static specials (use eyeColor) ──
+    case 'visor':
+      // One continuous scanline bar across BOTH eyes (cyclops/AR look).
+      x.globalAlpha = 0.85;
+      x.fillRect(6, oY + 5, 12, 2);
+      x.fillStyle = lighten(col, 45); x.globalAlpha = 1;
+      x.fillRect(6, oY + 5, 12, 1); // bright top scanline
+      x.fillStyle = col;
+      break;
+    case 'void':
+      // Near-black core with a faint glowing rim (black-hole).
+      x.fillStyle = darken(col, 82); x.globalAlpha = 1;
+      x.fillRect(7, oY + 4, 3, 4); x.fillRect(14, oY + 4, 3, 4);
+      x.fillStyle = col; x.shadowColor = col; x.shadowBlur = 2; x.globalAlpha = 0.5;
+      x.fillRect(7, oY + 4, 3, 1); x.fillRect(7, oY + 7, 3, 1);
+      x.fillRect(14, oY + 4, 3, 1); x.fillRect(14, oY + 7, 3, 1);
+      x.shadowBlur = 0;
+      break;
+    case 'dizzy': {
+      // 2x2 iris with one grey pixel rotating clockwise around the four corners.
+      const c = DIZZY_CORNERS[eyeMotionStep('dizzy')];
+      x.globalAlpha = 0.85;
+      x.fillRect(8, oY + 5, 2, 2); x.fillRect(15, oY + 5, 2, 2);
+      x.fillStyle = darken(col, 55); x.globalAlpha = 1;
+      x.fillRect(8 + c[0],  oY + 5 + c[1], 1, 1);
+      x.fillRect(15 + c[0], oY + 5 + c[1], 1, 1);
+      x.fillStyle = col;
+      break;
+    }
+    case 'shifty': {
+      // Pupils dart center→right→center→left on a loop.
+      const dx = SHIFTY_DX[eyeMotionStep('shifty')];
+      x.globalAlpha = 0.35;
+      x.fillRect(7, oY + 5, 3, 2); x.fillRect(14, oY + 5, 3, 2);   // eye base
+      x.fillStyle = darken(col, 45); x.globalAlpha = 1;             // darting pupil
+      x.fillRect(8 + dx, oY + 5, 1, 2); x.fillRect(15 + dx, oY + 5, 1, 2);
+      x.fillStyle = col;
+      break;
+    }
     default:
       x.globalAlpha = 0.7;
       x.fillRect(8, oY + 5, 2, 2);
