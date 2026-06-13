@@ -187,7 +187,8 @@ export class PollBoard {
 
   // ── Detail view ─────────────────────────────────────────────────────────────
 
-  private renderDetail(): string {
+  /** Computed detail-view state, shared by the full render and the in-place refresh. */
+  private detailState() {
     const poll = this.selectedPoll!;
     const now = Math.floor(Date.now() / 1000);
     const expired = !!(poll.endsAt && poll.endsAt < now);
@@ -196,8 +197,15 @@ export class PollBoard {
     const showResults = !!(myVote || expired);
     const canVote = !myVote && !expired && !!this.myPubkey && authStore.getState().loginMethod !== 'guest';
     const totalVotes = results?.totalVoters ?? 0;
+    return { poll, now, expired, myVote, results, showResults, canVote, totalVotes };
+  }
 
-    const optionsHtml = poll.options.map(opt => {
+  // ── Dynamic sub-sections (regenerated on results/vote changes without touching
+  //    the static question + media, so the poll image never reloads / flickers) ──
+
+  private buildOptionsHtml(s: ReturnType<PollBoard['detailState']>): string {
+    const { poll, results, showResults, canVote, totalVotes, myVote } = s;
+    return poll.options.map(opt => {
       const count = results?.totals.get(opt.id) ?? 0;
       const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
       const isMine = myVote?.includes(opt.id);
@@ -231,25 +239,50 @@ export class PollBoard {
 
       return `<div class="pb-opt-result"><div class="pb-opt-label">${this.esc(opt.label)}</div></div>`;
     }).join('');
+  }
 
-    const loadingHtml = this.isLoadingResults && showResults
-      ? `<div class="pb-loading">Loading results…</div>`
-      : '';
+  private buildMetaHtml(s: ReturnType<PollBoard['detailState']>): string {
+    const { poll, expired, totalVotes } = s;
+    const timeLeft = poll.endsAt ? this.formatTimeLeft(poll.endsAt) : null;
+    return `
+      <span class="pb-badge ${poll.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${poll.polltype === 'multiplechoice' ? 'multiple choice' : 'single choice'}</span>
+      ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
+      ${timeLeft && !expired ? `<span class="pb-meta-time">${timeLeft} left</span>` : ''}
+      <span class="pb-meta-votes">${totalVotes} voter${totalVotes !== 1 ? 's' : ''}</span>
+    `;
+  }
 
+  private buildVoteRowHtml(s: ReturnType<PollBoard['detailState']>): string {
+    const { poll, expired, showResults, canVote, myVote } = s;
     const voteBtn = canVote
       ? `<button class="pb-btn-vote" id="pb-cast-vote" ${this.isVoting ? 'disabled' : ''}>${this.isVoting ? 'Voting…' : 'Cast Vote'}</button>`
       : '';
+    if (!showResults && canVote) {
+      return `
+        <div class="pb-vote-row">
+          ${poll.polltype === 'multiplechoice' ? '<span class="pb-hint">Select all that apply</span>' : ''}
+          ${voteBtn}
+        </div>
+      `;
+    }
+    if (!canVote && !myVote && !expired) return `<div class="pb-hint-login">${ti18n('polls.login_to_vote')}</div>`;
+    return '';
+  }
 
-    const timeLeft = poll.endsAt ? this.formatTimeLeft(poll.endsAt) : null;
+  private renderDetail(): string {
+    const s = this.detailState();
+    const { poll } = s;
+    const loadingHtml = this.isLoadingResults && s.showResults ? `<div class="pb-loading">Loading results…</div>` : '';
     const authorName = this.authorNames.get(poll.pubkey) || poll.pubkey.slice(0, 10) + '…';
     const authorPic  = this.authorPics.get(poll.pubkey) || '';
-    // Fetch author profile in background if not cached
+    // Fetch author profile in background if not cached — updates only the author row
+    // (a full re-render would reload the poll image).
     if (!this.authorNames.has(poll.pubkey)) {
       fetchProfile(poll.pubkey).then(profile => {
         if (!profile) return;
         this.authorNames.set(poll.pubkey, this.cleanAuthorName(profile.display_name || profile.name || poll.pubkey.slice(0, 10) + '…'));
         if (profile.picture) this.authorPics.set(poll.pubkey, profile.picture);
-        if (this.isOpen && this.view === 'detail') this.renderView();
+        if (this.isOpen && this.view === 'detail') this.updateDetailAuthor();
       }).catch(() => {});
     }
 
@@ -269,24 +302,43 @@ export class PollBoard {
           </div>
           ${media.text ? `<div class="pb-detail-question">${this.esc(media.text)}</div>` : ''}
           ${this.mediaHtml(media.images)}
-          <div class="pb-detail-meta">
-            <span class="pb-badge ${poll.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${poll.polltype === 'multiplechoice' ? 'multiple choice' : 'single choice'}</span>
-            ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
-            ${timeLeft && !expired ? `<span class="pb-meta-time">${timeLeft} left</span>` : ''}
-            <span class="pb-meta-votes">${totalVotes} voter${totalVotes !== 1 ? 's' : ''}</span>
-          </div>
-          ${loadingHtml}
-          <div class="pb-options">${optionsHtml}</div>
-          ${!showResults && canVote ? `
-            <div class="pb-vote-row">
-              ${poll.polltype === 'multiplechoice' ? '<span class="pb-hint">Select all that apply</span>' : ''}
-              ${voteBtn}
-            </div>
-          ` : ''}
-          ${!canVote && !myVote && !expired ? `<div class="pb-hint-login">${ti18n('polls.login_to_vote')}</div>` : ''}
+          <div class="pb-detail-meta">${this.buildMetaHtml(s)}</div>
+          <div class="pb-detail-loading">${loadingHtml}</div>
+          <div class="pb-options">${this.buildOptionsHtml(s)}</div>
+          <div class="pb-detail-voterow">${this.buildVoteRowHtml(s)}</div>
         </div>
       </div>
     `;
+  }
+
+  /** Update only the author row in place (profile arrived) — leaves the image intact. */
+  private updateDetailAuthor(): void {
+    if (!this.container || this.view !== 'detail' || !this.selectedPoll) return;
+    const row = this.container.querySelector('.pb-detail-author');
+    if (!row) return;
+    const poll = this.selectedPoll;
+    const name = this.authorNames.get(poll.pubkey) || poll.pubkey.slice(0, 10) + '…';
+    const pic  = this.authorPics.get(poll.pubkey) || '';
+    row.innerHTML = `
+      ${pic ? `<img src="${this.esc(pic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
+      <span class="pb-author-name">${this.esc(name)}</span>
+    `;
+  }
+
+  /** Update the vote/results regions in place (loading toggled, votes cast) without
+   *  rebuilding the whole detail view — the poll image keeps its loaded node. */
+  private refreshDetail(): void {
+    if (!this.container || this.view !== 'detail' || !this.selectedPoll) return;
+    const s = this.detailState();
+    const loadingEl = this.container.querySelector('.pb-detail-loading');
+    const metaEl    = this.container.querySelector('.pb-detail-meta');
+    const optsEl    = this.container.querySelector('.pb-options');
+    const voteRowEl = this.container.querySelector('.pb-detail-voterow');
+    if (loadingEl) loadingEl.innerHTML = this.isLoadingResults && s.showResults ? `<div class="pb-loading">Loading results…</div>` : '';
+    if (metaEl)    metaEl.innerHTML = this.buildMetaHtml(s);
+    if (optsEl)    optsEl.innerHTML = this.buildOptionsHtml(s);
+    if (voteRowEl) voteRowEl.innerHTML = this.buildVoteRowHtml(s);
+    this.bindDetailDynamic();
   }
 
   // ── Create view ─────────────────────────────────────────────────────────────
@@ -383,40 +435,8 @@ export class PollBoard {
       });
     });
 
-    // Detail: vote inputs
-    this.container.querySelectorAll('.pb-opt-input').forEach(el => {
-      el.addEventListener('change', () => {
-        const input = el as HTMLInputElement;
-        if (this.selectedPoll?.polltype === 'singlechoice') {
-          this.selectedOptions.clear();
-          if (input.checked) this.selectedOptions.add(input.value);
-        } else {
-          if (input.checked) this.selectedOptions.add(input.value);
-          else this.selectedOptions.delete(input.value);
-        }
-        // Update visual selection
-        this.container?.querySelectorAll('.pb-opt-vote').forEach(label => {
-          const inp = label.querySelector('input') as HTMLInputElement;
-          label.classList.toggle('pb-opt-selected', inp?.checked ?? false);
-        });
-      });
-    });
-
-    // Detail: cast vote
-    this.container.querySelector('#pb-cast-vote')?.addEventListener('click', async () => {
-      if (!this.selectedPoll || this.selectedOptions.size === 0 || this.isVoting) return;
-      this.isVoting = true;
-      this.renderView();
-      const ok = await castVote(this.selectedPoll, [...this.selectedOptions]);
-      if (ok) {
-        this.votedLocal.set(this.selectedPoll.id, [...this.selectedOptions]);
-        this.saveVotedToStorage();
-        await this.loadResultsForDetail(this.selectedPoll);
-      }
-      this.isVoting = false;
-      this.selectedOptions.clear();
-      this.renderView();
-    });
+    // Detail: vote inputs + cast vote (also re-bound after an in-place refresh)
+    this.bindDetailDynamic();
 
     // Create: question
     this.container.querySelector('#pb-create-q')?.addEventListener('input', (e) => {
@@ -482,9 +502,48 @@ export class PollBoard {
     });
   }
 
+  /** Bind the vote inputs + cast-vote button. Safe to call after a full render or an
+   *  in-place refreshDetail() — it only touches the (freshly recreated) option/vote nodes. */
+  private bindDetailDynamic(): void {
+    if (!this.container) return;
+
+    this.container.querySelectorAll('.pb-opt-input').forEach(el => {
+      el.addEventListener('change', () => {
+        const input = el as HTMLInputElement;
+        if (this.selectedPoll?.polltype === 'singlechoice') {
+          this.selectedOptions.clear();
+          if (input.checked) this.selectedOptions.add(input.value);
+        } else {
+          if (input.checked) this.selectedOptions.add(input.value);
+          else this.selectedOptions.delete(input.value);
+        }
+        // Update visual selection
+        this.container?.querySelectorAll('.pb-opt-vote').forEach(label => {
+          const inp = label.querySelector('input') as HTMLInputElement;
+          label.classList.toggle('pb-opt-selected', inp?.checked ?? false);
+        });
+      });
+    });
+
+    this.container.querySelector('#pb-cast-vote')?.addEventListener('click', async () => {
+      if (!this.selectedPoll || this.selectedOptions.size === 0 || this.isVoting) return;
+      this.isVoting = true;
+      this.refreshDetail();
+      const ok = await castVote(this.selectedPoll, [...this.selectedOptions]);
+      if (ok) {
+        this.votedLocal.set(this.selectedPoll.id, [...this.selectedOptions]);
+        this.saveVotedToStorage();
+        await this.loadResultsForDetail(this.selectedPoll);
+      }
+      this.isVoting = false;
+      this.selectedOptions.clear();
+      this.refreshDetail();
+    });
+  }
+
   private async loadResultsForDetail(poll: Poll): Promise<void> {
     this.isLoadingResults = true;
-    this.renderView();
+    this.refreshDetail();
     try {
       const results = await fetchVotes(poll, this.myPubkey);
       this.resultsCache.set(poll.id, results);
@@ -494,7 +553,7 @@ export class PollBoard {
       }
     } catch (_) {}
     this.isLoadingResults = false;
-    this.renderView();
+    this.refreshDetail();
   }
 
   // ── Storage ─────────────────────────────────────────────────────────────────
