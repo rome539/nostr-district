@@ -6,9 +6,13 @@
 
 import { fetchPolls, fetchVotes, createPoll, castVote, Poll, PollResults } from '../nostr/pollService';
 import { authStore } from '../stores/authStore';
-import { fetchProfile } from '../nostr/nostrService';
+import { fetchProfile, queryEvents } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { t as ti18n } from '../i18n/i18n';
+import { nip19 } from 'nostr-tools';
+
+// Matches a bech32 nostr entity, with or without the `nostr:` URI prefix.
+const NOSTR_ENTITY_RE = /(?:nostr:)?(n(?:pub|profile|event|ote|addr)1[023456789acdefghjklmnpqrstuvwxyz]{20,})/gi;
 
 type View = 'list' | 'detail' | 'create';
 
@@ -31,6 +35,7 @@ export class PollBoard {
   private votedLocal = new Map<string, string[]>(); // pollId → option ids (locally tracked)
   private authorNames = new Map<string, string>();  // pubkey → display name
   private authorPics  = new Map<string, string>();  // pubkey → picture url
+  private embedCache  = new Map<string, any>();      // event id → fetched note (null = not found)
 
   // create form
   private cQuestion = '';
@@ -109,6 +114,7 @@ export class PollBoard {
     if (this.view === 'detail') this.container.innerHTML = this.renderDetail();
     if (this.view === 'create') this.container.innerHTML = this.renderCreate();
     this.bindEvents();
+    if (this.view === 'detail') this.hydrateRichContent();
   }
 
   // ── List view ───────────────────────────────────────────────────────────────
@@ -121,7 +127,9 @@ export class PollBoard {
     } catch (_) { this.polls = []; }
     this.isLoading = false;
     this.renderView();
-    // Fetch author profiles in background, re-render as they arrive
+    // Fetch author profiles in background. Update only the matching author rows in
+    // place as they arrive — a full renderView() would reset the list's scrollTop and
+    // bounce the user back to the top mid-scroll.
     const uniquePubkeys = [...new Set(this.polls.map(p => p.pubkey))];
     for (const pk of uniquePubkeys) {
       if (this.authorNames.has(pk)) continue;
@@ -130,9 +138,22 @@ export class PollBoard {
         const name = this.cleanAuthorName(profile.display_name || profile.name || pk.slice(0, 10) + '…');
         this.authorNames.set(pk, name);
         if (profile.picture) this.authorPics.set(pk, profile.picture);
-        if (this.isOpen && this.view === 'list') this.renderView();
+        if (this.isOpen && this.view === 'list') this.updateListAuthor(pk);
       }).catch(() => {});
     }
+  }
+
+  /** Update every list row authored by `pk` in place (profile arrived). */
+  private updateListAuthor(pk: string): void {
+    if (!this.container) return;
+    const name = this.authorNames.get(pk) || pk.slice(0, 10) + '…';
+    const pic  = this.authorPics.get(pk) || '';
+    this.container.querySelectorAll(`.pb-poll-author[data-pubkey="${pk}"]`).forEach(row => {
+      row.innerHTML = `
+        ${pic ? `<img src="${this.esc(pic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
+        <span class="pb-author-name">${this.esc(name)}</span>
+      `;
+    });
   }
 
   private renderList(): string {
@@ -157,7 +178,7 @@ export class PollBoard {
                   ${authorPic ? `<img src="${this.esc(authorPic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
                   <span class="pb-author-name">${this.esc(authorName)}</span>
                 </div>
-                <div class="pb-poll-q">${this.esc(this.splitMedia(p.content).text || '📷 image')}</div>
+                <div class="pb-poll-q">${this.esc(this.previewText(p.content) || '📷 image')}</div>
                 <div class="pb-poll-meta">
                   <span class="pb-badge ${p.polltype === 'multiplechoice' ? 'pb-badge-multi' : 'pb-badge-single'}">${p.polltype === 'multiplechoice' ? 'multi' : 'single'}</span>
                   ${expired ? '<span class="pb-badge pb-badge-ended">ended</span>' : ''}
@@ -300,7 +321,7 @@ export class PollBoard {
             ${authorPic ? `<img src="${this.esc(authorPic)}" class="pb-author-pic" onerror="this.style.display='none'">` : '<div class="pb-author-pic pb-author-pic-placeholder"></div>'}
             <span class="pb-author-name">${this.esc(authorName)}</span>
           </div>
-          ${media.text ? `<div class="pb-detail-question">${this.esc(media.text)}</div>` : ''}
+          ${media.text ? `<div class="pb-detail-question">${this.renderRichText(media.text)}</div>` : ''}
           ${this.mediaHtml(media.images)}
           <div class="pb-detail-meta">${this.buildMetaHtml(s)}</div>
           <div class="pb-detail-loading">${loadingHtml}</div>
@@ -619,6 +640,151 @@ export class PollBoard {
     ).join('')}</div>`;
   }
 
+  // ── nostr: entities (npub mentions + nevent/note embeds) ──────────────────────
+
+  private shortNpub(pubkey: string): string {
+    try { return '@' + nip19.npubEncode(pubkey).slice(5, 13) + '…'; } catch { return '@' + pubkey.slice(0, 8) + '…'; }
+  }
+
+  /** Compact, fetch-free text for the list preview: drop note/event refs, render
+   *  mentions as @name (only if already cached, else a short npub). */
+  private previewText(content: string): string {
+    const base = this.splitMedia(content).text;
+    return base.replace(NOSTR_ENTITY_RE, (m, tok) => {
+      try {
+        const dec = nip19.decode(String(tok).toLowerCase());
+        if (dec.type === 'npub')     { const n = this.authorNames.get(dec.data as string); return n ? '@' + n : this.shortNpub(dec.data as string); }
+        if (dec.type === 'nprofile') { const pk = (dec.data as any).pubkey; const n = this.authorNames.get(pk); return n ? '@' + n : this.shortNpub(pk); }
+        return ''; // event / addr refs are dropped from the compact preview
+      } catch { return m; }
+    }).replace(/[ \t]{2,}/g, ' ').replace(/\s+\n/g, '\n').trim();
+  }
+
+  /** Detail-view rich text: escape, then swap nostr: entities for @mention spans and
+   *  embed placeholders (filled in by hydrateRichContent). Bech32 tokens survive HTML
+   *  escaping untouched, so escaping the whole string first is safe. */
+  private renderRichText(text: string): string {
+    let html = this.esc(text);
+    html = html.replace(NOSTR_ENTITY_RE, (m, tok) => {
+      try {
+        const dec = nip19.decode(String(tok).toLowerCase());
+        if (dec.type === 'npub')     return this.mentionSpan(dec.data as string);
+        if (dec.type === 'nprofile') return this.mentionSpan((dec.data as any).pubkey);
+        if (dec.type === 'note')     return this.embedPlaceholder(dec.data as string, []);
+        if (dec.type === 'nevent')   { const d = dec.data as any; return this.embedPlaceholder(d.id, d.relays || []); }
+        if (dec.type === 'naddr')    return this.embedChip(String(tok).toLowerCase());
+      } catch { /* leave token as-is */ }
+      return m;
+    });
+    return html.replace(/\n/g, '<br>');
+  }
+
+  private mentionSpan(pubkey: string): string {
+    const name = this.authorNames.get(pubkey);
+    const label = name ? '@' + this.esc(name) : this.esc(this.shortNpub(pubkey));
+    return `<span class="pb-mention" data-pubkey="${pubkey}">${label}</span>`;
+  }
+
+  private embedPlaceholder(eventId: string, relays: string[]): string {
+    return `<div class="pb-embed" data-eid="${eventId}" data-relays="${this.esc(relays.join(','))}">`
+      + `<div class="pb-embed-loading">Loading note…</div></div>`;
+  }
+
+  private embedChip(token: string): string {
+    return `<a class="pb-embed-chip" href="https://njump.me/${this.esc(token)}" target="_blank" rel="noopener">📝 quoted note ↗</a>`;
+  }
+
+  /** After a detail render, resolve @mention names and fetch + fill note embeds. */
+  private hydrateRichContent(): void {
+    if (!this.container) return;
+
+    // Mentions: click → profile modal; fetch name if not cached, then update label.
+    this.container.querySelectorAll('.pb-mention').forEach(el => {
+      const pk = (el as HTMLElement).dataset.pubkey;
+      if (!pk) return;
+      el.addEventListener('click', (e) => { e.stopPropagation(); ProfileModal.show(pk, this.authorNames.get(pk) || pk.slice(0, 10) + '…'); });
+      if (!this.authorNames.has(pk)) {
+        fetchProfile(pk).then(profile => {
+          if (!profile) return;
+          const name = this.cleanAuthorName(profile.display_name || profile.name || this.shortNpub(pk));
+          this.authorNames.set(pk, name);
+          if (profile.picture) this.authorPics.set(pk, profile.picture);
+          this.container?.querySelectorAll(`.pb-mention[data-pubkey="${pk}"]`).forEach(s => { s.textContent = '@' + name; });
+        }).catch(() => {});
+      }
+    });
+
+    // Embeds: fetch the referenced note (cached), render an author + content card.
+    this.container.querySelectorAll('.pb-embed').forEach(el => this.hydrateEmbed(el as HTMLElement));
+  }
+
+  private async hydrateEmbed(el: HTMLElement): Promise<void> {
+    const eid = el.dataset.eid;
+    if (!eid) return;
+    const relays = (el.dataset.relays || '').split(',').filter(Boolean);
+
+    let ev = this.embedCache.get(eid);
+    if (ev === undefined) {
+      try {
+        const found = await queryEvents({ ids: [eid] }, relays.length ? relays.concat([
+          'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub',
+        ]) : undefined);
+        ev = found[0] ?? null;
+      } catch { ev = null; }
+      this.embedCache.set(eid, ev);
+    }
+
+    // Element may have been replaced (view changed) — re-find live nodes by id.
+    const live = this.container?.querySelectorAll(`.pb-embed[data-eid="${eid}"]`);
+    if (!live || !live.length) return;
+
+    let nevent = '';
+    try { nevent = nip19.neventEncode({ id: eid, author: ev?.pubkey }); } catch { try { nevent = nip19.noteEncode(eid); } catch {} }
+    const njump = nevent ? `https://njump.me/${nevent}` : `https://njump.me/${eid}`;
+
+    if (!ev) {
+      const html = `<a class="pb-embed-chip" href="${this.esc(njump)}" target="_blank" rel="noopener">📝 quoted note ↗</a>`;
+      live.forEach(n => { (n as HTMLElement).innerHTML = html; });
+      return;
+    }
+
+    const prof = await fetchProfile(ev.pubkey).catch(() => null);
+    const name = this.esc(this.cleanAuthorName(prof?.display_name || prof?.name || this.shortNpub(ev.pubkey)));
+    const pic  = prof?.picture ? this.esc(prof.picture) : '';
+    const media = this.splitMedia(ev.content || '');
+    let body = this.esc(media.text);
+    // one level of mentions inside the embed; nested note refs become a small link
+    body = body.replace(NOSTR_ENTITY_RE, (m, tok) => {
+      try {
+        const dec = nip19.decode(String(tok).toLowerCase());
+        if (dec.type === 'npub')     return this.mentionSpan(dec.data as string);
+        if (dec.type === 'nprofile') return this.mentionSpan((dec.data as any).pubkey);
+        return '<span class="pb-embed-ref">📝 note</span>';
+      } catch { return m; }
+    });
+    if (body.length > 280) body = body.slice(0, 280) + '…';
+    body = body.replace(/\n/g, '<br>');
+
+    const html = `
+      <div class="pb-embed-author">
+        ${pic ? `<img src="${pic}" class="pb-embed-pic" onerror="this.style.display='none'">` : '<div class="pb-embed-pic pb-author-pic-placeholder"></div>'}
+        <span class="pb-embed-name">${name}</span>
+      </div>
+      ${body ? `<div class="pb-embed-body">${body}</div>` : ''}
+      ${this.mediaHtml(media.images)}
+      <a class="pb-embed-open" href="${this.esc(njump)}" target="_blank" rel="noopener">open note ↗</a>
+    `;
+    live.forEach(n => {
+      const node = n as HTMLElement;
+      node.innerHTML = html;
+      node.classList.add('pb-embed-loaded');
+      node.querySelectorAll('.pb-mention').forEach(s => {
+        const pk = (s as HTMLElement).dataset.pubkey;
+        if (pk) s.addEventListener('click', (e) => { e.stopPropagation(); ProfileModal.show(pk, this.authorNames.get(pk) || pk.slice(0, 10) + '…'); });
+      });
+    });
+  }
+
   // ── Styles ───────────────────────────────────────────────────────────────────
 
   private injectStyles(): void {
@@ -749,6 +915,46 @@ export class PollBoard {
       .pb-media-img {
         max-width: 100%; max-height: 260px; border-radius: 8px; object-fit: cover;
         cursor: zoom-in; border: 1px solid rgba(255,255,255,0.08); display: block;
+      }
+
+      /* nostr @mentions */
+      .pb-mention {
+        color: var(--nd-accent); cursor: pointer; font-weight: bold;
+        text-decoration: none;
+      }
+      .pb-mention:hover { text-decoration: underline; }
+
+      /* Embedded note cards */
+      .pb-embed {
+        display: block; margin: 8px 0; padding: 10px 12px;
+        background: color-mix(in srgb, black 40%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb, var(--nd-text) 12%, transparent);
+        border-left: 3px solid color-mix(in srgb, var(--nd-accent) 55%, transparent);
+        border-radius: 7px;
+      }
+      .pb-embed-loading { color: var(--nd-subtext); font-size: 12px; opacity: 0.7; }
+      .pb-embed-author { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+      .pb-embed-pic {
+        width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+        border: 1px solid color-mix(in srgb, var(--nd-text) 15%, transparent);
+      }
+      .pb-embed-name { color: var(--nd-text); font-size: 12px; font-weight: bold; }
+      .pb-embed-body {
+        color: var(--nd-subtext); font-size: 12px; line-height: 1.5;
+        white-space: pre-wrap; word-break: break-word;
+      }
+      .pb-embed .pb-media { margin: 6px 0 2px; }
+      .pb-embed .pb-media-img { max-height: 180px; }
+      .pb-embed-ref { color: var(--nd-accent); font-weight: bold; }
+      .pb-embed-open, .pb-embed-chip {
+        display: inline-block; margin-top: 8px; color: var(--nd-accent);
+        font-size: 11px; text-decoration: none; opacity: 0.85;
+      }
+      .pb-embed-open:hover, .pb-embed-chip:hover { text-decoration: underline; opacity: 1; }
+      .pb-embed-chip {
+        padding: 6px 10px; border-radius: 6px; margin-top: 0;
+        background: color-mix(in srgb, black 40%, var(--nd-bg));
+        border: 1px solid color-mix(in srgb, var(--nd-accent) 35%, transparent);
       }
       .pb-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
       .pb-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
