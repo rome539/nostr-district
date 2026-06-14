@@ -1834,13 +1834,14 @@ const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: number[]
 };
 const SCAVENGE_SCENES = Object.keys(SCAVENGE_SPAWN);
 
-// Respawn delay after a spot is collected — random 20min … 50min (avg 35 →
-// ~5.1 pickups/hr across 3 spots). Slowed from 12-36min so the faucet sits near
-// the bounty sink (~26 commons/wk) for moderate players instead of overflowing it;
-// the 4% legendary odds keep legendary-gated sets on pace despite fewer pickups.
-// The server bucket refills 1/5min (~12/hr) so honest streaks never hit the cooldown.
+// Respawn delay after a spot is collected — random 20min … 45min (avg 32.5 →
+// ~5.5 pickups/hr across 3 spots). A touch faster than the prior 20-50min, but the
+// faucet still sits near the bounty sink (~28 commons/wk) for moderate players
+// rather than overflowing it; the 4% legendary odds keep legendary-gated sets on
+// pace. The server bucket refills 1/5min (~12/hr) so honest streaks never hit the
+// cooldown (5.5/hr legit leaves comfortable headroom).
 const SCAVENGE_RESPAWN_MIN = 20 * 60 * 1000;
-const SCAVENGE_RESPAWN_MAX = 50 * 60 * 1000;
+const SCAVENGE_RESPAWN_MAX = 45 * 60 * 1000;
 
 interface ScavSlot { scene: string; x: number; readyAt: number; }
 const SLOTS_KEY = 'nd_scavenge_slots_v2';
