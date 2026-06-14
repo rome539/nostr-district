@@ -920,6 +920,7 @@ export class CrewPanel {
         const ta = composer.querySelector('.cp-composer-input') as HTMLTextAreaElement;
         const status = composer.querySelector('.cp-composer-status') as HTMLElement;
         ta.addEventListener('keydown', e => e.stopPropagation());
+        attachEmojiAutocomplete(ta);
 
         // Upload a blob via the shared Blossom helper. Crew posts are PUBLIC, so
         // this is the PLAINTEXT path (not the encrypted DM one). nostr.build was
