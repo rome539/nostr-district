@@ -76,6 +76,12 @@ let onItemMinted: ItemMintedHandler | null = null;
 
 export function setItemMintedHandler(handler: ItemMintedHandler | null): void { onItemMinted = handler; }
 
+// Fired only for scavenge mint denials (server tags them `scavenge: true`), so the
+// scene can restore the optimistically-removed spot instead of losing it silently.
+type ScavengeErrorHandler = (reason: string) => void;
+let onScavengeError: ScavengeErrorHandler | null = null;
+export function setScavengeErrorHandler(handler: ScavengeErrorHandler | null): void { onScavengeError = handler; }
+
 // ── Fishing (server-rolled) ───────────────────────────────────────────────────
 // The client sends a bare "I reeled in"; the server rolls what was caught and
 // whether it's kept, and answers with fish_caught. See server.ts rollFishCatch.
@@ -476,6 +482,7 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'game_msg') onGameMsg?.(msg);
       if (msg.type === 'incoming_zap') onIncomingZap?.(msg.senderPk, msg.senderName || '', Number(msg.amountSats) || 0, msg.comment || '');
       if (msg.type === 'item_minted') onItemMinted?.(msg.event);
+      if (msg.type === 'item_mint_error' && msg.scavenge) onScavengeError?.(msg.reason);
       if (msg.type === 'fish_caught') onFishCaught?.(msg as FishCaughtMsg);
       if (msg.type === 'bounty_list') {
         if (pendingBountyList) { const cb = pendingBountyList; pendingBountyList = null; cb(msg.bounties ?? []); }

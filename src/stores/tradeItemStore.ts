@@ -1987,6 +1987,14 @@ export function getSceneScavengeSpots(scene: string): ScavengeSpot[] {
   return out;
 }
 
+// Spots are removed from the bucket the instant the player collects (optimistic), so
+// a double-press can't double-collect. If the server then DENIES the mint (cooldown /
+// hiccup) we put the spot back instead of losing it silently. This FIFO matches the
+// server's in-order replies: a 'found' mint drains the oldest, a scavenge error
+// restores it. The server bucket is still the real gate, so even a mis-restore only
+// yields another gated attempt — never a free item.
+const _pendingScav: ScavSpot[] = [];
+
 // Collect a spot — removes it from its bucket (the freed slot refills on the global
 // cadence) and asks the server to roll + mint. The server picks the tier + item, so
 // a script can't request legendaries; the reward arrives via item_minted.
@@ -2001,14 +2009,14 @@ export function collectScavengeSlot(spotId: string): boolean {
     const st = loadHol(hol.id);
     const idx = st.spots.findIndex(s => s.id === spotId);
     if (idx < 0) return false;
-    st.spots.splice(idx, 1);
+    _pendingScav.push(st.spots.splice(idx, 1)[0]);
     if (st.nextSpawnAt < Date.now()) st.nextSpawnAt = Date.now() + spawnInterval(HOL_SPAWN_MIN, HOL_SPAWN_MAX);
     saveHol();
   } else {
     const st = loadScav();
     const idx = st.spots.findIndex(s => s.id === spotId);
     if (idx < 0) return false;
-    st.spots.splice(idx, 1);
+    _pendingScav.push(st.spots.splice(idx, 1)[0]);
     if (st.nextSpawnAt < Date.now()) st.nextSpawnAt = Date.now() + spawnInterval(SCAV_SPAWN_MIN, SCAV_SPAWN_MAX);
     saveScav();
   }
@@ -2016,6 +2024,27 @@ export function collectScavengeSlot(spotId: string): boolean {
   import('../nostr/presenceService').then(({ sendScavengeRequest }) => {
     sendScavengeRequest(isHoliday);
   });
+  return true;
+}
+
+/** A scavenge mint succeeded (item_minted, source 'found') — drop the matching
+ *  in-flight spot; it's gone for good. */
+export function confirmPendingScavenge(): void { _pendingScav.shift(); }
+
+/** A scavenge mint was DENIED (item_mint_error) — restore the in-flight spot to its
+ *  bucket so the player can retry instead of losing it silently. Returns true if a
+ *  spot was put back (caller can toast + refresh the markers). */
+export function restorePendingScavengeSpot(): boolean {
+  const spot = _pendingScav.shift();
+  if (!spot) return false;
+  const isHoliday = spot.id.startsWith('hol');
+  const hol = isHoliday ? getActiveHolidayDrop() : null;
+  if (isHoliday && !hol) return false;
+  const st = isHoliday ? loadHol(hol!.id) : loadScav();
+  if (!st.spots.some(s => s.id === spot.id)) {
+    st.spots.push(spot);
+    isHoliday ? saveHol() : saveScav();
+  }
   return true;
 }
 

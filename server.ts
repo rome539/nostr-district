@@ -197,13 +197,13 @@ function publishWeeklyMarker(pubkey: string): void {
 // ── Scavenge rate limit (server-authoritative, keyed by pubkey) ───────────────
 // The client picks WHERE/WHEN spots appear (localStorage, random) — harmless. But
 // the RATE of scavenge mints is enforced here so clearing/editing localStorage can't
-// farm the loop. Token bucket: burst up to 3 (the spot count), refill 1 per 5 min.
-// Refill is set above the LEGIT ceiling (3 spots × 12–36-min respawn averages
-// ~7.4/hr, lucky fast-respawn streaks peak higher briefly) so a normal player is
-// never falsely blocked, while a cheater can't beat ~12/hr sustained.
-// Per-account, survives restarts + syncs across devices.
+// farm the loop. Token bucket: burst up to the MAX simultaneous spots, refill 1 per
+// 5 min. Capacity 5 covers a holiday stack (3 base + 2 holiday) so a returning
+// player can always clear a full stack in one go; the REFILL (1/5min ≈ 12/hr) is the
+// real sustained ceiling and is unchanged, so the weekly faucet doesn't move — a
+// cheater still can't beat ~12/hr sustained. Per-account, survives restarts + syncs.
 const SCAVENGE_FILE = '.scavenge-buckets.json';
-const SCAVENGE_CAPACITY = 3;
+const SCAVENGE_CAPACITY = 5;
 const SCAVENGE_REFILL_MS = 5 * 60 * 1000;
 let scavengeBuckets: Record<string, { tokens: number; lastRefill: number }> = {};
 try { if (existsSync(SCAVENGE_FILE)) scavengeBuckets = JSON.parse(readFileSync(SCAVENGE_FILE, 'utf8')); } catch {}
@@ -1634,18 +1634,18 @@ wss.on('connection', (ws) => {
           ? activeHolidayPool()                                 // only during a live holiday window
           : (SCAV_SCENE_POOLS[player.room] ?? null);            // room must have a scavenge pool
         if (!pool) {
-          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'wrong_room', room: player.room }));
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'wrong_room', room: player.room, scavenge: true }));
           return;
         }
         if (!canScavenge(myPubkey)) {
-          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'scavenge_cooldown' }));
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'scavenge_cooldown', scavenge: true }));
           return;
         }
         recordScavenge(myPubkey);
         const itemId = rollScavengeNoRepeat(pool, holiday, myPubkey);
         const event = itemId ? mintItem(myPubkey, itemId, 'found') : null;
         if (!event) {
-          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'oracle_unavailable' }));
+          ws.send(JSON.stringify({ type: 'item_mint_error', reason: 'oracle_unavailable', scavenge: true }));
           return;
         }
         console.log(`[Oracle] Scavenged ${itemId} (${ITEM_RARITY.get(itemId!) ?? '?'}) for ${player.name} (${myPubkey.slice(0,8)}…)`);

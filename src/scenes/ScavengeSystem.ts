@@ -17,6 +17,8 @@ export class ScavengeSystem {
   private spots: ScavengeSpot[] = [];
   private isTouch: boolean;
   private lastRefresh = 0;
+  // Re-pull spots when a denied collect restores one (see BaseScene scavenge-error handler).
+  private onRefresh = () => { this.spots = getSceneScavengeSpots(this.sceneId); };
 
   constructor(
     private scene: Phaser.Scene,
@@ -36,6 +38,7 @@ export class ScavengeSystem {
       fontFamily: 'monospace', fontSize: '9px', color: accent,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.promptBg.on('pointerdown', () => this.tryInteract());
+    window.addEventListener('nd-scavenge-refresh', this.onRefresh);
   }
 
   update(time: number): void {
@@ -95,6 +98,7 @@ export class ScavengeSystem {
   }
 
   destroy(): void {
+    window.removeEventListener('nd-scavenge-refresh', this.onRefresh);
     this.markerG.destroy();
     this.promptBg.destroy();
     this.promptText.destroy();

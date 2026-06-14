@@ -82,7 +82,7 @@ import { canUseDMs } from '../nostr/dmService';
 import { registerSenderNameHint } from '../nostr/zapService';
 import { ToastManager } from '../ui/ToastManager';
 import { receiveMintedEvent, fetchInventoryFromRelays } from '../stores/tradeItemStore';
-import { setItemMintedHandler as _setMintHandler, setItemReceivedHandler } from '../nostr/presenceService';
+import { setItemMintedHandler as _setMintHandler, setItemReceivedHandler, setScavengeErrorHandler } from '../nostr/presenceService';
 import { authStore } from '../stores/authStore';
 import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '../stores/avatarStore';
 import { getRainbowColor, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops } from '../stores/marketStore';
@@ -532,12 +532,24 @@ export abstract class BaseScene extends Phaser.Scene {
           });
         } else if (source === 'found') {
           // Scavenge result — the server rolled it, so the find is only known now.
-          import('../stores/tradeItemStore').then(({ ITEM_CATALOG }) => {
+          import('../stores/tradeItemStore').then(({ ITEM_CATALOG, confirmPendingScavenge }) => {
+            confirmPendingScavenge(); // this collect succeeded — drop its in-flight spot
             const def = ITEM_CATALOG.find(d => d.id === item.itemId);
             if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `${def.emoji} Found a ${def.name}!`, color: '#7fd8a0', open: 'inventory' } }));
           });
         }
       }
+    });
+    // A scavenge mint was denied (cooldown / hiccup): put the spot back instead of
+    // losing it silently, and tell the active ScavengeSystem to re-show it.
+    setScavengeErrorHandler((reason) => {
+      import('../stores/tradeItemStore').then(({ restorePendingScavengeSpot }) => {
+        if (!restorePendingScavengeSpot()) return;
+        window.dispatchEvent(new CustomEvent('nd-scavenge-refresh'));
+        if (reason === 'scavenge_cooldown') {
+          window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: 'Slow down — that spot’s still cooling off.', color: '#e0b060' } }));
+        }
+      });
     });
     setItemReceivedHandler((fromName, event) => {
       // Add the item to inventory immediately (no waiting for a relay refetch)
