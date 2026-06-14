@@ -1378,6 +1378,18 @@ export abstract class BaseScene extends Phaser.Scene {
     document.addEventListener('keydown', mapHandler);
     this.events.once('shutdown', () => document.removeEventListener('keydown', mapHandler));
 
+    // Stuck-key guard. If the window/tab loses focus mid-press (alt-tab, OS dialog,
+    // clicking another app), the matching keyup is delivered elsewhere and Phaser
+    // keeps the arrow flagged isDown — so the avatar "walks by himself". Clearing all
+    // key state on any focus loss stops movement the instant focus returns.
+    const resetKeys = () => this.input.keyboard?.resetKeys();
+    window.addEventListener('blur', resetKeys);
+    document.addEventListener('visibilitychange', resetKeys);
+    this.events.once('shutdown', () => {
+      window.removeEventListener('blur', resetKeys);
+      document.removeEventListener('visibilitychange', resetKeys);
+    });
+
     // Listen for wallet → "open profile editor" intent dispatched by WalletPanel.
     const openProfileHandler = () => { if (!blk() && !ci()) this.onTKey(); };
     window.addEventListener('nd-open-profile-tab', openProfileHandler);
