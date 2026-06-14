@@ -160,6 +160,12 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'hol_relay_stone',    name: 'Relay Stone',        category: 'holiday', rarity: 'rare',      emoji: '🪨', description: 'Carries your words to every shore.' },
   { id: 'hol_zap_bolt',       name: 'Zap Bolt',           category: 'holiday', rarity: 'rare',      emoji: '💜', description: 'A tip with no middleman.' },
   { id: 'hol_first_note',     name: 'First Note',         category: 'holiday', rarity: 'legendary', emoji: '📝', description: 'kind:1 — the first words ever spoken on the network.' },
+  // Valentine's (Feb 8–14) — completes the Lovestruck set → Heart Eyes
+  { id: 'hol_red_rose',       name: 'Red Rose',           category: 'holiday', rarity: 'common',    emoji: '🌹', description: 'Thorns included. Like every good thing.' },
+  { id: 'hol_chocolate_box',  name: 'Box of Chocolates',  category: 'holiday', rarity: 'common',    emoji: '🍫', description: "You never know what you'll get. Verify, don't trust." },
+  { id: 'hol_candy_heart',    name: 'Candy Heart',        category: 'holiday', rarity: 'common',    emoji: '💗', description: "Stamped 'HODL ME'." },
+  { id: 'hol_cupids_arrow',   name: "Cupid's Arrow",      category: 'holiday', rarity: 'rare',      emoji: '🏹', description: 'Signed, sealed, irreversible.' },
+  { id: 'hol_diamond_heart',  name: 'Diamond Heart',      category: 'holiday', rarity: 'legendary', emoji: '💎', description: 'Harder than your seed phrase. Twice as guarded.' },
 
   // ── Evergreen expansion (+36 across the non-holiday categories) ───────────────
   // Hardware (+6) — feeds Dead Hardware / electric aura
@@ -539,6 +545,14 @@ export const ITEM_SETS: ItemSet[] = [
     itemIds: ['hol_ostrich_egg', 'hol_purple_pill', 'hol_relay_stone', 'hol_zap_bolt', 'hol_first_note'],
     rewardLabel: 'Nostrich',
     rewardCosmetic: { slot: 'hat', value: 'ostrichhat', label: 'Ostrich Hat' },
+  },
+  {
+    id: 'set_valentine',
+    name: 'Lovestruck',
+    description: "Collect every Valentine's item.",
+    itemIds: ['hol_red_rose', 'hol_chocolate_box', 'hol_candy_heart', 'hol_cupids_arrow', 'hol_diamond_heart'],
+    rewardLabel: 'Sweetheart',
+    rewardCosmetic: { slot: 'eyes', value: 'heart', label: 'Heart Eyes' },
   },
   {
     id: 'set_holiday_vault',
@@ -1872,6 +1886,7 @@ interface HolidayDrop { id: string; accent: string; startMD: [number, number]; e
 const HOLIDAY_DROPS: HolidayDrop[] = [
   { id: 'genesis',    accent: '#f0a030', startMD: [1, 1],   endMD: [1, 6],   pool: ['hol_block_zero', 'hol_chancellor', 'hol_genesis_coin'] },
   { id: 'finney',     accent: '#70b0ff', startMD: [1, 9],   endMD: [1, 15],  pool: ['hol_rpow_token', 'hol_running_btc'] },
+  { id: 'valentine',  accent: '#ff6b9d', startMD: [2, 8],   endMD: [2, 14],  pool: ['hol_red_rose', 'hol_chocolate_box', 'hol_candy_heart', 'hol_cupids_arrow', 'hol_diamond_heart'] },
   { id: 'pizza_day',  accent: '#ffb000', startMD: [5, 18],  endMD: [5, 25],  pool: ['hol_btc_pizza', 'hol_pepperoni', 'hol_pizza_coin'] },
   { id: 'july4',      accent: '#ff5566', startMD: [7, 1],   endMD: [7, 7],   pool: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'] },
   { id: 'halloween',  accent: '#ff6a00', startMD: [10, 27], endMD: [10, 31], pool: ['hol_candy_corn', 'hol_skull_candle', 'hol_black_cat', 'hol_jack_o_lantern', 'hol_witch_hat', 'hol_cauldron', 'hol_phantom_key', 'hol_reaper_coin'] },

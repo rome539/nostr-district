@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { FireworksEngine, isJuly4thPeriod } from '../utils/fireworks';
-import { BatEngine, newBatEngine, drawBatsCanvas, isHalloweenPeriod } from '../utils/bats';
+import { BatEngine, newBatEngine, drawBatsCanvas, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
+import { HeartsEngine, newHeartsEngine, drawHeartsPhaser, isValentinePeriod } from '../utils/valentineFX';
 import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
@@ -67,6 +68,7 @@ export class RoomScene extends BaseScene {
   private fireplaceGraphics!: Phaser.GameObjects.Graphics;
   private cityFwEngines: FireworksEngine[] = [];
   private cityBatEngine: BatEngine | null = null;
+  private cityHeartsEngine: HeartsEngine | null = null;
   private bgTexKey = '';
   private bgOffscreen: HTMLCanvasElement | null = null;
   private bgLiveCanvas: HTMLCanvasElement | null = null;
@@ -127,6 +129,7 @@ export class RoomScene extends BaseScene {
     this.lightingOverlayGraphics = this.add.graphics().setDepth(3);
     this.loungeGraphics          = this.add.graphics().setDepth(4);
     this.shootingStarGraphics    = this.add.graphics().setDepth(0);
+    this.buildCityWindowMask(); // clip all window FX to the open panes (behind the frame cross-bars)
     if (isJuly4thPeriod()) {
       const winCfg = (x1: number, x2: number, initialDelay: number) => ({
         launchY: 248, explodeYMin: 30, explodeYMax: 150,
@@ -145,6 +148,12 @@ export class RoomScene extends BaseScene {
       // Bats confined to the window y-range so they appear in the city sky
       this.cityBatEngine = newBatEngine(GAME_WIDTH, {
         yMin: 25, yMax: 220, count: 5, speedMin: 0.3, speedMax: 0.7,
+      });
+    }
+    if (isValentinePeriod()) {
+      // Hearts drift up through the city sky behind the windows
+      this.cityHeartsEngine = newHeartsEngine(GAME_WIDTH, 220, {
+        yMin: 25, yMax: 220, count: 6, speedMin: 0.15, speedMax: 0.4,
       });
     }
     this.voidStarsGraphics       = this.add.graphics();
@@ -287,6 +296,7 @@ export class RoomScene extends BaseScene {
       if (this.myRoom.parsedRoomConfig?.wallTheme === 'cityview') {
         this.updateShootingStar(delta);
         this.updateCityWindowFireworks(time, delta);
+        this.updateCityWindowCritters(time, delta);
       } else {
         this.shootingStarGraphics.clear();
       }
@@ -525,6 +535,48 @@ export class RoomScene extends BaseScene {
         g.fillCircle(p.x, p.y, fw.radius);
       }
     }
+  }
+
+  // Halloween bats + Valentine's hearts in the city sky — drawn into the same
+  // window-clipped graphics layer as the fireworks (only where inside a window
+  // pane and not over a decoration), so they appear behind the glass.
+  private updateCityWindowCritters(time: number, delta: number): void {
+    if (!this.cityBatEngine && !this.cityHeartsEngine) return;
+    const accept = (x: number, y: number) => this.inCityWindow(x, y) && !this.inCityDecoration(x, y);
+    if (this.cityBatEngine) {
+      this.cityBatEngine.tick(time, delta);
+      drawBatsPhaser(this.shootingStarGraphics, this.cityBatEngine, time, accept);
+    }
+    if (this.cityHeartsEngine) {
+      this.cityHeartsEngine.tick(time, delta);
+      drawHeartsPhaser(this.shootingStarGraphics, this.cityHeartsEngine, accept);
+    }
+  }
+
+  // Clip the city-window FX layer to the four open panes of each window, so the
+  // frame's cross-bars (baked into the bg at depth -1) occlude any heart/bat/
+  // firework crossing them — partially hidden, not vanished. Geometry mirrors
+  // roomWalls.ts: FR=7 border inset, mullions at the window's mid-lines.
+  private buildCityWindowMask(): void {
+    const wins = [
+      { wx: 45,  wy: 10, ww: 195, wh: 242 },
+      { wx: 302, wy: 10, ww: 197, wh: 242 },
+      { wx: 558, wy: 10, ww: 196, wh: 242 },
+    ];
+    const FR = 7;
+    const g = this.make.graphics({}, false);
+    g.fillStyle(0xffffff);
+    for (const { wx, wy, ww, wh } of wins) {
+      const ix = wx + FR,        rx = wx + ww - FR;
+      const iy = wy + FR,        by = wy + wh - FR;
+      const vx = wx + Math.round(ww / 2) - 2, vr = vx + 4; // vertical mullion gap
+      const hy = wy + Math.round(wh / 2) - 2, hb = hy + 4; // horizontal mullion gap
+      g.fillRect(ix, iy, vx - ix, hy - iy); // top-left pane
+      g.fillRect(vr, iy, rx - vr, hy - iy); // top-right pane
+      g.fillRect(ix, hb, vx - ix, by - hb); // bottom-left pane
+      g.fillRect(vr, hb, rx - vr, by - hb); // bottom-right pane
+    }
+    this.shootingStarGraphics.setMask(g.createGeometryMask());
   }
 
   // ── BaseScene Overrides ──

@@ -12,6 +12,7 @@
 import Phaser from 'phaser';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
+import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
@@ -153,6 +154,8 @@ export class WoodsScene extends BaseScene {
   private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
   private glowingEyes: GlowingEyesEngine | null = null;
   private groundFog: GroundFogEngine | null = null;
+  private valentineGraphics: Phaser.GameObjects.Graphics | null = null;
+  private heartsEngine: HeartsEngine | null = null;
   private scavenge: ScavengeSystem | null = null;
   private spawnX = 1400;
   private nearCabin = false;
@@ -214,6 +217,10 @@ export class WoodsScene extends BaseScene {
         [850, FLOOR_Y - 28], [1250, FLOOR_Y - 24], [1520, FLOOR_Y - 22],
       ]);
       this.groundFog = new GroundFogEngine(W, FLOOR_Y + 5, 18);
+    }
+    if (isValentinePeriod()) {
+      this.valentineGraphics = this.add.graphics().setDepth(2);
+      this.heartsEngine = newHeartsEngine(W, FLOOR_Y, { count: 8 });
     }
     this.waterGraphics = this.add.graphics().setDepth(1);
     this.boatGraphics = this.add.graphics().setDepth(2);
@@ -861,6 +868,15 @@ export class WoodsScene extends BaseScene {
       drawPumpkinPhaser(this.halloweenGraphics, 300,  FLOOR_Y, 6, glow * 0.7);
       drawPumpkinPhaser(this.halloweenGraphics, 1300, FLOOR_Y, 7, glow * 0.7);
       if (this.glowingEyes) { this.glowingEyes.tick(delta); drawEyesPhaser(this.halloweenGraphics, this.glowingEyes, time); }
+    }
+    if (this.valentineGraphics) {
+      this.valentineGraphics.clear();
+      if (this.heartsEngine) { this.heartsEngine.tick(time, delta); drawHeartsPhaser(this.valentineGraphics, this.heartsEngine); }
+      const glow = 0.55 + Math.sin(time * 0.002) * 0.3;
+      drawHeartLanternPhaser(this.valentineGraphics, FIRE_X - 80, FLOOR_Y, 5, glow);
+      drawHeartLanternPhaser(this.valentineGraphics, FIRE_X + 65, FLOOR_Y, 4, glow);
+      drawHeartLanternPhaser(this.valentineGraphics, 300,  FLOOR_Y, 4, glow * 0.7);
+      drawHeartLanternPhaser(this.valentineGraphics, 1300, FLOOR_Y, 4, glow * 0.7);
     }
     this.updatePlayerGlow(time);
     this.updateCabinProximity();

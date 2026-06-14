@@ -238,6 +238,20 @@ const WINTER_THEME: HolidayTheme = {
   extraColor:  '#9fd8ec',
 };
 
+const VALENTINE_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 50%, #e23d6a)',
+  border:      'color-mix(in srgb, #ff6b9d 65%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #ff5d8f 60%, transparent)',
+  titleColor:  '#ffd0de',
+  textColor:   '#ffaac6',
+  subColor:    '#f090b0',
+  panelBg:     'color-mix(in srgb, black 72%, #e23d6a)',
+  panelBorder: 'color-mix(in srgb, #ff6b9d 55%, transparent)',
+  linkColor:   '#ffaac6',
+  strongColor: '#ffd0de',
+  extraColor:  '#ff9cc0',
+};
+
 const HOLIDAYS: Holiday[] = [
   {
     id:              'pizza_day',
@@ -287,6 +301,17 @@ const HOLIDAYS: Holiday[] = [
     anniversaryYear: 2009,
     externalLink:    'https://twitter.com/halfin/status/1110302988',
     theme:           FINNEY_THEME,
+  },
+  {
+    // Valentine's Day — the District's Lovestruck drop (Feb 8–14). Complete the
+    // set to unlock the Heart Eyes.
+    id:              'valentine',
+    emoji:           '💝',
+    monthDayStart:   [2, 8],
+    monthDayEnd:     [2, 14],
+    i18nPrefix:      'login.valentine',
+    anniversaryYear: null,
+    theme:           VALENTINE_THEME,
   },
   {
     id:              'july4',

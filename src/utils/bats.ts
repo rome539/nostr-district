@@ -86,8 +86,11 @@ function drawBat(
   }
 }
 
-export function drawBatsPhaser(g: Phaser.GameObjects.Graphics, engine: BatEngine, time: number): void {
+export function drawBatsPhaser(
+  g: Phaser.GameObjects.Graphics, engine: BatEngine, time: number, accept?: (x: number, y: number) => boolean,
+): void {
   for (const b of engine.bats) {
+    if (accept && !accept(b.x, b.y)) continue;
     // dark silhouette with subtle glow so they read against the night sky
     g.fillStyle(0x1a0a2e, 0.7);
     drawBat((x, y, w, h) => g.fillRect(x - 1, y - 1, w + 2, h + 2), b, time);

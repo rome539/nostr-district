@@ -275,7 +275,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'hair_partbeard',  name: 'Part + Beard',     slot: 'hair',      value: 'partbeard',      price: 0.50, tier: 'basic' },
   { id: 'hair_braid',      name: 'Braid',            slot: 'hair',      value: 'braid',          price: 1.50, tier: 'premium' },
   // ── Eyes ─────────────────────────────────────────────────────────────────────
-  { id: 'eye_heart',  name: '♥ Heart Eyes',  slot: 'eyes', value: 'heart',  price: 0.50, tier: 'basic' },
+  { id: 'eye_heart',  name: '♥ Heart Eyes',  slot: 'eyes', value: 'heart',  price: 0,    tier: 'rare', earn: true }, // unlock: complete the Lovestruck set (Valentine's drop, Feb 8–14)
   { id: 'eye_glow',   name: '✦ Glow Eyes',   slot: 'eyes', value: 'glow',   price: 1.50, tier: 'premium' },
   { id: 'eye_blaze',  name: '🔥 Blaze Eyes',  slot: 'eyes', value: 'blaze',  price: 3.00, tier: 'rare' },
   { id: 'eye_frost',  name: '❄️ Frost Eyes',  slot: 'eyes', value: 'frost',  price: 3.00, tier: 'rare' },

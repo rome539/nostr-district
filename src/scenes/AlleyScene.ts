@@ -13,6 +13,7 @@ import Phaser from 'phaser';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { ScavengeSystem } from './ScavengeSystem';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
+import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
 import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { GAME_HEIGHT, GROUND_Y, PLAYER_SPEED, P, hexToNum, fitPromptBubble, positionPromptBubble } from '../config/game.config';
@@ -61,6 +62,8 @@ export class AlleyScene extends BaseScene {
   private batEngine: BatEngine | null = null;
   private glowingEyes: GlowingEyesEngine | null = null;
   private groundFog: GroundFogEngine | null = null;
+  private valentineGraphics: Phaser.GameObjects.Graphics | null = null;
+  private heartsEngine: HeartsEngine | null = null;
   private scavenge: ScavengeSystem | null = null;
 
   // Water drip particles
@@ -124,6 +127,10 @@ export class AlleyScene extends BaseScene {
         [80,  FLOOR_Y - 70], [350, FLOOR_Y - 55], [620, FLOOR_Y - 80], [900, FLOOR_Y - 65],
       ]);
       this.groundFog = new GroundFogEngine(W, FLOOR_Y + 5, 10);
+    }
+    if (isValentinePeriod()) {
+      this.valentineGraphics = this.add.graphics().setDepth(4);
+      this.heartsEngine = newHeartsEngine(W, FLOOR_Y, { count: 6 });
     }
     this.emoteGraphics = this.add.graphics().setDepth(15);
 
@@ -804,6 +811,14 @@ export class AlleyScene extends BaseScene {
       drawPumpkinPhaser(this.halloweenGraphics, 180,  FLOOR_Y, 14, glow);
       drawPumpkinPhaser(this.halloweenGraphics, 500,  FLOOR_Y, 12, glow * 0.8);
       drawPumpkinPhaser(this.halloweenGraphics, 820,  FLOOR_Y, 14, glow);
+    }
+    if (this.valentineGraphics) {
+      this.valentineGraphics.clear();
+      if (this.heartsEngine) { this.heartsEngine.tick(time, delta); drawHeartsPhaser(this.valentineGraphics, this.heartsEngine); }
+      const glow = 0.55 + Math.sin(time * 0.002) * 0.3;
+      drawHeartLanternPhaser(this.valentineGraphics, 180, FLOOR_Y, 6, glow);
+      drawHeartLanternPhaser(this.valentineGraphics, 500, FLOOR_Y, 5, glow * 0.8);
+      drawHeartLanternPhaser(this.valentineGraphics, 820, FLOOR_Y, 6, glow);
     }
     this.updateFortuneProximity();
     this.updateTarotProximity();

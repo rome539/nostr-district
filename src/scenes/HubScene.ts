@@ -4,6 +4,7 @@ import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, 
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
+import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
 import {
   connectPresence, setPresenceCallbacks, sendPosition, sendChat, sendRoomChange,
   sendRoomRequest, sendRoomResponse, requestOnlinePlayers, sendAvatarUpdate,
@@ -85,6 +86,9 @@ export class HubScene extends BaseScene {
   private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
   private glowingEyes: GlowingEyesEngine | null = null;
   private groundFog: GroundFogEngine | null = null;
+  private valentineGraphics: Phaser.GameObjects.Graphics | null = null;
+  private heartsGraphics: Phaser.GameObjects.Graphics | null = null;
+  private heartsEngine: HeartsEngine | null = null;
   private scavenge: ScavengeSystem | null = null;
   private readonly BULLETIN_X = 860;
   private readonly CREW_BOARD_X = 615;
@@ -254,6 +258,11 @@ export class HubScene extends BaseScene {
       ]);
       this.groundFog = new GroundFogEngine(WORLD_WIDTH, GROUND_Y + 10, 16);
     }
+    if (isValentinePeriod()) {
+      this.valentineGraphics = this.add.graphics().setDepth(1);
+      this.heartsGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
+      this.heartsEngine = newHeartsEngine(GAME_WIDTH, GROUND_Y, { count: 8 });
+    }
     this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
 this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteGraphics = this.add.graphics().setDepth(15);
@@ -329,6 +338,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.fwGraphics?.destroy(); this.fwEngine = null;
       this.batGraphics?.destroy(); this.batEngine = null;
       this.halloweenGraphics?.destroy(); this.glowingEyes = null; this.groundFog = null;
+      this.valentineGraphics?.destroy(); this.heartsGraphics?.destroy(); this.heartsEngine = null;
       this.chimneyGraphics?.destroy(); this.chimneyParticles = [];
     });
   }
@@ -359,6 +369,19 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       for (const [px, py, ps] of pumpkinPositions) drawPumpkinPhaser(this.halloweenGraphics, px, py, ps, glow);
       // Glowing eyes in dark corners
       if (this.glowingEyes) { this.glowingEyes.tick(delta); drawEyesPhaser(this.halloweenGraphics, this.glowingEyes, time); }
+    }
+    if (this.valentineGraphics) {
+      this.valentineGraphics.clear();
+      const glow = 0.55 + Math.sin(time * 0.002) * 0.3;
+      const lanterns: [number, number, number][] = [
+        [310, GROUND_Y, 4], [620, GROUND_Y, 5], [870, GROUND_Y, 4], [1100, GROUND_Y, 5], [1420, GROUND_Y, 4],
+      ];
+      for (const [px, py, ps] of lanterns) drawHeartLanternPhaser(this.valentineGraphics, px, py, ps, glow);
+    }
+    if (this.heartsEngine && this.heartsGraphics) {
+      this.heartsGraphics.clear();
+      this.heartsEngine.tick(time, delta);
+      drawHeartsPhaser(this.heartsGraphics, this.heartsEngine);
     }
     this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
     this.updateChimneySmoke(delta);

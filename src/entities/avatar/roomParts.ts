@@ -320,10 +320,10 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       // Bright 2x2 pupils with flame tip row above
       x.globalAlpha = 0.65;
       x.fillRect(8,  oY + 4, 2, 1); // left flame tip
-      x.fillRect(15, oY + 4, 2, 1); // right flame tip
+      x.fillRect(14, oY + 4, 2, 1); // right flame tip
       x.globalAlpha = 1.0;
       x.fillRect(8,  oY + 5, 2, 2); // left pupil
-      x.fillRect(15, oY + 5, 2, 2); // right pupil
+      x.fillRect(14, oY + 5, 2, 2); // right pupil
       break;
     case 'frost':
       // Vertical ice shard — bright center 2x2, dim 2x1 tips; cry positions (x=8, x=15)
@@ -447,10 +447,10 @@ export function drawRoomEyes(x: CanvasRenderingContext2D, a: AvatarConfig, oY: n
       // 2x2 iris with one grey pixel rotating clockwise around the four corners.
       const c = DIZZY_CORNERS[eyeMotionStep('dizzy')];
       x.globalAlpha = 0.85;
-      x.fillRect(8, oY + 5, 2, 2); x.fillRect(15, oY + 5, 2, 2);
+      x.fillRect(8, oY + 5, 2, 2); x.fillRect(14, oY + 5, 2, 2);
       x.fillStyle = darken(col, 55); x.globalAlpha = 1;
       x.fillRect(8 + c[0],  oY + 5 + c[1], 1, 1);
-      x.fillRect(15 + c[0], oY + 5 + c[1], 1, 1);
+      x.fillRect(14 + c[0], oY + 5 + c[1], 1, 1);
       x.fillStyle = col;
       break;
     }

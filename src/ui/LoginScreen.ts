@@ -695,7 +695,8 @@ export class LoginScreen {
       }
       .login-title {
         font-size: clamp(22px, 7vw, 32px); color: var(--nd-accent);
-        margin: 14px 0 6px 0; letter-spacing: 3px;
+        /* shrink to the text so only "NOSTR DISTRICT" is the click/hover hitbox */
+        width: fit-content; max-width: 100%; margin: 14px auto 6px auto; letter-spacing: 3px;
         text-shadow: 0 0 20px color-mix(in srgb, var(--nd-accent) 50%, transparent);
         cursor: pointer; transition: text-shadow 0.2s ease; user-select: none;
       }
