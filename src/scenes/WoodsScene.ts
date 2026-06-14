@@ -17,7 +17,7 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
-import { isRoaming, setRoaming } from '../stores/roamStore';
+import { isRoaming } from '../stores/roamStore';
 import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble, positionPromptBubble } from '../config/game.config';
@@ -242,9 +242,9 @@ export class WoodsScene extends BaseScene {
 
     this.createPlayer();
     // /roam: stroll all the way out onto the dock to the fishing point (~DOCK_X+20;
-    // movement clamps at DOCK_X so it can't walk into the lake), pause, then head back
-    // to the district edge (x≥W-24 → hub).
-    this.roamConfig = { deepX: DOCK_X + 20, exitX: WORLD_WIDTH + 40 };
+    // movement clamps at DOCK_X so it can't walk into the lake), pause there with a 🤔
+    // (like it's thinking about fishing), then head back to the district edge (→ hub).
+    this.roamConfig = { deepX: DOCK_X + 20, exitX: WORLD_WIDTH + 40, restEmote: 'think' };
     this.resetRoam();
     const rerenderPlayerSprite = () => {
       const av = getAvatar();
@@ -917,21 +917,28 @@ export class WoodsScene extends BaseScene {
   }
 
   private updateMovement(delta: number): void {
-    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
-    const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
-    if (c) {
-      if (c.left.isDown) vx = -PLAYER_SPEED;
-      else if (c.right.isDown) vx = PLAYER_SPEED;
+    if (this.shouldBlockPanelKeys()) {
+      // Panels block manual movement, but the /roam autopilot keeps strolling so you
+      // can browse the bazaar while your avatar wanders. Frozen as before if not roaming.
+      const rv = this.roamVX();
+      if (rv == null) { this.isKeyboardMoving = false; return; }
+      vx = rv;
+    } else {
+      const c = this.input.keyboard?.createCursorKeys();
+      if (c) {
+        if (c.left.isDown) vx = -PLAYER_SPEED;
+        else if (c.right.isDown) vx = PLAYER_SPEED;
+      }
+      if (vx === 0) {
+        if (this.mobileLeft) vx = -PLAYER_SPEED;
+        else if (this.mobileRight) vx = PLAYER_SPEED;
+      }
+      // /roam: manual input cancels it; otherwise the autopilot drives.
+      if (vx !== 0) { if (isRoaming()) this.stopRoam(); }
+      else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     }
-    if (vx === 0) {
-      if (this.mobileLeft) vx = -PLAYER_SPEED;
-      else if (this.mobileRight) vx = PLAYER_SPEED;
-    }
-    // /roam: manual input cancels it; otherwise the autopilot drives.
-    if (vx !== 0) { if (isRoaming()) setRoaming(false); }
-    else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     this.isKeyboardMoving = vx !== 0;
 
     if (vx !== 0) {

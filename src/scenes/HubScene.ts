@@ -11,7 +11,7 @@ import {
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
   isPresenceReady,
 } from '../nostr/presenceService';
-import { isRoaming, setRoaming } from '../stores/roamStore';
+import { isRoaming } from '../stores/roamStore';
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
 import { startCrewJoinReqSubscription } from '../nostr/crewService';
 import { ChatUI } from '../ui/ChatUI';
@@ -744,21 +744,28 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
   }
   private updateMovement(delta: number): void {
-    if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
-    const c = this.input.keyboard?.createCursorKeys();
     let vx = 0;
-    if (c) {
-      if (c.left.isDown) vx = -PLAYER_SPEED;
-      else if (c.right.isDown) vx = PLAYER_SPEED;
+    if (this.shouldBlockPanelKeys()) {
+      // Panels block manual movement, but the /roam autopilot keeps strolling so you
+      // can browse the bazaar while your avatar wanders. Frozen as before if not roaming.
+      const rv = this.roamVX();
+      if (rv == null) { this.isKeyboardMoving = false; return; }
+      vx = rv;
+    } else {
+      const c = this.input.keyboard?.createCursorKeys();
+      if (c) {
+        if (c.left.isDown) vx = -PLAYER_SPEED;
+        else if (c.right.isDown) vx = PLAYER_SPEED;
+      }
+      if (vx === 0) {
+        if (this.mobileLeft) vx = -PLAYER_SPEED;
+        else if (this.mobileRight) vx = PLAYER_SPEED;
+      }
+      // /roam: manual input cancels it; otherwise the autopilot drives.
+      if (vx !== 0) { if (isRoaming()) this.stopRoam(); }
+      else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     }
-    if (vx === 0) {
-      if (this.mobileLeft) vx = -PLAYER_SPEED;
-      else if (this.mobileRight) vx = PLAYER_SPEED;
-    }
-    // /roam: manual input cancels it; otherwise the autopilot drives.
-    if (vx !== 0) { if (isRoaming()) setRoaming(false); }
-    else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     this.isKeyboardMoving = vx !== 0;
 
     if (vx !== 0 && (this.nearBuilding || this.nearCrewBoard || this.nearBulletinBoard)) {

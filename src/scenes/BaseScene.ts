@@ -93,7 +93,7 @@ import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
 import { GROUND_Y, P, NAME_FONT, PLAYER_SPEED } from '../config/game.config';
-import { isRoaming, toggleRoaming } from '../stores/roamStore';
+import { isRoaming, setRoaming, toggleRoaming } from '../stores/roamStore';
 import { addSeenPubkey } from '../stores/seenPlayersStore';
 
 // ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
@@ -501,10 +501,11 @@ export abstract class BaseScene extends Phaser.Scene {
   // Subclasses (hub, woods) set roamConfig in create() to participate. deepX = how
   // far INTO the scene to stroll before turning back; exitX = past the edge that
   // leads to the other scene (the scene's normal edge check does the transition).
-  protected roamConfig: { deepX: number; exitX: number } | null = null;
+  protected roamConfig: { deepX: number; exitX: number; restEmote?: string } | null = null;
   private roamPhase: 'explore' | 'exit' = 'explore';
   private roamWalking = false;
   private roamUntil = 0;
+  private roamEmote: string | null = null; // emote currently shown by roam (so we clear it)
 
   // ── Mobile controls ────────────────────────────────────────────────────────
   protected mobileLeft  = false;
@@ -1898,21 +1899,57 @@ export abstract class BaseScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════════════
   /** Reset the per-scene roam state. Call when a roaming scene starts (the avatar
    *  explores fresh each time it enters a scene) and whenever /roam toggles. */
-  protected resetRoam(): void { this.roamPhase = 'explore'; this.roamWalking = false; this.roamUntil = 0; }
+  protected resetRoam(): void {
+    this.clearRoamEmote();
+    this.roamPhase = 'explore'; this.roamWalking = false; this.roamUntil = 0;
+  }
+
+  /** Stop roaming and clear any roam emote (used when manual input takes over). */
+  protected stopRoam(): void { setRoaming(false); this.clearRoamEmote(); }
+
+  // Show / hide a roam emote, broadcasting it like a normal /emote so others see it.
+  private triggerRoamEmote(name: string): void {
+    if (this.roamEmote === name) return;
+    this.clearRoamEmote();
+    this.emoteSet.start(name);
+    sendChat(`/emote ${name}_on`);
+    this.roamEmote = name;
+  }
+  private clearRoamEmote(): void {
+    if (!this.roamEmote) return;
+    const name = this.roamEmote; this.roamEmote = null;
+    this.emoteSet.stop(name);
+    sendChat(`/emote ${name}_off`);
+  }
 
   /** Autopilot horizontal velocity for the /roam easter egg this frame, or null when
-   *  not roaming / scene doesn't participate. Strolls deep into the scene, turns, then
-   *  heads for the exit edge (which the scene's own edge check uses to transition),
-   *  pausing briefly now and then. */
+   *  not roaming / scene doesn't participate. Strolls deep into the scene, rests there
+   *  (with restEmote if set — e.g. 🤔 at the dock), turns back to the exit edge (which
+   *  the scene's own edge check uses to transition), and naps (💤) on the odd pause. */
   protected roamVX(): number | null {
     if (!isRoaming() || !this.roamConfig) return null;
     const x = this.getPlayerSprite().x;
-    const { deepX, exitX } = this.roamConfig;
-    if (this.roamPhase === 'explore' && Math.abs(x - deepX) <= 12) this.roamPhase = 'exit';
+    const { deepX, exitX, restEmote } = this.roamConfig;
     const now = this.time.now;
+
+    // Reached the far point → linger here (longer pause + rest emote) before heading back.
+    if (this.roamPhase === 'explore' && Math.abs(x - deepX) <= 12) {
+      this.roamPhase = 'exit';
+      this.roamWalking = false;
+      this.roamUntil = now + 2400 + Math.random() * 2600;
+      if (restEmote && Math.random() < 0.4) this.triggerRoamEmote(restEmote); // 🤔 only sometimes
+      return 0;
+    }
+
     if (now >= this.roamUntil) { // alternate walk / brief pause for a natural stroll
       this.roamWalking = !this.roamWalking;
-      this.roamUntil = now + (this.roamWalking ? 2600 + Math.random() * 3400 : 500 + Math.random() * 1500);
+      if (this.roamWalking) {
+        this.clearRoamEmote(); // moving again
+        this.roamUntil = now + 2600 + Math.random() * 3400;
+      } else {
+        this.roamUntil = now + 600 + Math.random() * 1600;
+        if (Math.random() < 0.18) this.triggerRoamEmote('zzz'); // occasional nap on a pause
+      }
     }
     if (!this.roamWalking) return 0;
     const target = this.roamPhase === 'explore' ? deepX : exitX;
