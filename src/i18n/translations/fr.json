@@ -655,6 +655,8 @@
   "sys.already_in_hub": "Déjà dans le hub !",
   "sys.woods_closed": "Les bois sont temporairement fermés.",
   "sys.unknown_cmd": "Inconnu : /{cmd}",
+  "sys.roam.on": "Balade dans le district… bougez pour reprendre le contrôle.",
+  "sys.roam.off": "Balade désactivée.",
   "sys.dm.need_key": "Les DM nécessitent une clé Nostr",
   "sys.dm.opening": "Ouverture du DM…",
   "sys.not_found": "\"{name}\" introuvable",

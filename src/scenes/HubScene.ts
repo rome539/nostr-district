@@ -11,6 +11,7 @@ import {
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler,
   isPresenceReady,
 } from '../nostr/presenceService';
+import { isRoaming, setRoaming } from '../stores/roamStore';
 import { startDMSubscription, canUseDMs } from '../nostr/dmService';
 import { startCrewJoinReqSubscription } from '../nostr/crewService';
 import { ChatUI } from '../ui/ChatUI';
@@ -267,6 +268,10 @@ export class HubScene extends BaseScene {
 this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.emoteGraphics = this.add.graphics().setDepth(15);
     this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard(); this.createCrewBoard(); this.createWoodsSign();
+    // /roam: stroll right into the plaza (alley/buildings are E-gated, so safe), then
+    // back to the woods edge (x≤24). resetRoam so each entry explores fresh.
+    this.roamConfig = { deepX: 1450, exitX: 0 };
+    this.resetRoam();
     onNextAvatarSync(() => {
       this.generateWalkFrames(getAvatar());
       if (this.textures.exists('player')) this.textures.remove('player');
@@ -751,6 +756,9 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       if (this.mobileLeft) vx = -PLAYER_SPEED;
       else if (this.mobileRight) vx = PLAYER_SPEED;
     }
+    // /roam: manual input cancels it; otherwise the autopilot drives.
+    if (vx !== 0) { if (isRoaming()) setRoaming(false); }
+    else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     this.isKeyboardMoving = vx !== 0;
 
     if (vx !== 0 && (this.nearBuilding || this.nearCrewBoard || this.nearBulletinBoard)) {

@@ -655,6 +655,8 @@
   "sys.already_in_hub": "Già nell'hub!",
   "sys.woods_closed": "I boschi sono momentaneamente chiusi.",
   "sys.unknown_cmd": "Sconosciuto: /{cmd}",
+  "sys.roam.on": "In giro per il distretto… muoviti per riprendere il controllo.",
+  "sys.roam.off": "Vagabondaggio disattivato.",
   "sys.dm.need_key": "I DM richiedono una chiave Nostr",
   "sys.dm.opening": "Apertura messaggio diretto...",
   "sys.not_found": "\"{name}\" non trovato",

@@ -655,6 +655,8 @@
   "sys.already_in_hub": "Schon im Hub!",
   "sys.woods_closed": "Der Wald ist vorübergehend geschlossen.",
   "sys.unknown_cmd": "Unbekannt: /{cmd}",
+  "sys.roam.on": "Streift durchs Viertel… bewege dich, um die Kontrolle zurückzuholen.",
+  "sys.roam.off": "Streifen aus.",
   "sys.dm.need_key": "DMs erfordern einen Nostr-Schlüssel",
   "sys.dm.opening": "Eröffnungs-DM…",
   "sys.not_found": "„{name}“ nicht gefunden",

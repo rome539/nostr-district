@@ -92,7 +92,8 @@ import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
-import { GROUND_Y, P, NAME_FONT } from '../config/game.config';
+import { GROUND_Y, P, NAME_FONT, PLAYER_SPEED } from '../config/game.config';
+import { isRoaming, toggleRoaming } from '../stores/roamStore';
 import { addSeenPubkey } from '../stores/seenPlayersStore';
 
 // ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
@@ -495,6 +496,15 @@ export abstract class BaseScene extends Phaser.Scene {
   protected walkTime       = 0;
   protected walkFrame      = 0;
   protected footTimer      = 0;
+
+  // ── /roam autopilot (easter egg) ─────────────────────────────────────────────
+  // Subclasses (hub, woods) set roamConfig in create() to participate. deepX = how
+  // far INTO the scene to stroll before turning back; exitX = past the edge that
+  // leads to the other scene (the scene's normal edge check does the transition).
+  protected roamConfig: { deepX: number; exitX: number } | null = null;
+  private roamPhase: 'explore' | 'exit' = 'explore';
+  private roamWalking = false;
+  private roamUntil = 0;
 
   // ── Mobile controls ────────────────────────────────────────────────────────
   protected mobileLeft  = false;
@@ -1884,6 +1894,32 @@ export abstract class BaseScene extends Phaser.Scene {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // /roam autopilot
+  // ══════════════════════════════════════════════════════════════════════════
+  /** Reset the per-scene roam state. Call when a roaming scene starts (the avatar
+   *  explores fresh each time it enters a scene) and whenever /roam toggles. */
+  protected resetRoam(): void { this.roamPhase = 'explore'; this.roamWalking = false; this.roamUntil = 0; }
+
+  /** Autopilot horizontal velocity for the /roam easter egg this frame, or null when
+   *  not roaming / scene doesn't participate. Strolls deep into the scene, turns, then
+   *  heads for the exit edge (which the scene's own edge check uses to transition),
+   *  pausing briefly now and then. */
+  protected roamVX(): number | null {
+    if (!isRoaming() || !this.roamConfig) return null;
+    const x = this.getPlayerSprite().x;
+    const { deepX, exitX } = this.roamConfig;
+    if (this.roamPhase === 'explore' && Math.abs(x - deepX) <= 12) this.roamPhase = 'exit';
+    const now = this.time.now;
+    if (now >= this.roamUntil) { // alternate walk / brief pause for a natural stroll
+      this.roamWalking = !this.roamWalking;
+      this.roamUntil = now + (this.roamWalking ? 2600 + Math.random() * 3400 : 500 + Math.random() * 1500);
+    }
+    if (!this.roamWalking) return 0;
+    const target = this.roamPhase === 'explore' ? deepX : exitX;
+    return Math.sign(target - x) * PLAYER_SPEED;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // COMMON COMMAND HANDLER
   // ══════════════════════════════════════════════════════════════════════════
   protected handleCommonCommand(cmd: string, arg: string): boolean {
@@ -2094,6 +2130,14 @@ export abstract class BaseScene extends Phaser.Scene {
       // ── World map ──────────────────────────────────────────────────────────
       case 'map': case 'world':
         this.worldMap.toggle(); return true;
+
+      // ── /roam (easter egg) — auto-stroll the hub ↔ woods loop until you move ──
+      case 'roam': {
+        const on = toggleRoaming();
+        this.resetRoam();
+        this.chatUI.addMessage('system', ti18n(on ? 'sys.roam.on' : 'sys.roam.off'), ac);
+        return true;
+      }
 
       // ── Visit ────────────────────────────────────────────────────────────
       case 'visit': {

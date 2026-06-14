@@ -655,6 +655,8 @@
   "sys.already_in_hub": "Já está no hub!",
   "sys.woods_closed": "A floresta está temporariamente fechada.",
   "sys.unknown_cmd": "Desconhecido: /{cmd}",
+  "sys.roam.on": "Perambulando pelo distrito… mexa-se para retomar o controle.",
+  "sys.roam.off": "Perambular desativado.",
   "sys.dm.need_key": "DMs exigem uma chave Nostr",
   "sys.dm.opening": "Abrindo DM…",
   "sys.not_found": "\"{name}\" não encontrado",

@@ -17,6 +17,7 @@ import { BaseScene } from './BaseScene';
 import { captureThumb } from '../stores/sceneThumbs';
 import { t as ti18n } from '../i18n/i18n';
 import { getStatus } from '../stores/statusStore';
+import { isRoaming, setRoaming } from '../stores/roamStore';
 import { onNextAvatarSync, signEvent, publishEvent } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble, positionPromptBubble } from '../config/game.config';
@@ -240,6 +241,11 @@ export class WoodsScene extends BaseScene {
     }
 
     this.createPlayer();
+    // /roam: stroll all the way out onto the dock to the fishing point (~DOCK_X+20;
+    // movement clamps at DOCK_X so it can't walk into the lake), pause, then head back
+    // to the district edge (x≥W-24 → hub).
+    this.roamConfig = { deepX: DOCK_X + 20, exitX: WORLD_WIDTH + 40 };
+    this.resetRoam();
     const rerenderPlayerSprite = () => {
       const av = getAvatar();
       for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
@@ -923,6 +929,9 @@ export class WoodsScene extends BaseScene {
       if (this.mobileLeft) vx = -PLAYER_SPEED;
       else if (this.mobileRight) vx = PLAYER_SPEED;
     }
+    // /roam: manual input cancels it; otherwise the autopilot drives.
+    if (vx !== 0) { if (isRoaming()) setRoaming(false); }
+    else { const rv = this.roamVX(); if (rv != null) vx = rv; }
     this.isKeyboardMoving = vx !== 0;
 
     if (vx !== 0) {

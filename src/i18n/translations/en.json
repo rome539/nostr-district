@@ -669,6 +669,8 @@
   "sys.already_in_hub": "Already in the hub!",
   "sys.woods_closed": "The woods are temporarily closed.",
   "sys.unknown_cmd": "Unknown: /{cmd}",
+  "sys.roam.on": "Roaming the district… move to take back control.",
+  "sys.roam.off": "Roam off.",
   "sys.dm.need_key": "DMs require a Nostr key",
   "sys.dm.opening": "Opening DM…",
   "sys.not_found": "\"{name}\" not found",

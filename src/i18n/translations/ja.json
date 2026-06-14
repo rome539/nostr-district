@@ -655,6 +655,8 @@
   "sys.already_in_hub": "すでにハブにいます！",
   "sys.woods_closed": "森は臨時休業中です。",
   "sys.unknown_cmd": "不明: /{cmd}",
+  "sys.roam.on": "街をぶらぶら歩いています…動くと操作を取り戻せます。",
+  "sys.roam.off": "ぶらぶら歩きをオフにしました。",
   "sys.dm.need_key": "DMにはNostrキーが必要です",
   "sys.dm.opening": "DMを開設中…",
   "sys.not_found": "「{name}」が見つかりません",

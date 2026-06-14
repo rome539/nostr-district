@@ -655,6 +655,8 @@
   "sys.already_in_hub": "已经在中心了！",
   "sys.woods_closed": "树林暂时关闭。",
   "sys.unknown_cmd": "未知：/{cmd}",
+  "sys.roam.on": "正在街区里闲逛…移动即可重新掌控。",
+  "sys.roam.off": "闲逛模式已关闭。",
   "sys.dm.need_key": "DM 需要 Nostr 密钥",
   "sys.dm.opening": "打开DM…",
   "sys.not_found": "未找到“{name}”",

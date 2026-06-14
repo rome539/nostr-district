@@ -655,6 +655,8 @@
   "sys.already_in_hub": "Уже в хабе!",
   "sys.woods_closed": "Лес временно закрыт.",
   "sys.unknown_cmd": "Неизвестно: /{cmd}",
+  "sys.roam.on": "Брожу по району… двигайтесь, чтобы вернуть управление.",
+  "sys.roam.off": "Режим блуждания выключен.",
   "sys.dm.need_key": "DM требует ключ Nostr",
   "sys.dm.opening": "Открытие DM…",
   "sys.not_found": "«{name}» не найден",
