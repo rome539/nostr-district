@@ -15,6 +15,27 @@ interface Suggestion { code: string; url: string }
 
 const IS_TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+// Theme the dropdown's scrollbar. Inline styles can't reach the ::-webkit-scrollbar
+// pseudo-elements (Chrome/Safari), so inject a scoped stylesheet once; the standard
+// scrollbar-color/width (Firefox + Chrome 121+) is set inline on the box itself.
+const AC_CLASS = 'nd-emoji-ac';
+function ensureScrollbarStyle(): void {
+  if (document.getElementById('nd-emoji-ac-style')) return;
+  const el = document.createElement('style');
+  el.id = 'nd-emoji-ac-style';
+  el.textContent = `
+    .${AC_CLASS}::-webkit-scrollbar { width: 8px; }
+    .${AC_CLASS}::-webkit-scrollbar-track { background: transparent; }
+    .${AC_CLASS}::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--nd-accent) 45%, #2a2a4a);
+      border-radius: 8px; border: 2px solid transparent; background-clip: padding-box;
+    }
+    .${AC_CLASS}::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--nd-accent) 70%, #2a2a4a); background-clip: padding-box;
+    }`;
+  document.head.appendChild(el);
+}
+
 // Matches a `:query` token ending at the caret, only when the colon starts at the
 // beginning or follows whitespace — so URLs like http://… never trigger it.
 const TOKEN_RE = /(^|\s):([a-zA-Z0-9_-]*)$/;
@@ -121,10 +142,13 @@ export function attachEmojiAutocomplete(field: Field): () => void {
     items = next;
     sel = Math.min(sel, items.length - 1);
     if (!box) {
+      ensureScrollbarStyle();
       box = document.createElement('div');
+      box.className = AC_CLASS;
       box.style.cssText = [
         'position:fixed;z-index:2147483000;max-width:min(280px,92vw);overflow-y:auto',
         '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y',
+        'scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--nd-accent) 50%,#2a2a4a) transparent',
         'background:#0c0c1c;border:1px solid color-mix(in srgb,var(--nd-accent) 45%,#2a2a4a)',
         'border-radius:7px;box-shadow:0 6px 24px rgba(0,0,0,0.55);padding:3px',
       ].join(';');
