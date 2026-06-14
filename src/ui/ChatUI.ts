@@ -5,6 +5,7 @@
 
 import Phaser from 'phaser';
 import { sendChat } from '../nostr/presenceService';
+import { NAME_FONT } from '../config/game.config';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 import { maybeTranslate } from '../i18n/translator';
@@ -503,15 +504,24 @@ export class ChatUI {
     }
 
     const displayText = truncated;
+    const fontSize = (scene as unknown as { getBubbleFontSize?: () => string }).getBubbleFontSize?.() ?? '12px';
     const bubbleText = scene.add.text(bx, by - 10, displayText, {
-      fontFamily: '"Courier New", monospace', fontSize: '12px', color: tint, align: 'center',
+      fontFamily: NAME_FONT, fontSize, color: tint, align: 'center',
       backgroundColor: '#0a0014cc', padding: { x: 6, y: 4 },
       wordWrap: { width: 220, useAdvancedWrap: true },
       ...(NEON_COLORS.has(tint) ? { shadow: { offsetX: 0, offsetY: 0, color: tint, blur: 4, fill: true } } : {}),
     });
-    bubbleText.setOrigin(0.5); bubbleText.setDepth(9999);
+    // Bottom-anchor the bubble so long (multi-line) messages grow UPWARD above the
+    // head instead of expanding down over the player's face. We pin the bottom edge
+    // where a single-line bubble's bottom would sit, so short bubbles are unchanged
+    // and tall ones extend toward the ceiling.
+    bubbleText.setOrigin(0.5, 1); bubbleText.setDepth(9999);
+    const lineCount = Math.max(1, bubbleText.getWrappedText(displayText).length);
+    const oneLineH = (bubbleText.height - 8) / lineCount + 8; // single-line height (pad y = 4 per side)
+    const bottomY = (by - 16) + oneLineH / 2;
+    bubbleText.y = bottomY + 6;
     bubbleText.setAlpha(0);
-    scene.tweens.add({ targets: bubbleText, alpha: 1, y: by - 16, duration: 200, ease: 'Quad.easeOut' });
+    scene.tweens.add({ targets: bubbleText, alpha: 1, y: bottomY, duration: 200, ease: 'Quad.easeOut' });
     scene.time.delayedCall(lifetime - 400, () => {
       scene.tweens.add({
         targets: bubbleText, alpha: 0, y: `-=10`, duration: 400, ease: 'Quad.easeIn',

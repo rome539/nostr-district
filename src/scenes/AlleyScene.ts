@@ -49,6 +49,9 @@ const VENDING_URL    = 'assets/furniture/vending-machine-bazaar.png'; // web-saf
 const POSTER_X       = 706;  // oracle's wanted poster (wall right of the vending machine)
 const POSTER_RANGE   = 40;
 
+/** Single source of truth for Alley name tags (local + other players). */
+const ALLEY_NAME_STYLE: import('./BaseScene').NameTagStyle = { fontSize: '11px', color: P.lpurp, bg: '#0a0014ee', padding: { x: 5, y: 3 } };
+
 export class AlleyScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
 
@@ -743,11 +746,7 @@ export class AlleyScene extends BaseScene {
     const name = this.registry.get('playerName') || 'guest';
     const status = getStatus();
 
-    this.playerName = this.add.text(spawnX, this.playerY + 14, name.slice(0, 14), {
-      fontFamily: '"Courier New", monospace', fontSize: '9px',
-      color: P.lpurp, align: 'center',
-      backgroundColor: '#04081088', padding: { x: 3, y: 1 },
-    }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.makeNameText(spawnX, this.playerY + 14, name, ALLEY_NAME_STYLE, 11);
 
     this.playerStatusText = this.add.text(spawnX, this.playerY + 26, status.slice(0, 30), {
       fontFamily: '"Courier New", monospace', fontSize: '8px',
@@ -760,6 +759,7 @@ export class AlleyScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
   protected override getBubbleYOffset(): number { return -72; }
+  protected override getBubbleFontSize(): string { return ALLEY_NAME_STYLE.fontSize; }
   protected override onPlayerJoinGuard(_p: { pubkey: string }): boolean { return !this.isLeavingScene; }
   protected override handleSceneEsc(): boolean {
     if (FortuneTellerModal.isOpen()) { FortuneTellerModal.destroy(); return true; }
@@ -771,8 +771,8 @@ export class AlleyScene extends BaseScene {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 2,
       nameYOffset: +14, statusYOffset: +26,
-      nameColor: P.lpurp, nameFontSize: '9px', statusFontSize: '8px',
-      nameBg: '#04081088', namePadding: { x: 3, y: 1 },
+      nameColor: ALLEY_NAME_STYLE.color, nameFontSize: ALLEY_NAME_STYLE.fontSize, statusFontSize: '8px',
+      nameBg: ALLEY_NAME_STYLE.bg, namePadding: ALLEY_NAME_STYLE.padding,
       czW: 40, czH: 60, czYOffset: -50,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8],
       useFadeIn: false, interpolateY: false, emoteContext: 'cabin',

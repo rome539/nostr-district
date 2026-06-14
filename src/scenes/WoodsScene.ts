@@ -127,6 +127,9 @@ interface Ember { x: number; y: number; vx: number; vy: number; life: number; ma
 interface Ripple { x: number; y: number; radius: number; maxRadius: number; alpha: number; }
 interface ChimneyPuff { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; }
 
+/** Single source of truth for Woods name tags (local + other players). */
+const WOODS_NAME_STYLE: import('./BaseScene').NameTagStyle = { fontSize: '9px', color: WOODS_ACCENT, bg: '#0a0014ee', padding: { x: 4, y: 2 } };
+
 export class WoodsScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
   private playerGlow!: Phaser.GameObjects.Graphics;
@@ -1123,10 +1126,7 @@ export class WoodsScene extends BaseScene {
     this.player = this.add.image(this.spawnX, this.playerY, 'player').setOrigin(0.5, 1).setDepth(10);
     this.playerSprite = this.player;
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), {
-      fontFamily: '"Courier New", monospace', fontSize: '9px', color: WOODS_ACCENT,
-      align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 },
-    }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.makeNameText(this.player.x, this.playerY + 14, name, WOODS_NAME_STYLE, 11);
     const ms = getStatus();
     this.playerStatusText = this.add.text(this.player.x, this.playerY + 26, ms, {
       fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center',
@@ -2348,12 +2348,13 @@ export class WoodsScene extends BaseScene {
     return false;
   }
 
+  protected override getBubbleFontSize(): string { return WOODS_NAME_STYLE.fontSize; }
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 1,
       nameYOffset: +14, statusYOffset: +26,
-      nameColor: WOODS_ACCENT, nameFontSize: '9px', statusFontSize: '8px',
-      nameBg: '#04081088', namePadding: { x: 3, y: 1 },
+      nameColor: WOODS_NAME_STYLE.color, nameFontSize: WOODS_NAME_STYLE.fontSize, statusFontSize: '8px',
+      nameBg: WOODS_NAME_STYLE.bg, namePadding: WOODS_NAME_STYLE.padding,
       czW: 40, czH: 50, czYOffset: -20,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8],
       useFadeIn: true, interpolateY: false, emoteContext: 'hub',

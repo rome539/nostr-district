@@ -46,6 +46,9 @@ const ENTERABLE: BuildingZone[] = [
   { id: 'market', name: 'MARKET', doorX: 1215, neonColor: P.amber },
 ];
 
+/** Single source of truth for Hub name tags. Local player overrides color to P.teal. */
+const HUB_NAME_STYLE: import('./BaseScene').NameTagStyle = { fontSize: '9px', color: P.lcream, bg: '#0a0014ee', padding: { x: 4, y: 2 } };
+
 export class HubScene extends BaseScene {
   private static readonly WOODS_OPEN = true;
   private player!: Phaser.GameObjects.Image;
@@ -562,12 +565,13 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     return false;
   }
 
+  protected override getBubbleFontSize(): string { return HUB_NAME_STYLE.fontSize; }
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 1,
       nameYOffset: +14, statusYOffset: +26,
-      nameColor: P.lcream, nameFontSize: '10px', statusFontSize: '9px',
-      nameBg: '#0a0014bb', namePadding: { x: 4, y: 2 },
+      nameColor: HUB_NAME_STYLE.color, nameFontSize: HUB_NAME_STYLE.fontSize, statusFontSize: '9px',
+      nameBg: HUB_NAME_STYLE.bg, namePadding: HUB_NAME_STYLE.padding,
       czW: 44, czH: 56, czYOffset: -20,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0x6a4888, 0x4a6080],
       useFadeIn: true, interpolateY: false, emoteContext: 'hub',
@@ -692,10 +696,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.player = this.add.image(sx, this.playerY, 'player').setOrigin(0.5, 1).setScale(1).setDepth(10);
     this.playerSprite = this.player;
     const n = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(sx, this.playerY + 14, n.slice(0, 14), {
-      fontFamily: '"Courier New", monospace', fontSize: '10px', color: P.teal,
-      align: 'center', backgroundColor: '#0a0014bb', padding: { x: 4, y: 2 },
-    }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.makeNameText(sx, this.playerY + 14, n, { ...HUB_NAME_STYLE, color: P.teal }, 11);
 
     const myStatus = getStatus();
     this.playerStatusText = this.add.text(sx, this.playerY + 26, myStatus, {

@@ -33,6 +33,9 @@ const FP_Y    = FLOOR_Y - 14;
 
 interface Ember { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; }
 
+/** Single source of truth for Cabin name tags (local + other players). */
+const CABIN_NAME_STYLE: import('./BaseScene').NameTagStyle = { fontSize: '11px', color: CABIN_ACCENT, bg: '#0a0014ee', padding: { x: 5, y: 3 } };
+
 export class CabinScene extends BaseScene {
   private player!: Phaser.GameObjects.Image;
   private scavenge: ScavengeSystem | null = null;
@@ -1146,7 +1149,7 @@ export class CabinScene extends BaseScene {
     this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
     this.playerSprite = this.player;
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(this.player.x, this.playerY + 14, name.slice(0, 14), { fontFamily: '"Courier New", monospace', fontSize: '9px', color: CABIN_ACCENT, align: 'center', backgroundColor: '#04081088', padding: { x: 3, y: 1 } }).setOrigin(0.5).setDepth(11);
+    this.playerName = this.makeNameText(this.player.x, this.playerY + 14, name, CABIN_NAME_STYLE, 11);
     const ms = getStatus();
     this.playerStatusText = this.add.text(this.player.x, this.playerY + 26, ms, { fontFamily: '"Courier New", monospace', fontSize: '8px', color: P.lpurp, align: 'center' }).setOrigin(0.5).setDepth(11).setAlpha(ms ? 1 : 0);
   }
@@ -1194,6 +1197,7 @@ export class CabinScene extends BaseScene {
   // ══════════════════════════════════════════════════════════════════
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
   protected override getBubbleYOffset(): number { return -72; }
+  protected override getBubbleFontSize(): string { return CABIN_NAME_STYLE.fontSize; }
   protected override onPlayerJoinGuard(_p: { pubkey: string }): boolean { return !this.isLeavingScene; }
   protected override handleSceneChatCommand(_pk: string, _name: string, text: string, isMe: boolean): boolean {
     if (text === '/stoke') {
@@ -1216,8 +1220,8 @@ export class CabinScene extends BaseScene {
     return {
       texKeyPrefix: 'avatar_hub_', scale: 2,
       nameYOffset: +14, statusYOffset: +26,
-      nameColor: CABIN_ACCENT, nameFontSize: '9px', statusFontSize: '8px',
-      nameBg: '#04081088', namePadding: { x: 3, y: 1 },
+      nameColor: CABIN_NAME_STYLE.color, nameFontSize: CABIN_NAME_STYLE.fontSize, statusFontSize: '8px',
+      nameBg: CABIN_NAME_STYLE.bg, namePadding: CABIN_NAME_STYLE.padding,
       czW: 40, czH: 60, czYOffset: -50,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8],
       useFadeIn: true, interpolateY: false, emoteContext: 'cabin',

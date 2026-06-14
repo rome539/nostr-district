@@ -92,7 +92,7 @@ import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
 import { getStatus } from '../stores/statusStore';
-import { GROUND_Y, P } from '../config/game.config';
+import { GROUND_Y, P, NAME_FONT } from '../config/game.config';
 import { addSeenPubkey } from '../stores/seenPlayersStore';
 
 // ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
@@ -412,6 +412,18 @@ export interface OtherPlayerConfig {
   emoteContext: 'hub' | 'cabin' | 'room';
 }
 
+/**
+ * Shared name-tag visual style — the single source of truth for a scene's name tags.
+ * Used for BOTH the local player's name and `getOtherPlayerConfig`, so the two can't drift.
+ * Tweak a scene's tag by editing its one NameTagStyle.
+ */
+export interface NameTagStyle {
+  fontSize: string;
+  color: string;
+  bg: string;
+  padding: { x: number; y: number };
+}
+
 export abstract class BaseScene extends Phaser.Scene {
   // ── Player text (assigned in each scene's createPlayer) ─────────────────
   protected playerName!: Phaser.GameObjects.Text;
@@ -668,7 +680,7 @@ export abstract class BaseScene extends Phaser.Scene {
     const spawnNameColor = isMuted ? '#3d3d55'
       : (avatarConfig.nameColor && !isAnimatedColor(avatarConfig.nameColor) ? avatarConfig.nameColor : cfg.nameColor);
     const nt = this.add.text(px, py + cfg.nameYOffset, name.slice(0, 14), {
-      fontFamily: '"Courier New", monospace', fontSize: cfg.nameFontSize,
+      fontFamily: NAME_FONT, fontSize: cfg.nameFontSize,
       color: spawnNameColor, align: 'center', backgroundColor: cfg.nameBg,
       padding: cfg.namePadding,
     }).setOrigin(0.5).setDepth(9);
@@ -760,9 +772,17 @@ export abstract class BaseScene extends Phaser.Scene {
     }
   }
 
+  /** Create the local player's name-tag Text from a shared NameTagStyle. */
+  protected makeNameText(x: number, y: number, name: string, style: NameTagStyle, depth: number): Phaser.GameObjects.Text {
+    return this.add.text(x, y, name.slice(0, 14), {
+      fontFamily: NAME_FONT, fontSize: style.fontSize,
+      color: style.color, align: 'center', backgroundColor: style.bg, padding: style.padding,
+    }).setOrigin(0.5).setDepth(depth);
+  }
+
   private _buildWaveSet(text: string, ref: Phaser.GameObjects.Text, color: string): WaveCharSet {
     const fontSize = ref.style.fontSize as string;
-    const tmp = this.add.text(0, -9999, 'W', { fontFamily: '"Courier New", monospace', fontSize }).setVisible(false);
+    const tmp = this.add.text(0, -9999, 'W', { fontFamily: NAME_FONT, fontSize }).setVisible(false);
     const charW = tmp.width;
     tmp.destroy();
 
@@ -770,13 +790,13 @@ export abstract class BaseScene extends Phaser.Scene {
     // exact same box (color, padding, corners) without showing any text.
     const pad = (ref.style as any).padding ?? { x: 4, y: 2 };
     const bg = this.add.text(0, 0, text.replace(/\S/g, ' '), {
-      fontFamily: '"Courier New", monospace', fontSize,
+      fontFamily: NAME_FONT, fontSize,
       backgroundColor: ref.style.backgroundColor as string,
       padding: pad,
     }).setOrigin(0.5, 0.5).setDepth(8);
 
     const chars = Array.from(text).map(ch =>
-      this.add.text(0, 0, ch, { fontFamily: '"Courier New", monospace', fontSize, color })
+      this.add.text(0, 0, ch, { fontFamily: NAME_FONT, fontSize, color })
         .setOrigin(0.5, 0.5).setDepth(9)
     );
     return { chars, charW, text, bg };
@@ -1548,6 +1568,13 @@ export abstract class BaseScene extends Phaser.Scene {
    * Default: -48. Alley/Cabin: -94. Room: -155.
    */
   protected getBubbleYOffset(): number { return -36; }
+
+  /**
+   * Chat-bubble font size, per scene — kept proportional to each scene's name tag
+   * (and thus its avatar scale) so bubbles don't dwarf small-avatar scenes.
+   * Overridden in each scene to match its name-tag size.
+   */
+  protected getBubbleFontSize(): string { return '12px'; }
 
   /**
    * Whether to show a sprite bubble when another player activates an emote.

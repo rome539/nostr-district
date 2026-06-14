@@ -530,6 +530,7 @@ export class RoomScene extends BaseScene {
   // ── BaseScene Overrides ──
   protected override getPlayerSprite(): Phaser.GameObjects.Image { return this.player; }
   protected override getBubbleYOffset(): number { return -135; }
+  protected override getBubbleFontSize(): string { return this.nameTagStyle.fontSize; }
   protected override clampPlayerMoveY(y: number): number { return Phaser.Math.Clamp(y, 320, 470); }
   protected override onPresenceCountUpdate(c: number): void { super.onPresenceCountUpdate(c); this.globalPlayerCount = c; }
 
@@ -584,12 +585,16 @@ export class RoomScene extends BaseScene {
   protected override getEyePixelOffsets(): { lx: number; rx: number; yFrac: number } {
     return { lx: -3.5 / 76, rx: 3.5 / 76, yFrac: 45 / 76 };
   }
+  /** Single source of truth for Room name tags (local + other players); color is per-room. */
+  private get nameTagStyle(): import('./BaseScene').NameTagStyle {
+    return { fontSize: '13px', color: this.roomConfig.neonColor, bg: '#0a0014ee', padding: { x: 5, y: 3 } };
+  }
   protected override getOtherPlayerConfig(): import('./BaseScene').OtherPlayerConfig {
     return {
       texKeyPrefix: 'avatar_room_', scale: 3,
       nameYOffset: +14, statusYOffset: +26,
-      nameColor: this.roomConfig.neonColor, nameFontSize: '10px', statusFontSize: '9px',
-      nameBg: '#0a001488', namePadding: { x: 4, y: 2 },
+      nameColor: this.nameTagStyle.color, nameFontSize: this.nameTagStyle.fontSize, statusFontSize: '9px',
+      nameBg: this.nameTagStyle.bg, namePadding: this.nameTagStyle.padding,
       czW: 60, czH: 120, czYOffset: -80,
       tintPalette: [0xe87aab, 0x7b68ee, 0x5dcaa5, 0xfad480, 0xb8a8f8],
       useFadeIn: false, interpolateY: true, emoteContext: 'room',
@@ -656,10 +661,7 @@ export class RoomScene extends BaseScene {
     this.playerSprite = this.player;
     this._localPlayerTexKey = 'player_room';
     const name = this.registry.get('playerName') || 'guest';
-    this.playerName = this.add.text(GAME_WIDTH / 2, this.playerY + 14, name.slice(0, 14), {
-      fontFamily: '"Courier New", monospace', fontSize: '10px', color: this.roomConfig.neonColor,
-      align: 'center', backgroundColor: '#0a001488', padding: { x: 4, y: 2 },
-    }).setOrigin(0.5).setDepth(this.playerY + 1);
+    this.playerName = this.makeNameText(GAME_WIDTH / 2, this.playerY + 14, name, this.nameTagStyle, this.playerY + 1);
     const myStatus = getStatus();
     this.playerStatusText = this.add.text(GAME_WIDTH / 2, this.playerY + 26, myStatus, {
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center',

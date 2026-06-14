@@ -20,7 +20,24 @@ export class BootScene extends Phaser.Scene {
     this.generateRoomPlayerSprite();
     this.generateNeonSignFrames();
     initFeedService();
-    this.scene.start('HubScene');
+    this.startFirstScene();
+  }
+
+  /**
+   * Start the first scene only after the name-tag font (JetBrains Mono) is loaded,
+   * so Phaser doesn't rasterize names with the Courier fallback. Times out after
+   * 1.5s so a slow/failed font fetch can never hang the boot.
+   */
+  private startFirstScene(): void {
+    const go = () => this.scene.start('HubScene');
+    const fonts = (document as unknown as { fonts?: { load(f: string): Promise<unknown>; ready: Promise<unknown> } }).fonts;
+    if (!fonts?.load) { go(); return; }
+    let started = false;
+    const start = () => { if (!started) { started = true; go(); } };
+    Promise.race([
+      fonts.load("500 13px 'JetBrains Mono'").then(() => fonts.ready),
+      new Promise((r) => setTimeout(r, 1500)),
+    ]).then(start, start);
   }
 
   // ================================================================

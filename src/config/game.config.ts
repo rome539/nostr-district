@@ -11,6 +11,8 @@ export const GAME_HEIGHT = 480;
 export const WORLD_WIDTH = 1600;
 export const PLAYER_SPEED = 120;
 export const GROUND_Y = 340;
+/** Self-hosted JetBrains Mono Medium (fuller body), Courier fallback while it loads. Used for name tags + chat bubbles. Monospace keeps per-char name anims aligned. */
+export const NAME_FONT = '"JetBrains Mono", "Courier New", monospace';
 
 // ── Extended Palette ──
 export const P = {

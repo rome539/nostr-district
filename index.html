@@ -72,6 +72,14 @@
   </script>
 
   <style>
+    /* Self-hosted name-tag font (CSP-safe: font-src 'self'). Medium weight = fuller body than Courier. */
+    @font-face {
+      font-family: 'JetBrains Mono';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     input, textarea, .nd-chat-log.nd-chat-focused, .nd-chat-log.nd-chat-focused *, .dm-messages, .dm-messages *, .cp-messages, .cp-messages * { user-select: text; -webkit-user-select: text; }
     html { width: 100%; height: 100dvh; overflow: hidden; background: #0D0221; }
