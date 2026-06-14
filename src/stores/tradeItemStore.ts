@@ -1834,18 +1834,42 @@ const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: number[]
 };
 const SCAVENGE_SCENES = Object.keys(SCAVENGE_SPAWN);
 
-// Respawn delay after a spot is collected — random 20min … 45min (avg 32.5 →
-// ~5.5 pickups/hr across 3 spots). A touch faster than the prior 20-50min, but the
-// faucet still sits near the bounty sink (~28 commons/wk) for moderate players
-// rather than overflowing it; the 4% legendary odds keep legendary-gated sets on
-// pace. The server bucket refills 1/5min (~12/hr) so honest streaks never hit the
-// cooldown (5.5/hr legit leaves comfortable headroom).
-const SCAVENGE_RESPAWN_MIN = 20 * 60 * 1000;
-const SCAVENGE_RESPAWN_MAX = 45 * 60 * 1000;
+// Scavenge spots use a steady "spawn bucket" instead of N independent respawn
+// timers. The old model gave each of 3 spots its own 20-45min timer; those sync up
+// (first run, or returning after a break) so all three appear together, then nothing
+// for half an hour. Here spots refill on ONE global cadence: keep up to MAX active,
+// add a new one every ~SPAWN_MIN..MAX. Collecting frees a slot that refills on the
+// same schedule — so spots trickle in one at a time. Same long-run faucet, evenly
+// spaced (so set-completion math is unchanged).
+//
+// Cadence matches the prior faucet: base avg 11min ≈ 5.5 spawns/hr (was 3×(20-45));
+// holiday avg 16min ≈ 3.75/hr (was 2×(20-45)). Well under the server's ~12/hr mint
+// bucket, and the steady spacing is LESS bursty than before, so the limiter gets
+// MORE headroom, not less.
+const SCAV_MAX_SPOTS = 3;
+const SCAV_SPAWN_MIN = 8  * 60 * 1000;
+const SCAV_SPAWN_MAX = 14 * 60 * 1000;
+const HOL_MAX_SPOTS  = 2;
+const HOL_SPAWN_MIN  = 12 * 60 * 1000;
+const HOL_SPAWN_MAX  = 20 * 60 * 1000;
 
-interface ScavSlot { scene: string; x: number; readyAt: number; }
-const SLOTS_KEY = 'nd_scavenge_slots_v2';
-let _slots: ScavSlot[] | null = null;
+interface ScavSpot  { id: string; scene: string; x: number; }
+// A bucket of active spots + when the next one is scheduled. `seq` mints unique ids;
+// `holidayId` tags the holiday bucket so a new holiday starts fresh.
+interface ScavState { spots: ScavSpot[]; nextSpawnAt: number; seq: number; holidayId?: string; }
+
+const SCAV_STATE_KEY = 'nd_scavenge_state_v3';
+const HOL_STATE_KEY  = 'nd_holiday_state_v2';
+let _scav: ScavState | null = null;
+let _hol:  ScavState | null = null;
+
+// One-time cleanup: the pre-bucket model stored spawn state under these keys, which
+// the new schema (above) no longer reads. Drop the orphans so they don't linger in
+// returning players' localStorage.
+try {
+  localStorage.removeItem('nd_scavenge_slots_v2');
+  localStorage.removeItem('nd_holiday_slots_v1');
+} catch { /* ignore */ }
 
 function pickScavengeX(scene: string): number {
   const cfg = SCAVENGE_SPAWN[scene];
@@ -1856,25 +1880,52 @@ function pickScavengeX(scene: string): number {
   return Math.round(cfg.min + Math.random() * (cfg.max - cfg.min));
 }
 
-function rollSlot(delay = 0): ScavSlot {
+const spawnInterval = (min: number, max: number): number => min + Math.random() * (max - min);
+
+function newScavSpot(prefix: string, seq: number): ScavSpot {
   const scene = SCAVENGE_SCENES[Math.floor(Math.random() * SCAVENGE_SCENES.length)];
-  return { scene, x: pickScavengeX(scene), readyAt: Date.now() + delay };
+  return { id: `${prefix}${seq}`, scene, x: pickScavengeX(scene) };
 }
 
-function loadSlots(): ScavSlot[] {
-  if (_slots) return _slots;
+// Advance a bucket to `now`: spawn while below cap and the cadence allows, then reset
+// an overdue timer once full — so a long absence caps at MAX (a gentle welcome-back)
+// instead of dumping a backlog. Returns true if the bucket changed (needs saving).
+function tickBucket(st: ScavState, max: number, sMin: number, sMax: number, prefix: string): boolean {
+  const now = Date.now();
+  let changed = false, guard = 0;
+  while (st.spots.length < max && now >= st.nextSpawnAt && guard++ < 64) {
+    st.spots.push(newScavSpot(prefix, st.seq++));
+    st.nextSpawnAt += spawnInterval(sMin, sMax); // advance from the schedule to keep cadence
+    changed = true;
+  }
+  if (st.spots.length >= max && st.nextSpawnAt < now) {
+    st.nextSpawnAt = now + spawnInterval(sMin, sMax);
+    changed = true;
+  }
+  return changed;
+}
+
+function loadScav(): ScavState {
+  if (_scav) return _scav;
   try {
-    const s = JSON.parse(localStorage.getItem(SLOTS_KEY) ?? 'null');
-    if (Array.isArray(s) && s.length === 3) { _slots = s; return s; }
+    const s = JSON.parse(localStorage.getItem(SCAV_STATE_KEY) ?? 'null');
+    if (s && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') { _scav = s; return s; }
   } catch {}
-  _slots = [rollSlot(), rollSlot(), rollSlot()]; // all active immediately on first run
-  localStorage.setItem(SLOTS_KEY, JSON.stringify(_slots));
-  return _slots;
+  _scav = { spots: [], nextSpawnAt: Date.now(), seq: 0 }; // first spot appears ~now
+  return _scav;
 }
+function saveScav(): void { if (_scav) localStorage.setItem(SCAV_STATE_KEY, JSON.stringify(_scav)); }
 
-function saveSlots(): void {
-  if (_slots) localStorage.setItem(SLOTS_KEY, JSON.stringify(_slots));
+function loadHol(holidayId: string): ScavState {
+  if (_hol && _hol.holidayId === holidayId) return _hol;
+  try {
+    const s = JSON.parse(localStorage.getItem(HOL_STATE_KEY) ?? 'null');
+    if (s && s.holidayId === holidayId && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') { _hol = s; return s; }
+  } catch {}
+  _hol = { spots: [], nextSpawnAt: Date.now(), seq: 0, holidayId };
+  return _hol;
 }
+function saveHol(): void { if (_hol) localStorage.setItem(HOL_STATE_KEY, JSON.stringify(_hol)); }
 
 export interface ScavengeSpot { id: string; x: number; pool: string[]; accent?: string; }
 
@@ -1913,83 +1964,55 @@ export function getActiveHolidayDrop(): HolidayDrop | null {
   return null;
 }
 
-interface HolSlot { holidayId: string; scene: string; x: number; readyAt: number; }
-const HOL_SLOTS_KEY = 'nd_holiday_slots_v1';
-let _holSlots: HolSlot[] | null = null;
-
-function loadHolSlots(holidayId: string): HolSlot[] {
-  if (_holSlots && _holSlots[0]?.holidayId === holidayId) return _holSlots;
-  try {
-    const s = JSON.parse(localStorage.getItem(HOL_SLOTS_KEY) ?? 'null');
-    if (Array.isArray(s) && s.length === 2 && s[0]?.holidayId === holidayId) { _holSlots = s; return s; }
-  } catch {}
-  // New holiday (or first run) — fresh pair, active immediately
-  _holSlots = [rollHolSlot(holidayId), rollHolSlot(holidayId)];
-  localStorage.setItem(HOL_SLOTS_KEY, JSON.stringify(_holSlots));
-  return _holSlots;
-}
-
-function rollHolSlot(holidayId: string, delay = 0): HolSlot {
-  const scene = SCAVENGE_SCENES[Math.floor(Math.random() * SCAVENGE_SCENES.length)];
-  return { holidayId, scene, x: pickScavengeX(scene), readyAt: Date.now() + delay };
-}
-
-function saveHolSlots(): void {
-  if (_holSlots) localStorage.setItem(HOL_SLOTS_KEY, JSON.stringify(_holSlots));
-}
-
-// The scavenge spots currently active (ready) in the given scene — base + holiday.
+// The scavenge spots currently active in the given scene — base + holiday. Ticking
+// the buckets here means spots appear as the player moves between scenes (and the
+// in-scene timer in ScavengeSystem re-queries so they also appear without leaving).
 export function getSceneScavengeSpots(scene: string): ScavengeSpot[] {
-  const now = Date.now();
   const out: ScavengeSpot[] = [];
 
-  loadSlots().forEach((slot, i) => {
-    if (slot.scene === scene && slot.readyAt <= now) {
-      out.push({ id: `slot${i}`, x: slot.x, pool: SCENE_POOLS[scene] });
-    }
-  });
+  const base = loadScav();
+  if (tickBucket(base, SCAV_MAX_SPOTS, SCAV_SPAWN_MIN, SCAV_SPAWN_MAX, 'sc')) saveScav();
+  for (const sp of base.spots) {
+    if (sp.scene === scene) out.push({ id: sp.id, x: sp.x, pool: SCENE_POOLS[scene] });
+  }
 
   const hol = getActiveHolidayDrop();
   if (hol) {
-    loadHolSlots(hol.id).forEach((slot, i) => {
-      if (slot.scene === scene && slot.readyAt <= now) {
-        out.push({ id: `hol${i}`, x: slot.x, pool: hol.pool, accent: hol.accent });
-      }
-    });
+    const h = loadHol(hol.id);
+    if (tickBucket(h, HOL_MAX_SPOTS, HOL_SPAWN_MIN, HOL_SPAWN_MAX, 'hol')) saveHol();
+    for (const sp of h.spots) {
+      if (sp.scene === scene) out.push({ id: sp.id, x: sp.x, pool: hol.pool, accent: hol.accent });
+    }
   }
   return out;
 }
 
-// Collect a spot — asks the server to roll + mint, rerolls the slot's respawn.
+// Collect a spot — removes it from its bucket (the freed slot refills on the global
+// cadence) and asks the server to roll + mint. The server picks the tier + item, so
+// a script can't request legendaries; the reward arrives via item_minted.
 export function collectScavengeSlot(spotId: string): boolean {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') return false;
-  const delay = SCAVENGE_RESPAWN_MIN + Math.random() * (SCAVENGE_RESPAWN_MAX - SCAVENGE_RESPAWN_MIN);
 
-  let pool: string[];
   const isHoliday = spotId.startsWith('hol');
   if (isHoliday) {
     const hol = getActiveHolidayDrop();
     if (!hol) return false;
-    const i = parseInt(spotId.replace('hol', ''));
-    const slots = loadHolSlots(hol.id);
-    if (!slots[i] || slots[i].readyAt > Date.now()) return false;
-    pool = hol.pool;
-    slots[i] = rollHolSlot(hol.id, delay);
-    saveHolSlots();
+    const st = loadHol(hol.id);
+    const idx = st.spots.findIndex(s => s.id === spotId);
+    if (idx < 0) return false;
+    st.spots.splice(idx, 1);
+    if (st.nextSpawnAt < Date.now()) st.nextSpawnAt = Date.now() + spawnInterval(HOL_SPAWN_MIN, HOL_SPAWN_MAX);
+    saveHol();
   } else {
-    const i = parseInt(spotId.replace('slot', ''));
-    const slots = loadSlots();
-    if (!slots[i] || slots[i].readyAt > Date.now()) return false;
-    pool = SCENE_POOLS[slots[i].scene];
-    slots[i] = rollSlot(delay);
-    saveSlots();
+    const st = loadScav();
+    const idx = st.spots.findIndex(s => s.id === spotId);
+    if (idx < 0) return false;
+    st.spots.splice(idx, 1);
+    if (st.nextSpawnAt < Date.now()) st.nextSpawnAt = Date.now() + spawnInterval(SCAV_SPAWN_MIN, SCAV_SPAWN_MAX);
+    saveScav();
   }
 
-  // The SERVER rolls what's in the spot (tier + item from the room's pool) and
-  // answers with item_minted — the client no longer picks the item, so a script
-  // can't request legendaries. `pool` above is only used to mark the spot spent.
-  void pool;
   import('../nostr/presenceService').then(({ sendScavengeRequest }) => {
     sendScavengeRequest(isHoliday);
   });

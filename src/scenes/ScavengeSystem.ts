@@ -16,6 +16,7 @@ export class ScavengeSystem {
   private nearSpot: ScavengeSpot | null = null;
   private spots: ScavengeSpot[] = [];
   private isTouch: boolean;
+  private lastRefresh = 0;
 
   constructor(
     private scene: Phaser.Scene,
@@ -38,6 +39,14 @@ export class ScavengeSystem {
   }
 
   update(time: number): void {
+    // Re-query every ~20s so a spot that spawns into this scene appears without the
+    // player leaving and re-entering. Collected spots are gone from the bucket, so a
+    // wholesale replace can't resurrect them; nearSpot is recomputed below each frame.
+    if (time - this.lastRefresh > 20000) {
+      this.lastRefresh = time;
+      this.spots = getSceneScavengeSpots(this.sceneId);
+    }
+
     const player = this.getPlayer();
     this.markerG.clear();
 
