@@ -1825,11 +1825,18 @@ const SCENE_POOLS: Record<string, string[]> = {
 // in a random scene at a random position. Collecting one rerolls it to a new
 // random scene+position, so there are always three to hunt for somewhere.
 
-// Per-scene spawn ranges + positions to avoid (doors, NPCs, interactables)
-const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: number[] }> = {
+// Per-scene spawn ranges + positions to avoid (doors, NPCs, interactables).
+// An avoid entry is either an x (default 100px berth) or [x, radius] for a tighter
+// berth — used where a wide 100px exclusion would blanket walkable ground.
+type AvoidPoint = number | [number, number];
+const SCAVENGE_SPAWN: Record<string, { min: number; max: number; avoid: AvoidPoint[] }> = {
   hub:   { min: 80,  max: 1520, avoid: [180, 480, 740, 980, 1215, 615, 860] },
-  alley: { min: 110, max: 880,  avoid: [319, 422, 44, 930] },
-  woods: { min: 640, max: 1520, avoid: [720, 900, 978] },
+  // [600,85] = bazaar vending machine — keep orbs off it (they'd render behind the PNG).
+  alley: { min: 110, max: 880,  avoid: [319, 422, 44, 930, [600, 85]] },
+  // Tight berth on the campfire (720) so the shore CLEARING left of the cabin (900)
+  // stays spawnable — a full 100px berth there merged with the cabin's and left no
+  // room left of the cabin at all.
+  woods: { min: 620, max: 1520, avoid: [[720, 50], 900, 978] },
   cabin: { min: 110, max: 940,  avoid: [76, 227, 320, 870] },
 };
 const SCAVENGE_SCENES = Object.keys(SCAVENGE_SPAWN);
@@ -1873,9 +1880,13 @@ try {
 
 function pickScavengeX(scene: string): number {
   const cfg = SCAVENGE_SPAWN[scene];
+  const clear = (x: number) => cfg.avoid.every(a => {
+    const [ax, ar] = Array.isArray(a) ? a : [a, 100];
+    return Math.abs(ax - x) >= ar;
+  });
   for (let i = 0; i < 40; i++) {
     const x = cfg.min + Math.random() * (cfg.max - cfg.min);
-    if (cfg.avoid.every(a => Math.abs(a - x) >= 100)) return Math.round(x);
+    if (clear(x)) return Math.round(x);
   }
   return Math.round(cfg.min + Math.random() * (cfg.max - cfg.min));
 }
