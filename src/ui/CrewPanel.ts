@@ -28,6 +28,7 @@ import { fetchProfile } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 
 // Force every crew emblem emoji to render as a text-style/monochrome glyph
 // (the look some Nostr themes' custom fonts give for free) instead of the OS
@@ -651,6 +652,7 @@ export class CrewPanel {
     });
 
     this.inputEl = el.querySelector('.cp-input');
+    attachEmojiAutocomplete(this.inputEl!);
     this.inputEl!.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') { e.preventDefault(); this.doSendChat(); }

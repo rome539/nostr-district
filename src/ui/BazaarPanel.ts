@@ -15,6 +15,7 @@ import { authStore } from '../stores/authStore';
 import { t as ti18n } from '../i18n/i18n';
 import { ToastManager } from './ToastManager';
 import { boltIcon } from './icons';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { getCachedName, resolveNames } from '../nostr/crewService';
 import { getOnlinePlayers, requestOnlinePlayers, acceptBidRequest, declineWinRequest } from '../nostr/presenceService';
 import {
@@ -574,6 +575,10 @@ export class BazaarPanel {
       document.body.appendChild(overlay);
       // ESC closes THIS modal (list/bid/etc.), not the whole bazaar.
       dereg = BazaarPanel.registerOverlay(() => { cleanup(); resolve(null); });
+      // Emoji autocomplete on free-text fields (e.g. the optional listing note).
+      box.querySelectorAll('input[data-key]').forEach(el => {
+        if ((el as HTMLInputElement).type !== 'number') attachEmojiAutocomplete(el as HTMLInputElement);
+      });
       (box.querySelector('input') as HTMLInputElement)?.focus();
     });
   }

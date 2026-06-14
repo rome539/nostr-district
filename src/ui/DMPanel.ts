@@ -14,6 +14,7 @@ import { fetchProfile } from '../nostr/nostrService';
 import { authStore } from '../stores/authStore';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { maybeTranslate, isTranslatorSupported } from '../i18n/translator';
 import { t as ti18n, onLangChange } from '../i18n/i18n';
 import { ProfileModal } from './ProfileModal';
@@ -641,6 +642,7 @@ export class DMPanel {
     this.convListEl = this.container.querySelector('.dm-conv-list') as HTMLDivElement;
     this.messagesEl = this.container.querySelector('.dm-messages') as HTMLDivElement;
     this.inputEl = this.container.querySelector('.dm-input') as HTMLInputElement;
+    attachEmojiAutocomplete(this.inputEl);
 
     this.inputEl.addEventListener('keydown', (e) => {
       e.stopPropagation();

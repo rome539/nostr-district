@@ -8,6 +8,7 @@ import { sendChat } from '../nostr/presenceService';
 import { NAME_FONT } from '../config/game.config';
 import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { maybeTranslate } from '../i18n/translator';
 
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
@@ -198,6 +199,7 @@ export class ChatUI {
       this.showLog();
     });
 
+    attachEmojiAutocomplete(this.input);
     inputRow.appendChild(this.input);
     inputRow.appendChild(gifBtn);
     this.container.appendChild(inputRow);

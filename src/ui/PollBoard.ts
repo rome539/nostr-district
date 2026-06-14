@@ -10,6 +10,7 @@ import { fetchProfile, queryEvents } from '../nostr/nostrService';
 import { ProfileModal } from './ProfileModal';
 import { t as ti18n } from '../i18n/i18n';
 import { pickAndUploadPlainImage, attachPlainImagePaste } from './imageUpload';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { nip19 } from 'nostr-tools';
 
 // Matches a bech32 nostr entity, with or without the `nostr:` URI prefix.
@@ -548,6 +549,7 @@ export class PollBoard {
         onUrl: (url) => this.appendQuestionImageUrl(url),
         onStatus: (m) => { if (m) this.showCreateError(m === 'Uploading…' ? 'Uploading image…' : m); },
       });
+      attachEmojiAutocomplete(qEl as HTMLTextAreaElement);
     }
 
     // Create: option inputs (typing + paste-to-upload)
@@ -562,6 +564,7 @@ export class PollBoard {
         onUrl: (url) => this.appendOptionImageUrl(idx, url),
         onStatus: (m) => { if (m) this.showCreateError(m === 'Uploading…' ? 'Uploading image…' : m); },
       });
+      attachEmojiAutocomplete(el as HTMLInputElement);
     });
 
     // Create: attach image to the question

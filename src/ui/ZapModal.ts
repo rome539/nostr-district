@@ -11,6 +11,7 @@ import { sendChat } from '../nostr/presenceService';
 import { SoundEngine } from '../audio/SoundEngine';
 import { getSparkBalance, getSparkSdk } from '../nostr/sparkService';
 import { boltIcon } from './icons';
+import { attachEmojiAutocomplete } from './emojiAutocomplete';
 // @ts-ignore — JS module, no types
 import { renderQR } from '../../nip46-bunker.js';
 
@@ -185,6 +186,7 @@ export class ZapModal {
     // Amount input — focus style
     const amountInput = modal.querySelector('#zap-amount') as HTMLInputElement;
     const commentInput = modal.querySelector('#zap-comment') as HTMLInputElement;
+    attachEmojiAutocomplete(commentInput);
     [amountInput, commentInput].forEach(inp => {
       inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') ZapModal.destroy(); });
       inp.addEventListener('focus', () => inp.style.borderColor = 'color-mix(in srgb,var(--nd-accent) 55%,transparent)');

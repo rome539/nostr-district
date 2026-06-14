@@ -45,6 +45,26 @@ rebuildMapFromStorage();
 
 export function getEmojiCount(): number { return emojiMap.size; }
 
+export function hasCustomEmojis(): boolean { return emojiMap.size > 0; }
+
+/**
+ * Suggest custom emojis for a typed `:prefix` (used by chat autocomplete).
+ * Prefix matches rank above substring matches; both sorted alphabetically.
+ * An empty prefix returns the first `limit` emojis (just after the user types `:`).
+ */
+export function getEmojiSuggestions(prefix: string, limit = 8): { code: string; url: string }[] {
+  const q = prefix.toLowerCase();
+  const starts: { code: string; url: string }[] = [];
+  const contains: { code: string; url: string }[] = [];
+  for (const [code, url] of emojiMap) {
+    if (q === '' || code.startsWith(q)) starts.push({ code, url });
+    else if (code.includes(q)) contains.push({ code, url });
+  }
+  const byCode = (a: { code: string }, b: { code: string }) => a.code.localeCompare(b.code);
+  starts.sort(byCode); contains.sort(byCode);
+  return [...starts, ...contains].slice(0, limit);
+}
+
 export function getStoredEmojiPacks(): StoredEmojiPack[] { return getStoredPacks(); }
 
 export function isEmojiPackAdded(pubkey: string, dTag: string): boolean {

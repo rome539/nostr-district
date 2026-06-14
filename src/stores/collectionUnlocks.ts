@@ -67,7 +67,10 @@ export function isSetCosmetic(slot: string, value: string): boolean {
 }
 
 // Same look as the aura unlock toast (auraUnlockStore) — kept local to avoid exporting it.
-function showCosmeticToast(label: string): void {
+// Takes all labels unlocked in one pass so simultaneous completions collapse into a
+// SINGLE toast + a single sound (instead of N divs stacking on the same spot).
+function showCosmeticToast(labels: string[]): void {
+  if (!labels.length) return;
   SoundEngine.get().auraUnlock();
   const el = document.createElement('div');
   el.style.cssText = [
@@ -75,9 +78,9 @@ function showCosmeticToast(label: string): void {
     'background:#1a1428;border:1px solid rgba(154,110,255,0.35);border-radius:8px',
     'padding:10px 20px;color:#e0d0ff;font-family:\'Courier New\',monospace',
     'font-size:12px;font-weight:bold;z-index:9999;pointer-events:none',
-    'box-shadow:0 4px 20px rgba(154,110,255,0.3);transition:opacity 0.4s;white-space:nowrap',
+    'box-shadow:0 4px 20px rgba(154,110,255,0.3);transition:opacity 0.4s;max-width:80vw;text-align:center',
   ].join(';');
-  el.textContent = `✨ Unlocked: ${label}`;
+  el.textContent = `✨ Unlocked: ${labels.join(', ')}`;
   document.body.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3600);
 }
@@ -132,6 +135,9 @@ function recompute(): void {
   // Set cosmetics (rod skins, name colors, hats) — POSSESSION-BASED entitlement.
   // No permanent unlock is stored: ownership is recomputed live from the inventory,
   // so trading away a set piece re-locks the cosmetic until the set is whole again.
+  // Collect every reward that newly completes this pass, so multiple simultaneous
+  // unlocks announce as one toast + one sound rather than N stacked on the same spot.
+  const newlyUnlocked: string[] = [];
   for (const set of ITEM_SETS) {
     const rewards = [set.rewardCosmetic, ...(set.rewardCosmetics ?? [])].filter(Boolean) as { slot: string; value: string; label: string }[];
     if (!rewards.length) continue;
@@ -144,11 +150,14 @@ function recompute(): void {
       // (rebuild flaps would otherwise re-fire it on every bazaar open).
       if (complete && _wasComplete[key] === false && !_toasted.has(key)) {
         _toasted.add(key);
-        persistToasted();
-        showCosmeticToast(label);
+        newlyUnlocked.push(label);
       }
       _wasComplete[key] = complete;
     }
+  }
+  if (newlyUnlocked.length) {
+    persistToasted();
+    showCosmeticToast(newlyUnlocked);
   }
 
   // Fish hat: own every non-legendary fish at once

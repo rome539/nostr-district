@@ -570,8 +570,24 @@ export class BunkerClient {
             return JSON.parse(r);
         } catch (e) {
             console.warn('[NIP-46] signEvent failed:', e.message);
-            this._handleDisconnect();
-            throw new Error('Signer disconnected');
+            // A declined/failed signature must NOT tear down the session — the remote
+            // signer is almost always still connected; the user just said no (or
+            // ignored) this one request. Previously any failure here called
+            // _handleDisconnect(), which nuked the session and left every later
+            // sign throwing "Not connected" until a full re-login. Instead verify
+            // connectivity with a bounded ping (the same signal the heartbeat trusts):
+            // only a ping failure is a real disconnect; otherwise it's a decline and
+            // the session stays alive so the user can simply retry.
+            let alive = false;
+            try {
+                const pong = await Promise.race([
+                    this._request('ping'),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('ping timeout')), 8000)),
+                ]);
+                alive = pong === 'pong';
+            } catch (_) {}
+            if (!alive) { this._handleDisconnect(); throw new Error('Signer disconnected'); }
+            throw new Error('Signature declined');
         }
     }
 
