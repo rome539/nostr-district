@@ -138,6 +138,7 @@ export function sendItemSwapRequest(myEvent: object, theirEvent: object, theirPu
 export interface BountyInfo {
   id: string;
   wants: { itemId: string; qty: number }[];
+  burnAny?: { count: number; rarities: ('common' | 'rare')[] }; // burn any N of these rarities (player's choice)
   rewardItemId: string;
   tier: 'rare' | 'legendary'; // legendary weeks want rares and pay a legendary
   endsAt: number;

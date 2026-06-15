@@ -479,7 +479,19 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface Bounty { id: string; wants: { itemId: string; qty: number }[]; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number; holiday?: boolean }
+// A bounty is satisfied EITHER by burning specific items (`wants`, used by the
+// themed holiday poster) OR by burning any N items of a rarity the player picks
+// (`burnAny`, used by the regular + legendary posters — far easier than hunting
+// specific items, and the player chooses what to feed it).
+type ItemTier = 'common' | 'rare';
+interface Bounty { id: string; wants: { itemId: string; qty: number }[]; burnAny?: { count: number; rarities: ItemTier[] }; rewardItemId: string; tier: 'rare' | 'legendary'; endsAt: number; holiday?: boolean }
+// A poster can demand BOTH: specific items (`wants`) AND N more of the listed
+// rarities the player freely picks (`burnAny`). Regular = 2 specific commons +
+// 3 your-choice commons = 5 burned. Legendary = 4 specific rares to find + 6
+// your-choice (commons OR rares) = 10 burned.
+const BOUNTY_CHOICE_COMMON = 3; // free-pick commons on a regular poster (+2 specific = 5)
+const BOUNTY_LEG_SPECIFIC  = 4; // specific rares to find on a legendary poster…
+const BOUNTY_LEG_CHOICE    = 6; // …+ 6 more commons-or-rares you pick = 10 burned
 
 // FNV-1a hash of a pubkey → 32-bit seed component, so each npub gets its own board.
 function pkHash(pk: string): number {
@@ -504,38 +516,30 @@ function getWeekBounties(pubkey: string): Bounty[] {
   const usedRewards = new Set<string>();
   const bounties: Bounty[] = [];
   for (let n = 0; n < BOUNTY_COUNT; n++) {
+    // 2 specific commons + ANY 3 commons of the player's choosing = 5 burned → a rare.
+    // Still a 5-item sink, but most of it is "feed whatever commons you're sitting on,"
+    // so it fires far more often than hunting 5 exact items.
     const usedWants = new Set<string>();
-    // 5 DISTINCT commons, 1 each (still 5 burned/claim, ~26/wk at the 4-day cadence).
-    // A scavenger's stash is a broad spread — 1-2 of many commons, rarely 3 of one —
-    // so "3× of one specific item" was often unclaimable even with a full inventory.
-    // Asking 1× each of five different items matches what people actually hold, so the
-    // sink fires far more often and drains variety instead of grinding one item.
-    const wants = [
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
-    ];
     bounties.push({
       id: `bounty_${period}_${pubkey}_${n}`,
-      wants,
+      wants: [
+        { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+        { itemId: pick(BOUNTY_WANT_POOL, usedWants), qty: 1 },
+      ],
+      burnAny: { count: BOUNTY_CHOICE_COMMON, rarities: ['common'] },
       rewardItemId: pick(BOUNTY_REWARD_POOL, usedRewards),
       tier: 'rare',
       endsAt: (period + 1) * BOUNTY_PERIOD_MS,
     });
   }
-  // Legendary period (seeded, after the normal picks so the rng sequence is stable):
-  // replace the last poster with a rares→legendary trade. Same id → same claims.
+  // Legendary period (seeded): the last poster becomes a big rares→legendary trade —
+  // find 4 specific rares + burn 6 more commons-or-rares of your choice = 10. Same
+  // id → same claims.
   if (rng() < BOUNTY_LEGENDARY_WEEK_CHANCE) {
     const usedWants = new Set<string>();
     const last = bounties[BOUNTY_COUNT - 1];
-    // 3 distinct rares, 1 each (same logic — you rarely hold 2 of one specific rare).
-    last.wants = [
-      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
-      { itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 },
-    ];
+    last.wants = Array.from({ length: BOUNTY_LEG_SPECIFIC }, () => ({ itemId: pick(BOUNTY_REWARD_POOL, usedWants), qty: 1 }));
+    last.burnAny = { count: BOUNTY_LEG_CHOICE, rarities: ['common', 'rare'] };
     last.rewardItemId = BOUNTY_LEGENDARY_POOL[Math.floor(rng() * BOUNTY_LEGENDARY_POOL.length)];
     last.tier = 'legendary';
   }
@@ -1694,7 +1698,7 @@ wss.on('connection', (ws) => {
           for (const b of bounties) {
             const claims = await loadBountyClaims(b.id);
             out.push({
-              id: b.id, wants: b.wants, rewardItemId: b.rewardItemId, tier: b.tier, endsAt: b.endsAt,
+              id: b.id, wants: b.wants, burnAny: b.burnAny, rewardItemId: b.rewardItemId, tier: b.tier, endsAt: b.endsAt,
               holiday: !!b.holiday,
               claimed: claims.length,
               claimedByMe: claims.includes(me),
@@ -1724,20 +1728,36 @@ wss.on('connection', (ws) => {
           const claims = await loadBountyClaims(bountyId);
           if (claims.includes(me)) { fail('already_claimed'); return; }
 
-          // Verify the submitted instances cover the wants multiset, each one
-          // authoritative from relays (oracle-signed, owned by claimant, unburned).
-          const needed: Record<string, number> = {};
-          for (const w of bounty.wants) needed[w.itemId] = w.qty;
-          const totalNeeded = bounty.wants.reduce((s, w) => s + w.qty, 0);
-          if (instanceIds.length !== totalNeeded) { fail('wrong_items'); return; }
-          const verified: any[] = [];
+          // Verify the submitted instances, each one authoritative from relays
+          // (oracle-signed, owned by claimant, unburned). A poster needs the
+          // specific `wants` items AND `burnAny.count` more of the right rarity —
+          // the submission must cover the wants multiset, with the leftover being
+          // exactly the free-choice items at the required rarity.
+          const wantsTotal = bounty.wants.reduce((s, w) => s + w.qty, 0);
+          const anyCount = bounty.burnAny?.count ?? 0;
+          if (instanceIds.length !== wantsTotal + anyCount) { fail('wrong_items'); return; }
+          const fetched: { ev: any; itemId: string }[] = [];
           for (const instanceId of instanceIds) {
             const ev = await fetchOwnedItem(instanceId, me);
             const itemId = ev?.tags?.find((t: string[]) => t[0] === 'item_id')?.[1];
-            if (!ev || !itemId || !(needed[itemId] > 0)) { fail('wrong_items'); return; }
-            needed[itemId]--;
-            verified.push(ev);
+            if (!ev || !itemId) { fail('wrong_items'); return; }
+            fetched.push({ ev, itemId });
           }
+          // Consume the specific wants first; whatever's left is the free-choice set.
+          const needed: Record<string, number> = {};
+          for (const w of bounty.wants) needed[w.itemId] = (needed[w.itemId] ?? 0) + w.qty;
+          const leftover: { ev: any; itemId: string }[] = [];
+          for (const it of fetched) {
+            if (needed[it.itemId] > 0) needed[it.itemId]--;
+            else leftover.push(it);
+          }
+          if (Object.values(needed).some(n => n > 0)) { fail('wrong_items'); return; } // a required item is missing
+          if (bounty.burnAny) {
+            if (leftover.length !== anyCount) { fail('wrong_items'); return; }
+            const allowed = bounty.burnAny.rarities as string[];
+            for (const it of leftover) if (!allowed.includes(ITEM_RARITY.get(it.itemId) ?? '')) { fail('wrong_items'); return; }
+          } else if (leftover.length !== 0) { fail('wrong_items'); return; }
+          const verified: any[] = fetched.map(f => f.ev);
 
           // All inputs check out → burn them, mint the posted reward, record.
           for (const ev of verified) burnItem(ev);

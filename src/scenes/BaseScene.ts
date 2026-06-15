@@ -1492,6 +1492,7 @@ export abstract class BaseScene extends Phaser.Scene {
     // ESC peels one layer at a time instead of tearing down the whole panel.
     if (BazaarPanel.closeTopOverlay())  {                               return true; }
     if (BazaarPanel.isOpen())           { bazaarPanel.close();          return true; }
+    if (BountyBoardPanel.closeTopModal()) {                             return true; }
     if (BountyBoardPanel.isOpen())      { BountyBoardPanel.destroy();   return true; }
     if (WalletPanel.isOpen())           { WalletPanel.destroy();        return true; }
     if (MarketPanel.isOpen())           { MarketPanel.destroy();        return true; }
