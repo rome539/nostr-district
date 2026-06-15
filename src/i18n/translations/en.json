@@ -576,6 +576,8 @@
   "bz.no_pending_offers": "No pending offers.<br><br>Trade offers and bids appear here.",
   "bz.offer_incoming": "Incoming: {offer} for {want}",
   "bz.offer_outgoing": "Outgoing: {offer} for {want}",
+  "bz.you_give": "You give",
+  "bz.you_get": "You get",
   "bz.from": "from",
   "bz.to": "to",
   "bz.waiting_response": "Waiting for response…",

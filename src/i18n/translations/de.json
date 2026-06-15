@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "Keine offenen Angebote.<br><br>Tauschangebote und Gebote erscheinen hier.",
   "bz.offer_incoming": "Eingehend: {offer} für {want}",
   "bz.offer_outgoing": "Ausgehend: {offer} für {want}",
+  "bz.you_give": "Du gibst",
+  "bz.you_get": "Du erhältst",
   "bz.from": "von",
   "bz.to": "an",
   "bz.waiting_response": "Warte auf Antwort…",

@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "保留中のオファーはありません。<br><br>トレードオファーと入札はここに表示されます。",
   "bz.offer_incoming": "受信: {offer} ↔ {want}",
   "bz.offer_outgoing": "送信: {offer} ↔ {want}",
+  "bz.you_give": "あなたが渡す",
+  "bz.you_get": "あなたが受け取る",
   "bz.from": "差出",
   "bz.to": "宛先",
   "bz.waiting_response": "返答待ち…",

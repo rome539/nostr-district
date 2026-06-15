@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "لا توجد عروض معلّقة.<br><br>تظهر عروض المقايضة والمزايدات هنا.",
   "bz.offer_incoming": "وارد: {offer} مقابل {want}",
   "bz.offer_outgoing": "صادر: {offer} مقابل {want}",
+  "bz.you_give": "أنت تعطي",
+  "bz.you_get": "أنت تحصل",
   "bz.from": "من",
   "bz.to": "إلى",
   "bz.waiting_response": "بانتظار الرد…",

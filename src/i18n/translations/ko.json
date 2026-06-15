@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "대기 중인 제안이 없습니다.<br><br>교환 제안과 입찰이 여기에 표시됩니다.",
   "bz.offer_incoming": "받음: {offer} ↔ {want}",
   "bz.offer_outgoing": "보냄: {offer} ↔ {want}",
+  "bz.you_give": "내가 줄 것",
+  "bz.you_get": "내가 받을 것",
   "bz.from": "보낸이",
   "bz.to": "받는이",
   "bz.waiting_response": "응답 대기 중…",

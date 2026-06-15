@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "Aucune offre en attente.<br><br>Les offres d'échange et enchères apparaissent ici.",
   "bz.offer_incoming": "Reçue : {offer} contre {want}",
   "bz.offer_outgoing": "Envoyée : {offer} contre {want}",
+  "bz.you_give": "Vous donnez",
+  "bz.you_get": "Vous recevez",
   "bz.from": "de",
   "bz.to": "à",
   "bz.waiting_response": "En attente de réponse…",

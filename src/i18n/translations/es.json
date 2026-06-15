@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "No hay ofertas pendientes.<br><br>Las ofertas de intercambio y pujas aparecen aquí.",
   "bz.offer_incoming": "Entrante: {offer} por {want}",
   "bz.offer_outgoing": "Saliente: {offer} por {want}",
+  "bz.you_give": "Tú das",
+  "bz.you_get": "Tú recibes",
   "bz.from": "de",
   "bz.to": "a",
   "bz.waiting_response": "Esperando respuesta…",

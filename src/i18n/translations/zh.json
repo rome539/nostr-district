@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "没有待处理的报价。<br><br>交易报价和出价会显示在这里。",
   "bz.offer_incoming": "收到：{offer} 换 {want}",
   "bz.offer_outgoing": "发出：{offer} 换 {want}",
+  "bz.you_give": "你给出",
+  "bz.you_get": "你得到",
   "bz.from": "来自",
   "bz.to": "发往",
   "bz.waiting_response": "等待回应…",

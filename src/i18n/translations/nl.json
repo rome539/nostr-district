@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "Geen openstaande aanbiedingen.<br><br>Ruilaanbiedingen en biedingen verschijnen hier.",
   "bz.offer_incoming": "Inkomend: {offer} voor {want}",
   "bz.offer_outgoing": "Uitgaand: {offer} voor {want}",
+  "bz.you_give": "Jij geeft",
+  "bz.you_get": "Jij krijgt",
   "bz.from": "van",
   "bz.to": "aan",
   "bz.waiting_response": "Wachten op reactie…",

@@ -17,6 +17,7 @@ import { ToastManager } from './ToastManager';
 import { boltIcon } from './icons';
 import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { getCachedName, resolveNames } from '../nostr/crewService';
+import { esc } from '../utils/sanitize';
 import { getOnlinePlayers, requestOnlinePlayers, acceptBidRequest, declineWinRequest } from '../nostr/presenceService';
 import {
   placeBid, withdrawBid, declineBid, fetchBidsForListings, subscribeBids, fetchMyWins, subscribeWins, payWonItem,
@@ -1325,6 +1326,12 @@ export class BazaarPanel {
     const incoming = offers.filter(o => o.direction === 'incoming');
     const outgoing = offers.filter(o => o.direction === 'outgoing');
 
+    // Resolve the trade partners' names (show a name, not a raw pubkey); re-render
+    // once they arrive.
+    const peers = offers.map(o => o.direction === 'incoming' ? o.fromPubkey : o.toPubkey)
+      .filter(pk => getCachedName(pk).startsWith('npub'));
+    if (peers.length) resolveNames([...new Set(peers)]).then(() => { if (BazaarPanel.isOpen()) this.render(); });
+
     // Bids placed on YOUR listings show here too — a bid is an incoming sats offer.
     const myListings = getLocalListings();
     const listingsWithBids = myListings.filter(l =>
@@ -1357,19 +1364,30 @@ export class BazaarPanel {
 
         const card = document.createElement('div');
         card.style.cssText = `background:#0e0e22;border:1px solid #1e1e3a;border-radius:8px;padding:12px 14px;margin-bottom:8px;`;
-        const peer = (isIncoming ? offer.fromPubkey : offer.toPubkey).slice(0,8) + '…';
+        // From the player's POV in both directions: what YOU hand over → what YOU receive.
+        // Outgoing: you give your offered item, get what you want. Incoming: you give the
+        // item they want, get the one they offered.
+        const giveDef  = isIncoming ? wantDef  : offerDef;
+        const getDef   = isIncoming ? offerDef : wantDef;
+        const peerName = getCachedName(isIncoming ? offer.fromPubkey : offer.toPubkey);
+        const peerLabel = isIncoming ? ti18n('bz.from') : ti18n('bz.to');
 
         card.innerHTML = `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <span style="font-size:18px;color:#e6e6f5;">${offerDef.emoji}</span>
-            <span style="color:#666;font-size:14px;">⇄</span>
-            <span style="font-size:18px;color:#e6e6f5;">${wantDef.emoji}</span>
-            <div style="flex:1;">
-              <div style="color:#c0a8ff;font-size:12px;">${ti18n(isIncoming ? 'bz.offer_incoming' : 'bz.offer_outgoing', { offer: offerDef.name, want: wantDef.name })}</div>
-              <div style="color:#444;font-size:9px;">${isIncoming ? ti18n('bz.from') : ti18n('bz.to')}: ${peer}</div>
-              ${offer.message ? `<div style="color:#666;font-size:10px;font-style:italic;">"${offer.message}"</div>` : ''}
+          <div style="display:flex;align-items:stretch;gap:8px;margin-bottom:8px;">
+            <div style="flex:1;text-align:center;background:#160d12;border:1px solid #3a2030;border-radius:6px;padding:7px 4px;">
+              <div style="color:#ff8a8a;font-size:8px;letter-spacing:1px;margin-bottom:3px;">${ti18n('bz.you_give')}</div>
+              <div style="font-size:22px;line-height:1;">${giveDef.emoji}</div>
+              <div style="color:#e6e6f5;font-size:11px;margin-top:3px;">${esc(giveDef.name)}</div>
+            </div>
+            <div style="display:flex;align-items:center;color:#c0a8ff;font-size:18px;">→</div>
+            <div style="flex:1;text-align:center;background:#0d160d;border:1px solid #20381f;border-radius:6px;padding:7px 4px;">
+              <div style="color:#86e08a;font-size:8px;letter-spacing:1px;margin-bottom:3px;">${ti18n('bz.you_get')}</div>
+              <div style="font-size:22px;line-height:1;">${getDef.emoji}</div>
+              <div style="color:#e6e6f5;font-size:11px;margin-top:3px;">${esc(getDef.name)}</div>
             </div>
           </div>
+          <div style="color:#777;font-size:10px;margin-bottom:${offer.message ? '4' : '8'}px;">${peerLabel} <span style="color:#9a8acc;">${esc(peerName)}</span></div>
+          ${offer.message ? `<div style="color:#666;font-size:10px;font-style:italic;margin-bottom:8px;">"${esc(offer.message)}"</div>` : ''}
           ${isIncoming ? `
             <div style="display:flex;gap:6px;">
               <button class="offer-accept-btn" style="flex:1;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 0;border-radius:4px;">${ti18n('bz.accept')}</button>

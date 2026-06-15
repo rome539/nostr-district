@@ -562,6 +562,8 @@
   "bz.no_pending_offers": "Нет ожидающих предложений.<br><br>Предложения обмена и ставки появятся здесь.",
   "bz.offer_incoming": "Входящее: {offer} за {want}",
   "bz.offer_outgoing": "Исходящее: {offer} за {want}",
+  "bz.you_give": "Вы отдаёте",
+  "bz.you_get": "Вы получаете",
   "bz.from": "от",
   "bz.to": "кому",
   "bz.waiting_response": "Ожидание ответа…",
