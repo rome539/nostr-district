@@ -13,13 +13,16 @@ export class MarketRoomSystem {
 
   setup(scene: Phaser.Scene): void {
     this.scene = scene;
-    this.shopPromptBg = scene.add.graphics().setDepth(50).setVisible(false);
+    // These are screen-fixed UI (positioned with GAME_WIDTH/2 screen coords), so
+    // they MUST ignore camera scroll — the camera follows the player, and without
+    // scrollFactor 0 the prompt drifts to the opposite corner as you move.
+    this.shopPromptBg = scene.add.graphics().setDepth(50).setScrollFactor(0).setVisible(false);
     this.shopPrompt = scene.add.text(0, 0, `[E] ${ti18n('prompt.browse_shop')}`, {
       fontFamily: '"Courier New", monospace', fontSize: '11px', color: P.amber, fontStyle: 'bold', align: 'center',
-    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     this.shopPromptArrow = scene.add.text(0, 0, '▼', {
       fontFamily: 'monospace', fontSize: '9px', color: P.amber,
-    }).setOrigin(0.5).setDepth(51).setVisible(false);
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0).setVisible(false);
     fitPromptBubble(this.shopPromptBg, this.shopPrompt, { minWidth: 128, fill: hexToNum(P.bg), fillAlpha: 0.9, stroke: hexToNum(P.amber), strokeAlpha: 0.3 });
     this.shopPrompt.setInteractive();
     this.shopPrompt.on('pointerdown', () => { if (this.nearShop) MarketPanel.open(); });
