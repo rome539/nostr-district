@@ -25,6 +25,8 @@ import {
 } from '../stores/tradeItemStore';
 
 const PANEL_ID = 'bazaar-panel';
+// Group sat amounts with the user's locale separators (100000 → 100,000).
+const fmtSats = (n: number): string => n.toLocaleString();
 const RARITY_COLOR: Record<string, string> = {
   common:    '#a0c8a0',
   rare:      '#70b0ff',
@@ -613,7 +615,7 @@ export class BazaarPanel {
     const result = await listItem(owned.instanceId, price, res.note || undefined);
     this.render();
     if (result.ok) {
-      ToastManager.show(ti18n('bz.listed_ok', { item: `${def.emoji} ${def.name}`, price: String(price) }), '#c070ff');
+      ToastManager.show(ti18n('bz.listed_ok', { item: `${def.emoji} ${def.name}`, price: fmtSats(price) }), '#c070ff');
     } else {
       const reasons: Record<string, string> = {
         no_lightning_address: ti18n('bz.list_err.no_lightning_address'),
@@ -778,7 +780,7 @@ export class BazaarPanel {
   private localListingCard(listing: MarketListing, _pubkey: string): HTMLElement {
     const card = this.listingCardShell(
       listing.def,
-      `${listing.price} ${boltIcon(11, '#ffd700')}`,
+      `${fmtSats(listing.price)} ${boltIcon(11, '#ffd700')}`,
       `<button class="bazaar-delist-btn" style="background:#1a0a0a;border:1px solid #6a1a1a;color:#ff7070;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;">${ti18n('bz.delist')}</button>`,
       { note: listing.note },
     );
@@ -846,25 +848,25 @@ export class BazaarPanel {
     const reserved = isItemReserved(listing.instanceId);
     const actions = reserved
       ? `<button class="bazaar-buy-btn" disabled style="background:#16101f;border:1px solid #4a3a5a;color:#8a7aaa;font-family:'Courier New',monospace;font-size:10px;cursor:not-allowed;padding:4px 12px;border-radius:4px;">${ti18n('bz.bid_pending')}</button>`
-      : `<button class="bazaar-buy-btn" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;display:flex;align-items:center;gap:4px;">${ti18n('bz.buy')} · ${listing.price} ${boltIcon(10, '#70ff70')}</button>`
+      : `<button class="bazaar-buy-btn" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;display:flex;align-items:center;gap:4px;">${ti18n('bz.buy')} · ${fmtSats(listing.price)} ${boltIcon(10, '#70ff70')}</button>`
         + `<button class="bazaar-bid-btn" style="background:#1a0a2a;border:1px solid #4a1a6a;color:#c070ff;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;">${ti18n('bz.bid')}</button>`;
     // Surface MY standing bid on this listing, if any, so the market shows what
     // I've already offered (and how much) without opening the Offers tab.
     const myBid = this.myBidsOut.find(b => b.instanceId === listing.instanceId);
     const bidLine = myBid
       ? (myBid.declined
-        ? `<div style="color:#c06060;font-size:9px;margin-top:2px;">${ti18n('bz.your_bid_declined', { amount: String(myBid.amount) })}</div>`
-        : `<div style="color:#c070ff;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.your_bid_amount', { amount: String(myBid.amount) })} ${boltIcon(9, '#c070ff')}</div>`)
+        ? `<div style="color:#c06060;font-size:9px;margin-top:2px;">${ti18n('bz.your_bid_declined', { amount: fmtSats(myBid.amount) })}</div>`
+        : `<div style="color:#c070ff;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.your_bid_amount', { amount: fmtSats(myBid.amount) })} ${boltIcon(9, '#c070ff')}</div>`)
       : '';
     // Highest bid anyone has placed on this listing — a reference point for bidders.
     // Hidden when MY own bid is already the top (the "your bid" line covers it).
     const topBid = this.topBidsByInstance[listing.instanceId] ?? 0;
     const topLine = (topBid > 0 && (!myBid || topBid > myBid.amount))
-      ? `<div style="color:#ffb84d;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.top_bid', { amount: String(topBid) })} ${boltIcon(9, '#ffb84d')}</div>`
+      ? `<div style="color:#ffb84d;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.top_bid', { amount: fmtSats(topBid) })} ${boltIcon(9, '#ffb84d')}</div>`
       : '';
     const card = this.listingCardShell(
       def,
-      `${listing.price} ${boltIcon(11, '#ffd700')}`,
+      `${fmtSats(listing.price)} ${boltIcon(11, '#ffd700')}`,
       actions,
       { note: listing.note, sellerLine: ti18n('bz.by_seller', { name: sellerName }), extraLine: bidLine + topLine },
     );
@@ -876,7 +878,7 @@ export class BazaarPanel {
       const result = await purchaseListing(listing, (msg) => { btn.textContent = msg.slice(0, 20) + '…'; });
       if (result.status === 'ok') {
         btn.textContent = ti18n('bz.paid_check'); btn.style.color = '#ffd700';
-        ToastManager.show(ti18n('bz.bought_ok', { price: String(listing.price), item: def.name }), '#ffd700');
+        ToastManager.show(ti18n('bz.bought_ok', { price: fmtSats(listing.price), item: def.name }), '#ffd700');
         setTimeout(() => this.render(), 1500);
       } else if (result.status === 'invoice' && result.invoice) {
         // Wallet can't cover it → show a QR. The server is already polling for
@@ -891,7 +893,7 @@ export class BazaarPanel {
           // Fires when the server's item_sold for this listing arrives —
           // the modal closes itself; we just celebrate and refresh.
           () => {
-            ToastManager.show(ti18n('bz.bought_ok', { price: String(listing.price), item: name }), '#ffd700');
+            ToastManager.show(ti18n('bz.bought_ok', { price: fmtSats(listing.price), item: name }), '#ffd700');
             this.render();
           },
           listing.instanceId,
@@ -932,7 +934,7 @@ export class BazaarPanel {
     const def = listing.itemDef!;
     const res = await this.themedModal({
       title: ti18n('bz.bid_title', { item: `${def.emoji} ${def.name}` }),
-      fields: [{ key: 'amount', label: ti18n('bz.bid_field', { price: String(listing.price) }), placeholder: String(listing.price), type: 'number' }],
+      fields: [{ key: 'amount', label: ti18n('bz.bid_field', { price: fmtSats(listing.price) }), placeholder: String(listing.price), type: 'number' }],
       confirmLabel: ti18n('bz.place_bid'),
       confirmColor: '#c070ff',
     });
@@ -941,7 +943,7 @@ export class BazaarPanel {
     if (amount < 1) { ToastManager.show(ti18n('bz.bid_min'), '#ff7070'); return; }
     const r = await placeBid(listing, amount);
     if (r.ok) {
-      ToastManager.show(ti18n('bz.bid_placed', { amount: String(amount), item: def.name }), '#c070ff');
+      ToastManager.show(ti18n('bz.bid_placed', { amount: fmtSats(amount), item: def.name }), '#c070ff');
       // Reflect the bid immediately (one bid per item — replace any prior bid on
       // this listing) AND remember it for ~15s so a lagging relay fetch can't
       // revert it to a stale "declined". Re-render on whatever tab we're on so
@@ -1209,8 +1211,8 @@ export class BazaarPanel {
       const accepted = this.acceptedBid[listing.item.instanceId];
       const card = document.createElement('div');
       card.style.cssText = `background:#0e0e22;border:1px solid #1e1e3a;border-left:3px solid ${RARITY_COLOR[listing.def.rarity]};border-radius:8px;padding:12px 14px;margin-bottom:8px;`;
-      const countLine = accepted ? ti18n('bz.listed_at', { price: String(listing.price) })
-        : `${ti18n('bz.listed_at', { price: String(listing.price) })} · ${ti18n(bids.length === 1 ? 'bz.bid_count_one' : 'bz.bid_count_many', { n: String(bids.length) })}`;
+      const countLine = accepted ? ti18n('bz.listed_at', { price: fmtSats(listing.price) })
+        : `${ti18n('bz.listed_at', { price: fmtSats(listing.price) })} · ${ti18n(bids.length === 1 ? 'bz.bid_count_one' : 'bz.bid_count_many', { n: String(bids.length) })}`;
       card.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <span style="font-size:18px;color:#e6e6f5;">${listing.def.emoji}</span>
@@ -1223,7 +1225,7 @@ export class BazaarPanel {
       if (accepted) {
         const note = document.createElement('div');
         note.style.cssText = `color:#70ff70;font-size:10px;`;
-        note.textContent = ti18n('bz.accepted_awaiting', { name: accepted.name, amount: String(accepted.amount) });
+        note.textContent = ti18n('bz.accepted_awaiting', { name: accepted.name, amount: fmtSats(accepted.amount) });
         card.appendChild(note);
         body.appendChild(card);
         continue;
@@ -1273,7 +1275,7 @@ export class BazaarPanel {
       ? `<span style="color:#06140a;background:#ffd700;font-size:7px;font-weight:bold;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-right:6px;">${ti18n('bz.high')}</span>`
       : `<span style="color:#555;font-size:10px;margin-right:6px;">#${i + 1}</span>`;
     row.innerHTML =
-      `<span style="color:#c0c0e0;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tag}${bidderName} · <span style="color:#ffd700;">${bid.amount}</span> sats</span>`
+      `<span style="color:#c0c0e0;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tag}${bidderName} · <span style="color:#ffd700;">${fmtSats(bid.amount)}</span> sats</span>`
       + `<div style="display:flex;gap:4px;flex-shrink:0;">`
       + `<button class="bid-accept" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 10px;border-radius:4px;">${ti18n('bz.accept')}</button>`
       + `<button class="bid-decline" title="${ti18n('bz.decline_bid')}" style="background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>`
@@ -1293,7 +1295,7 @@ export class BazaarPanel {
         // later detect it clearing (winner declines / we revoke) even if the
         // panel was closed when the item_unreserved broadcast arrived.
         this.acceptConfirmed.add(id);
-        ToastManager.show(ti18n('bz.accepted_toast', { name: bidderName, amount: String(bid.amount) }), '#c070ff');
+        ToastManager.show(ti18n('bz.accepted_toast', { name: bidderName, amount: fmtSats(bid.amount) }), '#c070ff');
       } else {
         delete this.acceptedBid[id]; this.acceptConfirmed.delete(id); // revert — accept failed
         const reasons: Record<string, string> = {
@@ -1340,7 +1342,7 @@ export class BazaarPanel {
         <span style="font-size:18px;color:#e6e6f5;${bid.declined ? 'opacity:0.6;' : ''}">${def?.emoji ?? '·'}</span>
         <div style="flex:1;min-width:0;">
           <div style="color:#c0c0e0;font-size:12px;${bid.declined ? 'opacity:0.7;' : ''}">${def?.name ?? ti18n('bz.item')}</div>
-          <div style="color:#555;font-size:9px;letter-spacing:1px;">${ti18n('bz.your_bid_label')} · <span style="color:#ffd700;">${bid.amount}</span> SATS${declinedPill}</div>
+          <div style="color:#555;font-size:9px;letter-spacing:1px;">${ti18n('bz.your_bid_label')} · <span style="color:#ffd700;">${fmtSats(bid.amount)}</span> SATS${declinedPill}</div>
         </div>`;
       const cancel = document.createElement('button');
       cancel.textContent = ti18n('bz.cancel_caps');
@@ -1375,9 +1377,9 @@ export class BazaarPanel {
     const def = ITEM_CATALOG.find(d => d.id === win.itemId);
     const banner = document.createElement('div');
     banner.style.cssText = `background:#160e2a;border:1px solid #6a3aaa;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;`;
-    banner.innerHTML = `<span style="color:#d8b8ff;font-size:11px;">${ti18n('bz.win.banner', { item: def ? def.emoji + ' ' + def.name : ti18n('bz.an_item'), price: `<span style="color:#ffd700;">${win.price}</span>` })}</span>`;
+    banner.innerHTML = `<span style="color:#d8b8ff;font-size:11px;">${ti18n('bz.win.banner', { item: def ? def.emoji + ' ' + def.name : ti18n('bz.an_item'), price: `<span style="color:#ffd700;">${fmtSats(win.price)}</span>` })}</span>`;
     const payBtn = document.createElement('button');
-    payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+    payBtn.textContent = `${ti18n('bz.pay')} ${fmtSats(win.price)}`;
     payBtn.style.cssText = `flex-shrink:0;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;font-weight:bold;cursor:pointer;padding:5px 12px;border-radius:4px;`;
     const declineBtn = document.createElement('button');
     payBtn.addEventListener('click', async () => {
@@ -1396,7 +1398,7 @@ export class BazaarPanel {
         this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
         setTimeout(() => this.render(), 1200);
       } else if (r.status === 'invoice' && r.invoice) {
-        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${fmtSats(win.price)}`;
         const { showInvoiceModal } = await import('./market/MarketInvoice');
         showInvoiceModal(
           r.invoice, def?.name ?? ti18n('bz.item'), win.price, undefined, undefined, undefined, null,
@@ -1417,7 +1419,7 @@ export class BazaarPanel {
         this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
         setTimeout(() => this.render(), 1200);
       } else {
-        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${fmtSats(win.price)}`;
         ToastManager.show(ti18n('bz.payment_failed'), '#ff7070');
       }
     });
