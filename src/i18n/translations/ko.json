@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item}을(를) {name}에게 선물했습니다!",
   "bz.gift_failed": "선물에 실패했습니다 — 로그인 상태인지 확인하세요.",
   "bz.bids_on_yours": "내 등록에 대한 입찰",
+  "bz.bids_show_more": "입찰 {n}개 더",
+  "bz.bids_show_less": "접기",
   "bz.listed_at": "{price} sats에 등록됨",
   "bz.bid_count_one": "입찰 {n}건",
   "bz.bid_count_many": "입찰 {n}건",

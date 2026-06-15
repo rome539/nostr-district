@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} を {name} にプレゼントしました！",
   "bz.gift_failed": "プレゼントに失敗しました — ログインしているか確認してください。",
   "bz.bids_on_yours": "あなたの出品への入札",
+  "bz.bids_show_more": "他{n}件の入札",
+  "bz.bids_show_less": "折りたたむ",
   "bz.listed_at": "{price} satsで出品中",
   "bz.bid_count_one": "入札 {n}件",
   "bz.bid_count_many": "入札 {n}件",

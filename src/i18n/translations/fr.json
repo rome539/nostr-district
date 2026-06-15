@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} offert à {name} !",
   "bz.gift_failed": "Échec du cadeau — vérifiez que vous êtes connecté.",
   "bz.bids_on_yours": "ENCHÈRES SUR VOS ANNONCES",
+  "bz.bids_show_more": "+{n} enchères",
+  "bz.bids_show_less": "Réduire",
   "bz.listed_at": "EN VENTE À {price} SATS",
   "bz.bid_count_one": "{n} ENCHÈRE",
   "bz.bid_count_many": "{n} ENCHÈRES",

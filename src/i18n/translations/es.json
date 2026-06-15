@@ -546,6 +546,8 @@
   "bz.gifted_ok": "¡{item} regalado a {name}!",
   "bz.gift_failed": "No se pudo regalar — asegúrate de haber iniciado sesión.",
   "bz.bids_on_yours": "PUJAS EN TUS ANUNCIOS",
+  "bz.bids_show_more": "+{n} pujas más",
+  "bz.bids_show_less": "Mostrar menos",
   "bz.listed_at": "PUBLICADO POR {price} SATS",
   "bz.bid_count_one": "{n} PUJA",
   "bz.bid_count_many": "{n} PUJAS",

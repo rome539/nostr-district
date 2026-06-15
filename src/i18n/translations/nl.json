@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} geschonken aan {name}!",
   "bz.gift_failed": "Schenken mislukt — zorg dat je bent ingelogd.",
   "bz.bids_on_yours": "BIEDINGEN OP JOUW AANBOD",
+  "bz.bids_show_more": "+{n} biedingen",
+  "bz.bids_show_less": "Minder tonen",
   "bz.listed_at": "TE KOOP VOOR {price} SATS",
   "bz.bid_count_one": "{n} BOD",
   "bz.bid_count_many": "{n} BIEDINGEN",

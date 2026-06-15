@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} regalato a {name}!",
   "bz.gift_failed": "Regalo non riuscito — assicurati di aver effettuato l'accesso.",
   "bz.bids_on_yours": "OFFERTE SUI TUOI ANNUNCI",
+  "bz.bids_show_more": "+{n} altre offerte",
+  "bz.bids_show_less": "Mostra meno",
   "bz.listed_at": "IN VENDITA A {price} SATS",
   "bz.bid_count_one": "{n} OFFERTA",
   "bz.bid_count_many": "{n} OFFERTE",

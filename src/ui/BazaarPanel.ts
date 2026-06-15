@@ -20,7 +20,7 @@ import { getCachedName, resolveNames } from '../nostr/crewService';
 import { esc } from '../utils/sanitize';
 import { getOnlinePlayers, requestOnlinePlayers, acceptBidRequest, declineWinRequest } from '../nostr/presenceService';
 import {
-  placeBid, withdrawBid, declineBid, fetchBidsForListings, fetchTopBids, subscribeBids, subscribeMyBidDeclines, fetchMyWins, subscribeWins, payWonItem,
+  placeBid, withdrawBid, declineBid, fetchBidsForListings, fetchTopBids, subscribeTopBids, subscribeBids, subscribeMyBidDeclines, fetchMyWins, subscribeWins, payWonItem,
   fetchMyBids, fetchListedInstanceIdsOf, isItemSold, isItemReserved, type MarketBid, type WinNotice, type MyBid,
 } from '../stores/tradeItemStore';
 
@@ -52,12 +52,17 @@ export class BazaarPanel {
   private marketView: 'browse' | 'mine' = 'browse';
   private lastRenderedTab: string | null = null; // for preserving scroll on same-tab re-renders
   private expandedSets = new Set<string>();      // which set cards are expanded in the SETS tab
+  private expandedBidLists = new Set<string>();  // listing instanceIds whose full bid list is expanded
   private bidsByInstance: Record<string, MarketBid[]> = {};
   private topBidsByInstance: Record<string, number> = {}; // highest bid per market listing (reference for buyers)
-  private topBidsSig = '';                                 // id-set signature so we fetch once per unique listing set
+  private topBidsSig = '';                                 // id-set signature so we (re)subscribe once per unique listing set
+  private unsubTopBids: (() => void) | null = null;        // live bid feed for the current visible listings
   private myWins: WinNotice[] = [];
   private resolvedWins = new Set<string>(); // wins paid/declined this session — hide immediately
   private myBidsOut: MyBid[] = [];
+  // Bids I just placed, kept ~15s so a lagging relay fetch can't clobber a fresh
+  // (re)bid back to a stale "declined" before the new bid event has propagated.
+  private recentBids = new Map<string, { itemId: string; amount: number; sellerPubkey: string; at: number }>();
 
   // ── Overlay stack ──────────────────────────────────────────────────────────
   // Modals layered over the bazaar (trade partner picker, offer picker) register a
@@ -118,6 +123,7 @@ export class BazaarPanel {
       window.removeEventListener('nd-market-update', update);
       window.removeEventListener('nd-offers-update', update);
       unsubMarket(); unsubBids(); unsubWins(); unsubMyDeclines();
+      this.unsubTopBids?.(); this.unsubTopBids = null;
     };
   }
 
@@ -142,6 +148,14 @@ export class BazaarPanel {
     const sig = ids.slice().sort().join(',');
     if (!ids.length || sig === this.topBidsSig) return;
     this.topBidsSig = sig;
+    // (Re)subscribe to live bids on exactly this listing set — a new/withdrawn
+    // bid on any visible listing refetches the top-bid numbers in place.
+    this.unsubTopBids?.();
+    this.unsubTopBids = subscribeTopBids(ids, () => this.fetchTopBidsNow(ids));
+    this.fetchTopBidsNow(ids);
+  }
+
+  private fetchTopBidsNow(ids: string[]): void {
     fetchTopBids(ids).then((map) => {
       if (JSON.stringify(map) === JSON.stringify(this.topBidsByInstance)) return;
       this.topBidsByInstance = map;
@@ -164,9 +178,23 @@ export class BazaarPanel {
     const { pubkey } = authStore.getState();
     if (!pubkey) { this.myBidsOut = []; return; }
     fetchMyBids(pubkey).then((b) => {
-      this.myBidsOut = b;
+      this.myBidsOut = this.mergeRecentBids(b);
       if (BazaarPanel.isOpen()) this.render();
     });
+  }
+
+  // Overlay just-placed bids on top of the relay-fetched list: while a (re)bid is
+  // still propagating, the relay may return the prior (declined) bid — keep showing
+  // the fresh one (never declined) until it ages out and the relay catches up.
+  private mergeRecentBids(fetched: MyBid[]): MyBid[] {
+    const now = Date.now();
+    for (const [id, rec] of this.recentBids) if (now - rec.at > 15000) this.recentBids.delete(id);
+    if (!this.recentBids.size) return fetched;
+    const out = fetched.filter(b => !this.recentBids.has(b.instanceId));
+    for (const [id, rec] of this.recentBids) {
+      out.push({ instanceId: id, itemId: rec.itemId, amount: rec.amount, sellerPubkey: rec.sellerPubkey, declined: false });
+    }
+    return out;
   }
 
   open(): void {
@@ -914,13 +942,16 @@ export class BazaarPanel {
     const r = await placeBid(listing, amount);
     if (r.ok) {
       ToastManager.show(ti18n('bz.bid_placed', { amount: String(amount), item: def.name }), '#c070ff');
-      // Reflect the bid on the market card immediately (one bid per item — replace
-      // any prior bid on this listing). The relay-backed fetch reconciles later.
+      // Reflect the bid immediately (one bid per item — replace any prior bid on
+      // this listing) AND remember it for ~15s so a lagging relay fetch can't
+      // revert it to a stale "declined". Re-render on whatever tab we're on so
+      // both the market card and Offers ▸ Bids update at once.
+      this.recentBids.set(listing.instanceId, { itemId: listing.itemId, amount, sellerPubkey: listing.sellerPubkey, at: Date.now() });
       this.myBidsOut = [
         ...this.myBidsOut.filter(b => b.instanceId !== listing.instanceId),
         { instanceId: listing.instanceId, itemId: listing.itemId, amount, sellerPubkey: listing.sellerPubkey, declined: false },
       ];
-      if (this.tab === 'market' && BazaarPanel.isOpen()) this.render();
+      if (BazaarPanel.isOpen()) this.render();
     } else {
       const reasons: Record<string, string> = {
         already_sold: ti18n('bz.bid_err.already_sold'),
@@ -1199,71 +1230,95 @@ export class BazaarPanel {
       }
 
       const rowsWrap = document.createElement('div');
-      rowsWrap.className = 'nd-want-list';
-      rowsWrap.style.cssText = `display:flex;flex-direction:column;max-height:150px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#8a8a1a55 transparent;`;
-      bids.forEach((bid, i) => {
-        const bidderName = getCachedName(bid.buyer);
-        const isTop = i === 0;
-        const row = document.createElement('div');
-        // Separator between bids + a subtle highlight on the highest one so the
-        // stacked rows read as distinct, ranked offers rather than one blob.
-        row.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:6px;`
-          + (i > 0 ? 'border-top:1px solid #1a1a2e;' : '')
-          + (isTop ? 'background:color-mix(in srgb,#ffd700 7%,transparent);' : '');
-        const tag = isTop
-          ? `<span style="color:#06140a;background:#ffd700;font-size:7px;font-weight:bold;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-right:6px;">${ti18n('bz.high')}</span>`
-          : `<span style="color:#555;font-size:10px;margin-right:6px;">#${i + 1}</span>`;
-        row.innerHTML =
-          `<span style="color:#c0c0e0;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tag}${bidderName} · <span style="color:#ffd700;">${bid.amount}</span> sats</span>`
-          + `<div style="display:flex;gap:4px;flex-shrink:0;">`
-          + `<button class="bid-accept" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 10px;border-radius:4px;">${ti18n('bz.accept')}</button>`
-          + `<button class="bid-decline" title="${ti18n('bz.decline_bid')}" style="background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>`
-          + `</div>`;
-        row.querySelector('.bid-accept')!.addEventListener('click', async () => {
-          const id = listing.item.instanceId;
-          if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // already accepting/accepted
-          this.acceptInFlight.add(id);
-          // Optimistically switch the card to the accepted state NOW so the other
-          // ACCEPT buttons vanish immediately — no double-accept window.
-          this.acceptedBid[id] = { name: bidderName, amount: bid.amount };
-          this.render();
-          const r = await acceptBidRequest(id, bid.buyer, listing.def.name);
-          this.acceptInFlight.delete(id);
-          if (r.ok) {
-            // Server has reserved the item by now — mark the hold confirmed so we can
-            // later detect it clearing (winner declines / we revoke) even if the
-            // panel was closed when the item_unreserved broadcast arrived.
-            this.acceptConfirmed.add(id);
-            ToastManager.show(ti18n('bz.accepted_toast', { name: bidderName, amount: String(bid.amount) }), '#c070ff');
-          } else {
-            delete this.acceptedBid[id]; this.acceptConfirmed.delete(id); // revert — accept failed
-            const reasons: Record<string, string> = {
-              already_accepted: ti18n('bz.accept_err.already_accepted'),
-              already_sold: ti18n('bz.accept_err.already_sold'),
-              reserved: ti18n('bz.accept_err.reserved'),
-              no_such_bid: ti18n('bz.accept_err.no_such_bid'),
-              invoice_failed: ti18n('bz.accept_err.invoice_failed'),
-              not_your_listing: ti18n('bz.accept_err.not_your_listing'),
-            };
-            ToastManager.show(reasons[r.reason ?? ''] ?? ti18n('bz.accept_err.generic'), '#ff7070');
-            this.render();
-          }
-        });
-        row.querySelector('.bid-decline')!.addEventListener('click', () => {
-          const id = listing.item.instanceId;
-          if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // mid-accept — don't race it
-          // Optimistically drop the row; the relay marker makes it durable and
-          // marks the bid declined on the bidder's side too.
-          this.bidsByInstance[id] = (this.bidsByInstance[id] ?? []).filter(b => !(b.buyer === bid.buyer && b.at === bid.at));
-          declineBid(id, bid.buyer, bid.at, listing.def.id, bid.amount);
-          ToastManager.show(ti18n('bz.bid_declined_toast', { name: bidderName }), '#c06060');
+      rowsWrap.style.cssText = `display:flex;flex-direction:column;`;
+      // Show only the top couple of bids by default — the seller almost always
+      // just wants the highest. The rest collapse behind a "+N more" toggle so a
+      // hotly-contested item doesn't grow into a wall of rows (and no nested
+      // scrollbar to fight the panel's own scroll).
+      const COLLAPSED = 2;
+      const id = listing.item.instanceId;
+      const expanded = this.expandedBidLists.has(id);
+      const visible = expanded ? bids : bids.slice(0, COLLAPSED);
+      visible.forEach((bid, i) => rowsWrap.appendChild(this.bidRow(listing, bid, i)));
+
+      const hidden = bids.length - visible.length;
+      if (hidden > 0 || (expanded && bids.length > COLLAPSED)) {
+        const toggle = document.createElement('button');
+        toggle.style.cssText = `background:none;border:none;border-top:1px solid #1a1a2e;color:#8a7ad0;font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.5px;cursor:pointer;padding:7px 8px;text-align:left;`;
+        toggle.textContent = expanded
+          ? ti18n('bz.bids_show_less')
+          : ti18n('bz.bids_show_more', { n: String(hidden) });
+        toggle.addEventListener('click', () => {
+          if (expanded) this.expandedBidLists.delete(id); else this.expandedBidLists.add(id);
           this.render();
         });
-        rowsWrap.appendChild(row);
-      });
+        rowsWrap.appendChild(toggle);
+      }
       card.appendChild(rowsWrap);
       body.appendChild(card);
     }
+  }
+
+  /** One ranked bid row (rank `i`, 0 = highest) with ACCEPT / decline wired. */
+  private bidRow(listing: MarketListing, bid: MarketBid, i: number): HTMLElement {
+    const bidderName = getCachedName(bid.buyer);
+    const isTop = i === 0;
+    const row = document.createElement('div');
+    // Separator between bids + a subtle highlight on the highest one so the
+    // stacked rows read as distinct, ranked offers rather than one blob.
+    row.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:6px;`
+      + (i > 0 ? 'border-top:1px solid #1a1a2e;' : '')
+      + (isTop ? 'background:color-mix(in srgb,#ffd700 7%,transparent);' : '');
+    const tag = isTop
+      ? `<span style="color:#06140a;background:#ffd700;font-size:7px;font-weight:bold;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-right:6px;">${ti18n('bz.high')}</span>`
+      : `<span style="color:#555;font-size:10px;margin-right:6px;">#${i + 1}</span>`;
+    row.innerHTML =
+      `<span style="color:#c0c0e0;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tag}${bidderName} · <span style="color:#ffd700;">${bid.amount}</span> sats</span>`
+      + `<div style="display:flex;gap:4px;flex-shrink:0;">`
+      + `<button class="bid-accept" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 10px;border-radius:4px;">${ti18n('bz.accept')}</button>`
+      + `<button class="bid-decline" title="${ti18n('bz.decline_bid')}" style="background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>`
+      + `</div>`;
+    row.querySelector('.bid-accept')!.addEventListener('click', async () => {
+      const id = listing.item.instanceId;
+      if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // already accepting/accepted
+      this.acceptInFlight.add(id);
+      // Optimistically switch the card to the accepted state NOW so the other
+      // ACCEPT buttons vanish immediately — no double-accept window.
+      this.acceptedBid[id] = { name: bidderName, amount: bid.amount };
+      this.render();
+      const r = await acceptBidRequest(id, bid.buyer, listing.def.name);
+      this.acceptInFlight.delete(id);
+      if (r.ok) {
+        // Server has reserved the item by now — mark the hold confirmed so we can
+        // later detect it clearing (winner declines / we revoke) even if the
+        // panel was closed when the item_unreserved broadcast arrived.
+        this.acceptConfirmed.add(id);
+        ToastManager.show(ti18n('bz.accepted_toast', { name: bidderName, amount: String(bid.amount) }), '#c070ff');
+      } else {
+        delete this.acceptedBid[id]; this.acceptConfirmed.delete(id); // revert — accept failed
+        const reasons: Record<string, string> = {
+          already_accepted: ti18n('bz.accept_err.already_accepted'),
+          already_sold: ti18n('bz.accept_err.already_sold'),
+          reserved: ti18n('bz.accept_err.reserved'),
+          no_such_bid: ti18n('bz.accept_err.no_such_bid'),
+          invoice_failed: ti18n('bz.accept_err.invoice_failed'),
+          not_your_listing: ti18n('bz.accept_err.not_your_listing'),
+        };
+        ToastManager.show(reasons[r.reason ?? ''] ?? ti18n('bz.accept_err.generic'), '#ff7070');
+        this.render();
+      }
+    });
+    row.querySelector('.bid-decline')!.addEventListener('click', () => {
+      const id = listing.item.instanceId;
+      if (this.acceptInFlight.has(id) || this.acceptedBid[id]) return; // mid-accept — don't race it
+      // Optimistically drop the row; the relay marker makes it durable and
+      // marks the bid declined on the bidder's side too.
+      this.bidsByInstance[id] = (this.bidsByInstance[id] ?? []).filter(b => !(b.buyer === bid.buyer && b.at === bid.at));
+      declineBid(id, bid.buyer, bid.at, listing.def.id, bid.amount);
+      ToastManager.show(ti18n('bz.bid_declined_toast', { name: bidderName }), '#c06060');
+      this.render();
+    });
+    return row;
   }
 
   // Bids the player has placed on others' listings — with a CANCEL option.
@@ -1293,6 +1348,7 @@ export class BazaarPanel {
       cancel.addEventListener('click', async () => {
         cancel.disabled = true; cancel.textContent = '…';
         await withdrawBid(bid.instanceId, bid.sellerPubkey);
+        this.recentBids.delete(bid.instanceId); // don't let the sticky overlay resurrect it
         this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== bid.instanceId);
         ToastManager.show(ti18n('bz.bid_cancelled', { item: def?.name ?? ti18n('bz.item') }), '#c06060');
         this.render();
@@ -1336,6 +1392,7 @@ export class BazaarPanel {
         // The bid is fulfilled — clear it from YOUR BIDS and tombstone it.
         const paidBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
         if (paidBid) withdrawBid(win.instanceId, paidBid.sellerPubkey);
+        this.recentBids.delete(win.instanceId);
         this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
         setTimeout(() => this.render(), 1200);
       } else if (r.status === 'invoice' && r.invoice) {
@@ -1348,6 +1405,7 @@ export class BazaarPanel {
             ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
             this.resolvedWins.add(this.winKey(win));
             this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+            this.recentBids.delete(win.instanceId);
             this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
             this.render();
           },
@@ -1378,6 +1436,7 @@ export class BazaarPanel {
         if (myBid) withdrawBid(win.instanceId, myBid.sellerPubkey);
         this.resolvedWins.add(this.winKey(win));
         this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+        this.recentBids.delete(win.instanceId);
         this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
         ToastManager.show(ti18n('bz.declined_toast'), '#c06060');
         this.render();

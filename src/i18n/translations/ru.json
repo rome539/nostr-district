@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} подарен {name}!",
   "bz.gift_failed": "Не удалось подарить — убедитесь, что вы вошли.",
   "bz.bids_on_yours": "СТАВКИ НА ВАШИ ОБЪЯВЛЕНИЯ",
+  "bz.bids_show_more": "+{n} ставок",
+  "bz.bids_show_less": "Свернуть",
   "bz.listed_at": "ВЫСТАВЛЕНО ЗА {price} SATS",
   "bz.bid_count_one": "{n} СТАВКА",
   "bz.bid_count_many": "{n} СТАВОК",

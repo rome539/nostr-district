@@ -546,6 +546,8 @@
   "bz.gifted_ok": "تم إهداء {item} إلى {name}!",
   "bz.gift_failed": "فشل الإهداء — تأكد من تسجيل دخولك.",
   "bz.bids_on_yours": "مزايدات على قوائمك",
+  "bz.bids_show_more": "+{n} مزايدات",
+  "bz.bids_show_less": "عرض أقل",
   "bz.listed_at": "مُدرج بسعر {price} ساتس",
   "bz.bid_count_one": "{n} مزايدة",
   "bz.bid_count_many": "{n} مزايدات",

@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} presenteado a {name}!",
   "bz.gift_failed": "Falha ao presentear — verifique se você está logado.",
   "bz.bids_on_yours": "LANCES NOS SEUS ANÚNCIOS",
+  "bz.bids_show_more": "+{n} lances",
+  "bz.bids_show_less": "Mostrar menos",
   "bz.listed_at": "ANUNCIADO POR {price} SATS",
   "bz.bid_count_one": "{n} LANCE",
   "bz.bid_count_many": "{n} LANCES",

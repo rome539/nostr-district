@@ -546,6 +546,8 @@
   "bz.gifted_ok": "{item} an {name} verschenkt!",
   "bz.gift_failed": "Verschenken fehlgeschlagen — stelle sicher, dass du angemeldet bist.",
   "bz.bids_on_yours": "GEBOTE AUF DEINE ANGEBOTE",
+  "bz.bids_show_more": "+{n} weitere Gebote",
+  "bz.bids_show_less": "Weniger anzeigen",
   "bz.listed_at": "ANGEBOTEN FÜR {price} SATS",
   "bz.bid_count_one": "{n} GEBOT",
   "bz.bid_count_many": "{n} GEBOTE",

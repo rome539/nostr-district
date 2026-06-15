@@ -546,6 +546,8 @@
   "bz.gifted_ok": "已将 {item} 赠送给 {name}！",
   "bz.gift_failed": "赠送失败 — 请确认你已登录。",
   "bz.bids_on_yours": "对你上架的出价",
+  "bz.bids_show_more": "还有{n}个出价",
+  "bz.bids_show_less": "收起",
   "bz.listed_at": "以 {price} sats 上架",
   "bz.bid_count_one": "{n} 个出价",
   "bz.bid_count_many": "{n} 个出价",

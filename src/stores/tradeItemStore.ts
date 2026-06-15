@@ -1534,6 +1534,18 @@ export async function fetchTopBids(instanceIds: string[]): Promise<Record<string
   } catch { return {}; }
 }
 
+// Live bids on a set of listings (any seller) → keeps the market "Top bid"
+// reference current as bids are placed/withdrawn, without reopening the bazaar.
+export function subscribeTopBids(instanceIds: string[], onUpdate: () => void): () => void {
+  let unsub = () => {};
+  const ids = [...new Set(instanceIds)].filter(Boolean);
+  if (!ids.length) return unsub;
+  import('../nostr/nostrService').then(({ subscribeEvents }) => {
+    unsub = subscribeEvents({ kinds: [30078], '#t': ['ndbid'], '#d': ids }, () => onUpdate(), MARKET_RELAYS);
+  });
+  return () => unsub();
+}
+
 export function subscribeBids(sellerPubkey: string, onUpdate: () => void): () => void {
   let unsub = () => {};
   if (!sellerPubkey) return unsub;

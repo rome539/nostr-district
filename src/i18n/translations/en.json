@@ -560,6 +560,8 @@
   "bz.gifted_ok": "{item} gifted to {name}!",
   "bz.gift_failed": "Failed to gift — make sure you are logged in.",
   "bz.bids_on_yours": "BIDS ON YOUR LISTINGS",
+  "bz.bids_show_more": "+{n} more bids",
+  "bz.bids_show_less": "Show less",
   "bz.listed_at": "LISTED AT {price} SATS",
   "bz.bid_count_one": "{n} BID",
   "bz.bid_count_many": "{n} BIDS",
