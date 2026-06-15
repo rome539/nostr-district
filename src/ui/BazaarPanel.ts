@@ -38,6 +38,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 export class BazaarPanel {
   private el: HTMLElement | null = null;
   private tab: 'market' | 'inventory' | 'sets' | 'offers' = 'inventory';
+  private offersSubTab: 'bids' | 'trades' = 'bids'; // sub-tabs inside the OFFERS tab
   private pendingTradePubkey: string | null = null;
   private pendingTradeName: string | null = null;
   private inventoryPage = 0;
@@ -226,7 +227,9 @@ export class BazaarPanel {
     // Listings of mine that have un-accepted bids also count as things needing action
     const bidsNeedingAction = getLocalListings().filter(l =>
       (this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 && !this.acceptedBid[l.item.instanceId]).length;
-    const pendingOffers = incomingOffers + bidsNeedingAction;
+    // Won bids awaiting payment now live in the OFFERS ▸ Bids sub-tab, so they count too.
+    const wins = this.activeWins();
+    const pendingOffers = incomingOffers + bidsNeedingAction + wins.length;
     (['inventory','market','offers','sets'] as const).forEach(t => {
       const btn = document.createElement('button');
       const label = t === 'inventory' ? ti18n('bz.tab.items') : t === 'market' ? ti18n('bz.tab.market') : t === 'offers' ? `${ti18n('bz.tab.offers')}${pendingOffers > 0 ? ` (${pendingOffers})` : ''}` : ti18n('bz.tab.sets');
@@ -244,97 +247,17 @@ export class BazaarPanel {
     panel.appendChild(tabs);
 
     // ── "You won" banners — bids of yours the seller accepted; pay to claim. ───
-    // Hide a win the moment you actually OWN the item (it arrived) or you've
-    // paid/declined it this session — don't wait for the win-marker tombstone to
-    // propagate on relays (that lag left the banner lingering after paying).
-    const ownedWinIds = new Set(getInventoryWithDefs().map(e => e.owned.instanceId));
-    const wins = this.myWins.filter(w => !this.resolvedWins.has(w.instanceId) && !ownedWinIds.has(w.instanceId));
-    // Wrapped in a bounded scroll area so multiple wins stay compact.
-    const winsWrap = wins.length ? document.createElement('div') : null;
-    if (winsWrap) {
+    // Shown above the body on every tab EXCEPT offers, where they live inside the
+    // Bids sub-tab instead (so they aren't duplicated). Wrapped in a bounded
+    // scroll area so multiple wins stay compact.
+    if (wins.length && this.tab !== 'offers') {
+      const winsWrap = document.createElement('div');
       winsWrap.className = 'nd-want-list';
       winsWrap.style.cssText = `margin:8px 18px 0;display:flex;flex-direction:column;gap:6px;max-height:138px;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;scrollbar-color:#6a3aaa55 transparent;`;
+      for (const win of wins) winsWrap.appendChild(this.buildWinBanner(win));
+      this.ensureScrollStyle();
+      panel.appendChild(winsWrap);
     }
-    for (const win of wins) {
-      const def = ITEM_CATALOG.find(d => d.id === win.itemId);
-      const banner = document.createElement('div');
-      banner.style.cssText = `background:#160e2a;border:1px solid #6a3aaa;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;`;
-      banner.innerHTML = `<span style="color:#d8b8ff;font-size:11px;">${ti18n('bz.win.banner', { item: def ? def.emoji + ' ' + def.name : ti18n('bz.an_item'), price: `<span style="color:#ffd700;">${win.price}</span>` })}</span>`;
-      const payBtn = document.createElement('button');
-      payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
-      payBtn.style.cssText = `flex-shrink:0;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;font-weight:bold;cursor:pointer;padding:5px 12px;border-radius:4px;`;
-      const declineBtn = document.createElement('button');
-      payBtn.addEventListener('click', async () => {
-        payBtn.disabled = true; declineBtn.disabled = true; // lock both while paying
-        payBtn.textContent = ti18n('bz.paying');
-        const r = await payWonItem(win.instanceId, (m) => { payBtn.textContent = m; });
-        if (r.status === 'ok') {
-          payBtn.textContent = ti18n('bz.paid_check');
-          ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
-          this.resolvedWins.add(win.instanceId); // stays hidden even if a stale refresh re-adds it
-          this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
-          // The bid is fulfilled — clear it from YOUR BIDS and tombstone it.
-          const paidBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
-          if (paidBid) withdrawBid(win.instanceId, paidBid.sellerPubkey);
-          this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
-          setTimeout(() => this.render(), 1200);
-        } else if (r.status === 'invoice' && r.invoice) {
-          payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
-          const { showInvoiceModal } = await import('./market/MarketInvoice');
-          showInvoiceModal(
-            r.invoice, def?.name ?? ti18n('bz.item'), win.price, undefined, undefined, undefined, null,
-            // Server's item_sold for this win closed the modal — clean up the win UI.
-            () => {
-              ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
-              this.resolvedWins.add(win.instanceId);
-              this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
-              this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
-              this.render();
-            },
-            win.instanceId,
-          );
-        } else if (r.status === 'unavailable') {
-          payBtn.textContent = ti18n('bz.no_longer_available');
-          this.resolvedWins.add(win.instanceId);
-          this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
-          setTimeout(() => this.render(), 1200);
-        } else {
-          payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
-          ToastManager.show(ti18n('bz.payment_failed'), '#ff7070');
-        }
-      });
-
-      // Decline — winner changed their mind; re-open the item to the market.
-      declineBtn.textContent = ti18n('bz.decline');
-      declineBtn.style.cssText = `flex-shrink:0;background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 10px;border-radius:4px;`;
-      declineBtn.addEventListener('click', async () => {
-        const ok = await this.themedConfirm(ti18n('bz.decline_confirm', { item: def?.name ?? ti18n('bz.item') }), ti18n('bz.decline'));
-        if (!ok) return;
-        declineBtn.disabled = true; payBtn.disabled = true; declineBtn.textContent = '…'; // lock both
-        const r = await declineWinRequest(win.instanceId);
-        if (r.ok) {
-          // Also withdraw our bid so the seller isn't re-offered our flaky bid
-          const myBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
-          if (myBid) withdrawBid(win.instanceId, myBid.sellerPubkey);
-          this.resolvedWins.add(win.instanceId);
-          this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
-          this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
-          ToastManager.show(ti18n('bz.declined_toast'), '#c06060');
-          this.render();
-        } else {
-          declineBtn.disabled = false; payBtn.disabled = false; declineBtn.textContent = ti18n('bz.decline');
-          ToastManager.show(ti18n('bz.decline_failed'), '#ff7070');
-        }
-      });
-
-      const btnRow = document.createElement('div');
-      btnRow.style.cssText = `display:flex;gap:6px;flex-shrink:0;`;
-      btnRow.appendChild(declineBtn);
-      btnRow.appendChild(payBtn);
-      banner.appendChild(btnRow);
-      winsWrap!.appendChild(banner);
-    }
-    if (winsWrap) { this.ensureScrollStyle(); panel.appendChild(winsWrap); }
 
     // ── Body ─────────────────────────────────────────────────────────────────
     const body = document.createElement('div');
@@ -1321,6 +1244,93 @@ export class BazaarPanel {
     }
   }
 
+  /** Bids you won that still need paying — not yet arrived, paid, or declined. */
+  private activeWins(): WinNotice[] {
+    const ownedWinIds = new Set(getInventoryWithDefs().map(e => e.owned.instanceId));
+    return this.myWins.filter(w => !this.resolvedWins.has(w.instanceId) && !ownedWinIds.has(w.instanceId));
+  }
+
+  /** One "You won … pay X to claim it" banner with its pay/decline buttons wired. */
+  private buildWinBanner(win: WinNotice): HTMLElement {
+    const def = ITEM_CATALOG.find(d => d.id === win.itemId);
+    const banner = document.createElement('div');
+    banner.style.cssText = `background:#160e2a;border:1px solid #6a3aaa;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;`;
+    banner.innerHTML = `<span style="color:#d8b8ff;font-size:11px;">${ti18n('bz.win.banner', { item: def ? def.emoji + ' ' + def.name : ti18n('bz.an_item'), price: `<span style="color:#ffd700;">${win.price}</span>` })}</span>`;
+    const payBtn = document.createElement('button');
+    payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+    payBtn.style.cssText = `flex-shrink:0;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;font-weight:bold;cursor:pointer;padding:5px 12px;border-radius:4px;`;
+    const declineBtn = document.createElement('button');
+    payBtn.addEventListener('click', async () => {
+      payBtn.disabled = true; declineBtn.disabled = true; // lock both while paying
+      payBtn.textContent = ti18n('bz.paying');
+      const r = await payWonItem(win.instanceId, (m) => { payBtn.textContent = m; });
+      if (r.status === 'ok') {
+        payBtn.textContent = ti18n('bz.paid_check');
+        ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
+        this.resolvedWins.add(win.instanceId); // stays hidden even if a stale refresh re-adds it
+        this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+        // The bid is fulfilled — clear it from YOUR BIDS and tombstone it.
+        const paidBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
+        if (paidBid) withdrawBid(win.instanceId, paidBid.sellerPubkey);
+        this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
+        setTimeout(() => this.render(), 1200);
+      } else if (r.status === 'invoice' && r.invoice) {
+        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+        const { showInvoiceModal } = await import('./market/MarketInvoice');
+        showInvoiceModal(
+          r.invoice, def?.name ?? ti18n('bz.item'), win.price, undefined, undefined, undefined, null,
+          // Server's item_sold for this win closed the modal — clean up the win UI.
+          () => {
+            ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
+            this.resolvedWins.add(win.instanceId);
+            this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+            this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
+            this.render();
+          },
+          win.instanceId,
+        );
+      } else if (r.status === 'unavailable') {
+        payBtn.textContent = ti18n('bz.no_longer_available');
+        this.resolvedWins.add(win.instanceId);
+        this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+        setTimeout(() => this.render(), 1200);
+      } else {
+        payBtn.disabled = false; declineBtn.disabled = false; payBtn.textContent = `${ti18n('bz.pay')} ${win.price}`;
+        ToastManager.show(ti18n('bz.payment_failed'), '#ff7070');
+      }
+    });
+
+    // Decline — winner changed their mind; re-open the item to the market.
+    declineBtn.textContent = ti18n('bz.decline');
+    declineBtn.style.cssText = `flex-shrink:0;background:#1a0a0a;border:1px solid #5a2a2a;color:#c06060;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 10px;border-radius:4px;`;
+    declineBtn.addEventListener('click', async () => {
+      const ok = await this.themedConfirm(ti18n('bz.decline_confirm', { item: def?.name ?? ti18n('bz.item') }), ti18n('bz.decline'));
+      if (!ok) return;
+      declineBtn.disabled = true; payBtn.disabled = true; declineBtn.textContent = '…'; // lock both
+      const r = await declineWinRequest(win.instanceId);
+      if (r.ok) {
+        // Also withdraw our bid so the seller isn't re-offered our flaky bid
+        const myBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
+        if (myBid) withdrawBid(win.instanceId, myBid.sellerPubkey);
+        this.resolvedWins.add(win.instanceId);
+        this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
+        this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
+        ToastManager.show(ti18n('bz.declined_toast'), '#c06060');
+        this.render();
+      } else {
+        declineBtn.disabled = false; payBtn.disabled = false; declineBtn.textContent = ti18n('bz.decline');
+        ToastManager.show(ti18n('bz.decline_failed'), '#ff7070');
+      }
+    });
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = `display:flex;gap:6px;flex-shrink:0;`;
+    btnRow.appendChild(declineBtn);
+    btnRow.appendChild(payBtn);
+    banner.appendChild(btnRow);
+    return banner;
+  }
+
   private renderOffers(body: HTMLElement): void {
     const offers = getPendingOffers();
     const incoming = offers.filter(o => o.direction === 'incoming');
@@ -1337,19 +1347,69 @@ export class BazaarPanel {
     const listingsWithBids = myListings.filter(l =>
       (this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 || this.acceptedBid[l.item.instanceId]);
 
-    // Wins you've been accepted for but haven't paid are shown in the banner; here
-    // we also show bids YOU placed that are still pending, so you can cancel them.
+    // Won bids awaiting payment lead the Bids sub-tab (they were the top banner).
+    const wins = this.activeWins();
+
+    // Bids YOU placed that are still pending, so you can cancel them.
     const myActiveBids = this.myBidsOut.filter(b =>
       !this.myWins.some(w => w.instanceId === b.instanceId) && !isItemSold(b.instanceId));
 
-    if (offers.length === 0 && listingsWithBids.length === 0 && myActiveBids.length === 0) {
+    if (offers.length === 0 && listingsWithBids.length === 0 && myActiveBids.length === 0 && wins.length === 0) {
       body.innerHTML = `<div style="color:#8a8aa8;text-align:center;padding:40px 0;font-size:13px;">${ti18n('bz.no_pending_offers')}</div>`;
       return;
     }
 
-    this.renderBidsOnMyListings(body, listingsWithBids);
-    this.renderMyBids(body, myActiveBids);
+    // ── Sub-tabs: sats Bids vs item-for-item Trade Offers ───────────────────
+    const bidsCount = wins.length + listingsWithBids.reduce(
+      (n, l) => n + (this.bidsByInstance[l.item.instanceId]?.length ?? 0), 0) + myActiveBids.length;
+    const tradesCount = offers.length;
+    // Don't land the player on an empty sub-tab when the other one has something.
+    if (this.offersSubTab === 'bids' && bidsCount === 0 && tradesCount > 0) this.offersSubTab = 'trades';
+    else if (this.offersSubTab === 'trades' && tradesCount === 0 && bidsCount > 0) this.offersSubTab = 'bids';
+    const subBar = document.createElement('div');
+    subBar.style.cssText = `display:flex;gap:6px;margin-bottom:12px;`;
+    (['bids', 'trades'] as const).forEach(st => {
+      const count = st === 'bids' ? bidsCount : tradesCount;
+      const base = st === 'bids' ? ti18n('bz.subtab.bids') : ti18n('bz.subtab.trades');
+      const on = this.offersSubTab === st;
+      const btn = document.createElement('button');
+      btn.textContent = `${base}${count > 0 ? ` (${count})` : ''}`;
+      btn.style.cssText = `
+        flex:1;background:${on ? '#1a1a30' : '#0c0c1a'};
+        border:1px solid ${on ? '#4a4a8a' : '#1e1e3a'};
+        color:${on ? '#c0a8ff' : '#666'};
+        font-family:'Courier New',monospace;font-size:10px;cursor:pointer;
+        padding:6px 0;border-radius:5px;letter-spacing:1px;`;
+      btn.addEventListener('click', () => { this.offersSubTab = st; this.render(); });
+      subBar.appendChild(btn);
+    });
+    body.appendChild(subBar);
 
+    const emptyHint = (msg: string) => {
+      const d = document.createElement('div');
+      d.style.cssText = `color:#8a8aa8;text-align:center;padding:28px 0;font-size:12px;`;
+      d.textContent = msg;
+      body.appendChild(d);
+    };
+
+    if (this.offersSubTab === 'bids') {
+      if (wins.length === 0 && listingsWithBids.length === 0 && myActiveBids.length === 0) {
+        emptyHint(ti18n('bz.no_bids'));
+        return;
+      }
+      // Won bids needing payment lead — same banners that used to sit up top.
+      if (wins.length) {
+        const winsWrap = document.createElement('div');
+        winsWrap.style.cssText = `display:flex;flex-direction:column;gap:6px;margin-bottom:12px;`;
+        for (const win of wins) winsWrap.appendChild(this.buildWinBanner(win));
+        body.appendChild(winsWrap);
+      }
+      this.renderBidsOnMyListings(body, listingsWithBids);
+      this.renderMyBids(body, myActiveBids);
+      return;
+    }
+
+    // ── Trade Offers sub-tab ────────────────────────────────────────────────
     const section = (title: string, list: TradeOffer[], isIncoming: boolean) => {
       if (list.length === 0) return;
       const hdr = document.createElement('div');
@@ -1436,6 +1496,10 @@ export class BazaarPanel {
       }
     };
 
+    if (incoming.length === 0 && outgoing.length === 0) {
+      emptyHint(ti18n('bz.no_trade_offers'));
+      return;
+    }
     section(ti18n('bz.incoming_offers'), incoming, true);
     section(ti18n('bz.outgoing_offers'), outgoing, false);
   }
