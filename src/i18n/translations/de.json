@@ -561,6 +561,7 @@
   "bz.your_bids": "DEINE GEBOTE",
   "bz.your_bid_label": "DEIN GEBOT",
   "bz.your_bid_amount": "Dein Gebot: {amount}",
+  "bz.top_bid": "Höchstgebot: {amount}",
   "bz.your_bid_declined": "Dein Gebot: {amount} · abgelehnt",
   "bz.bid_cancelled": "Gebot auf {item} storniert.",
   "bz.no_pending_offers": "Keine offenen Angebote.<br><br>Tauschangebote und Gebote erscheinen hier.",

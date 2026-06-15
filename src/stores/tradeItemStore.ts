@@ -1505,6 +1505,35 @@ export async function fetchBidsForListings(sellerPubkey: string): Promise<Record
   } catch { return {}; }
 }
 
+// Public highest-bid lookup for ANY listings (not just my own). fetchBidsForListings
+// is scoped to bids p-tagged to one seller; this queries by item instanceId (the bid's
+// `d` tag) so a buyer browsing the market sees the current top bid on someone else's
+// listing as a reference point. Returns instanceId → highest live bid amount.
+export async function fetchTopBids(instanceIds: string[]): Promise<Record<string, number>> {
+  const ids = [...new Set(instanceIds)].filter(Boolean);
+  if (!ids.length) return {};
+  try {
+    const { queryEvents } = await import('../nostr/nostrService');
+    const events = await queryEvents({ kinds: [30078], '#t': ['ndbid'], '#d': ids, limit: 500 }, MARKET_RELAYS);
+    const byKey = new Map<string, any>(); // newest per (bidder, item)
+    for (const e of events) {
+      const d = e.tags.find((t: string[]) => t[0] === 'd')?.[1];
+      if (!d) continue;
+      const key = e.pubkey + '|' + d;
+      if (!byKey.has(key) || e.created_at > byKey.get(key).created_at) byKey.set(key, e);
+    }
+    const out: Record<string, number> = {};
+    for (const e of byKey.values()) {
+      if (e.tags.find((t: string[]) => t[0] === 'withdrawn')) continue;
+      const instanceId = e.tags.find((t: string[]) => t[0] === 'instance_id')?.[1] ?? e.tags.find((t: string[]) => t[0] === 'd')?.[1];
+      const amount = Math.floor(Number(e.tags.find((t: string[]) => t[0] === 'amount')?.[1] ?? '0'));
+      if (!instanceId || !(amount >= 1) || _soldInstances.has(instanceId)) continue;
+      if ((out[instanceId] ?? 0) < amount) out[instanceId] = amount;
+    }
+    return out;
+  } catch { return {}; }
+}
+
 export function subscribeBids(sellerPubkey: string, onUpdate: () => void): () => void {
   let unsub = () => {};
   if (!sellerPubkey) return unsub;
@@ -1607,6 +1636,19 @@ export function subscribeWins(myPubkey: string, onUpdate: () => void): () => voi
   import('../nostr/nostrService').then(({ subscribeEvents }) => {
     unsub = subscribeEvents({ kinds: [30078], authors: _oracleSet, '#t': ['ndwin'], '#p': [myPubkey] },
       (e) => { if (isTrustedOracle(e.pubkey)) onUpdate(); }, MARKET_RELAYS);
+  });
+  return () => unsub();
+}
+
+// Live updates to the bids I've placed: a seller declining one of my bids
+// (ndbiddecline addressed to me) fires this so the market "Your bid" line and
+// the Offers ▸ Bids list reflect the decline in real time, no reopen needed.
+export function subscribeMyBidDeclines(myPubkey: string, onUpdate: () => void): () => void {
+  let unsub = () => {};
+  if (!myPubkey) return unsub;
+  import('../nostr/nostrService').then(({ subscribeEvents }) => {
+    unsub = subscribeEvents({ kinds: [30078], '#t': ['ndbiddecline'], '#p': [myPubkey] },
+      () => onUpdate(), MARKET_RELAYS);
   });
   return () => unsub();
 }

@@ -561,6 +561,7 @@
   "bz.your_bids": "SEUS LANCES",
   "bz.your_bid_label": "SEU LANCE",
   "bz.your_bid_amount": "Seu lance: {amount}",
+  "bz.top_bid": "Maior lance: {amount}",
   "bz.your_bid_declined": "Seu lance: {amount} · recusado",
   "bz.bid_cancelled": "Lance em {item} cancelado.",
   "bz.no_pending_offers": "Nenhuma oferta pendente.<br><br>Ofertas de troca e lances aparecem aqui.",

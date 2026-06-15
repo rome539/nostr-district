@@ -575,6 +575,7 @@
   "bz.your_bids": "YOUR BIDS",
   "bz.your_bid_label": "YOUR BID",
   "bz.your_bid_amount": "Your bid: {amount}",
+  "bz.top_bid": "Top bid: {amount}",
   "bz.your_bid_declined": "Your bid: {amount} · declined",
   "bz.bid_cancelled": "Bid on {item} cancelled.",
   "bz.no_pending_offers": "No pending offers.<br><br>Trade offers and bids appear here.",

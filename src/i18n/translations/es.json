@@ -561,6 +561,7 @@
   "bz.your_bids": "TUS PUJAS",
   "bz.your_bid_label": "TU PUJA",
   "bz.your_bid_amount": "Tu puja: {amount}",
+  "bz.top_bid": "Puja más alta: {amount}",
   "bz.your_bid_declined": "Tu puja: {amount} · rechazada",
   "bz.bid_cancelled": "Puja por {item} cancelada.",
   "bz.no_pending_offers": "No hay ofertas pendientes.<br><br>Las ofertas de intercambio y pujas aparecen aquí.",

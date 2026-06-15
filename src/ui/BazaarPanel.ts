@@ -20,7 +20,7 @@ import { getCachedName, resolveNames } from '../nostr/crewService';
 import { esc } from '../utils/sanitize';
 import { getOnlinePlayers, requestOnlinePlayers, acceptBidRequest, declineWinRequest } from '../nostr/presenceService';
 import {
-  placeBid, withdrawBid, declineBid, fetchBidsForListings, subscribeBids, fetchMyWins, subscribeWins, payWonItem,
+  placeBid, withdrawBid, declineBid, fetchBidsForListings, fetchTopBids, subscribeBids, subscribeMyBidDeclines, fetchMyWins, subscribeWins, payWonItem,
   fetchMyBids, fetchListedInstanceIdsOf, isItemSold, isItemReserved, type MarketBid, type WinNotice, type MyBid,
 } from '../stores/tradeItemStore';
 
@@ -53,6 +53,8 @@ export class BazaarPanel {
   private lastRenderedTab: string | null = null; // for preserving scroll on same-tab re-renders
   private expandedSets = new Set<string>();      // which set cards are expanded in the SETS tab
   private bidsByInstance: Record<string, MarketBid[]> = {};
+  private topBidsByInstance: Record<string, number> = {}; // highest bid per market listing (reference for buyers)
+  private topBidsSig = '';                                 // id-set signature so we fetch once per unique listing set
   private myWins: WinNotice[] = [];
   private resolvedWins = new Set<string>(); // wins paid/declined this session — hide immediately
   private myBidsOut: MyBid[] = [];
@@ -109,11 +111,13 @@ export class BazaarPanel {
     // Live bids on my listings + live "you won" markers for me
     const unsubBids = pubkey ? subscribeBids(pubkey, () => this.refreshBids()) : () => {};
     const unsubWins = pubkey ? subscribeWins(pubkey, () => this.refreshWins()) : () => {};
+    // Live declines on the bids I placed → update market "Your bid" + Offers instantly
+    const unsubMyDeclines = pubkey ? subscribeMyBidDeclines(pubkey, () => this.refreshMyBids()) : () => {};
     this.unsub = () => {
       window.removeEventListener('nd-inventory-update', update);
       window.removeEventListener('nd-market-update', update);
       window.removeEventListener('nd-offers-update', update);
-      unsubMarket(); unsubBids(); unsubWins();
+      unsubMarket(); unsubBids(); unsubWins(); unsubMyDeclines();
     };
   }
 
@@ -127,6 +131,21 @@ export class BazaarPanel {
       const pks = Object.values(b).flat().map(x => x.buyer).filter(pk => getCachedName(pk).startsWith('npub'));
       if (pks.length) resolveNames([...new Set(pks)]).then(() => { if (BazaarPanel.isOpen()) this.render(); });
       if (BazaarPanel.isOpen()) this.render();
+    });
+  }
+
+  // Pull the current top bid on each visible market listing (incl. others' listings)
+  // so a buyer has a reference point. Fetched once per unique listing set; only
+  // re-renders when the numbers actually change (so it never loops on re-render).
+  private refreshTopBids(listings: RemoteListing[]): void {
+    const ids = listings.map(l => l.instanceId).filter(Boolean);
+    const sig = ids.slice().sort().join(',');
+    if (!ids.length || sig === this.topBidsSig) return;
+    this.topBidsSig = sig;
+    fetchTopBids(ids).then((map) => {
+      if (JSON.stringify(map) === JSON.stringify(this.topBidsByInstance)) return;
+      this.topBidsByInstance = map;
+      if (BazaarPanel.isOpen() && this.tab === 'market') this.render();
     });
   }
 
@@ -152,6 +171,7 @@ export class BazaarPanel {
 
   open(): void {
     if (BazaarPanel.isOpen()) { this.close(); return; }
+    this.topBidsSig = ''; // refetch top bids fresh each time the bazaar opens
     this.subscribe();
     this.refreshInventory();
     this.render();
@@ -596,6 +616,7 @@ export class BazaarPanel {
     // Kick off background fetch — only re-render if new data arrived
     const countBefore = remoteListings.length;
     fetchMarketListings().then(fresh => {
+      this.refreshTopBids(fresh);
       if (fresh.length !== countBefore && this.tab === 'market' && document.getElementById(PANEL_ID)) {
         this.render();
       }
@@ -807,11 +828,17 @@ export class BazaarPanel {
         ? `<div style="color:#c06060;font-size:9px;margin-top:2px;">${ti18n('bz.your_bid_declined', { amount: String(myBid.amount) })}</div>`
         : `<div style="color:#c070ff;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.your_bid_amount', { amount: String(myBid.amount) })} ${boltIcon(9, '#c070ff')}</div>`)
       : '';
+    // Highest bid anyone has placed on this listing — a reference point for bidders.
+    // Hidden when MY own bid is already the top (the "your bid" line covers it).
+    const topBid = this.topBidsByInstance[listing.instanceId] ?? 0;
+    const topLine = (topBid > 0 && (!myBid || topBid > myBid.amount))
+      ? `<div style="color:#ffb84d;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.top_bid', { amount: String(topBid) })} ${boltIcon(9, '#ffb84d')}</div>`
+      : '';
     const card = this.listingCardShell(
       def,
       `${listing.price} ${boltIcon(11, '#ffd700')}`,
       actions,
-      { note: listing.note, sellerLine: ti18n('bz.by_seller', { name: sellerName }), extraLine: bidLine },
+      { note: listing.note, sellerLine: ti18n('bz.by_seller', { name: sellerName }), extraLine: bidLine + topLine },
     );
     if (reserved) return card; // no buy/bid handlers — it's spoken for
     card.querySelector('.bazaar-bid-btn')?.addEventListener('click', () => this.promptBid(listing));

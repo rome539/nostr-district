@@ -561,6 +561,7 @@
   "bz.your_bids": "مزايداتك",
   "bz.your_bid_label": "مزايدتك",
   "bz.your_bid_amount": "مزايدتك: {amount}",
+  "bz.top_bid": "أعلى مزايدة: {amount}",
   "bz.your_bid_declined": "مزايدتك: {amount} · مرفوضة",
   "bz.bid_cancelled": "تم إلغاء المزايدة على {item}.",
   "bz.no_pending_offers": "لا توجد عروض معلّقة.<br><br>تظهر عروض المقايضة والمزايدات هنا.",

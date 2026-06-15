@@ -561,6 +561,7 @@
   "bz.your_bids": "VOS ENCHÈRES",
   "bz.your_bid_label": "VOTRE ENCHÈRE",
   "bz.your_bid_amount": "Votre enchère : {amount}",
+  "bz.top_bid": "Meilleure enchère : {amount}",
   "bz.your_bid_declined": "Votre enchère : {amount} · refusée",
   "bz.bid_cancelled": "Enchère sur {item} annulée.",
   "bz.no_pending_offers": "Aucune offre en attente.<br><br>Les offres d'échange et enchères apparaissent ici.",

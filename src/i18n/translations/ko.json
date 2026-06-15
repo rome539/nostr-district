@@ -561,6 +561,7 @@
   "bz.your_bids": "내 입찰",
   "bz.your_bid_label": "내 입찰",
   "bz.your_bid_amount": "내 입찰: {amount}",
+  "bz.top_bid": "최고 입찰: {amount}",
   "bz.your_bid_declined": "내 입찰: {amount} · 거절됨",
   "bz.bid_cancelled": "{item}에 대한 입찰을 취소했습니다.",
   "bz.no_pending_offers": "대기 중인 제안이 없습니다.<br><br>교환 제안과 입찰이 여기에 표시됩니다.",
