@@ -1556,7 +1556,7 @@ export async function fetchMyBids(myPubkey: string): Promise<MyBid[]> {
 }
 
 // ── Wins (durable "you won — pay now" markers) ────────────────────────────────
-export interface WinNotice { instanceId: string; itemId: string; price: number }
+export interface WinNotice { instanceId: string; itemId: string; price: number; ts: number }
 
 export async function fetchMyWins(myPubkey: string): Promise<WinNotice[]> {
   if (!_oracleSet.length || !myPubkey) return [];
@@ -1595,7 +1595,7 @@ export async function fetchMyWins(myPubkey: string): Promise<WinNotice[]> {
       const burned = esc?.tags?.find((t: string[]) => t[0] === 'burned');
       const reservedFor = esc?.tags?.find((t: string[]) => t[0] === 'awaiting_winner')?.[1];
       if (!esc || burned || reservedFor !== myPubkey) continue;
-      out.push({ instanceId, itemId, price });
+      out.push({ instanceId, itemId, price, ts: e.created_at });
     }
     return out;
   } catch { return []; }

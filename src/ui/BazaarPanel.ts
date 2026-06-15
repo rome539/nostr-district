@@ -1276,9 +1276,15 @@ export class BazaarPanel {
   }
 
   /** Bids you won that still need paying — not yet arrived, paid, or declined. */
+  // A win is keyed by instanceId + marker timestamp, NOT instanceId alone: an
+  // item's instanceId is reused across list → delist → relist, so a *new* win on
+  // the same item (e.g. seller declined, buyer re-bid, seller re-accepted) must
+  // not be suppressed by a stale resolution of an older win on that instance.
+  private winKey(w: WinNotice): string { return `${w.instanceId}:${w.ts}`; }
+
   private activeWins(): WinNotice[] {
     const ownedWinIds = new Set(getInventoryWithDefs().map(e => e.owned.instanceId));
-    return this.myWins.filter(w => !this.resolvedWins.has(w.instanceId) && !ownedWinIds.has(w.instanceId));
+    return this.myWins.filter(w => !this.resolvedWins.has(this.winKey(w)) && !ownedWinIds.has(w.instanceId));
   }
 
   /** One "You won … pay X to claim it" banner with its pay/decline buttons wired. */
@@ -1298,7 +1304,7 @@ export class BazaarPanel {
       if (r.status === 'ok') {
         payBtn.textContent = ti18n('bz.paid_check');
         ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
-        this.resolvedWins.add(win.instanceId); // stays hidden even if a stale refresh re-adds it
+        this.resolvedWins.add(this.winKey(win)); // stays hidden even if a stale refresh re-adds it
         this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
         // The bid is fulfilled — clear it from YOUR BIDS and tombstone it.
         const paidBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
@@ -1313,7 +1319,7 @@ export class BazaarPanel {
           // Server's item_sold for this win closed the modal — clean up the win UI.
           () => {
             ToastManager.show(ti18n('bz.paid_toast', { item: def?.name ?? ti18n('bz.item') }), '#ffd700');
-            this.resolvedWins.add(win.instanceId);
+            this.resolvedWins.add(this.winKey(win));
             this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
             this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
             this.render();
@@ -1322,7 +1328,7 @@ export class BazaarPanel {
         );
       } else if (r.status === 'unavailable') {
         payBtn.textContent = ti18n('bz.no_longer_available');
-        this.resolvedWins.add(win.instanceId);
+        this.resolvedWins.add(this.winKey(win));
         this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
         setTimeout(() => this.render(), 1200);
       } else {
@@ -1343,7 +1349,7 @@ export class BazaarPanel {
         // Also withdraw our bid so the seller isn't re-offered our flaky bid
         const myBid = this.myBidsOut.find(b => b.instanceId === win.instanceId);
         if (myBid) withdrawBid(win.instanceId, myBid.sellerPubkey);
-        this.resolvedWins.add(win.instanceId);
+        this.resolvedWins.add(this.winKey(win));
         this.myWins = this.myWins.filter(w => w.instanceId !== win.instanceId);
         this.myBidsOut = this.myBidsOut.filter(b => b.instanceId !== win.instanceId);
         ToastManager.show(ti18n('bz.declined_toast'), '#c06060');
