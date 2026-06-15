@@ -280,20 +280,18 @@ export class LoginScreen {
         ${this._lastLogin === 'extension' ? `<button id="login-continue-ext" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_ext'))}</button>` : ''}
         ${this._lastLogin === 'bunker'    ? `<button id="login-continue-bunker" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_bunker'))}</button>` : ''}
         ${this._lastLogin === 'nsec'      ? `<button id="login-continue-nsec" class="login-link bunker-cancel" style="position:absolute;top:8px;left:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.last_nsec'))}</button>` : ''}
-        <button id="login-guest-top" class="login-link bunker-cancel" style="position:absolute;top:8px;right:10px;font-size:11px;padding:6px 10px;">${this.esc(t('login.guest_link'))}</button>
         <h1 id="login-what-is-nostr" class="login-title" role="button" tabindex="0" title="What is Nostr?">NOSTR DISTRICT</h1>
         <p class="login-subtitle">${this.esc(t('login.subtitle'))}</p>
 
         <div id="login-main" class="login-methods">
-          ${passkeyBtn}
-          <button id="login-bunker" class="login-btn login-btn-create">
-            <span class="btn-label">${this.esc(t('login.connect_nostr'))}${infoGlyph('connect', 'About connecting with Nostr')}</span>
-            <span class="btn-sub">${this.esc(t('login.connect_nostr_desc'))}</span>
+          <button id="login-create" class="login-btn login-btn-create">
+            <span class="btn-label">${this.esc(t('login.create_link'))}${infoGlyph('create', 'About creating an account')}</span>
           </button>
+          ${passkeyBtn}
 
           <div id="login-bottom">
             <div class="login-divider"></div>
-            <button id="login-create" class="login-link">${this.esc(t('login.create_link'))} ${infoGlyph('create', 'About creating an account')}</button>
+            <button id="login-bunker" class="login-link">${this.esc(t('login.connect_nostr'))} ${infoGlyph('connect', 'About connecting with Nostr')}</button>
           </div>
         </div>
 
@@ -357,16 +355,13 @@ export class LoginScreen {
           </div>
 
           <div id="create-step-2" class="hidden">
-            <p class="create-header">Save your private key</p>
+            <p class="create-header">Save your password (nsec)</p>
             <div class="create-nsec-warning">
-              Your Nostr private key is the <strong>only</strong> way to recover your account on a new device. If you lose it, your account is gone forever.
+              Your password (nsec) has been created for you. Save it somewhere safe — it's the <strong>only</strong> way to log in on another device, and it can <strong>never be changed</strong>. If you lose it, your account is gone forever.
             </div>
             <div class="create-nsec-box">
               <div id="create-nsec-text" class="create-nsec-text"></div>
               <button id="create-nsec-copy" class="create-nsec-copy">Copy</button>
-            </div>
-            <div class="create-nsec-note">
-              Store this key somewhere safe (password manager, written down). You'll need it to log in on other devices.
             </div>
             <label class="warning-check create-saved-check">
               <input type="checkbox" id="create-saved">
@@ -934,6 +929,14 @@ export class LoginScreen {
         position: absolute; top: 8px; right: 10px;
         margin: 0; padding: 6px 10px; font-size: 11px;
       }
+      /* Quick-login (last-used) link only belongs on the main view — hide it
+         once we navigate into the Nostr-app or create sub-views. */
+      .login-box.view-nostr #login-continue-bunker,
+      .login-box.view-nostr #login-continue-nsec,
+      .login-box.view-nostr #login-continue-ext,
+      .login-box.view-create #login-continue-bunker,
+      .login-box.view-create #login-continue-nsec,
+      .login-box.view-create #login-continue-ext { display: none; }
 
       /* ── Inline per-method info glyph ──
          Sits next to the button's title text inside the login button itself.
@@ -1541,7 +1544,6 @@ export class LoginScreen {
       this.el('bunker-options').classList.remove('hidden');
       this.el('bunker-qr-panel').classList.add('hidden');
       this.container.querySelector('.login-box')!.classList.add('view-nostr');
-      this.container.querySelector<HTMLElement>('#login-guest-top')!.style.display = 'none';
       this.setStatus('');
     });
 
@@ -1660,6 +1662,9 @@ export class LoginScreen {
       (this.el('create-username') as HTMLInputElement).value = '';
       (this.el('create-saved') as HTMLInputElement).checked = false;
       (this.el('create-confirm') as HTMLButtonElement).disabled = true;
+      const cpBtn = this.el('create-passkey') as HTMLButtonElement;
+      cpBtn.disabled = false;
+      cpBtn.textContent = t('login.create.button');
     });
     this.el('create-passkey').addEventListener('click', () => this._submitCreateWithPasskey());
     this.el('create-nsec-copy').addEventListener('click', () => {
