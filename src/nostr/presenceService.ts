@@ -229,6 +229,12 @@ export function declineWinRequest(instanceId: string): Promise<{ ok: boolean; re
   });
 }
 
+// Ask the oracle to DM the seller about a new bid. Fire-and-forget — bid
+// notifications come from the trusted oracle key only, never player-to-player.
+export function notifyBid(instanceId: string): void {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'notify_bid', instanceId }));
+}
+
 // Seller revokes a bid acceptance (declined the winner after accepting) → server
 // clears the escrow reservation + win marker so the winner can no longer pay.
 const pendingRevokeAccept = new Map<string, (r: { ok: boolean; changed?: boolean; reason?: string }) => void>();

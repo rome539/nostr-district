@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "无法接受出价。",
   "bz.your_bids": "我的出价",
   "bz.your_bid_label": "你的出价",
+  "bz.your_bid_amount": "你的出价：{amount}",
+  "bz.your_bid_declined": "你的出价：{amount} · 已拒绝",
   "bz.bid_cancelled": "已取消对 {item} 的出价。",
   "bz.no_pending_offers": "没有待处理的报价。<br><br>交易报价和出价会显示在这里。",
   "bz.no_bids": "暂无出价。",

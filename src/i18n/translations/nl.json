@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "Kon bod niet accepteren.",
   "bz.your_bids": "JOUW BIEDINGEN",
   "bz.your_bid_label": "JOUW BOD",
+  "bz.your_bid_amount": "Jouw bod: {amount}",
+  "bz.your_bid_declined": "Jouw bod: {amount} · geweigerd",
   "bz.bid_cancelled": "Bod op {item} geannuleerd.",
   "bz.no_pending_offers": "Geen openstaande aanbiedingen.<br><br>Ruilaanbiedingen en biedingen verschijnen hier.",
   "bz.no_bids": "Nog geen biedingen.",

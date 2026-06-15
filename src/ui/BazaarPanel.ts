@@ -74,6 +74,25 @@ export class BazaarPanel {
   }
   private acceptedBid: Record<string, { name: string; amount: number }> = {};
   private acceptInFlight = new Set<string>();
+  // Instances whose reservation we've actually seen the server confirm. Lets us
+  // tell "reservation cleared" (winner declined / seller revoked → drop the
+  // accepted card) apart from "reservation not broadcast yet" (just accepted).
+  private acceptConfirmed = new Set<string>();
+
+  // Reconcile the optimistic "accepted — awaiting payment" state against the
+  // server's authoritative sold/reserved signals, so the seller's card clears the
+  // moment the winner pays (sold) or backs out / is revoked (reservation cleared).
+  private reconcileAcceptedBids(): void {
+    for (const id of Object.keys(this.acceptedBid)) {
+      if (isItemReserved(id)) this.acceptConfirmed.add(id); // server confirmed the hold
+      if (isItemSold(id)) {                                  // winner paid → done
+        delete this.acceptedBid[id]; this.acceptConfirmed.delete(id);
+      } else if (this.acceptConfirmed.has(id) && !isItemReserved(id) && !this.acceptInFlight.has(id)) {
+        // Was confirmed reserved, now isn't → winner declined or seller revoked.
+        delete this.acceptedBid[id]; this.acceptConfirmed.delete(id);
+      }
+    }
+  }
 
   static isOpen(): boolean { return !!document.getElementById(PANEL_ID); }
 
@@ -223,10 +242,12 @@ export class BazaarPanel {
     // ── Tabs ─────────────────────────────────────────────────────────────────
     const tabs = document.createElement('div');
     tabs.style.cssText = `display:flex;gap:2px;padding:10px 18px 0;flex-shrink:0;`;
+    this.reconcileAcceptedBids();
     const incomingOffers = getPendingOffers().filter(o => o.direction === 'incoming').length;
     // Listings of mine that have un-accepted bids also count as things needing action
     const bidsNeedingAction = getLocalListings().filter(l =>
-      (this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 && !this.acceptedBid[l.item.instanceId]).length;
+      !isItemSold(l.item.instanceId)
+      && (this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 && !this.acceptedBid[l.item.instanceId]).length;
     // Won bids awaiting payment now live in the OFFERS ▸ Bids sub-tab, so they count too.
     const wins = this.activeWins();
     const pendingOffers = incomingOffers + bidsNeedingAction + wins.length;
@@ -675,7 +696,7 @@ export class BazaarPanel {
   }
 
   // Shared card shell — rarity-accented left edge, emoji tile, info, right action
-  private listingCardShell(def: ItemDef, priceHtml: string, actionHtml: string, opts: { note?: string; sellerLine?: string } = {}): HTMLElement {
+  private listingCardShell(def: ItemDef, priceHtml: string, actionHtml: string, opts: { note?: string; sellerLine?: string; extraLine?: string } = {}): HTMLElement {
     const card = document.createElement('div');
     const ac = RARITY_COLOR[def.rarity];
     card.style.cssText = `
@@ -695,6 +716,7 @@ export class BazaarPanel {
         <div style="color:#666;font-size:9px;letter-spacing:1px;margin-top:1px;">${def.rarity.toUpperCase()} · ${CATEGORY_LABEL[def.category] ?? def.category}</div>
         ${opts.note ? `<div style="color:#8888aa;font-size:10px;margin-top:3px;font-style:italic;">"${opts.note}"</div>` : ''}
         ${opts.sellerLine ? `<div style="color:#555;font-size:9px;margin-top:2px;">${opts.sellerLine}</div>` : ''}
+        ${opts.extraLine ?? ''}
       </div>
       <div class="nd-card-actions" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
         <div style="color:#ffd700;font-size:13px;font-weight:bold;display:flex;align-items:center;gap:3px;">${priceHtml}</div>
@@ -777,11 +799,19 @@ export class BazaarPanel {
       ? `<button class="bazaar-buy-btn" disabled style="background:#16101f;border:1px solid #4a3a5a;color:#8a7aaa;font-family:'Courier New',monospace;font-size:10px;cursor:not-allowed;padding:4px 12px;border-radius:4px;">${ti18n('bz.bid_pending')}</button>`
       : `<button class="bazaar-buy-btn" style="background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;display:flex;align-items:center;gap:4px;">${ti18n('bz.buy')} · ${listing.price} ${boltIcon(10, '#70ff70')}</button>`
         + `<button class="bazaar-bid-btn" style="background:#1a0a2a;border:1px solid #4a1a6a;color:#c070ff;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:4px 12px;border-radius:4px;">${ti18n('bz.bid')}</button>`;
+    // Surface MY standing bid on this listing, if any, so the market shows what
+    // I've already offered (and how much) without opening the Offers tab.
+    const myBid = this.myBidsOut.find(b => b.instanceId === listing.instanceId);
+    const bidLine = myBid
+      ? (myBid.declined
+        ? `<div style="color:#c06060;font-size:9px;margin-top:2px;">${ti18n('bz.your_bid_declined', { amount: String(myBid.amount) })}</div>`
+        : `<div style="color:#c070ff;font-size:9px;font-weight:bold;margin-top:2px;display:flex;align-items:center;gap:3px;">${ti18n('bz.your_bid_amount', { amount: String(myBid.amount) })} ${boltIcon(9, '#c070ff')}</div>`)
+      : '';
     const card = this.listingCardShell(
       def,
       `${listing.price} ${boltIcon(11, '#ffd700')}`,
       actions,
-      { note: listing.note, sellerLine: ti18n('bz.by_seller', { name: sellerName }) },
+      { note: listing.note, sellerLine: ti18n('bz.by_seller', { name: sellerName }), extraLine: bidLine },
     );
     if (reserved) return card; // no buy/bid handlers — it's spoken for
     card.querySelector('.bazaar-bid-btn')?.addEventListener('click', () => this.promptBid(listing));
@@ -857,6 +887,13 @@ export class BazaarPanel {
     const r = await placeBid(listing, amount);
     if (r.ok) {
       ToastManager.show(ti18n('bz.bid_placed', { amount: String(amount), item: def.name }), '#c070ff');
+      // Reflect the bid on the market card immediately (one bid per item — replace
+      // any prior bid on this listing). The relay-backed fetch reconciles later.
+      this.myBidsOut = [
+        ...this.myBidsOut.filter(b => b.instanceId !== listing.instanceId),
+        { instanceId: listing.instanceId, itemId: listing.itemId, amount, sellerPubkey: listing.sellerPubkey, declined: false },
+      ];
+      if (this.tab === 'market' && BazaarPanel.isOpen()) this.render();
     } else {
       const reasons: Record<string, string> = {
         already_sold: ti18n('bz.bid_err.already_sold'),
@@ -1166,9 +1203,13 @@ export class BazaarPanel {
           const r = await acceptBidRequest(id, bid.buyer, listing.def.name);
           this.acceptInFlight.delete(id);
           if (r.ok) {
+            // Server has reserved the item by now — mark the hold confirmed so we can
+            // later detect it clearing (winner declines / we revoke) even if the
+            // panel was closed when the item_unreserved broadcast arrived.
+            this.acceptConfirmed.add(id);
             ToastManager.show(ti18n('bz.accepted_toast', { name: bidderName, amount: String(bid.amount) }), '#c070ff');
           } else {
-            delete this.acceptedBid[id]; // revert — accept failed
+            delete this.acceptedBid[id]; this.acceptConfirmed.delete(id); // revert — accept failed
             const reasons: Record<string, string> = {
               already_accepted: ti18n('bz.accept_err.already_accepted'),
               already_sold: ti18n('bz.accept_err.already_sold'),
@@ -1333,9 +1374,12 @@ export class BazaarPanel {
     if (peers.length) resolveNames([...new Set(peers)]).then(() => { if (BazaarPanel.isOpen()) this.render(); });
 
     // Bids placed on YOUR listings show here too — a bid is an incoming sats offer.
+    // Drop sold items even if a stale local-listing refresh transiently re-adds one
+    // (that flicker left a paid item's card briefly reappearing).
     const myListings = getLocalListings();
     const listingsWithBids = myListings.filter(l =>
-      (this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 || this.acceptedBid[l.item.instanceId]);
+      !isItemSold(l.item.instanceId)
+      && ((this.bidsByInstance[l.item.instanceId]?.length ?? 0) > 0 || this.acceptedBid[l.item.instanceId]));
 
     // Won bids awaiting payment lead the Bids sub-tab (they were the top banner).
     const wins = this.activeWins();
@@ -1440,8 +1484,8 @@ export class BazaarPanel {
           ${offer.message ? `<div style="color:#666;font-size:10px;font-style:italic;margin-bottom:8px;">"${esc(offer.message)}"</div>` : ''}
           ${isIncoming ? `
             <div style="display:flex;gap:6px;">
-              <button class="offer-accept-btn" style="flex:1;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 0;border-radius:4px;">${ti18n('bz.accept')}</button>
               <button class="offer-reject-btn" style="flex:1;background:#1a0a0a;border:1px solid #6a1a1a;color:#ff7070;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 0;border-radius:4px;">${ti18n('bz.decline')}</button>
+              <button class="offer-accept-btn" style="flex:1;background:#0a1a0a;border:1px solid #1a6a1a;color:#70ff70;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 0;border-radius:4px;">${ti18n('bz.accept')}</button>
             </div>
           ` : `
             <div style="display:flex;align-items:center;gap:8px;">

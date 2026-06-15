@@ -1403,14 +1403,13 @@ export async function placeBid(listing: RemoteListing, amount: number): Promise<
       content: '',
     });
     await publishEvent(signed);
-    // DM the seller so they get a push (Damus/iOS) with the bid amount, even when
-    // offline. Bids are public events anyway, so nothing private is leaked.
+    // Notify the seller via the ORACLE (it DMs them a push), not a player-to-player
+    // DM. Keeps all notifications coming from the trusted oracle key and avoids
+    // prompting the bidder's signer to encrypt a DM. The bid event itself is public.
     try {
-      const { sendDirectMessage } = await import('../nostr/dmService');
-      const name = listing.itemDef?.name ?? listing.itemId;
-      sendDirectMessage(listing.sellerPubkey,
-        `New bid: ${amount} sats on your ${name} in Nostr District. Open /bazaar → Offers to accept or decline.`).catch(() => {});
-    } catch { /* DM is best-effort */ }
+      const { notifyBid } = await import('../nostr/presenceService');
+      notifyBid(listing.instanceId);
+    } catch { /* best-effort */ }
     return { ok: true };
   } catch { return { ok: false, reason: 'publish_failed' }; }
 }

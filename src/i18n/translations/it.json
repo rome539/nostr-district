@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "Impossibile accettare l'offerta.",
   "bz.your_bids": "LE TUE OFFERTE",
   "bz.your_bid_label": "LA TUA OFFERTA",
+  "bz.your_bid_amount": "La tua offerta: {amount}",
+  "bz.your_bid_declined": "La tua offerta: {amount} · rifiutata",
   "bz.bid_cancelled": "Offerta su {item} annullata.",
   "bz.no_pending_offers": "Nessuna offerta in sospeso.<br><br>Le offerte di scambio e le offerte appaiono qui.",
   "bz.no_bids": "Ancora nessuna offerta.",

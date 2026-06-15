@@ -2056,6 +2056,34 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // ── Notify a seller of a new bid (oracle-sent) ────────────────────────
+      // Bids are public relay events; the bidder asks the oracle to DM the seller
+      // so the push comes from the trusted oracle key — consistent with the win/
+      // sold/gift notices — instead of a player-to-player DM, and the bidder's
+      // signer isn't prompted to encrypt one. Verified against the bidder's signed
+      // bid on the relays so it can't be used to DM-spam a seller.
+      if (msg.type === 'notify_bid' && myPubkey) {
+        const bidder     = myPubkey;
+        const instanceId = typeof msg.instanceId === 'string' ? msg.instanceId : '';
+        if (!instanceId) return;
+        (async () => {
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const ev = held.get(instanceId);
+          if (!ev || isBurned(ev)) return;
+          const seller = tagVal(ev, 'escrow_seller');
+          if (!seller || seller === bidder) return;
+          // Confirm the bidder really has a live bid on this item before DMing.
+          const bids = newestPerD(await queryRelays({ kinds: [30078], authors: [bidder], '#t': ['ndbid'] }));
+          const bidEv = bids.get(instanceId);
+          if (!bidEv || tagVal(bidEv, 'withdrawn')) return;
+          const amount = Math.floor(Number(tagVal(bidEv, 'amount') ?? '0'));
+          if (!(amount >= 1)) return;
+          const itemName = tagVal(ev, 'escrow_name') ?? tagVal(ev, 'item_id') ?? 'an item';
+          dmFromOracle(seller, `New bid: ${amount} sats on your ${itemName} in Nostr District. Open the app → Bazaar → Offers to accept or decline.`);
+        })().catch(() => {});
+        return;
+      }
+
       if (msg.type === 'game_msg' && myPubkey) {
         const player = players.get(myPubkey);
         if (!player) return;

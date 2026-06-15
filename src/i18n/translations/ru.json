@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "Не удалось принять ставку.",
   "bz.your_bids": "ВАШИ СТАВКИ",
   "bz.your_bid_label": "ВАША СТАВКА",
+  "bz.your_bid_amount": "Ваша ставка: {amount}",
+  "bz.your_bid_declined": "Ваша ставка: {amount} · отклонена",
   "bz.bid_cancelled": "Ставка на {item} отменена.",
   "bz.no_pending_offers": "Нет ожидающих предложений.<br><br>Предложения обмена и ставки появятся здесь.",
   "bz.no_bids": "Пока нет ставок.",

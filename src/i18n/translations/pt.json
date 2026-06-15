@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "Não foi possível aceitar o lance.",
   "bz.your_bids": "SEUS LANCES",
   "bz.your_bid_label": "SEU LANCE",
+  "bz.your_bid_amount": "Seu lance: {amount}",
+  "bz.your_bid_declined": "Seu lance: {amount} · recusado",
   "bz.bid_cancelled": "Lance em {item} cancelado.",
   "bz.no_pending_offers": "Nenhuma oferta pendente.<br><br>Ofertas de troca e lances aparecem aqui.",
   "bz.no_bids": "Ainda não há lances.",

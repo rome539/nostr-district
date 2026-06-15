@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "入札を承認できませんでした。",
   "bz.your_bids": "あなたの入札",
   "bz.your_bid_label": "あなたの入札",
+  "bz.your_bid_amount": "あなたの入札: {amount}",
+  "bz.your_bid_declined": "あなたの入札: {amount} · 拒否",
   "bz.bid_cancelled": "{item} への入札を取り消しました。",
   "bz.no_pending_offers": "保留中のオファーはありません。<br><br>トレードオファーと入札はここに表示されます。",
   "bz.no_bids": "まだ入札はありません。",

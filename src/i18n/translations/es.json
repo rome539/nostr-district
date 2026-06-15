@@ -560,6 +560,8 @@
   "bz.accept_err.generic": "No se pudo aceptar la puja.",
   "bz.your_bids": "TUS PUJAS",
   "bz.your_bid_label": "TU PUJA",
+  "bz.your_bid_amount": "Tu puja: {amount}",
+  "bz.your_bid_declined": "Tu puja: {amount} · rechazada",
   "bz.bid_cancelled": "Puja por {item} cancelada.",
   "bz.no_pending_offers": "No hay ofertas pendientes.<br><br>Las ofertas de intercambio y pujas aparecen aquí.",
   "bz.no_bids": "Aún no hay pujas.",
