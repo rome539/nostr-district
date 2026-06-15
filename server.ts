@@ -2021,6 +2021,41 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // ── Seller revokes a bid acceptance ───────────────────────────────────
+      // The seller declined a bidder AFTER accepting them (or on a stale UI where
+      // the accept state was lost). A relay decline marker alone never reaches the
+      // oracle, so the escrow stayed stamped and the winner could still pay. This
+      // clears the winner stamp + win marker so the seller's decline actually sticks
+      // and the item re-opens to the market. No-op (still ok) if the named bidder
+      // isn't the current winner, so declining a non-winning bid is harmless.
+      if (msg.type === 'revoke_acceptance' && myPubkey) {
+        const seller     = myPubkey;
+        const instanceId = typeof msg.instanceId === 'string' ? msg.instanceId : '';
+        const bidder     = typeof msg.bidder === 'string' ? msg.bidder : '';
+        const fail = (reason: string) => ws.send(JSON.stringify({ type: 'revoke_acceptance_error', instanceId, reason }));
+        if (!instanceId) { fail('bad_request'); return; }
+        (async () => {
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const ev = held.get(instanceId);
+          if (!ev || isBurned(ev)) { fail('item_gone'); return; }
+          if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
+          const winner = tagVal(ev, 'awaiting_winner');
+          // Nothing reserved, or a different bidder is the winner → nothing to undo.
+          if (!winner || (bidder && winner !== bidder)) {
+            ws.send(JSON.stringify({ type: 'acceptance_revoked', instanceId, changed: false }));
+            return;
+          }
+          const cleared = restampEscrow(ev, null, 0); // drop the winner stamp
+          if (!cleared) { fail('revoke_failed'); return; }
+          publishToRelays(cleared);
+          clearWinMarker(instanceId, winner);
+          setReservedForWinner(instanceId, false); // re-open BUY/BID to everyone
+          console.log(`[Bids] ${seller.slice(0,8)}… revoked acceptance of ${winner.slice(0,8)}… on ${instanceId} — item re-opened`);
+          ws.send(JSON.stringify({ type: 'acceptance_revoked', instanceId, changed: true }));
+        })().catch(() => fail('revoke_failed'));
+        return;
+      }
+
       if (msg.type === 'game_msg' && myPubkey) {
         const player = players.get(myPubkey);
         if (!player) return;

@@ -246,18 +246,8 @@ export class BazaarPanel {
     });
     panel.appendChild(tabs);
 
-    // ── "You won" banners — bids of yours the seller accepted; pay to claim. ───
-    // Shown above the body on every tab EXCEPT offers, where they live inside the
-    // Bids sub-tab instead (so they aren't duplicated). Wrapped in a bounded
-    // scroll area so multiple wins stay compact.
-    if (wins.length && this.tab !== 'offers') {
-      const winsWrap = document.createElement('div');
-      winsWrap.className = 'nd-want-list';
-      winsWrap.style.cssText = `margin:8px 18px 0;display:flex;flex-direction:column;gap:6px;max-height:138px;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;scrollbar-color:#6a3aaa55 transparent;`;
-      for (const win of wins) winsWrap.appendChild(this.buildWinBanner(win));
-      this.ensureScrollStyle();
-      panel.appendChild(winsWrap);
-    }
+    // "You won — pay X" banners now live solely in the OFFERS ▸ Bids sub-tab;
+    // the OFFERS (n) tab count (which includes wins) is what flags them here.
 
     // ── Body ─────────────────────────────────────────────────────────────────
     const body = document.createElement('div');

@@ -229,6 +229,18 @@ export function declineWinRequest(instanceId: string): Promise<{ ok: boolean; re
   });
 }
 
+// Seller revokes a bid acceptance (declined the winner after accepting) → server
+// clears the escrow reservation + win marker so the winner can no longer pay.
+const pendingRevokeAccept = new Map<string, (r: { ok: boolean; changed?: boolean; reason?: string }) => void>();
+export function revokeAcceptanceRequest(instanceId: string, bidder: string): Promise<{ ok: boolean; changed?: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    if (ws?.readyState !== WebSocket.OPEN) { resolve({ ok: false, reason: 'offline' }); return; }
+    const timer = setTimeout(() => { pendingRevokeAccept.delete(instanceId); resolve({ ok: false, reason: 'timeout' }); }, 15000);
+    pendingRevokeAccept.set(instanceId, (r) => { clearTimeout(timer); resolve(r); });
+    ws.send(JSON.stringify({ type: 'revoke_acceptance', instanceId, bidder }));
+  });
+}
+
 type ItemReceivedHandler = (fromName: string, event?: any) => void;
 let onItemReceived: ItemReceivedHandler | null = null;
 export function setItemReceivedHandler(h: ItemReceivedHandler | null): void { onItemReceived = h; }
@@ -543,6 +555,14 @@ export function connectPresence(cb: PresenceCallback): void {
       if (msg.type === 'decline_win_error') {
         const cb = pendingDeclineWin.get(msg.instanceId);
         if (cb) { pendingDeclineWin.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
+      }
+      if (msg.type === 'acceptance_revoked') {
+        const cb = pendingRevokeAccept.get(msg.instanceId);
+        if (cb) { pendingRevokeAccept.delete(msg.instanceId); cb({ ok: true, changed: !!msg.changed }); }
+      }
+      if (msg.type === 'revoke_acceptance_error') {
+        const cb = pendingRevokeAccept.get(msg.instanceId);
+        if (cb) { pendingRevokeAccept.delete(msg.instanceId); cb({ ok: false, reason: msg.reason }); }
       }
       if (msg.type === 'sold_list' && Array.isArray(msg.ids)) {
         import('../stores/tradeItemStore').then(({ markSoldInstances }) => markSoldInstances(msg.ids));

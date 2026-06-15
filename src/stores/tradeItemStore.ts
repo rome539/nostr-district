@@ -1448,6 +1448,14 @@ export async function declineBid(instanceId: string, bidderPubkey: string, bidAt
       content: '',
     });
     await publishEvent(signed);
+    // If this bid had already been ACCEPTED (escrow reserved + win marker issued),
+    // the relay marker alone wouldn't stop the winner from paying — the oracle never
+    // reads decline markers. Tell the server to revoke any matching reservation so
+    // the decline actually sticks. No-op server-side when nothing was reserved.
+    try {
+      const { revokeAcceptanceRequest } = await import('../nostr/presenceService');
+      revokeAcceptanceRequest(instanceId, bidderPubkey).catch(() => {});
+    } catch { /* best-effort */ }
     // Live-notify the bidder over the trade protocol (hidden from chat clients).
     try {
       const { sendProtocolMessage } = await import('../nostr/dmService');
