@@ -13,6 +13,7 @@ import { t as ti18n } from '../i18n/i18n';
 
 export type LoginInfoTopic =
   | 'nostr'        // "What is Nostr?" — global overview
+  | 'google'       // Continue with Google — encrypted Drive backup + recovery
   | 'passkey'      // Passkey login (both "Continue as X" and "Save with Passkey")
   | 'connect'     // "Connect with Nostr" overview (shows 3 sub-methods)
   | 'signer'       // NIP-46 remote signer

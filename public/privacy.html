@@ -86,11 +86,14 @@
   by the extension or signer, or held only in your browser’s memory for the session;
   we never receive it.</p>
 
-  <h2>4. In-app Lightning wallet</h2>
-  <p>The app includes an optional Lightning wallet powered by the Breez SDK. Wallet
-  keys are derived from your Nostr key and handled on your device. Lightning
-  transactions are processed by the Breez / Spark network under their terms; we do
-  not custody funds.</p>
+  <h2>4. Built-in Lightning wallet</h2>
+  <p>Every account includes a Lightning wallet powered by the Breez SDK. The
+  wallet’s keys (a recovery phrase) are generated on your device. So the same
+  wallet follows your account across devices, an <strong>end-to-end encrypted
+  backup</strong> of that recovery phrase is published to public Nostr relays,
+  encrypted to your own Nostr key — only you can decrypt it; neither we nor the
+  relays ever see anything but ciphertext. Lightning transactions are processed by
+  the Breez / Spark network under their terms; we do not custody funds.</p>
 
   <h2>5. Multiplayer presence</h2>
   <p>To show players in shared spaces, the app connects to a real-time presence
