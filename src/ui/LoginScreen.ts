@@ -391,13 +391,13 @@ export class LoginScreen {
           </div>
 
           <div id="create-step-2" class="hidden">
-            <p class="create-header">Save your private key (nsec)</p>
+            <p class="create-header">${this.esc(t('login.create.nsec_title'))}</p>
             <div class="create-nsec-warning">
-              Your private key (nsec) has been created for you. Save it somewhere safe — it's the <strong>only</strong> way to log in on another device, and it can <strong>never be changed</strong>. If you lose it, your account is gone forever.
+              ${t('login.create.nsec_warning')}
             </div>
             <div class="create-nsec-box">
               <div id="create-nsec-text" class="create-nsec-text"></div>
-              <button id="create-nsec-copy" class="create-nsec-copy">Copy</button>
+              <button id="create-nsec-copy" class="create-nsec-copy">${this.esc(t('login.create.copy'))}</button>
             </div>
             <label class="warning-check create-saved-check">
               <input type="checkbox" id="create-saved">
@@ -1768,8 +1768,8 @@ export class LoginScreen {
       const text = this._pendingCreateNsec;
       if (text) {
         navigator.clipboard.writeText(text).then(() => {
-          (this.el('create-nsec-copy') as HTMLElement).textContent = 'Copied!';
-          setTimeout(() => { (this.el('create-nsec-copy') as HTMLElement).textContent = 'Copy'; }, 2000);
+          (this.el('create-nsec-copy') as HTMLElement).textContent = t('login.create.copied');
+          setTimeout(() => { (this.el('create-nsec-copy') as HTMLElement).textContent = t('login.create.copy'); }, 2000);
         }).catch(() => {});
       }
     });
@@ -1797,14 +1797,14 @@ export class LoginScreen {
     const btn = this.el('login-google') as HTMLButtonElement;
     const label = btn.querySelector('span');
     btn.disabled = true;
-    if (label) label.textContent = 'Connecting…';
+    if (label) label.textContent = t('login.g.connecting');
     this.setStatus('');
     try {
       const { requestGoogleAuth } = await import('../auth/googleAuth');
       const { accessToken } = await requestGoogleAuth();
       await this._handleGoogleToken(accessToken);
     } catch (e: any) {
-      this.setStatus(e?.message || 'Google sign-in failed', true);
+      this.setStatus(e?.message || t('login.g.signin_fail'), true);
     } finally {
       btn.disabled = false;
       if (label) label.textContent = t('login.create.google');
@@ -1814,13 +1814,13 @@ export class LoginScreen {
   // With a Drive-scoped token in hand: existing backup → ask PIN → unlock → log
   // in; no backup → set PIN → generate key → save to Drive → log in.
   private async _handleGoogleToken(token: string): Promise<void> {
-    this.setStatus('Checking your Google Drive backup…');
+    this.setStatus(t('login.g.checking'));
     let backup;
     try {
       const { readBackup } = await import('../auth/driveBackup');
       backup = await readBackup(token);
     } catch (e: any) {
-      this.setStatus(e?.message || 'Could not reach Google Drive', true);
+      this.setStatus(e?.message || t('login.g.drive_fail'), true);
       return;
     }
 
@@ -1848,11 +1848,11 @@ export class LoginScreen {
         if (pin === PIN_RESET) { this.setStatus(''); break; }
         try {
           const nsec = await unlockWithPin(backup, pin);
-          this.setStatus('Welcome back — logging in…');
+          this.setStatus(t('login.g.welcome'));
           this.onNsecLogin(nsec);
           return;
         } catch {
-          lastError = 'Incorrect password — try again';
+          lastError = t('login.pw.incorrect');
         }
       }
     }
@@ -1865,7 +1865,7 @@ export class LoginScreen {
     // Keep the box covered from here through the Face ID prompt — without this,
     // closing the password prompt uncovers the main modal for the duration of
     // the Drive upload before the Face ID prompt appears (the flash).
-    const busy = this._showBusyCover('Creating your account…');
+    const busy = this._showBusyCover(t('login.g.creating'));
     try {
       const { generateSecretKey, nip19 } = await import('nostr-tools');
       const nsec = nip19.nsecEncode(generateSecretKey());
@@ -1878,7 +1878,7 @@ export class LoginScreen {
     } catch (e: any) {
       busy.remove();
       this.container.querySelector('.login-box')?.classList.remove('pin-active');
-      this.setStatus(e?.message || 'Could not save your account', true);
+      this.setStatus(e?.message || t('login.g.save_fail'), true);
     }
   }
 
@@ -1887,10 +1887,10 @@ export class LoginScreen {
   // password. Returns null on success (logged in) or an error message to show.
   private async _recoverWithPasskey(token: string, backup: any): Promise<string | null> {
     const wrap = backup?.wraps?.passkey;
-    if (!wrap) return 'No Face ID recovery is set up for this account.';
+    if (!wrap) return t('login.fid.no_recovery');
     // Cover the box from the moment the forgot prompt closed, through Face ID,
     // straight into the new-password prompt — no main-modal flash between.
-    const busy = this._showBusyCover('Unlocking with Face ID…');
+    const busy = this._showBusyCover(t('login.fid.unlocking'));
     try {
       const { getRecoveryPasskeyPrf } = await import('../stores/passkeyStore');
       const { unlockDekWithPasskey, decryptNsecFromDek, rewrapPin } = await import('../auth/backupCrypto');
@@ -1901,13 +1901,13 @@ export class LoginScreen {
       // Offer to set a new password (skippable — recovery already succeeded).
       busy.remove(); // new-password prompt mounts in the same tick → no flash
       const newPw = await this._promptPin('set', {
-        title: 'Set a new password',
-        desc: 'You\'re back in. Choose a new password for next time.',
-        okLabel: 'Save password',
+        title: t('login.pw.new_title'),
+        desc: t('login.pw.new_desc'),
+        okLabel: t('login.pw.new_btn'),
       });
       if (newPw && newPw !== PIN_RESET && newPw !== PIN_RECOVER) {
         // Re-cover for the re-wrap + Drive upload before logging in.
-        const saving = this._showBusyCover('Saving…');
+        const saving = this._showBusyCover(t('login.fid.saving'));
         try {
           const updated = await rewrapPin(backup, dek, newPw);
           const { writeBackup } = await import('../auth/driveBackup');
@@ -1921,11 +1921,11 @@ export class LoginScreen {
     } catch (e: any) {
       busy.remove();
       this.container.querySelector('.login-box')?.classList.remove('pin-active');
-      if (e?.name === 'NotAllowedError') return 'Face ID was cancelled — try again or use your password.';
+      if (e?.name === 'NotAllowedError') return t('login.fid.cancelled');
       if (/prf/i.test(e?.message || '') || e?.message === 'PRF_NOT_SUPPORTED') {
-        return 'Face ID recovery isn\'t available on this device — try your password.';
+        return t('login.fid.unavailable');
       }
-      return `Face ID recovery failed: ${e?.message || e?.name || 'unknown error'}`;
+      return `${t('login.fid.failed')}: ${e?.message || e?.name || 'unknown error'}`;
     }
   }
 
@@ -1938,7 +1938,7 @@ export class LoginScreen {
   ): Promise<void> {
     const wantsIt = await this._promptFaceIdSetup();
     if (!wantsIt) return;
-    this.setStatus('Setting up Face ID…');
+    this.setStatus(t('login.fid.setting_up'));
     try {
       const { createRecoveryPasskey } = await import('../stores/passkeyStore');
       const { wrapDekWithPasskey, withPasskeyWrap } = await import('../auth/backupCrypto');
@@ -1949,8 +1949,8 @@ export class LoginScreen {
     } catch (e: any) {
       // Non-fatal: account already saved with a password. Just note it.
       const msg = /prf/i.test(e?.message || '') || e?.message === 'PRF_NOT_SUPPORTED'
-        ? 'Face ID isn\'t supported here — your password still protects your account.'
-        : 'Couldn\'t set up Face ID — your password still protects your account.';
+        ? t('login.fid.setup_unsupported')
+        : t('login.fid.setup_fail');
       this.setStatus(msg, true);
     }
   }
@@ -1979,10 +1979,10 @@ export class LoginScreen {
       overlay.className = 'passkey-prompt-overlay';
       overlay.innerHTML = `
         <div class="passkey-prompt-box pin-prompt-box">
-          <div class="passkey-prompt-title">Set up Face ID?</div>
-          <div class="passkey-prompt-desc">Add Face ID (or your fingerprint) so you can get back into your account if you ever forget your password. Highly recommended.</div>
-          <button id="fid-go" class="login-btn login-btn-primary">Set up Face ID</button>
-          <button id="fid-skip" class="login-link" style="font-size:12px;">Not now</button>
+          <div class="passkey-prompt-title">${this.esc(t('login.fid.setup_title'))}</div>
+          <div class="passkey-prompt-desc">${this.esc(t('login.fid.setup_desc'))}</div>
+          <button id="fid-go" class="login-btn login-btn-primary">${this.esc(t('login.fid.setup_btn'))}</button>
+          <button id="fid-skip" class="login-link" style="font-size:12px;">${this.esc(t('login.fid.not_now'))}</button>
         </div>`;
       const loginBox = this.container.querySelector('.login-box')!;
       loginBox.appendChild(overlay);
@@ -2003,23 +2003,21 @@ export class LoginScreen {
   ): Promise<string | null> {
     return new Promise((resolve) => {
       const setting = mode === 'set';
-      const title = opts.title ?? (setting ? 'Create a password' : 'Enter your password');
-      const desc = opts.desc ?? (setting
-        ? 'This password unlocks your account on any device. Choose something you\'ll remember — and don\'t lose it.'
-        : 'Enter the password you set when you created this account.');
-      const okLabel = opts.okLabel ?? (setting ? 'Create account' : 'Unlock');
+      const title = opts.title ?? (setting ? t('login.pw.create_title') : t('login.pw.enter_title'));
+      const desc = opts.desc ?? (setting ? t('login.pw.create_desc') : t('login.pw.enter_desc'));
+      const okLabel = opts.okLabel ?? (setting ? t('login.pw.create_btn') : t('login.pw.unlock_btn'));
       const overlay = document.createElement('div');
       overlay.className = 'passkey-prompt-overlay';
       overlay.innerHTML = `
         <div class="passkey-prompt-box pin-prompt-box">
           <div class="passkey-prompt-title">${this.esc(title)}</div>
           <div class="passkey-prompt-desc">${this.esc(desc)}</div>
-          <input id="pin-1" class="nsec-input create-field" type="password" autocomplete="${setting ? 'new-password' : 'current-password'}" placeholder="Password" maxlength="64">
-          ${setting ? '<input id="pin-2" class="nsec-input create-field" type="password" autocomplete="new-password" placeholder="Confirm password" maxlength="64">' : ''}
+          <input id="pin-1" class="nsec-input create-field" type="password" autocomplete="${setting ? 'new-password' : 'current-password'}" placeholder="${this.esc(t('login.pw.placeholder'))}" maxlength="64">
+          ${setting ? `<input id="pin-2" class="nsec-input create-field" type="password" autocomplete="new-password" placeholder="${this.esc(t('login.pw.confirm'))}" maxlength="64">` : ''}
           <div id="pin-err" class="login-status error" style="min-height:16px;"></div>
           <button id="pin-ok" class="login-btn login-btn-primary">${this.esc(okLabel)}</button>
-          ${setting ? '' : '<button id="pin-forgot" class="login-link" style="font-size:12px;">Forgot password?</button>'}
-          <button id="pin-cancel" class="login-link" style="font-size:12px;">Cancel</button>
+          ${setting ? '' : `<button id="pin-forgot" class="login-link" style="font-size:12px;">${this.esc(t('login.pw.forgot'))}</button>`}
+          <button id="pin-cancel" class="login-link" style="font-size:12px;">${this.esc(t('login.pw.cancel'))}</button>
         </div>`;
       const loginBox = this.container.querySelector('.login-box')!;
       loginBox.appendChild(overlay);
@@ -2034,9 +2032,9 @@ export class LoginScreen {
       overlay.querySelector('#pin-ok')!.addEventListener('click', () => {
         const v = p1.value.trim();
         if (setting) {
-          if (v.length < 6) { err.textContent = 'Password must be at least 6 characters'; return; }
-          if (v !== (p2?.value.trim() || '')) { err.textContent = 'Passwords do not match'; return; }
-        } else if (!v) { err.textContent = 'Enter your password'; return; }
+          if (v.length < 6) { err.textContent = t('login.pw.too_short'); return; }
+          if (v !== (p2?.value.trim() || '')) { err.textContent = t('login.pw.mismatch'); return; }
+        } else if (!v) { err.textContent = t('login.pw.enter_one'); return; }
         done(v);
       });
       overlay.querySelector('#pin-cancel')!.addEventListener('click', () => done(null));
@@ -2046,15 +2044,15 @@ export class LoginScreen {
       overlay.querySelector('#pin-forgot')?.addEventListener('click', () => {
         const box = overlay.querySelector('.passkey-prompt-box') as HTMLElement;
         box.innerHTML = `
-          <div class="passkey-prompt-title">Forgot your password?</div>
+          <div class="passkey-prompt-title">${this.esc(t('login.fp.title'))}</div>
           <div class="passkey-prompt-desc">${opts.hasPasskey
-            ? 'Use Face ID to get back into your account, then set a new password.'
-            : 'Your account is encrypted with your password and can\'t be recovered without it — not by us, not by Google. If you continue, this account is <b>permanently erased</b> and a brand-new one is created in its place.'}</div>
-          ${opts.hasPasskey ? '<button id="pin-recover-go" class="login-btn login-btn-primary">Unlock with Face ID</button>' : ''}
+            ? this.esc(t('login.fp.desc_faceid'))
+            : t('login.fp.desc_erase')}</div>
+          ${opts.hasPasskey ? `<button id="pin-recover-go" class="login-btn login-btn-primary">${this.esc(t('login.fp.unlock'))}</button>` : ''}
           ${opts.hasPasskey
-            ? '<button id="pin-reset-go" class="login-link" style="font-size:11px;color:rgba(220,120,120,0.75);margin-top:2px;">Lost your device too? Erase &amp; start new</button>'
-            : '<button id="pin-reset-go" class="login-btn login-btn-primary" style="background:#7a2330;border-color:#a33;">Erase &amp; start new</button>'}
-          <button id="pin-reset-back" class="login-link" style="font-size:12px;">Go back</button>`;
+            ? `<button id="pin-reset-go" class="login-link" style="font-size:11px;color:rgba(220,120,120,0.75);margin-top:2px;">${this.esc(t('login.fp.erase_soft'))}</button>`
+            : `<button id="pin-reset-go" class="login-btn login-btn-primary" style="background:#7a2330;border-color:#a33;">${this.esc(t('login.fp.erase_hard'))}</button>`}
+          <button id="pin-reset-back" class="login-link" style="font-size:12px;">${this.esc(t('login.fp.go_back'))}</button>`;
         box.querySelector('#pin-recover-go')?.addEventListener('click', () => done(PIN_RECOVER));
         box.querySelector('#pin-reset-go')!.addEventListener('click', () => done(PIN_RESET));
         // Go back to the password entry (reopen a fresh prompt and chain its result).
