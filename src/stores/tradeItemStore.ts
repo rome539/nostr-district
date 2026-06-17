@@ -1251,7 +1251,36 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
   try {
     const { queryEvents } = await import('../nostr/nostrService');
     const { pubkey: myPubkey } = authStore.getState();
-    const events = await queryEvents({ kinds: [30402], '#t': ['ndmarket'], limit: 200 }, MARKET_RELAYS);
+
+    // Page backwards through time until the relays are exhausted, so the market
+    // isn't capped at a single newest-200 slice. Listings are tiny database-style
+    // records (item id, price, instance id, seller) — not heavy NIP-01 content —
+    // so fetching the whole set is cheap; there's no fixed page-count ceiling. No
+    // sort dependency either: we just need every live listing and the UI filters
+    // locally. Each page asks for the newest PAGE_SIZE events older than the
+    // previous page's oldest. Termination is progress-driven, not count-capped:
+    //   • batch < PAGE_SIZE  → no relay was saturated, nothing older remains (done)
+    //   • added === 0        → a page surfaced nothing new (guards a relay that
+    //                          ignores `until` and re-sends the newest set)
+    //   • `until` strictly decreases every page → guaranteed forward progress
+    // The dedicated district relay (next step) replaces this with server-side paging.
+    const PAGE_SIZE = 200;
+    const rawById = new Map<string, any>();
+    let until: number | undefined;
+    for (;;) {
+      const filter: any = { kinds: [30402], '#t': ['ndmarket'], limit: PAGE_SIZE };
+      if (until !== undefined) filter.until = until;
+      const batch = await queryEvents(filter, MARKET_RELAYS);
+      let added = 0;
+      let oldest = Infinity;
+      for (const e of batch) {
+        if (!rawById.has(e.id)) { rawById.set(e.id, e); added++; }
+        if (e.created_at < oldest) oldest = e.created_at;
+      }
+      if (batch.length < PAGE_SIZE || added === 0 || !isFinite(oldest)) break;
+      until = oldest - 1; // strictly older than this page's oldest event
+    }
+    const events = [...rawById.values()];
 
     // Dedupe by d-tag keeping newest (a delisted tombstone, newer, wins)
     const byD = new Map<string, any>();
