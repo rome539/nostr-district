@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Nostr District</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; background: #0c0a1a; color: #d6d3e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.65; font-size: 16px;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+    h1 { color: #fff; font-size: 28px; margin: 0 0 6px; }
+    h2 { color: #b9a3ff; font-size: 19px; margin: 36px 0 8px; }
+    h3 { color: #cbb9ff; font-size: 15px; margin: 22px 0 6px; }
+    p, li { color: #c9c5d6; }
+    a { color: #8fb4ff; }
+    .meta { color: #8a849c; font-size: 14px; margin-bottom: 28px; }
+    .lead { color: #d6d3e0; }
+    code { background: #1b1830; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+    .note { background: #16132a; border: 1px solid #2a2547; border-radius: 8px; padding: 12px 16px; }
+    hr { border: none; border-top: 1px solid #241f3d; margin: 40px 0; }
+    footer { color: #6f6986; font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Nostr District &middot; Effective June 17, 2026</p>
+
+  <p class="lead">Nostr District is a browser-based application that runs entirely
+  on your device. We keep no user accounts on our servers, and the app is
+  designed so that <strong>we cannot read your private keys</strong>. This policy
+  explains what data is involved and how it is handled.</p>
+
+  <h2>1. Google sign-in &amp; Google Drive</h2>
+  <p>When you choose <strong>“Continue with Google,”</strong> the app requests a
+  single, minimal Google permission: <code>drive.appdata</code> (the Google Drive
+  Application Data folder).</p>
+  <ul>
+    <li>This grants access to <strong>one hidden, app-specific folder</strong> in
+      your own Google Drive — and nothing else. The app <strong>cannot</strong>
+      see your email address, name, profile, contacts, photos, or any other files
+      in your Drive.</li>
+    <li>In that folder the app stores <strong>one encrypted file</strong>: a backup
+      of your Nostr private key.</li>
+    <li>The backup is <strong>encrypted on your device</strong> with a key derived
+      from a password you choose (and, optionally, a passkey / biometric).
+      <strong>Only ciphertext is uploaded.</strong> Neither we, Google, nor anyone
+      with access to your Drive can decrypt it without your password or passkey.
+      The file contains no name, public key, or other identifying information.</li>
+    <li>The app reads this file back only to let you log in again on the same or
+      another device.</li>
+  </ul>
+  <p>There is no server in this process — all encryption and decryption happen in
+  your browser, and we never receive your Google data.</p>
+
+  <h3>Limited Use disclosure</h3>
+  <p class="note">Nostr District’s use and transfer of information received from
+  Google APIs will adhere to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>,
+  including the Limited Use requirements. We use <code>drive.appdata</code> access
+  solely to store and retrieve your encrypted account backup. We do not use it for
+  advertising, we do not sell it, and we do not allow humans to read it.</p>
+
+  <h3>Revoking access &amp; deleting your data</h3>
+  <p>You can revoke the app’s access at any time at
+  <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.
+  You can delete the encrypted backup from your Drive’s app data (Drive settings →
+  “Manage apps”), or with the app’s “erase and start new” option. Deleting it
+  permanently removes the backup; if you have not saved your private key elsewhere,
+  the account cannot be recovered.</p>
+
+  <h2>2. Nostr data (public by design)</h2>
+  <p>Nostr District is a client for the Nostr protocol. Content you publish — posts,
+  profile, reactions, and similar — is sent to public Nostr relays and is, by the
+  nature of the protocol, <strong>public and not controlled by us</strong>. Please
+  don’t post anything you wish to keep private. Direct messages use end-to-end
+  encryption (NIP-17 / NIP-44) where supported.</p>
+
+  <h2>3. Other login methods</h2>
+  <p>You may also sign in with a Nostr browser extension (NIP-07), a remote signer
+  (NIP-46), your private key (nsec), or as a guest. With these, your key is handled
+  by the extension or signer, or held only in your browser’s memory for the session;
+  we never receive it.</p>
+
+  <h2>4. In-app Lightning wallet</h2>
+  <p>The app includes an optional Lightning wallet powered by the Breez SDK. Wallet
+  keys are derived from your Nostr key and handled on your device. Lightning
+  transactions are processed by the Breez / Spark network under their terms; we do
+  not custody funds.</p>
+
+  <h2>5. Multiplayer presence</h2>
+  <p>To show players in shared spaces, the app connects to a real-time presence
+  server. It relays ephemeral presence and position data, along with your public
+  Nostr identifier (npub), to other connected players. This data is not persisted
+  beyond the live session.</p>
+
+  <h2>6. Analytics</h2>
+  <p>We use privacy-respecting Cloudflare Web Analytics, which does not use cookies
+  and does not fingerprint or track individuals across sites.</p>
+
+  <h2>7. Cookies &amp; local storage</h2>
+  <p>The app stores preferences and session data (such as your chosen login method
+  and theme) in your browser’s local storage. It does not use third-party
+  advertising or tracking cookies.</p>
+
+  <h2>8. Children</h2>
+  <p>Nostr District is not directed to children under 13.</p>
+
+  <h2>9. Changes</h2>
+  <p>We may update this policy; the effective date above reflects the latest
+  version.</p>
+
+  <h2>10. Contact</h2>
+  <p>Questions about this policy: <strong><a href="mailto:romeo.nostr@gmail.com">romeo.nostr@gmail.com</a></strong></p>
+
+  <hr>
+  <footer>Nostr District — your keys, your account, recoverable, never owned.</footer>
+</main>
+</body>
+</html>
