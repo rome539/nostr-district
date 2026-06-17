@@ -383,7 +383,11 @@ const loginScreen = new LoginScreen({
     loginInProgress = true;
     try {
       await loginWithNewAccount(nsec, username);
-      await _offerPasskey(nsec, username);
+      // A freshly created free account logs in with its nsec, so make the
+      // quick-login offer private-key login ("Private key (nsec)") next time.
+      localStorage.setItem('nd_last_login', 'nsec');
+      // Passkey save removed from the create flow — passkeys are now used only as
+      // the Face ID recovery wrap on the Google backup. (_offerPasskey kept for reuse.)
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();

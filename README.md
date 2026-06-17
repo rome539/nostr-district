@@ -31,10 +31,43 @@ Nostr District is a browser-based MMO where your Nostr identity is your characte
 
 ## Login Methods
 
+- **Continue with Google** — mass-market sign-in; a Nostr key is generated, encrypted, and stored in *your* Google Drive (see below)
 - **NIP-46 Remote Signer** — Primal, Amber, nsec.app (recommended)
 - **Browser Extension** — Alby, nos2x (NIP-07)
 - **Private Key** — nsec (stored in memory only)
 - **Guest** — no key needed, look around freely
+
+### Continue with Google (encrypted cloud backup)
+
+For users who don't want to manage a key, "Continue with Google" feels custodial
+but stays self-custodial — the private key is generated and encrypted **on the
+device**, and **nothing is ever stored on a relay or readable by Google**.
+
+How it works ([`src/auth/`](src/auth/)):
+
+1. Google returns a token scoped to `drive.appdata` only — access to one hidden,
+   app-private folder in the user's own Drive; never their email, name, or files.
+2. **New account:** an `nsec` is generated, the user sets a password, and an
+   *encrypted* blob is written to that Drive folder.
+   **Returning:** the blob is read back and the password decrypts it locally.
+3. **Forgot the password?** If the user set up **Face ID** at signup, it unlocks
+   the same backup and they keep the same account (then set a new password).
+
+Encryption ([`backupCrypto.ts`](src/auth/backupCrypto.ts)): a random DEK encrypts
+the nsec with AES-256-GCM; the DEK is wrapped by a key derived from the password
+(PBKDF2-SHA256, 600k iterations) and, optionally, by a passkey PRF secret (Face
+ID). Any wrap unlocks the DEK; adding one never re-encrypts the nsec. The blob
+holds no npub, name, or Google id — so even with full Drive access nobody can
+link the Nostr identity to the Google account without the password or Face ID.
+
+Trust tier: like **Private Key**, the decrypted key lives in app memory during a
+session — lower than Remote Signer / Extension (where the key never enters the
+app). It's an onboarding convenience, and the nsec stays exportable, so the
+account is never locked to Google or to this app.
+
+Build config: set `VITE_GOOGLE_CLIENT_ID` in the frontend build environment
+(Cloudflare Pages); the OAuth client must list the production origin under
+*Authorized JavaScript origins*.
 
 ## Commands
 
@@ -314,6 +347,7 @@ Nostr District ships with a built-in security kit (`src/nostr-auth-security-kit.
 | NIP-07 Extension | Private key never touches the app — signing happens inside the extension |
 | NIP-46 Bunker | Key stays on the remote signer; app only holds a temporary session token |
 | nsec | Stored in a closure-based `SecureKeyStore` with no `.get()` method — XSS cannot extract the raw key |
+| Continue with Google | nsec generated and AES-256-GCM-encrypted client-side; only ciphertext is stored (in the user's own Google Drive app folder); decrypted into memory at login like nsec. Google never sees the key |
 | Guest | Ephemeral key generated locally, never persisted |
 
 ### SecureKeyStore

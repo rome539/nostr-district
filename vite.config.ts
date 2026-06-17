@@ -43,7 +43,10 @@ export default defineConfig({
     open: true,
     headers: {
       'Cross-Origin-Embedder-Policy': 'credentialless',
-      'Cross-Origin-Opener-Policy': 'same-origin',
+      // same-origin-allow-popups (not same-origin) so the Google sign-in popup
+      // keeps its window.opener link and can hand the token back. NOTE: this
+      // disables cross-origin isolation (no SharedArrayBuffer).
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
     },
   },
 });

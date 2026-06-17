@@ -13,8 +13,12 @@ function b64(buf: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
+// Tolerant of both standard base64 and base64url (the backup wrap encodes the
+// PRF salt as base64url), with or without padding.
 function unb64(s: string): Uint8Array {
-  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 ? '='.repeat(4 - (s.length % 4)) : '';
+  return Uint8Array.from(atob(s + pad), c => c.charCodeAt(0));
 }
 
 async function deriveKey(prfOutput: ArrayBuffer): Promise<CryptoKey> {
@@ -88,14 +92,20 @@ export async function saveWithPasskey(nsec: string, displayName: string): Promis
   displayName = (displayName || 'Nostr User').slice(0, 40);
   const salt = crypto.getRandomValues(new Uint8Array(32));
 
+  // Brand the credential as a Nostr District passkey so password managers
+  // (Proton Pass, etc.) file it as its OWN entry and don't offer to overwrite a
+  // matching login — e.g. your Google account — by username. The app's own
+  // passkey list still uses the clean `displayName` stored below.
+  const credName = `${displayName} · Nostr District`;
+
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       rp: { name: 'Nostr District', id: window.location.hostname },
       user: {
         id: crypto.getRandomValues(new Uint8Array(16)),
-        name: displayName,
-        displayName,
+        name: credName,
+        displayName: credName,
       },
       pubKeyCredParams: [
         { alg: -7,   type: 'public-key' },  // ES256
@@ -164,6 +174,72 @@ export async function linkExistingPasskey(nsec: string, displayName: string): Pr
   const existing = getStoredPasskeys().filter(p => p.credentialId !== entry.credentialId);
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, entry]));
   return entry;
+}
+
+// ── Recovery-passkey helpers ────────────────────────────────────────────────
+// Used by the Google-backup flow, NOT the passkey-login flow: these return the
+// raw PRF secret so backupCrypto can wrap/unwrap the DEK with it. Nothing is
+// stored in localStorage — the wrap lives in the Drive blob instead.
+
+export interface RecoveryPasskey {
+  credentialId: string;               // base64
+  prfSecret: Uint8Array<ArrayBuffer>; // 32-byte PRF output
+  prfSalt: Uint8Array<ArrayBuffer>;   // salt fed to the PRF (stored in the wrap)
+}
+
+/** Create a new platform passkey and return its PRF secret + salt. */
+export async function createRecoveryPasskey(displayName: string): Promise<RecoveryPasskey> {
+  displayName = (displayName || 'Nostr User').slice(0, 40);
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const credName = `${displayName} · Nostr District`;
+
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: 'Nostr District', id: window.location.hostname },
+      user: {
+        id: crypto.getRandomValues(new Uint8Array(16)),
+        name: credName,
+        displayName: credName,
+      },
+      pubKeyCredParams: [
+        { alg: -7,   type: 'public-key' },
+        { alg: -257, type: 'public-key' },
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'required',
+        residentKey: 'preferred',
+      },
+      extensions: { prf: { eval: { first: salt.buffer } } } as any,
+    },
+  }) as PublicKeyCredential;
+
+  const prf = (cred.getClientExtensionResults() as any)?.prf?.results?.first as ArrayBuffer | undefined;
+  if (!prf) throw new Error('PRF_NOT_SUPPORTED');
+
+  return { credentialId: b64(cred.rawId), prfSecret: new Uint8Array(prf), prfSalt: salt };
+}
+
+/** Re-run the PRF for an existing recovery passkey to reproduce its secret. */
+export async function getRecoveryPasskeyPrf(
+  credentialId: string,
+  prfSaltB64: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const salt = unb64(prfSaltB64);
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type: 'public-key', id: unb64(credentialId).buffer as ArrayBuffer }],
+      userVerification: 'required',
+      extensions: { prf: { eval: { first: salt.buffer as ArrayBuffer } } } as any,
+    },
+  }) as PublicKeyCredential | null;
+  if (!assertion) throw new Error('Passkey unlock cancelled');
+
+  const prf = (assertion.getClientExtensionResults() as any)?.prf?.results?.first as ArrayBuffer | undefined;
+  if (!prf) throw new Error('PRF_NOT_SUPPORTED');
+  return new Uint8Array(prf);
 }
 
 export async function loginWithPasskey(credentialId: string): Promise<string> {

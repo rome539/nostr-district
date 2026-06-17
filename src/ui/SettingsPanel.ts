@@ -40,12 +40,19 @@ export class SettingsPanel {
   private hotkeyModal      = new HotkeyModal();
   private activityLogModal = new ActivityLogModal();
 
+  // `minimal` = opened pre-login (e.g. from the login screen): hides the
+  // account header (npub/Keys), Lightning Wallet, and Logout — leaving only
+  // appearance/theme/emoji/hotkeys/links, which work without an account.
+  constructor(private minimal = false) {}
+
   create(): void {
     this.destroy();
 
     this.gearEl = document.createElement('div');
     this.gearEl.id = GEAR_ID;
-    this.gearEl.textContent = '\u2699';
+    // \ufe0e = text-presentation selector: forces the monochrome gear glyph so
+    // the theme color applies, instead of iOS rendering it as a color emoji.
+    this.gearEl.textContent = '\u2699\ufe0e';
     this.gearEl.style.cssText = `
       position: fixed; top: 12px; right: 14px; z-index: 2000;
       width: 34px; height: 34px;
@@ -153,7 +160,7 @@ export class SettingsPanel {
     }).join('');
 
     this.panelEl.innerHTML = `
-      <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
+      <div id="sp-account-section" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--nd-dpurp) 22%,transparent);">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
           <span style="color:var(--nd-text);font-size:13px;font-weight:bold;">${esc(state.displayName || 'guest')}</span>
           <span style="color:var(--nd-subtext);font-size:11px;">${esc(method)}</span>
@@ -191,10 +198,12 @@ export class SettingsPanel {
           color:var(--nd-accent);">Browse</button>
       </div>
 
-      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+      <div id="sp-wallet-section">
+        <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
-      <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.lightning_wallet'))}</div>
-      <div id="sp-wallet-row" style="margin-bottom:10px;"></div>
+        <div style="color:var(--nd-subtext);font-size:10px;letter-spacing:0.08em;margin-bottom:6px;padding:0 2px;">${esc(t('settings.lightning_wallet'))}</div>
+        <div id="sp-wallet-row" style="margin-bottom:10px;"></div>
+      </div>
 
       <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
@@ -248,23 +257,35 @@ export class SettingsPanel {
         <span style="opacity:0.4;font-size:10px;">rome539/nostr-district ↗</span>
       </a>
 
-      <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
+      <div id="sp-logout-section">
+        <div style="height:1px;background:color-mix(in srgb,var(--nd-dpurp) 22%,transparent);margin:8px 0;"></div>
 
-      <div id="settings-logout" style="padding:10px 10px;color:${P.red};font-size:13px;cursor:pointer;border-radius:4px;transition:background 0.15s;">
-        \u23FB ${esc(t('settings.logout'))}
-      </div>
+        <div id="settings-logout" style="padding:10px 10px;color:${P.red};font-size:13px;cursor:pointer;border-radius:4px;transition:background 0.15s;">
+          \u23FB ${esc(t('settings.logout'))}
+        </div>
 
-      <div id="settings-confirm" style="display:none;padding:10px;background:${P.red}11;border:1px solid ${P.red}33;border-radius:4px;margin-top:6px;">
-        <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Are you sure?</div>
-        <div style="display:flex;gap:8px;">
-          <button id="settings-confirm-yes" style="flex:1;padding:7px;background:${P.red}33;border:1px solid ${P.red}55;border-radius:4px;color:${P.red};font-family:'Courier New',monospace;font-size:12px;cursor:pointer;font-weight:bold;">${esc(t('settings.logout'))}</button>
-          <button id="settings-confirm-no" style="flex:1;padding:7px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:4px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">Cancel</button>
+        <div id="settings-confirm" style="display:none;padding:10px;background:${P.red}11;border:1px solid ${P.red}33;border-radius:4px;margin-top:6px;">
+          <div style="color:var(--nd-text);font-size:12px;margin-bottom:10px;">Are you sure?</div>
+          <div style="display:flex;gap:8px;">
+            <button id="settings-confirm-yes" style="flex:1;padding:7px;background:${P.red}33;border:1px solid ${P.red}55;border-radius:4px;color:${P.red};font-family:'Courier New',monospace;font-size:12px;cursor:pointer;font-weight:bold;">${esc(t('settings.logout'))}</button>
+            <button id="settings-confirm-no" style="flex:1;padding:7px;background:none;border:1px solid color-mix(in srgb,var(--nd-dpurp) 44%,transparent);border-radius:4px;color:var(--nd-subtext);font-family:'Courier New',monospace;font-size:12px;cursor:pointer;">Cancel</button>
+          </div>
         </div>
       </div>
     `;
 
     this.panelEl.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.panelEl.addEventListener('click', (e) => e.stopPropagation());
+
+    // Pre-login (minimal): hide account-only sections. Elements still exist, so
+    // the wiring below stays intact — they're just not shown.
+    if (this.minimal) {
+      ['sp-account-section', 'sp-wallet-section', 'sp-logout-section'].forEach((id) => {
+        const el = this.panelEl?.querySelector(`#${id}`) as HTMLElement | null;
+        if (el) el.style.display = 'none';
+      });
+    }
+
     document.body.appendChild(this.panelEl);
 
     // Hotkeys & commands button
