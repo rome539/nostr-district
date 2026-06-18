@@ -412,6 +412,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'aura_steam',     name: 'Steam Aura',     slot: 'aura', value: 'steam',     price: 0, tier: 'rare', earn: true },
   { id: 'aura_spores',    name: 'Spores Aura',    slot: 'aura', value: 'spores',    price: 0, tier: 'rare', earn: true },
   { id: 'aura_nebula',    name: 'Nebula Aura',    slot: 'aura', value: 'nebula',    price: 0, tier: 'rare', earn: true },
+  { id: 'aura_school',    name: 'School Aura',    slot: 'aura', value: 'school',    price: 0, tier: 'rare', earn: true },
   // Set-completion rods + name colors (bazaar collection rewards, never sold)
   { id: 'rod_driftwood',   name: 'Driftwood Rod',     slot: 'rodSkin',   value: 'driftwood', price: 0, tier: 'rare', earn: true },
   { id: 'rod_abyssal',     name: 'Abyssal Rod',       slot: 'rodSkin',   value: 'abyssal',   price: 0, tier: 'rare', earn: true },

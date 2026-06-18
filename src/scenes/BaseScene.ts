@@ -343,6 +343,20 @@ function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Parti
       emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(18)) } as any,
       blendMode: 'ADD',
     };
+    case 'school': return { // Full Catch set — a school of fish (aura_fish texture) circling the player
+      speed:    { min: r(16), max: r(38) },
+      angle:    { min: 0, max: 360 },
+      lifespan: { min: 900, max: 1700 },
+      scale:    { start: s * 1.0, end: s * 0.7 }, // texture is 14px wide — scale by sprite size
+      alpha:    { start: 1, end: 0 },
+      rotate:   { min: -18, max: 18 },
+      tint:     [0x8fd4ff, 0x5aa0d0, 0xffac5a, 0xe8f6ff], // silvery blues + a koi-orange accent
+      frequency: 300, // a few fish at a time — a small school, not a swarm
+      quantity:  1,
+      gravityY:  0,
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, -r(6), r(20)) } as any,
+      blendMode: 'NORMAL',
+    };
     default: return { // smoke
       speed:    { min: r(8), max: r(20) },
       angle:    { min: 255, max: 285 },
@@ -793,6 +807,15 @@ export abstract class BaseScene extends Phaser.Scene {
       b.generateTexture('aura_bat', 13, 6);
       b.destroy();
     }
+    // Tiny fish silhouette for the school aura — drawn white so the emitter tint colors it.
+    if (!this.textures.exists('aura_fish')) {
+      const f = this.make.graphics(undefined, false);
+      f.fillStyle(0xffffff, 1);
+      f.fillEllipse(8, 4, 11, 7);          // body
+      f.fillTriangle(0, 1, 0, 7, 5, 4);    // tail fin
+      f.generateTexture('aura_fish', 14, 8);
+      f.destroy();
+    }
   }
 
   /** Create the local player's name-tag Text from a shared NameTagStyle. */
@@ -853,7 +876,7 @@ export abstract class BaseScene extends Phaser.Scene {
   private _makeAuraEmitter(type: string, x: number, y: number, spriteHeight: number): Phaser.GameObjects.Particles.ParticleEmitter {
     this._ensureAuraDotTexture();
     const s = Math.max(0.2, spriteHeight / 96); // 96 = room reference (32px texture × scale 3)
-    const tex = type === 'bats' ? 'aura_bat' : 'aura_dot'; // bats use a real silhouette
+    const tex = type === 'bats' ? 'aura_bat' : type === 'school' ? 'aura_fish' : 'aura_dot'; // bats/school use real silhouettes
     return this.add.particles(x, y, tex, makeAuraConfig(type, s)).setDepth(13);
   }
 

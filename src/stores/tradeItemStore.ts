@@ -404,6 +404,7 @@ export const ITEM_SETS: ItemSet[] = [
     description: 'One of every fish in the lake.',
     itemIds: ITEM_CATALOG.filter(i => i.category === 'fish').map(i => i.id),
     rewardLabel: 'Master Fisher',
+    rewardAura: 'school', // a school of fish swims around you — the fishing capstone
   },
   {
     id: 'set_legendary_artifacts',
@@ -1415,12 +1416,40 @@ export function subscribeMarket(onUpdate: () => void): () => void {
 
 export interface MarketBid { buyer: string; amount: number; at: number }
 
+// Live availability check for a listing — the local sold/reserved sets can lag the
+// relays (an item_sold / burn tombstone may not have reached us yet), so verify
+// against the relays before acting on a listing. Returns an 'unavailable' reason
+// (matching the buy path's vocabulary) or null if the listing is still live.
+// Mirrors the market fetch's burn self-heal + the seller-side delist tombstone.
+async function checkListingLive(listing: RemoteListing): Promise<string | null> {
+  // Fast path: anything we already know is gone/locked.
+  if (_soldInstances.has(listing.instanceId)) return 'already_sold';
+  if (_reservedInstances.has(listing.instanceId)) return 'reserved_for_winner';
+  try {
+    const { queryEvents } = await import('../nostr/nostrService');
+    // Oracle burn tombstone on the instance (sold / transferred / discarded) → gone.
+    if (_oracleSet.length) {
+      const states = await queryEvents({ kinds: [30078], authors: _oracleSet, '#d': [listing.instanceId] }, MARKET_RELAYS);
+      const burned = states.some(e => isTrustedOracle(e.pubkey) && e.tags?.find((t: string[]) => t[0] === 'burned'));
+      if (burned) { markSoldInstances([listing.instanceId]); return 'already_sold'; }
+    }
+    // Seller's current 30402 for this listing — an explicit delist tombstone → not listed.
+    // (Absence is NOT treated as gone: a relay simply may not carry it — benefit of the doubt.)
+    const live = await queryEvents({ kinds: [30402], authors: [listing.sellerPubkey], '#d': [listing.dTag] }, MARKET_RELAYS);
+    const newest = live.reduce<any>((a, b) => (!a || b.created_at > a.created_at ? b : a), null);
+    if (newest && newest.tags?.find((t: string[]) => t[0] === 'delisted')) { dropLocalListing(listing); return 'not_listed'; }
+  } catch { /* relay unreachable — don't block the bid; the seller can still decline it */ }
+  return null;
+}
+
 export async function placeBid(listing: RemoteListing, amount: number): Promise<{ ok: boolean; reason?: string }> {
   const { pubkey, loginMethod } = authStore.getState();
   if (!pubkey || loginMethod === 'guest') return { ok: false, reason: 'no_signer' };
   if (listing.sellerPubkey === pubkey) return { ok: false, reason: 'own_listing' };
-  if (_soldInstances.has(listing.instanceId)) return { ok: false, reason: 'already_sold' };
-  if (_reservedInstances.has(listing.instanceId)) return { ok: false, reason: 'reserved_for_winner' };
+  // Authoritative live check — parity with the buy path so a bid can't land on a
+  // listing that's already sold, transferred away, or delisted.
+  const unavailable = await checkListingLive(listing);
+  if (unavailable) return { ok: false, reason: unavailable };
   try {
     const signed = await signEvent({
       kind: 30078, pubkey, created_at: Math.floor(Date.now() / 1000),
@@ -1760,6 +1789,10 @@ export async function purchaseListing(listing: RemoteListing, onStatus?: (msg: s
     // by us right now; surface the precise reason so we don't say "payment failed".
     const unavailable = ['already_sold', 'item_gone', 'not_listed', 'reserved', 'reserved_for_winner', 'own_listing'];
     if (init.error && unavailable.includes(init.error)) {
+      // Record truly-gone instances so EVERY local guard (including bidding) catches
+      // them right away — not just the buy flow. A delisted item ('not_listed') can
+      // be re-listed, so it's only dropped, not marked sold.
+      if (init.error === 'already_sold' || init.error === 'item_gone') markSoldInstances([listing.instanceId]);
       // Keep winner-reserved AND payment-pending ('reserved', ≤5 min) items visible —
       // both can come back on the market; only definitively-gone ones get dropped.
       if (init.error !== 'reserved_for_winner' && init.error !== 'reserved') dropLocalListing(listing);
