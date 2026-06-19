@@ -198,7 +198,7 @@ export async function publishEvent(event: any): Promise<boolean> {
       } catch (_) { resolve(false); }
     });
 
-  const relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
+  const relays = ['wss://nostr.thedistrict.online', 'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
   const results = await Promise.allSettled(relays.map(publishToRelay));
   const accepted = results.filter(r => r.status === 'fulfilled' && (r as any).value === true).length;
   console.log(`[Nostr] Published kind:${event.kind} to ${accepted}/${relays.length} relays`);

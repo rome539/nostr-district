@@ -762,6 +762,7 @@ export async function fetchInventoryFromRelays(ownerPubkey: string): Promise<voi
     // Must match PUBLISH_RELAYS in server.ts so we reach whichever relays hold
     // the items + burn tombstones, regardless of browser relay reachability.
     const ITEM_RELAYS = [
+      'wss://nostr.thedistrict.online', // our own relay — canonical store for the item economy
       'wss://relay.damus.io',
       'wss://nos.lol',
       'wss://relay.primal.net',
@@ -1339,6 +1340,7 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
 }
 
 const MARKET_RELAYS = [
+  'wss://nostr.thedistrict.online', // our own relay — canonical store for the item economy
   'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net',
   'wss://offchain.pub', 'wss://nostr.mom', 'wss://relay.snort.social',
 ];
