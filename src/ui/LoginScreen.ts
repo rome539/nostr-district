@@ -1827,10 +1827,10 @@ export class LoginScreen {
       return;
     }
 
-    const { createBackup, unlockWithPin } = await import('../auth/backupCrypto');
+    const { createBackup, unlockWithPin, hasPasskeyWrap } = await import('../auth/backupCrypto');
 
     if (backup) {
-      const hasPasskey = !!backup.wraps.passkey;
+      const hasPasskey = hasPasskeyWrap(backup);
       // Returning user — unlock with password (retry until correct or cancelled).
       // Errors are shown inline in the prompt (setStatus is hidden behind it).
       let lastError: string | undefined;
@@ -1889,15 +1889,16 @@ export class LoginScreen {
   // (passkey) wrap, log in with the original key, and offer to set a new
   // password. Returns null on success (logged in) or an error message to show.
   private async _recoverWithPasskey(token: string, backup: any): Promise<string | null> {
-    const wrap = backup?.wraps?.passkey;
-    if (!wrap) return t('login.fid.no_recovery');
+    const { getPasskeyWrapMeta } = await import('../auth/backupCrypto');
+    const meta = getPasskeyWrapMeta(backup);
+    if (!meta) return t('login.fid.no_recovery');
     // Cover the box from the moment the forgot prompt closed, through Face ID,
     // straight into the new-password prompt — no main-modal flash between.
     const busy = this._showBusyCover(t('login.fid.unlocking'));
     try {
       const { getRecoveryPasskeyPrf } = await import('../stores/passkeyStore');
       const { unlockDekWithPasskey, decryptNsecFromDek, rewrapPin } = await import('../auth/backupCrypto');
-      const prf = await getRecoveryPasskeyPrf(wrap.credentialId, wrap.salt);
+      const prf = await getRecoveryPasskeyPrf(meta.credentialId, meta.salt);
       const dek = await unlockDekWithPasskey(backup, prf);
       const nsec = await decryptNsecFromDek(backup, dek);
 
