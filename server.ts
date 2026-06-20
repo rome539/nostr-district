@@ -925,7 +925,6 @@ function mintItem(ownerPubkey: string, itemId: string, acquiredFrom: string): ob
       ['item_id', itemId],
       ['source',  acquiredFrom],
       ['t',       'nditem'],
-      ['client',  'Nostr District'],
     ],
     content: '',
   };

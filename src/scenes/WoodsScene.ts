@@ -1895,7 +1895,7 @@ export class WoodsScene extends BaseScene {
       postBtn.style.opacity = '0.6';
       try {
         const imageUrl = await uploadFishImage(name);
-        const tags: string[][] = [['client', 'Nostr District'], ['t', 'nostrdistrict'], ['t', 'fishing']];
+        const tags: string[][] = [['t', 'nostrdistrict'], ['t', 'fishing']];
         let noteContent = baseContent;
         if (imageUrl) {
           noteContent += `\n\n${imageUrl}`;

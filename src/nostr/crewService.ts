@@ -282,7 +282,7 @@ async function publishCrewPointer(crewId: string, crewPk: string): Promise<boole
   const event = await signEvent({
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
+    tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district']],
     content: JSON.stringify({ crewPk }),
     pubkey,
   });
@@ -503,7 +503,7 @@ export function markInviteTokenUsed(token: string): void {
     signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', `nd-invite-${token}`], ['client', 'Nostr District']],
+      tags: [['d', `nd-invite-${token}`]],
       content: JSON.stringify({ consumed: true }),
     }).then(ev => publishEvent(ev))
       .catch(e => console.warn('[Crews] failed to publish token consumption:', e))
@@ -612,7 +612,7 @@ export async function createCrew(
   const defEvent = signWithKey(crewSk, {
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + id], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + id], ['t', 'nostr-district'], ...emblemEmojiTags],
     content: JSON.stringify(defContent),
   });
   await publishEvent(defEvent);
@@ -629,7 +629,7 @@ export async function createCrew(
     const createEvent = await signEvent({
       kind: 9007,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(id)], ['client', 'Nostr District']],
+      tags: [['h', groupId(id)]],
       content: '',
       pubkey,
     });
@@ -643,7 +643,7 @@ export async function createCrew(
     const joinEvent = await signEvent({
       kind: 9021,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(id)], ['client', 'Nostr District']],
+      tags: [['h', groupId(id)]],
       content: '',
       pubkey,
     });
@@ -870,7 +870,7 @@ export async function joinCrew(crewId: string, pubkey?: string): Promise<void> {
     const event = await signEvent({
       kind: 9021,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(crewId)], ['client', 'Nostr District']],
+      tags: [['h', groupId(crewId)]],
       content: '',
       pubkey: pk,
     });
@@ -889,7 +889,7 @@ export async function joinCrew(crewId: string, pubkey?: string): Promise<void> {
     const memberEvent = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', memberDTag(crewId)], ['client', 'Nostr District']],
+      tags: [['d', memberDTag(crewId)]],
       content: JSON.stringify({ active: true, crewId, role: 'member' }),
       pubkey: pk,
     });
@@ -940,7 +940,7 @@ export async function deleteCrew(crewId: string): Promise<void> {
       const tombstone = signWithKey(crewSk, {
         kind: 30078,
         created_at: Math.floor(Date.now() / 1000),
-        tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
+        tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district']],
         content: JSON.stringify({ deleted: true }),
       });
       await publishEvent(tombstone);
@@ -954,7 +954,7 @@ export async function deleteCrew(crewId: string): Promise<void> {
     const ptrTombstone = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district'], ['client', 'Nostr District']],
+      tags: [['d', CREW_PTR_PREFIX + crewId], ['t', 'nostr-district']],
       content: JSON.stringify({ deleted: true }),
       pubkey,
     });
@@ -972,7 +972,7 @@ export async function deleteCrew(crewId: string): Promise<void> {
     const deleteGroupEvent = await signEvent({
       kind: 9008,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(crewId)], ['client', 'Nostr District']],
+      tags: [['h', groupId(crewId)]],
       content: '',
       pubkey,
     });
@@ -1003,7 +1003,7 @@ export async function leaveCrew(crewId: string): Promise<void> {
     const event = await signEvent({
       kind: 9022,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(crewId)], ['client', 'Nostr District']],
+      tags: [['h', groupId(crewId)]],
       content: '',
       pubkey,
     });
@@ -1017,7 +1017,7 @@ export async function leaveCrew(crewId: string): Promise<void> {
     const memberEvent = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', memberDTag(crewId)], ['client', 'Nostr District']],
+      tags: [['d', memberDTag(crewId)]],
       content: JSON.stringify({ active: false, crewId }),
       pubkey,
     });
@@ -1044,7 +1044,7 @@ export async function clearMembership(crewId: string): Promise<void> {
     const memberEvent = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', memberDTag(crewId)], ['client', 'Nostr District']],
+      tags: [['d', memberDTag(crewId)]],
       content: JSON.stringify({ active: false, crewId }),
       pubkey,
     });
@@ -1378,7 +1378,7 @@ async function doSendCrewChat(crewId: string, content: string, pubkey: string): 
   const event = await signEvent({
     kind: 9,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['h', groupId(crewId)], ...emojiTags, ['client', 'Nostr District']],
+    tags: [['h', groupId(crewId)], ...emojiTags],
     content: payload,
     pubkey,
   });
@@ -1403,7 +1403,7 @@ export async function sendCrewSystemMessage(crewId: string, text: string, subjec
   const chatKey = await getEffectiveChatKey(crewId);
   const payload = chatKey ? await encryptContent(text, chatKey) : text;
   try {
-    const tags: string[][] = [['h', groupId(crewId)], ['t', 'nd-system'], ['client', 'Nostr District']];
+    const tags: string[][] = [['h', groupId(crewId)], ['t', 'nd-system']];
     if (subjectPubkey) tags.push(['p', subjectPubkey]);
     const event = await signEvent({
       kind: 9,
@@ -1430,7 +1430,7 @@ export async function sendJoinRequest(crewId: string): Promise<void> {
   const event = await signEvent({
     kind: 9,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['h', groupId(crewId)], ['t', 'nd-joinreq'], ['p', pubkey], ['token', token], ['client', 'Nostr District']],
+    tags: [['h', groupId(crewId)], ['t', 'nd-joinreq'], ['p', pubkey], ['token', token]],
     content: '',
     pubkey,
   });
@@ -1555,7 +1555,7 @@ export async function postCrewAnnouncement(crewId: string, content: string): Pro
   const event = await signEvent({
     kind: 9,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['h', groupId(crewId)], ['t', 'nd-post'], ['client', 'Nostr District']],
+    tags: [['h', groupId(crewId)], ['t', 'nd-post']],
     content: payload,
     pubkey,
   });
@@ -1615,7 +1615,7 @@ async function publishCrewDef(
   const defEvent = signWithKey(crewSk, {
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crew.id], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + crew.id], ['t', 'nostr-district'], ...emblemEmojiTags],
     content: JSON.stringify(content),
   });
   const ok = await publishEvent(defEvent);
@@ -1641,7 +1641,7 @@ export async function kickCrewMember(
     const event = await signEvent({
       kind: 9001,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['h', groupId(crewId)], ['p', memberPubkey], ['client', 'Nostr District']],
+      tags: [['h', groupId(crewId)], ['p', memberPubkey]],
       content: '',
       pubkey,
     });
@@ -1887,7 +1887,7 @@ export async function rotateCrewKey(
   const defEvent = signWithKey(newSk, {
     kind: 30078,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...emblemEmojiTags, ['client', 'Nostr District']],
+    tags: [['d', CREW_DEF_PREFIX + crewId], ['t', 'nostr-district'], ...emblemEmojiTags],
     content: JSON.stringify(content),
   });
   const okDef = await publishEvent(defEvent);
@@ -1969,7 +1969,7 @@ export async function deleteCrewAnnouncement(eventId: string): Promise<void> {
   const kind5 = await signEvent({
     kind: 5,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['e', eventId], ['client', 'Nostr District']],
+    tags: [['e', eventId]],
     content: 'Post deleted',
     pubkey,
   });

@@ -136,7 +136,7 @@ export async function publishSparkAddress(pubkey: string, lud16: string): Promis
       kind: 30078,
       pubkey,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', SPARK_ADDR_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', SPARK_ADDR_D_TAG]],
       content: JSON.stringify({ lud16 }),
     });
     const ok = await publishEvent(signed);
@@ -171,37 +171,39 @@ export async function fetchSparkAddress(pubkey: string): Promise<string | null> 
 
 export async function publishEvent(event: any): Promise<boolean> {
   if (!event?.id) { console.warn('[Nostr] publishEvent called with invalid event'); return false; }
-  const publishToRelay = (url: string): Promise<boolean> =>
+  const publishToRelay = (url: string): Promise<{ url: string; ok: boolean; msg: string }> =>
     new Promise((resolve) => {
       try {
         const ws = new WebSocket(url);
         let done = false;
-        const finish = (ok: boolean) => {
+        const finish = (ok: boolean, msg: string) => {
           if (done) return;
           done = true;
           try { ws.close(); } catch (_) {}
-          resolve(ok);
+          resolve({ url, ok, msg });
         };
-        const timer = setTimeout(() => finish(false), 6000);
+        const timer = setTimeout(() => finish(false, 'no response (timeout)'), 6000);
         ws.onopen = () => ws.send(JSON.stringify(['EVENT', event]));
         ws.onmessage = (msg) => {
           try {
             const d = JSON.parse(msg.data);
             if (Array.isArray(d) && d[0] === 'OK' && d[1] === event.id) {
               clearTimeout(timer);
-              finish(d[2] === true);
+              finish(d[2] === true, typeof d[3] === 'string' ? d[3] : '');
             }
           } catch (_) {}
         };
-        ws.onerror = () => finish(false);
-        ws.onclose = () => finish(false);
-      } catch (_) { resolve(false); }
+        ws.onerror = () => finish(false, 'connection error');
+        ws.onclose = () => finish(false, 'closed');
+      } catch (_) { resolve({ url, ok: false, msg: 'failed to open' }); }
     });
 
   const relays = ['wss://nostr.thedistrict.online', 'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
-  const results = await Promise.allSettled(relays.map(publishToRelay));
-  const accepted = results.filter(r => r.status === 'fulfilled' && (r as any).value === true).length;
-  console.log(`[Nostr] Published kind:${event.kind} to ${accepted}/${relays.length} relays`);
+  const results = await Promise.all(relays.map(publishToRelay));
+  const accepted = results.filter(r => r.ok).length;
+  // Per-relay breakdown so the relay's accept/reject is visible in the console.
+  const detail = results.map(r => `${r.url.replace('wss://', '')}=${r.ok ? 'OK' : 'NO' + (r.msg ? `(${r.msg})` : '')}`).join('  ');
+  console.log(`[Nostr] publish kind:${event.kind} → ${accepted}/${relays.length} | ${detail}`);
   return accepted > 0;
 }
 
@@ -345,7 +347,7 @@ export async function publishOutfits(outfits: OutfitPreset[]): Promise<boolean> 
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', OUTFITS_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', OUTFITS_D_TAG]],
       content: JSON.stringify(outfits),
     });
     return publishEvent(event);
@@ -380,7 +382,7 @@ export async function publishInventory(items: string[]): Promise<boolean> {
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', INVENTORY_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', INVENTORY_D_TAG]],
       content: JSON.stringify(items),
     });
     return publishEvent(event);
@@ -451,7 +453,7 @@ export async function publishTradeOffers(state: unknown): Promise<boolean> {
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', OFFERS_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', OFFERS_D_TAG]],
       content: JSON.stringify(state),
     });
     return publishEvent(event);
@@ -1113,7 +1115,7 @@ export async function publishRoomConfig(config: RoomConfig): Promise<boolean> {
     const event = await signEvent({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', ROOM_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', ROOM_D_TAG]],
       content: JSON.stringify(config),
     });
     return publishEvent(event);

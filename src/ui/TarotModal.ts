@@ -474,7 +474,6 @@ export const TarotModal = {
             tags: [
               ['t', 'tarot'],
               ['t', 'nostrdistrict'],
-              ['client', 'Nostr District'],
               // NIP-92 imeta — Primal uses these for inline image rendering
               ...imageUrls.map(url => ['imeta', `url ${url}`, 'm image/png']),
             ],

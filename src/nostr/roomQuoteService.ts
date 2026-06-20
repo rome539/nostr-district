@@ -94,7 +94,6 @@ export async function deleteRoomQuote(roomOwnerPubkey: string, eventId: string):
         tags: [
           ['e', eventId],
           ['a', `30078:${pubkey}:${dTag}`],
-          ['client', 'Nostr District'],
         ],
         content: 'deleted',
       }),
@@ -104,7 +103,6 @@ export async function deleteRoomQuote(roomOwnerPubkey: string, eventId: string):
         tags: [
           ['d', dTag],
           ['p', roomOwnerPubkey],
-          ['client', 'Nostr District'],
           ['deleted', 'true'],
         ],
         content: '',
@@ -128,7 +126,6 @@ export async function publishRoomQuote(roomOwnerPubkey: string, text: string): P
       tags: [
         ['d', QUOTE_D_PREFIX + roomOwnerPubkey],
         ['p', roomOwnerPubkey],
-        ['client', 'Nostr District'],
       ],
       content: JSON.stringify({ text: text.trim() }),
     });

@@ -1048,7 +1048,6 @@ export async function listItem(instanceId: string, price: number, note?: string)
         ['price', String(price), 'SATS'],
         ['item_id', def.id],
         ['instance_id', instanceId],
-        ['client', 'Nostr District'],
       ],
       content: JSON.stringify({ name: def.name, emoji: def.emoji, description: def.description, note, price }),
     };
@@ -1458,7 +1457,6 @@ export async function placeBid(listing: RemoteListing, amount: number): Promise<
       tags: [
         ['d', listing.instanceId], ['t', 'ndbid'], ['p', listing.sellerPubkey],
         ['amount', String(amount)], ['item_id', listing.itemId], ['instance_id', listing.instanceId],
-        ['client', 'Nostr District'],
       ],
       content: '',
     });

@@ -238,7 +238,7 @@ export const FortuneTellerModal = {
             const event = await signEvent({
               kind: 1,
               created_at: Math.floor(Date.now() / 1000),
-              tags: [['t', 'nostrdistrict'], ['client', 'Nostr District']],
+              tags: [['t', 'nostrdistrict']],
               content: `🔮 The oracle has spoken\n\n"${fortune}"\n\n— Madame Zara, Nostr District\n\n#nostrdistrict`,
             });
             const ok = await publishEvent(event);

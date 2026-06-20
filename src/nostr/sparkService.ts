@@ -230,7 +230,7 @@ async function publishEncryptedMnemonic(mnemonic: string, pubkeyHex: string, sig
     const signed = await signer({
       kind: 30078,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', MNEMONIC_SYNC_D_TAG], ['client', 'Nostr District']],
+      tags: [['d', MNEMONIC_SYNC_D_TAG]],
       content: ciphertext,
     });
     // Publish to every relay we'll later query, so the round-trip is
