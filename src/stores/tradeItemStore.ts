@@ -1989,7 +1989,7 @@ interface ScavSpot  { id: string; scene: string; x: number; }
 interface ScavState { spots: ScavSpot[]; nextSpawnAt: number; seq: number; holidayId?: string; }
 
 const SCAV_STATE_KEY = 'nd_scavenge_state_v3';
-const HOL_STATE_KEY  = 'nd_holiday_state_v2';
+const HOL_STATE_KEY  = 'nd_holiday_state_v3'; // v3: holiday bucket pre-fills to MAX on start
 let _scav: ScavState | null = null;
 let _hol:  ScavState | null = null;
 
@@ -1999,6 +1999,7 @@ let _hol:  ScavState | null = null;
 try {
   localStorage.removeItem('nd_scavenge_slots_v2');
   localStorage.removeItem('nd_holiday_slots_v1');
+  localStorage.removeItem('nd_holiday_state_v2'); // pre-fill change (v2 → v3)
 } catch { /* ignore */ }
 
 function pickScavengeX(scene: string): number {
@@ -2043,7 +2044,12 @@ function loadScav(): ScavState {
   if (_scav) return _scav;
   try {
     const s = JSON.parse(localStorage.getItem(SCAV_STATE_KEY) ?? 'null');
-    if (s && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') { _scav = s; return s; }
+    if (s && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') {
+      // Drop any spot in a scene we no longer spawn into (e.g. a stale 'rooftop'
+      // from an older build) so it can't strand somewhere unreachable.
+      s.spots = s.spots.filter((sp: ScavSpot) => SCAVENGE_SCENES.includes(sp.scene));
+      _scav = s; return s;
+    }
   } catch {}
   _scav = { spots: [], nextSpawnAt: Date.now(), seq: 0 }; // first spot appears ~now
   return _scav;
@@ -2054,9 +2060,18 @@ function loadHol(holidayId: string): ScavState {
   if (_hol && _hol.holidayId === holidayId) return _hol;
   try {
     const s = JSON.parse(localStorage.getItem(HOL_STATE_KEY) ?? 'null');
-    if (s && s.holidayId === holidayId && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') { _hol = s; return s; }
+    if (s && s.holidayId === holidayId && Array.isArray(s.spots) && typeof s.nextSpawnAt === 'number') {
+      s.spots = s.spots.filter((sp: ScavSpot) => SCAVENGE_SCENES.includes(sp.scene));
+      _hol = s; return s;
+    }
   } catch {}
-  _hol = { spots: [], nextSpawnAt: Date.now(), seq: 0, holidayId };
+  // Fresh holiday: both spots should be out the moment the event starts, not
+  // trickle in 12–20 min apart — pre-fill the bucket to MAX. Refill after a
+  // collect still uses the cadence below, so the mint-rate protection is intact.
+  const fresh: ScavState = { spots: [], nextSpawnAt: Date.now(), seq: 0, holidayId };
+  while (fresh.spots.length < HOL_MAX_SPOTS) fresh.spots.push(newScavSpot('hol', fresh.seq++));
+  fresh.nextSpawnAt = Date.now() + spawnInterval(HOL_SPAWN_MIN, HOL_SPAWN_MAX);
+  _hol = fresh;
   return _hol;
 }
 function saveHol(): void { if (_hol) localStorage.setItem(HOL_STATE_KEY, JSON.stringify(_hol)); }
