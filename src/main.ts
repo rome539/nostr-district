@@ -267,11 +267,14 @@ const loginScreen = new LoginScreen({
       loginScreen.setStatus(safeError(e), true);
     }
   },
-  onNsecLogin: async (nsec: string) => {
+  onNsecLogin: async (nsec: string, username?: string) => {
     if (loginInProgress) return;
     loginInProgress = true;
     try {
-      await loginWithNsec(nsec);
+      // A username is only passed when rotating to a fresh identity — publish a
+      // profile (kind:0 + Lightning address) for it; otherwise plain key login.
+      if (username) await loginWithNewAccount(nsec, username);
+      else await loginWithNsec(nsec);
       w.__nostr_district_started = true;
       loginScreen.destroy();
       startGame();

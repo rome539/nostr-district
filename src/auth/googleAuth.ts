@@ -13,7 +13,12 @@
 // email, or Google id; we just read/write our one blob in their app-data folder.
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
-const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+// Login requests BOTH scopes in one popup: drive.appdata (the hidden backup) and
+// drive.file (the visible, cross-app portable copy written at account creation).
+// Both are non-sensitive, per-app/per-file scopes — Google still never learns the
+// user's name, email, or other files.
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 export interface GoogleAuthResult {
   /** Short-lived OAuth access token scoped to drive.appdata only. */
@@ -70,20 +75,44 @@ export function preloadGoogleAuth(): void {
  * Rejects if the user cancels, the popup is blocked, or consent fails.
  */
 export async function requestGoogleAuth(): Promise<GoogleAuthResult> {
+  return {
+    accessToken: await requestTokenForScope(
+      SCOPES, 'drive.appdata', 'Drive access is required to save your account',
+    ),
+  };
+}
+
+/**
+ * Request a `drive.file`-scoped token, used only to write the portable, cross-app
+ * backup copy into the user's regular My Drive. Separate, incremental consent so
+ * the broader scope is never requested unless the user opts into portability.
+ */
+export async function requestGoogleDriveFileAuth(): Promise<GoogleAuthResult> {
+  return {
+    // 'consent' is REQUIRED here: this is an incremental scope requested AFTER
+    // login already granted drive.appdata. With prompt '' GIS sees the existing
+    // session and silently skips the consent for the new drive.file scope — the
+    // account chooser shows but selecting it returns nothing. Forcing 'consent'
+    // makes Google actually ask for (and grant) the new scope.
+    accessToken: await requestTokenForScope(
+      DRIVE_FILE_SCOPE, 'drive.file', 'Drive access is required to make your account portable', 'consent',
+    ),
+  };
+}
+
+/** Open Google's consent popup for one scope and resolve with the access token. */
+async function requestTokenForScope(scope: string, scopeCheck: string, scopeErr: string, prompt = ''): Promise<string> {
   const id = clientId();
   await loadGis();
   const google = (window as any).google;
 
-  const accessToken = await new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const client = google.accounts.oauth2.initTokenClient({
       client_id: id,
-      scope: SCOPES,
+      scope,
       callback: (resp: any) => {
         if (resp.error) { reject(new Error(resp.error_description || resp.error)); return; }
-        if (resp.scope && !resp.scope.includes('drive.appdata')) {
-          reject(new Error('Drive access is required to save your account'));
-          return;
-        }
+        if (resp.scope && !resp.scope.includes(scopeCheck)) { reject(new Error(scopeErr)); return; }
         if (!resp.access_token) { reject(new Error('Google returned no access token')); return; }
         resolve(resp.access_token as string);
       },
@@ -94,8 +123,6 @@ export async function requestGoogleAuth(): Promise<GoogleAuthResult> {
         else reject(new Error(err?.message || 'Google sign-in failed'));
       },
     });
-    client.requestAccessToken({ prompt: '' });
+    client.requestAccessToken({ prompt });
   });
-
-  return { accessToken };
 }

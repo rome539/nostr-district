@@ -28,7 +28,7 @@ import { startGlobalZapToasts } from '../nostr/zapService';
 import { LoginScreen } from '../ui/LoginScreen';
 import { t as ti18n } from '../i18n/i18n';
 import {
-  loginWithExtension, loginWithNsec, loginAsGuest,
+  loginWithExtension, loginWithNsec, loginWithNewAccount, loginAsGuest,
   startBunkerFlow, loginWithBunkerUrl, cancelBunkerFlow,
   onNextAvatarSync,
 } from '../nostr/nostrService';
@@ -137,10 +137,11 @@ export class HubScene extends BaseScene {
           loginScreen.setStatus(e.message, true);
         }
       },
-      onNsecLogin: async (nsec: string) => {
+      onNsecLogin: async (nsec: string, username?: string) => {
         try {
           this.snd.startBoot();
-          await loginWithNsec(nsec);
+          if (username) await loginWithNewAccount(nsec, username);
+          else await loginWithNsec(nsec);
           loginScreen.destroy();
           this.finishLogin();
         } catch (e: any) {

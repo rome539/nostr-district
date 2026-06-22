@@ -43,31 +43,44 @@ For users who don't want to manage a key, "Continue with Google" feels custodial
 but stays self-custodial — the private key is generated and encrypted **on the
 device**, and **nothing is ever stored on a relay or readable by Google**.
 
+> **Open spec — copy this.** The blob format and crypto are written up as a draft
+> NIP so other clients can read the *same* backup: [`docs/KEY-BACKUP-NIP.md`](docs/KEY-BACKUP-NIP.md).
+> It's published here rather than as a nips-repo PR; the [`src/auth/`](src/auth/)
+> files below are the reference implementation — feel free to lift it.
+
 How it works ([`src/auth/`](src/auth/)):
 
-1. Google returns a token scoped to `drive.appdata` only — access to one hidden,
-   app-private folder in the user's own Drive; never their email, name, or files.
-2. **New account:** an `nsec` is generated, the user sets a password, and an
-   *encrypted* blob is written to that Drive folder.
-   **Returning:** the blob is read back and the password decrypts it locally.
+1. Google returns a token scoped to `drive.file` + `drive.appdata` only — per-file
+   access to what the app creates or the user picks, plus one hidden legacy folder;
+   never their email, name, or other files. ([`googleAuth.ts`](src/auth/googleAuth.ts))
+2. **One vault, shared across apps.** The encrypted backup is a *single visible
+   file* in the user's own Drive ([`driveBackup.ts`](src/auth/driveBackup.ts)).
+   - **New account:** an `nsec` is generated, the user sets a password, and the
+     *encrypted* vault is written to Drive.
+   - **Returning / another device:** the app finds the vault by remembered file
+     id, or the user picks it once via Google's file picker
+     ([`googlePicker.ts`](src/auth/googlePicker.ts)) — it then remembers the id
+     and never re-picks. No second copy is ever made.
 3. **Forgot the password?** If the user set up **Face ID** at signup, it unlocks
-   the same backup and they keep the same account (then set a new password).
+   the same vault and they keep the same account (then set a new password).
 
 Encryption ([`backupCrypto.ts`](src/auth/backupCrypto.ts)): a random DEK encrypts
 the nsec with AES-256-GCM; the DEK is wrapped by a key derived from the password
 (PBKDF2-SHA256, 600k iterations) and, optionally, by a passkey PRF secret (Face
-ID). Any wrap unlocks the DEK; adding one never re-encrypts the nsec. The blob
+ID). Any wrap unlocks the DEK; adding one never re-encrypts the nsec. The vault
 holds no npub, name, or Google id — so even with full Drive access nobody can
-link the Nostr identity to the Google account without the password or Face ID.
+link the Nostr identity to the Google account without the password or Face ID. A
+reader recognizes a vault by **decrypting it**, never by filename.
 
 Trust tier: like **Private Key**, the decrypted key lives in app memory during a
 session — lower than Remote Signer / Extension (where the key never enters the
 app). It's an onboarding convenience, and the nsec stays exportable, so the
 account is never locked to Google or to this app.
 
-Build config: set `VITE_GOOGLE_CLIENT_ID` in the frontend build environment
-(Cloudflare Pages); the OAuth client must list the production origin under
-*Authorized JavaScript origins*.
+Build config: set `VITE_GOOGLE_CLIENT_ID` (and `VITE_GOOGLE_PICKER_API_KEY` for
+the cross-app file picker) in the frontend build environment (Cloudflare Pages);
+the OAuth client must list the production origin under *Authorized JavaScript
+origins*.
 
 ## Commands
 

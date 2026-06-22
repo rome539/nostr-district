@@ -10,6 +10,13 @@ import type { SettingsPanel } from './SettingsPanel';
 // existing backup with the Face ID (passkey) wrap and keeps the same account.
 const PIN_RESET = '__nd_pin_reset__';
 const PIN_RECOVER = '__nd_pin_recover__';
+// Deliberate "start a new identity" (e.g. the current key was compromised) —
+// like RESET (wipe + new key) but ALSO purges the old key's portable My-Drive copy.
+const PIN_NEWID = '__nd_pin_newid__';
+// "Not your account? Recover a different one from Drive" — escape hatch on the
+// unlock screen: this app found A vault, but it's the wrong one; let the user
+// pick a different vault via the Drive picker.
+const PIN_DRIVE_IMPORT = '__nd_pin_drive_import__';
 
 // Passkey as a standalone *login* method is disabled — Nostr users won't use it,
 // and for normies it now lives only as the Face ID *recovery* wrap behind the
@@ -36,7 +43,7 @@ interface ShootingStar {
 export class LoginScreen {
   private container: HTMLDivElement;
   private onExtensionLogin: () => void;
-  private onNsecLogin: (nsec: string) => void;
+  private onNsecLogin: (nsec: string, username?: string) => void;
   private onGuestLogin: () => void;
   private onBunkerLogin: (url: string) => void;
   private onBunkerClientFlow: (() => void) | null = null;
@@ -73,7 +80,7 @@ export class LoginScreen {
 
   constructor(callbacks: {
     onExtensionLogin: () => void;
-    onNsecLogin: (nsec: string) => void;
+    onNsecLogin: (nsec: string, username?: string) => void;
     onGuestLogin: () => void;
     onBunkerLogin: (url: string) => void;
     onBunkerClientFlow?: () => void;
@@ -1033,6 +1040,10 @@ export class LoginScreen {
           width: 28px; height: 28px;
           opacity: 0.7;
         }
+        /* Bump the small Google-flow controls to a proper ~44px tap target. */
+        .pin-ghost-btn { min-height: 44px; padding: 10px 16px; }
+        .pin-corner-cancel { padding: 11px 14px; min-height: 44px; }
+        .pw-eye { padding: 12px; }
       }
 
       /* "What is Nostr?" is now the clickable title (see .login-title) */
@@ -1130,7 +1141,41 @@ export class LoginScreen {
         width: 100%; padding: 28px 24px; text-align: center;
         display: flex; flex-direction: column; align-items: stretch; gap: 10px;
       }
-      .pin-prompt-box { padding: 30px 28px 24px; gap: 12px; }
+      /* Action buttons inside the Google-flow prompts read centered, not the
+         left-aligned default the main login-method buttons use. */
+      .passkey-prompt-box .login-btn { text-align: center; }
+      /* Secondary actions ("Not your account?", "Start a new identity") as small,
+         clearly-tappable ghost buttons — not faded text that looks disabled. */
+      .pin-actions {
+        margin-top: 10px; display: flex; flex-wrap: wrap;
+        align-items: center; justify-content: center; gap: 8px;
+      }
+      .pin-ghost-btn {
+        border: 1px solid color-mix(in srgb, var(--nd-purp) 35%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--nd-navy) 45%, transparent);
+        color: var(--nd-subtext);
+        font-size: 12px; padding: 8px 14px; min-height: auto; width: auto;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      .pin-ghost-btn:hover {
+        border-color: color-mix(in srgb, var(--nd-purp) 65%, transparent);
+        color: var(--nd-accent);
+        background: color-mix(in srgb, var(--nd-navy) 80%, transparent);
+      }
+      /* Show/hide password eye toggle. */
+      .pw-wrap { position: relative; display: block; }
+      .pw-wrap .nsec-input { width: 100%; box-sizing: border-box; padding-right: 44px; }
+      .pw-eye {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer;
+        color: rgba(255,255,255,0.45); padding: 8px;
+        display: flex; align-items: center; justify-content: center;
+        -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+        transition: color 0.15s;
+      }
+      .pw-eye:hover, .pw-eye:focus-visible { color: rgba(255,255,255,0.85); outline: none; }
+      .pin-prompt-box { position: relative; padding: 30px 28px 24px; gap: 12px; }
       .pin-prompt-box .passkey-prompt-title { font-size: 20px; margin: 0; }
       .pin-prompt-box .passkey-prompt-desc { margin: 0 0 4px; }
       .pin-prompt-box .create-field { margin: 0; flex: none; }
@@ -1138,6 +1183,12 @@ export class LoginScreen {
       .pin-prompt-box #pin-err:empty { display: none; }
       .pin-prompt-box #pin-ok { margin-top: 2px; }
       .pin-prompt-box .login-link { padding: 6px; }
+      /* Cancel sits in the top-right corner (where a back button lives on the
+         other sub-views), not stacked at the bottom under the action buttons. */
+      .pin-prompt-box .pin-corner-cancel {
+        position: absolute; top: 4px; right: 6px;
+        margin: 0; padding: 6px 10px; font-size: 11px; min-height: auto;
+      }
       /* While the PIN prompt is open, hide the login box's own content so the
          box collapses to hug just the prompt (no tall, empty frame). */
       .login-box.pin-active > *:not(.passkey-prompt-overlay) { display: none; }
@@ -1814,41 +1865,81 @@ export class LoginScreen {
     }
   }
 
-  // With a Drive-scoped token in hand: existing backup → ask PIN → unlock → log
-  // in; no backup → set PIN → generate key → save to Drive → log in.
+  // With a Drive-scoped token in hand, drive the SINGLE-VAULT flow: find the one
+  // vault this app can see (its own, or one the user picked before) → ask PIN →
+  // unlock → log in. No vault → create one, or pick an existing vault from
+  // another app. Every write updates that one file in place — never a 2nd copy.
   private async _handleGoogleToken(token: string): Promise<void> {
     this.setStatus(t('login.g.checking'));
-    let backup;
+    let vault: { fileId: string; backup: any } | null = null;
     try {
-      const { readBackup } = await import('../auth/driveBackup');
-      backup = await readBackup(token);
+      const { findVault, readLegacyAppData, writeVault } = await import('../auth/driveBackup');
+      vault = await findVault(token);
+      // Migration: a pre-vault ND account still lives in the hidden app-data
+      // folder. Promote it to the single visible vault, once, then use that.
+      if (!vault) {
+        const legacy = await readLegacyAppData(token);
+        if (legacy) {
+          const fileId = await writeVault(token, legacy);
+          vault = { fileId, backup: legacy };
+        }
+      }
     } catch (e: any) {
       this.setStatus(e?.message || t('login.g.drive_fail'), true);
       return;
     }
 
-    const { createBackup, unlockWithPin, hasPasskeyWrap } = await import('../auth/backupCrypto');
+    // DEV-only test hook: ?driverecover=1 pretends this app can't see a vault yet
+    // so the cross-app "recover from Drive" (Picker) path can be exercised even
+    // with an account that already has one. No-op in production builds.
+    if (import.meta.env.DEV && new URLSearchParams(location.search).get('driverecover') === '1') {
+      vault = null;
+    }
 
-    if (backup) {
+    const { createBackup, unlockWithPin, hasPasskeyWrap } = await import('../auth/backupCrypto');
+    const { isPickerConfigured } = await import('../auth/googlePicker');
+    const pickerOk = isPickerConfigured();
+
+    // The id of the single vault, if one exists. New keys created below overwrite
+    // it in place (reset/rotation); a brand-new account creates it.
+    let vaultFileId: string | null = vault?.fileId ?? null;
+    // Set when the user deliberately rotates to a fresh key ("start a new
+    // identity"). A rotation re-establishes the person, so we let them pick a
+    // username for the new key (a plain new account stays anonymous by default).
+    let newIdentity = false;
+
+    if (vault) {
+      const backup = vault.backup;
       const hasPasskey = hasPasskeyWrap(backup);
       // Returning user — unlock with password (retry until correct or cancelled).
       // Errors are shown inline in the prompt (setStatus is hidden behind it).
       let lastError: string | undefined;
       for (;;) {
-        const pin = await this._promptPin('enter', { hasPasskey, initialError: lastError });
+        // `driveImport` adds the "Not your account? Recover a different one"
+        // escape hatch: this app found A vault, but it may be the wrong one
+        // (shared Google account, or the user's key lives in another app).
+        const pin = await this._promptPin('enter', { hasPasskey, initialError: lastError, driveImport: pickerOk });
         lastError = undefined;
         if (pin === null) { this.setStatus(''); return; }
-        // Forgot password + Face ID recovery available → unlock the SAME backup
+        // "Not your account?" → pick a different vault from Drive instead.
+        if (pin === PIN_DRIVE_IMPORT) {
+          if (await this._tryRecoverFromDrive(token)) return;
+          continue; // cancelled/failed → back to the unlock prompt
+        }
+        // Forgot password + Face ID recovery available → unlock the SAME vault
         // with the passkey wrap and keep the account.
         if (pin === PIN_RECOVER) {
-          const recErr = await this._recoverWithPasskey(token, backup);
+          const recErr = await this._recoverWithPasskey(token, backup, vaultFileId);
           if (recErr === null) return; // logged in
           lastError = recErr;          // failed → show reason on the next prompt
           continue;
         }
         // Forgot password, no recovery: the old nsec is unrecoverable
-        // (zero-knowledge), so wipe it and start fresh below.
+        // (zero-knowledge), so wipe it and overwrite the same vault below.
         if (pin === PIN_RESET) { this.setStatus(''); break; }
+        // Deliberate "start a new identity" (compromised key) — new key
+        // overwrites the same vault file, replacing the abandoned key everywhere.
+        if (pin === PIN_NEWID) { this.setStatus(''); newIdentity = true; break; }
         try {
           const nsec = await unlockWithPin(backup, pin);
           this.setStatus(t('login.g.welcome'));
@@ -1860,11 +1951,30 @@ export class LoginScreen {
       }
     }
 
-    // New user (or a reset after a forgotten password) — set a password,
-    // generate a key, back it up (overwriting any old backup), offer Face ID,
-    // then log in.
-    const pin = await this._promptPin('set');
-    if (pin === null) { this.setStatus(''); return; }
+    // New user, a fresh rotation, or a reset after a forgotten password — set a
+    // username + password, generate a key, write the single vault, offer Face ID,
+    // then log in. Username is optional (blank stays anonymous). When this app
+    // can't see any vault yet (not a reset/rotation), also offer to import a key
+    // the user already has in ANOTHER app via the one-tap Drive picker.
+    const canImport = !vault && pickerOk;
+    let pin: string;
+    let username: string | undefined;
+    for (;;) {
+      const res = await this._promptNewIdentity({
+        title: newIdentity ? t('login.g.newid_title') : t('login.g.acct_title'),
+        okLabel: newIdentity ? t('login.g.newid_btn') : t('login.pw.create_btn'),
+        driveImport: canImport,
+      });
+      if (res === null) { this.setStatus(''); return; }
+      if (res === 'import') {
+        // Explicit "recover from another app" → Picker → unlock → log in.
+        if (await this._tryRecoverFromDrive(token)) return; // imported + logged in
+        continue; // cancelled/failed → back to the create prompt
+      }
+      pin = res.pin;
+      username = res.username || undefined;
+      break;
+    }
     // Keep the box covered from here through the Face ID prompt — without this,
     // closing the password prompt uncovers the main modal for the duration of
     // the Drive upload before the Face ID prompt appears (the flash).
@@ -1873,11 +1983,14 @@ export class LoginScreen {
       const { generateSecretKey, nip19 } = await import('nostr-tools');
       const nsec = nip19.nsecEncode(generateSecretKey());
       const { backup: newBackup, dek } = await createBackup(nsec, pin);
-      const { writeBackup } = await import('../auth/driveBackup');
-      await writeBackup(token, newBackup);
+      const { writeVault } = await import('../auth/driveBackup');
+      // The ONE vault: overwrite it in place if one already existed (reset or
+      // rotation), otherwise create it. No second copy, no app-data folder.
+      const fileId = await writeVault(token, newBackup, vaultFileId ?? undefined);
+      vaultFileId = fileId;
       busy.remove(); // Face ID overlay mounts in the same tick → no flash
-      await this._offerFaceIdRecovery(token, newBackup, dek);
-      this.onNsecLogin(nsec);
+      await this._offerFaceIdRecovery(token, newBackup, dek, fileId);
+      this.onNsecLogin(nsec, username);
     } catch (e: any) {
       busy.remove();
       this.container.querySelector('.login-box')?.classList.remove('pin-active');
@@ -1888,7 +2001,7 @@ export class LoginScreen {
   // Forgot-password recovery: unlock the existing backup with the Face ID
   // (passkey) wrap, log in with the original key, and offer to set a new
   // password. Returns null on success (logged in) or an error message to show.
-  private async _recoverWithPasskey(token: string, backup: any): Promise<string | null> {
+  private async _recoverWithPasskey(token: string, backup: any, vaultFileId: string | null): Promise<string | null> {
     const { getPasskeyWrapMeta } = await import('../auth/backupCrypto');
     const meta = getPasskeyWrapMeta(backup);
     if (!meta) return t('login.fid.no_recovery');
@@ -1914,8 +2027,8 @@ export class LoginScreen {
         const saving = this._showBusyCover(t('login.fid.saving'));
         try {
           const updated = await rewrapPin(backup, dek, newPw);
-          const { writeBackup } = await import('../auth/driveBackup');
-          await writeBackup(token, updated);
+          const { writeVault } = await import('../auth/driveBackup');
+          await writeVault(token, updated, vaultFileId ?? undefined);
         } catch { /* non-fatal: they're recovered either way */ }
         saving.remove();
       }
@@ -1939,6 +2052,7 @@ export class LoginScreen {
     token: string,
     backup: any,
     dek: Uint8Array<ArrayBuffer>,
+    vaultFileId: string | null,
   ): Promise<void> {
     const wantsIt = await this._promptFaceIdSetup();
     if (!wantsIt) return;
@@ -1946,10 +2060,10 @@ export class LoginScreen {
     try {
       const { createRecoveryPasskey } = await import('../stores/passkeyStore');
       const { wrapDekWithPasskey, withPasskeyWrap } = await import('../auth/backupCrypto');
-      const { writeBackup } = await import('../auth/driveBackup');
+      const { writeVault } = await import('../auth/driveBackup');
       const pk = await createRecoveryPasskey('Nostr District');
       const wrap = await wrapDekWithPasskey(dek, pk.prfSecret, pk.credentialId, pk.prfSalt);
-      await writeBackup(token, withPasskeyWrap(backup, wrap));
+      await writeVault(token, withPasskeyWrap(backup, wrap), vaultFileId ?? undefined);
     } catch (e: any) {
       // Non-fatal: account already saved with a password. Just note it.
       const msg = /prf/i.test(e?.message || '') || e?.message === 'PRF_NOT_SUPPORTED'
@@ -1976,7 +2090,155 @@ export class LoginScreen {
     return overlay;
   }
 
-  // Yes/no overlay offering Face ID recovery setup. Resolves true if accepted.
+  // Cross-app recovery: this app can't see a vault yet, but the user may have
+  // created one in ANOTHER app (any JSON file in their My Drive — we validate by
+  // decryption, not filename). Picker → read with the SAME login token (already
+  // drive.file-scoped, so no extra popup) → unlock → remember the picked file id
+  // as THIS app's vault (so future logins open it directly, no re-pick, and no
+  // second copy). Returns true if recovered (logged in), false to fall through.
+  private async _tryRecoverFromDrive(token: string): Promise<boolean> {
+    const { isPickerConfigured } = await import('../auth/googlePicker');
+    if (!isPickerConfigured()) return false; // not built into this deploy
+    if (!(await this._promptDriveRecover())) return false;
+    try {
+      const { pickDriveFile } = await import('../auth/googlePicker');
+      const { readVaultById, setVaultId } = await import('../auth/driveBackup');
+      const { unlockWithPin } = await import('../auth/backupCrypto');
+
+      const fileId = await pickDriveFile(token);
+      if (!fileId) return false; // picker cancelled
+      const backup = await readVaultById(token, fileId);
+
+      let lastError: string | undefined;
+      for (;;) {
+        const pass = await this._promptUnlockPassphrase(lastError);
+        if (pass === null) return false;
+        try {
+          const nsec = await unlockWithPin(backup, pass);
+          // Remember this file as our vault — future logins reopen it directly.
+          setVaultId(fileId);
+          this.setStatus(t('login.g.welcome'));
+          this.onNsecLogin(nsec);
+          return true;
+        } catch {
+          lastError = t('login.pw.incorrect');
+        }
+      }
+    } catch (e: any) {
+      console.error('[picker] recover-from-Drive failed', e);
+      this.setStatus(e?.message || t('login.g.picker_fail'), true);
+      return false;
+    }
+  }
+
+  private _promptDriveRecover(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'passkey-prompt-overlay';
+      overlay.innerHTML = `
+        <div class="passkey-prompt-box pin-prompt-box">
+          <div class="passkey-prompt-title">${this.esc(t('login.g.recover_title'))}</div>
+          <div class="passkey-prompt-desc">${this.esc(t('login.g.recover_desc'))}</div>
+          <button id="dr-go" class="login-btn login-btn-primary">${this.esc(t('login.g.recover_find'))}</button>
+          <button id="dr-skip" class="login-link pin-corner-cancel">${this.esc(t('login.pw.cancel'))}</button>
+        </div>`;
+      const loginBox = this.container.querySelector('.login-box')!;
+      loginBox.appendChild(overlay);
+      loginBox.classList.add('pin-active');
+      const done = (v: boolean) => { overlay.remove(); loginBox.classList.remove('pin-active'); resolve(v); };
+      overlay.querySelector('#dr-go')!.addEventListener('click', () => done(true));
+      overlay.querySelector('#dr-skip')!.addEventListener('click', () => done(false));
+    });
+  }
+
+  // Password entry for an imported vault. Single field, no "forgot" path (a
+  // cross-app vault carries only its password wrap). Do NOT trim — it may
+  // contain spaces.
+  private _promptUnlockPassphrase(initialError?: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'passkey-prompt-overlay';
+      overlay.innerHTML = `
+        <div class="passkey-prompt-box pin-prompt-box">
+          <div class="passkey-prompt-title">${this.esc(t('login.pw.enter_title'))}</div>
+          <div class="passkey-prompt-desc">${this.esc(t('login.g.unlock_import_desc'))}</div>
+          <input id="up-1" class="nsec-input create-field" type="password" autocomplete="current-password" placeholder="${this.esc(t('login.pw.placeholder'))}" maxlength="128">
+          <div id="up-err" class="login-status error" style="min-height:16px;"></div>
+          <button id="up-ok" class="login-btn login-btn-primary">${this.esc(t('login.pw.unlock_btn'))}</button>
+          <button id="up-cancel" class="login-link pin-corner-cancel">${this.esc(t('login.pw.cancel'))}</button>
+        </div>`;
+      const loginBox = this.container.querySelector('.login-box')!;
+      loginBox.appendChild(overlay);
+      loginBox.classList.add('pin-active');
+      const inp = overlay.querySelector('#up-1') as HTMLInputElement;
+      const err = overlay.querySelector('#up-err') as HTMLElement;
+      if (initialError) err.textContent = initialError;
+      const done = (v: string | null) => { overlay.remove(); loginBox.classList.remove('pin-active'); resolve(v); };
+      const submit = () => {
+        const v = inp.value;
+        if (!v) { err.textContent = t('login.pw.enter_one'); return; }
+        done(v);
+      };
+      overlay.querySelector('#up-ok')!.addEventListener('click', submit);
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      overlay.querySelector('#up-cancel')!.addEventListener('click', () => done(null));
+      this._addPasswordToggles(overlay);
+      inp.focus();
+    });
+  }
+
+  // Combined username + password entry for creating a key (first-ever Google
+  // signup OR a deliberate "start a new identity" rotation) — one screen instead
+  // of two modal hops. Username is optional (blank = anonymous). Resolves to
+  // { pin, username }, 'import' if the user chose to recover from another app
+  // (only offered when `opts.driveImport`), or null if they cancel.
+  private _promptNewIdentity(
+    opts: { title?: string; okLabel?: string; driveImport?: boolean } = {},
+  ): Promise<{ pin: string; username: string } | 'import' | null> {
+    const title = opts.title ?? t('login.g.newid_title');
+    const okLabel = opts.okLabel ?? t('login.g.newid_btn');
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'passkey-prompt-overlay';
+      overlay.innerHTML = `
+        <div class="passkey-prompt-box pin-prompt-box">
+          <div class="passkey-prompt-title">${this.esc(title)}</div>
+          <div class="passkey-prompt-desc">${this.esc(t('login.g.combo_desc'))}</div>
+          <input id="ni-name" class="nsec-input create-field" type="text" autocomplete="off" spellcheck="false" placeholder="${this.esc(t('login.g.username_optional'))}" maxlength="32">
+          <input id="ni-1" class="nsec-input create-field" type="password" autocomplete="new-password" placeholder="${this.esc(t('login.pw.placeholder'))}" maxlength="64">
+          <input id="ni-2" class="nsec-input create-field" type="password" autocomplete="new-password" placeholder="${this.esc(t('login.pw.confirm'))}" maxlength="64">
+          <div id="ni-err" class="login-status error" style="min-height:16px;"></div>
+          <button id="ni-ok" class="login-btn login-btn-primary">${this.esc(okLabel)}</button>
+          ${opts.driveImport ? `<button id="ni-import" class="login-link" style="font-size:12px;">${this.esc(t('login.g.import_link'))}</button>` : ''}
+          <button id="ni-cancel" class="login-link pin-corner-cancel">${this.esc(t('login.pw.cancel'))}</button>
+        </div>`;
+      const loginBox = this.container.querySelector('.login-box')!;
+      loginBox.appendChild(overlay);
+      loginBox.classList.add('pin-active');
+      const name = overlay.querySelector('#ni-name') as HTMLInputElement;
+      const p1 = overlay.querySelector('#ni-1') as HTMLInputElement;
+      const p2 = overlay.querySelector('#ni-2') as HTMLInputElement;
+      const err = overlay.querySelector('#ni-err') as HTMLElement;
+      const done = (v: { pin: string; username: string } | 'import' | null) => {
+        overlay.remove(); loginBox.classList.remove('pin-active'); resolve(v);
+      };
+      const submit = () => {
+        const u = name.value.trim();
+        const pw = p1.value.trim();
+        if (u && u.length < 2) { err.textContent = t('login.g.username_min'); return; }
+        if (pw.length < 6) { err.textContent = t('login.pw.too_short'); return; }
+        if (pw !== p2.value.trim()) { err.textContent = t('login.pw.mismatch'); return; }
+        done({ pin: pw, username: u });
+      };
+      overlay.querySelector('#ni-ok')!.addEventListener('click', submit);
+      p2.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      overlay.querySelector('#ni-import')?.addEventListener('click', () => done('import'));
+      overlay.querySelector('#ni-cancel')!.addEventListener('click', () => done(null));
+      this._addPasswordToggles(overlay);
+      name.focus();
+    });
+  }
+
   private _promptFaceIdSetup(): Promise<boolean> {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -1997,13 +2259,40 @@ export class LoginScreen {
     });
   }
 
+  // Adds a show/hide "eye" toggle to every password field in an overlay, so a
+  // non-technical user can verify what they typed. Wraps each input in a
+  // relative container and drops a toggle button on the right.
+  private _addPasswordToggles(overlay: HTMLElement): void {
+    const eye = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const eyeOff = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    overlay.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'pw-wrap';
+      input.parentNode!.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pw-eye';
+      btn.setAttribute('aria-label', 'Show password');
+      btn.innerHTML = eye;
+      wrap.appendChild(btn);
+      btn.addEventListener('click', () => {
+        const reveal = input.type === 'password';
+        input.type = reveal ? 'text' : 'password';
+        btn.innerHTML = reveal ? eyeOff : eye;
+        btn.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+        input.focus();
+      });
+    });
+  }
+
   // Minimal password overlay. 'set' asks twice (confirm); 'enter' asks once.
   // Resolves with the password, or null if the user cancels. `opts.hasPasskey`
   // adds a "Unlock with Face ID" choice to the forgot-password screen; the
   // title/desc/okLabel overrides let it double as a "set a new password" prompt.
   private _promptPin(
     mode: 'set' | 'enter',
-    opts: { hasPasskey?: boolean; title?: string; desc?: string; okLabel?: string; initialError?: string } = {},
+    opts: { hasPasskey?: boolean; title?: string; desc?: string; okLabel?: string; initialError?: string; driveImport?: boolean } = {},
   ): Promise<string | null> {
     return new Promise((resolve) => {
       const setting = mode === 'set';
@@ -2020,8 +2309,12 @@ export class LoginScreen {
           ${setting ? `<input id="pin-2" class="nsec-input create-field" type="password" autocomplete="new-password" placeholder="${this.esc(t('login.pw.confirm'))}" maxlength="64">` : ''}
           <div id="pin-err" class="login-status error" style="min-height:16px;"></div>
           <button id="pin-ok" class="login-btn login-btn-primary">${this.esc(okLabel)}</button>
-          ${setting ? '' : `<button id="pin-forgot" class="login-link" style="font-size:12px;">${this.esc(t('login.pw.forgot'))}</button>`}
-          <button id="pin-cancel" class="login-link" style="font-size:12px;">${this.esc(t('login.pw.cancel'))}</button>
+          ${setting ? '' : `<button id="pin-forgot" class="login-link" style="font-size:13px;">${this.esc(t('login.pw.forgot'))}</button>`}
+          ${setting ? '' : `<div class="pin-actions">
+            ${opts.driveImport ? `<button id="pin-import" class="login-link pin-ghost-btn">${this.esc(t('login.g.not_your_account'))}</button>` : ''}
+            <button id="pin-newid" class="login-link pin-ghost-btn">${this.esc(t('login.g.newid_link'))}</button>
+          </div>`}
+          <button id="pin-cancel" class="login-link pin-corner-cancel">${this.esc(t('login.pw.cancel'))}</button>
         </div>`;
       const loginBox = this.container.querySelector('.login-box')!;
       loginBox.appendChild(overlay);
@@ -2033,15 +2326,23 @@ export class LoginScreen {
       if (opts.initialError) err.textContent = opts.initialError;
       const done = (val: string | null) => { overlay.remove(); loginBox.classList.remove('pin-active'); resolve(val); };
 
-      overlay.querySelector('#pin-ok')!.addEventListener('click', () => {
+      const submit = () => {
         const v = p1.value.trim();
         if (setting) {
           if (v.length < 6) { err.textContent = t('login.pw.too_short'); return; }
           if (v !== (p2?.value.trim() || '')) { err.textContent = t('login.pw.mismatch'); return; }
         } else if (!v) { err.textContent = t('login.pw.enter_one'); return; }
         done(v);
-      });
+      };
+      overlay.querySelector('#pin-ok')!.addEventListener('click', submit);
+      // Enter submits (a normal person's instinct after typing a password).
+      p1.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      p2?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      this._addPasswordToggles(overlay);
       overlay.querySelector('#pin-cancel')!.addEventListener('click', () => done(null));
+      // "Not your account? Recover a different one" — escape hatch to the Drive
+      // picker so a wrong auto-found vault isn't a dead end.
+      overlay.querySelector('#pin-import')?.addEventListener('click', () => done(PIN_DRIVE_IMPORT));
 
       // Forgot password → if Face ID recovery exists, offer it first; otherwise
       // (or in addition) the destructive wipe-and-start-over.
@@ -2056,11 +2357,25 @@ export class LoginScreen {
           ${opts.hasPasskey
             ? `<button id="pin-reset-go" class="login-link" style="font-size:11px;color:rgba(220,120,120,0.75);margin-top:2px;">${this.esc(t('login.fp.erase_soft'))}</button>`
             : `<button id="pin-reset-go" class="login-btn login-btn-primary" style="background:#7a2330;border-color:#a33;">${this.esc(t('login.fp.erase_hard'))}</button>`}
-          <button id="pin-reset-back" class="login-link" style="font-size:12px;">${this.esc(t('login.fp.go_back'))}</button>`;
+          <button id="pin-reset-back" class="login-link pin-corner-cancel">${this.esc(t('login.fp.go_back'))}</button>`;
         box.querySelector('#pin-recover-go')?.addEventListener('click', () => done(PIN_RECOVER));
         box.querySelector('#pin-reset-go')!.addEventListener('click', () => done(PIN_RESET));
         // Go back to the password entry (reopen a fresh prompt and chain its result).
         box.querySelector('#pin-reset-back')!.addEventListener('click', () => { overlay.remove(); resolve(this._promptPin('enter', opts)); });
+      });
+
+      // "Start a new identity" — deliberate rotation (e.g. the current key was
+      // compromised). Distinct from "forgot password": you may still know your
+      // PIN, but want to abandon this key for a brand-new one. Confirms first.
+      overlay.querySelector('#pin-newid')?.addEventListener('click', () => {
+        const box = overlay.querySelector('.passkey-prompt-box') as HTMLElement;
+        box.innerHTML = `
+          <div class="passkey-prompt-title">${this.esc(t('login.g.newid_confirm_title'))}</div>
+          <div class="passkey-prompt-desc">${t('login.g.newid_confirm_desc')}</div>
+          <button id="newid-go" class="login-btn login-btn-primary" style="background:#7a2330;border-color:#a33;">${this.esc(t('login.g.newid_confirm_btn'))}</button>
+          <button id="newid-back" class="login-link pin-corner-cancel">${this.esc(t('login.fp.go_back'))}</button>`;
+        box.querySelector('#newid-go')!.addEventListener('click', () => done(PIN_NEWID));
+        box.querySelector('#newid-back')!.addEventListener('click', () => { overlay.remove(); resolve(this._promptPin('enter', opts)); });
       });
 
       p1.focus();
