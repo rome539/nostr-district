@@ -13,6 +13,15 @@ import { DEFAULT_RELAYS } from '../nostr/relayManager';
 export type ItemRarity = 'common' | 'rare' | 'legendary' | 'junk';
 export type ItemCategory = 'fish' | 'hardware' | 'street' | 'lore' | 'occult' | 'critters' | 'eats' | 'holiday' | 'flora' | 'relics' | 'celestial';
 
+// Canonical rarity → accent colour, shared by the Bazaar UI and the scavenge
+// "Found a …!" toast so a find is tinted by what it's actually worth.
+export const RARITY_COLOR: Record<ItemRarity, string> = {
+  common:    '#a0c8a0',
+  rare:      '#70b0ff',
+  legendary: '#ffd700',
+  junk:      '#888888',
+};
+
 export interface ItemDef {
   id: string;
   name: string;
@@ -126,9 +135,9 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'hol_phantom_key',    name: 'Phantom Key',        category: 'holiday', rarity: 'legendary', emoji: '🔮', description: 'Opens doors that aren\'t there. Halloween only.' },
   { id: 'hol_reaper_coin',    name: 'Reaper\'s Toll',     category: 'holiday', rarity: 'legendary', emoji: '⚰️', description: 'Payment for the ferryman. Keep it close.' },
   // July 4th 🎆
-  { id: 'hol_sparkler',       name: 'Sparkler',           category: 'holiday', rarity: 'common',    emoji: '🎇', description: 'Burns bright and brief.' },
+  { id: 'hol_sparkler',       name: 'Sparkler',           category: 'holiday', rarity: 'rare',      emoji: '🎇', description: 'Burns bright and brief.' },
   { id: 'hol_flag_pin',       name: 'Flag Pin',           category: 'holiday', rarity: 'common',    emoji: '🇺🇸', description: 'Worn with quiet pride.' },
-  { id: 'hol_firecracker',    name: 'Firecracker',        category: 'holiday', rarity: 'rare',      emoji: '🧨', description: 'Handle with care.' },
+  { id: 'hol_firecracker',    name: 'Firecracker',        category: 'holiday', rarity: 'common',    emoji: '🧨', description: 'Handle with care.' },
   { id: 'hol_bottle_rocket',  name: 'Bottle Rocket',      category: 'holiday', rarity: 'rare',      emoji: '🚀', description: 'Aim away from face. Allegedly.' },
   { id: 'hol_liberty_coin',   name: 'Liberty Coin',       category: 'holiday', rarity: 'legendary', emoji: '🎆', description: 'Minted for the free and the sovereign.' },
   { id: 'hol_eagle_feather',  name: 'Eagle Feather',      category: 'holiday', rarity: 'legendary', emoji: '🦅', description: 'Fell from the highest flight on the freest day.' },

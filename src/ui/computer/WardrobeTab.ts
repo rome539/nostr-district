@@ -295,7 +295,7 @@ export class WardrobeTab {
     const colorKey = keyMap[this.currentSlot];
     if (!colorKey) { container.innerHTML = ''; return; }
     if (this.currentSlot === 'eyes' && EYE_CYCLE_TYPES.has(avatar.eyes ?? '')) { container.innerHTML = ''; return; }
-    const noColorAcc = new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']);
+    const noColorAcc = new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard', 'sparkler']);
     if (this.currentSlot === 'accessory' && noColorAcc.has(avatar.accessory ?? '')) { container.innerHTML = ''; return; }
     const noColorTop = new Set(['vjacket']);
     if (this.currentSlot === 'top' && noColorTop.has(avatar.top ?? '')) { container.innerHTML = ''; return; }

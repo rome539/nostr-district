@@ -34,7 +34,7 @@ import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { getAvatar, onLocalAvatarChange } from '../stores/avatarStore';
 import { ROD_SKINS } from '../stores/marketStore';
 import { incrementLegendaryCatch, incrementCoelacanth } from '../stores/fishingUnlockStore';
-import { ITEM_BY_FISH_NAME, receiveMintedEvent } from '../stores/tradeItemStore';
+import { ITEM_BY_FISH_NAME, receiveMintedEvent, RARITY_COLOR, type ItemRarity } from '../stores/tradeItemStore';
 import { setFishCaughtHandler, sendFishCatchRequest, FishCaughtMsg } from '../nostr/presenceService';
 import { ScavengeSystem } from './ScavengeSystem';
 
@@ -1823,11 +1823,11 @@ export class WoodsScene extends BaseScene {
     }
     if (res.kept) {
       this.snd.itemReward();
-      if (!isLegendary) {
-        this.time.delayedCall(800, () => {
-          this.chatUI.addMessage('system', `📦 ${catch_.name} added to your collection.`, '#80c8ff');
-        });
-      }
+      // A kept fish pops a rarity-coloured toast (tap → inventory).
+      const rarity: ItemRarity = isLegendary ? 'legendary' : catch_.junk ? 'junk' : catch_.rare ? 'rare' : 'common';
+      window.dispatchEvent(new CustomEvent('nd-toast', {
+        detail: { msg: `📦 ${catch_.name} added to your collection`, color: RARITY_COLOR[rarity], open: 'inventory' },
+      }));
     }
 
     if (isLegendary) {

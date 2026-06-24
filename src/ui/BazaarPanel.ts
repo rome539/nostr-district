@@ -9,7 +9,7 @@ import {
   fetchMarketListings, getCachedRemoteListings, RemoteListing,
   MarketListing, purchaseListing, restoreLocalListing, discardItem, fetchInventoryFromRelays, subscribeMarket, fetchMyListings,
   TradeOffer, getPendingOffers, sendTradeOffer, acceptTradeOffer, rejectTradeOffer, cancelTradeOffer,
-  getPendingOutgoingInstanceIds, streamOwnedItemsOf, normalizePubkey, reclaimOrphanedEscrows,
+  getPendingOutgoingInstanceIds, streamOwnedItemsOf, normalizePubkey, reclaimOrphanedEscrows, RARITY_COLOR,
 } from '../stores/tradeItemStore';
 import { authStore } from '../stores/authStore';
 import { t as ti18n } from '../i18n/i18n';
@@ -27,12 +27,6 @@ import {
 const PANEL_ID = 'bazaar-panel';
 // Group sat amounts with the user's locale separators (100000 → 100,000).
 const fmtSats = (n: number): string => n.toLocaleString();
-const RARITY_COLOR: Record<string, string> = {
-  common:    '#a0c8a0',
-  rare:      '#70b0ff',
-  legendary: '#ffd700',
-  junk:      '#888888',
-};
 const CATEGORY_LABEL: Record<string, string> = {
   fish: 'Fish', hardware: 'Hardware', street: 'Street', lore: 'Lore', occult: 'Occult', critters: 'Critters', holiday: 'Holiday',
 };

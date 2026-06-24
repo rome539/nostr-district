@@ -316,6 +316,51 @@ export class MarketPreview {
       MarketPreview._setCanvas(MarketPreview._makeWallThemeCanvas(item.value));
     } else if (item.slot === 'floorStyle') {
       MarketPreview._setCanvas(MarketPreview._makeFloorCanvas(item.value));
+    } else if (item.slot === 'accessory' && item.value === 'sparkler') {
+      // Procedural accessory — not baked into the sprite. Mirror the in-game
+      // HandSparkler look (horizontal wood stick + flickering bead + short crackling
+      // sparks), derived from the same `s` scale (preview avatar ≈168px → s≈1.75).
+      const src = renderHubSprite({ ...getAvatar(), accessory: 'sparkler' } as AvatarConfig);
+      const W = 111, H = 168;
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const ctx = c.getContext('2d')!;
+      const s = 1.75;
+      const handX = 70.5, handY = 122, tipX = handX + 9 * s; // hand → outward stick → bead
+      const cols = ['#ffffff', '#fff0c0', '#ffd060', '#ff6060', '#80a0ff'];
+      interface SP { x:number; y:number; vx:number; vy:number; life:number; decay:number; col:string; }
+      const pts: SP[] = []; const seed = Math.random() * 1000; let lastSpawn = 0;
+      const loop = () => {
+        const now = Date.now();
+        ctx.clearRect(0, 0, W, H);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, 0, 0, W, H);
+        // wood stick (lineWidth 1.6*s, like the live one)
+        ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 1.6 * s; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(handX, handY); ctx.lineTo(tipX, handY); ctx.stroke();
+        // sparks — emitter match: ~1 every 24ms, speed 10-40*s px/s, life 90-240ms, gravity 55*s, shrink+fade
+        if (now - lastSpawn > 24) {
+          const a = Math.random() * Math.PI * 2, sp = (10 + Math.random() * 30) * s / 60;
+          pts.push({ x: tipX, y: handY, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: 1 / (5.4 + Math.random() * 9), col: cols[Math.floor(Math.random() * cols.length)] });
+          lastSpawn = now;
+        }
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = pts.length - 1; i >= 0; i--) {
+          const p = pts[i]; p.x += p.vx; p.y += p.vy; p.vy += 55 * s / 3600; p.life -= p.decay;
+          if (p.life <= 0) { pts.splice(i, 1); continue; }
+          ctx.globalAlpha = p.life; ctx.fillStyle = p.col;
+          ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.4, 0.7 * s * p.life), 0, Math.PI * 2); ctx.fill();
+        }
+        // burning bead (glow + hot core, same radii as the live one)
+        const f = Math.min(1, 0.6 + Math.sin(now * 0.03 + seed) * 0.25 + Math.random() * 0.15);
+        ctx.globalAlpha = 0.3 * f; ctx.fillStyle = '#ffe080';
+        ctx.beginPath(); ctx.arc(tipX, handY, (2.6 + f * 1.4) * s, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = f; ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(tipX, handY, (1.1 + f * 0.7) * s, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        MarketPreview._animId = requestAnimationFrame(loop);
+      };
+      MarketPreview._setCanvas(c);
+      loop();
     } else if (WEARABLE_SLOTS.has(item.slot)) {
       MarketPreview._drawAvatarCanvas(MarketPreview._wearablePreviewConfig(item));
     } else {

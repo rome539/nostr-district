@@ -61,6 +61,8 @@ import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
 import { SoundEngine } from '../audio/SoundEngine';
 import { EYE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../entities/avatar/eyeCycles';
 import { CHAR_ANIMS, charAnimStates } from '../entities/nameAnim';
+import { AuraFireworks } from './auraFireworks';
+import { HandSparkler } from './handSparkler';
 import { ComputerUI } from '../ui/ComputerUI';
 import { MuteList } from '../ui/MuteList';
 import { PlayerPicker } from '../ui/PlayerPicker';
@@ -473,11 +475,17 @@ export abstract class BaseScene extends Phaser.Scene {
   protected emoteGraphics!: Phaser.GameObjects.Graphics;
 
   // ── Aura particle state (Phaser ParticleEmitter per player) ─────────────
+  // The 'fireworks' aura is special: it runs the real FireworksEngine (AuraFireworks)
+  // instead of a particle emitter, so either `emitter` or `fw` is set, never both.
   private _localAuraEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private _localAuraFw      : AuraFireworks | null = null;
   private _localAuraType    = '';
   private _auraLastX        = NaN;
   private _auraStillTime    = 0;
-  private _otherAuraMap     = new Map<string, { emitter: Phaser.GameObjects.Particles.ParticleEmitter; type: string }>();
+  private _otherAuraMap     = new Map<string, { emitter: Phaser.GameObjects.Particles.ParticleEmitter | null; fw: AuraFireworks | null; type: string }>();
+  // Sparkler accessory — a live hand particle, one per player wearing it.
+  private _localHandSparkler: HandSparkler | null = null;
+  private _otherSparklerMap  = new Map<string, HandSparkler>();
   private _otherStillMap    = new Map<string, { lastTargetX: number; stillSince: number }>();
   private _localEyeL: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private _localEyeR: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -557,10 +565,10 @@ export abstract class BaseScene extends Phaser.Scene {
           });
         } else if (source === 'found') {
           // Scavenge result — the server rolled it, so the find is only known now.
-          import('../stores/tradeItemStore').then(({ ITEM_CATALOG, confirmPendingScavenge }) => {
+          import('../stores/tradeItemStore').then(({ ITEM_CATALOG, RARITY_COLOR, confirmPendingScavenge }) => {
             confirmPendingScavenge(); // this collect succeeded — drop its in-flight spot
             const def = ITEM_CATALOG.find(d => d.id === item.itemId);
-            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `${def.emoji} Found a ${def.name}!`, color: '#7fd8a0', open: 'inventory' } }));
+            if (def) window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `${def.emoji} Found a ${def.name}!`, color: RARITY_COLOR[def.rarity], open: 'inventory' } }));
           });
         }
       }
@@ -650,7 +658,9 @@ export abstract class BaseScene extends Phaser.Scene {
     const o = this.otherPlayers.get(pk); if (!o) return;
     this.otherPlayers.delete(pk);
     const ae = this._otherAuraMap.get(pk);
-    if (ae) { ae.emitter.destroy(); this._otherAuraMap.delete(pk); }
+    if (ae) { ae.emitter?.destroy(); ae.fw?.destroy(); this._otherAuraMap.delete(pk); }
+    const hs = this._otherSparklerMap.get(pk);
+    if (hs) { hs.destroy(); this._otherSparklerMap.delete(pk); }
     this._otherStillMap.delete(pk);
     const ee = this._otherEyeMap.get(pk);
     if (ee) { ee.left.destroy(); ee.right.destroy(); this._otherEyeMap.delete(pk); }
@@ -888,6 +898,13 @@ export abstract class BaseScene extends Phaser.Scene {
     return { lx: -3 / 56, rx: 2 / 56, yFrac: 33 / 56 };
   }
 
+  /** Where a held hand item (the sparkler) sits — matched to the 'watch' wrist,
+   *  one pixel lower. xFrac/yFrac are fractions of displayHeight from sprite.x
+   *  (centre) and sprite.y, mirrored with flipX. Hub canvas 56 tall; Room overrides. */
+  protected getHandPixelOffsets(): { xFrac: number; yFrac: number } {
+    return { xFrac: 5 / 56, yFrac: 16 / 56 };
+  }
+
   private _makeEyePair(type: string, lx: number, rx: number, ey: number, spriteHeight: number) {
     this._ensureAuraDotTexture();
     const s = Math.max(0.2, spriteHeight / 96);
@@ -1020,18 +1037,43 @@ export abstract class BaseScene extends Phaser.Scene {
             const nx = o.sprite.x;
             const grounded = oa.aura === 'fire' || oa.aura === 'smoke';
             const ny = o.sprite.y - o.sprite.displayHeight * (grounded ? 0.08 : 0.34);
+            const depth = o.sprite.depth + 1; // track Y-sorted depth (room), not fixed
             let entry = this._otherAuraMap.get(pk);
             if (!entry || entry.type !== oa.aura) {
-              entry?.emitter.destroy();
-              entry = { emitter: this._makeAuraEmitter(oa.aura, nx, ny, o.sprite.displayHeight), type: oa.aura };
+              entry?.emitter?.destroy();
+              entry?.fw?.destroy();
+              if (oa.aura === 'fireworks') {
+                const sc = Math.max(0.2, o.sprite.displayHeight / 96);
+                entry = { emitter: null, fw: new AuraFireworks(this, depth, sc), type: oa.aura };
+              } else {
+                entry = { emitter: this._makeAuraEmitter(oa.aura, nx, ny, o.sprite.displayHeight), fw: null, type: oa.aura };
+              }
               this._otherAuraMap.set(pk, entry);
-            } else {
-              entry.emitter.setPosition(nx, ny);
             }
-            entry.emitter.setDepth(o.sprite.depth + 1); // track Y-sorted depth (room), not fixed
+            if (entry.fw) entry.fw.update(time, delta, nx, ny, depth);
+            else if (entry.emitter) { entry.emitter.setPosition(nx, ny); entry.emitter.setDepth(depth); }
           } else if (!otherStill || !oa.aura || !nearEnough) {
             const entry = this._otherAuraMap.get(pk);
-            if (entry) { entry.emitter.destroy(); this._otherAuraMap.delete(pk); }
+            if (entry) { entry.emitter?.destroy(); entry.fw?.destroy(); this._otherAuraMap.delete(pk); }
+          }
+
+          // Sparkler accessory — live hand particle, shown whenever equipped + nearby
+          // (no stillness gate; you're holding it whether you move or not).
+          if (oa.accessory === 'sparkler' && nearEnough) {
+            const depth = o.sprite.depth + 1;
+            const dH = o.sprite.displayHeight;
+            const { xFrac, yFrac } = this.getHandPixelOffsets();
+            // flipX === false means facing right → hold on the facing side.
+            const side = o.sprite.flipX ? -1 : 1;
+            const handX = o.sprite.x + side * xFrac * dH;
+            const handY = o.sprite.y - yFrac * dH;
+            const dir = side; // stick points outward in the facing direction
+            let hs = this._otherSparklerMap.get(pk);
+            if (!hs) { hs = new HandSparkler(this, depth, o.sprite.displayHeight / 96); this._otherSparklerMap.set(pk, hs); }
+            hs.update(time, handX, handY, dir, depth);
+          } else {
+            const hs = this._otherSparklerMap.get(pk);
+            if (hs) { hs.destroy(); this._otherSparklerMap.delete(pk); }
           }
 
           // Eye VFX — cry uses particles; color-cycle steps eyeColor; motion eyes
@@ -1180,27 +1222,58 @@ export abstract class BaseScene extends Phaser.Scene {
         const px = this.playerName.x;
         const grounded = av.aura === 'fire' || av.aura === 'smoke';
         const py = this.playerSprite.y - this.playerSprite.displayHeight * (grounded ? 0.08 : 0.34);
-        if (!this._localAuraEmitter || this._localAuraType !== av.aura) {
-          this._localAuraEmitter?.destroy();
-          this._localAuraEmitter = this._makeAuraEmitter(av.aura, px, py, this.playerSprite.displayHeight);
-          this._localAuraType = av.aura;
-        } else {
-          this._localAuraEmitter.setPosition(px, py);
-        }
         // Sit the aura just in front of the player. Scenes that depth-sort by Y (the
         // room) put the sprite at depth≈y (~hundreds); a fixed depth would bury the
         // aura behind the floor/furniture (smoke fogging the room, steam behind you).
-        this._localAuraEmitter.setDepth(this.playerSprite.depth + 1);
-      } else if (!localStill && this._localAuraEmitter) {
-        this._localAuraEmitter.destroy();
-        this._localAuraEmitter = null;
+        const depth = this.playerSprite.depth + 1;
+        if (av.aura === 'fireworks') {
+          if (this._localAuraType !== 'fireworks') {
+            this._localAuraEmitter?.destroy(); this._localAuraEmitter = null;
+            this._localAuraFw?.destroy();
+            this._localAuraFw = new AuraFireworks(this, depth, Math.max(0.2, this.playerSprite.displayHeight / 96));
+            this._localAuraType = 'fireworks';
+          }
+          this._localAuraFw!.update(time, delta, px, py, depth);
+        } else {
+          if (this._localAuraFw) { this._localAuraFw.destroy(); this._localAuraFw = null; }
+          if (!this._localAuraEmitter || this._localAuraType !== av.aura) {
+            this._localAuraEmitter?.destroy();
+            this._localAuraEmitter = this._makeAuraEmitter(av.aura, px, py, this.playerSprite.displayHeight);
+            this._localAuraType = av.aura;
+          } else {
+            this._localAuraEmitter.setPosition(px, py);
+          }
+          this._localAuraEmitter.setDepth(depth);
+        }
+      } else if (!localStill && (this._localAuraEmitter || this._localAuraFw)) {
+        this._localAuraEmitter?.destroy(); this._localAuraEmitter = null;
+        this._localAuraFw?.destroy(); this._localAuraFw = null;
         this._localAuraType = '';
       }
-    } else if (this._localAuraEmitter) {
-      this._localAuraEmitter.destroy();
-      this._localAuraEmitter = null;
+    } else if (this._localAuraEmitter || this._localAuraFw) {
+      this._localAuraEmitter?.destroy(); this._localAuraEmitter = null;
+      this._localAuraFw?.destroy(); this._localAuraFw = null;
       this._localAuraType = '';
       this._auraLastX = NaN;
+    }
+
+    // Sparkler accessory — live hand particle, shown whenever equipped (moving or not).
+    if (av.accessory === 'sparkler' && this.playerSprite) {
+      const depth = this.playerSprite.depth + 1;
+      const dH = this.playerSprite.displayHeight;
+      const { xFrac, yFrac } = this.getHandPixelOffsets();
+      // flipX === false means facing right → hold the sparkler on the facing side.
+      const side = this.playerSprite.flipX ? -1 : 1;
+      const handX = this.playerSprite.x + side * xFrac * dH;
+      const handY = this.playerSprite.y - yFrac * dH;
+      const dir = side; // stick points outward in the facing direction
+      if (!this._localHandSparkler) {
+        this._localHandSparkler = new HandSparkler(this, depth, this.playerSprite.displayHeight / 96);
+      }
+      this._localHandSparkler.update(time, handX, handY, dir, depth);
+    } else if (this._localHandSparkler) {
+      this._localHandSparkler.destroy();
+      this._localHandSparkler = null;
     }
 
     // Eye VFX — cry uses particles; color-cycle eyes step eyeColor; motion eyes
@@ -2194,6 +2267,13 @@ export abstract class BaseScene extends Phaser.Scene {
 
       // ── /roam (easter egg) — auto-stroll the hub ↔ woods loop until you move ──
       case 'roam': {
+        // Only scenes that set roamConfig (Hub, Woods) participate. Gating the toggle
+        // here stops /roam arming the global flag in the cabin/alley and then kicking
+        // in the moment you step back into the Hub or Woods.
+        if (!this.roamConfig) {
+          this.chatUI.addMessage('system', ti18n('sys.roam.here'), ac);
+          return true;
+        }
         const on = toggleRoaming();
         this.resetRoam();
         this.chatUI.addMessage('system', ti18n(on ? 'sys.roam.on' : 'sys.roam.off'), ac);
@@ -2444,10 +2524,16 @@ export abstract class BaseScene extends Phaser.Scene {
     document.documentElement.style.removeProperty('--nd-ctrl-offset');
     this._localAuraEmitter?.destroy();
     this._localAuraEmitter = null;
+    this._localAuraFw?.destroy();
+    this._localAuraFw = null;
     this._localAuraType = '';
     this._auraLastX = NaN;
-    this._otherAuraMap.forEach(e => e.emitter.destroy());
+    this._otherAuraMap.forEach(e => { e.emitter?.destroy(); e.fw?.destroy(); });
     this._otherAuraMap.clear();
+    this._localHandSparkler?.destroy();
+    this._localHandSparkler = null;
+    this._otherSparklerMap.forEach(hs => hs.destroy());
+    this._otherSparklerMap.clear();
     this._otherStillMap.clear();
     this._localEyeL?.destroy();
     this._localEyeR?.destroy();

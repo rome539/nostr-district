@@ -19,6 +19,12 @@ import { SoundEngine } from '../audio/SoundEngine';
 
 let _wired = false;
 
+// Cosmetics unlocked by holding ONE specific collectable (not a whole set).
+// Possession-based: usable only while the item is in inventory.
+const ITEM_GATED_COSMETICS: { itemId: string; slot: string; value: string; label: string }[] = [
+  { itemId: 'hol_sparkler', slot: 'accessory', value: 'sparkler', label: 'Sparkler' },
+];
+
 // Latest set-completion progress per cosmetic reward, keyed `${slot}:${value}`
 // (matches the market catalog key). Read by the market panel rows + isOwned.
 //
@@ -108,13 +114,24 @@ async function enforceEquipped(): Promise<void> {
       if (v && v !== none && isEarnGated(slot, v) && !isOwned(slot, v)) fixes[slot] = none;
     };
     check('hat', 'none');
+    check('accessory', 'none');
     check('bottom', 'pants');
     check('eyes', 'default');
     check('aura', '');
     check('rodSkin', '');
     check('nameColor', '');
     check('chatColor', '');
-    if (Object.keys(fixes).length) setAvatar(fixes as any);
+    if (Object.keys(fixes).length) {
+      const updated = setAvatar(fixes as any);
+      // Broadcast the strip so OTHER players de-equip it in real time too — setAvatar
+      // alone only updates locally (without this, e.g. a sparkler you gave away stays
+      // drawn on you for everyone else until they reload).
+      const [{ publishAvatar }, { sendAvatarUpdate }] = await Promise.all([
+        import('../nostr/nostrService'), import('../nostr/presenceService'),
+      ]);
+      publishAvatar(updated).catch(() => {});
+      sendAvatarUpdate();
+    }
   } finally {
     _enforcing = false;
   }
@@ -155,6 +172,22 @@ function recompute(): void {
       _wasComplete[key] = complete;
     }
   }
+
+  // Item-gated cosmetics — granted by simply OWNING one specific collectable (not a
+  // full set). Possession-based like set cosmetics: re-locks the instant the item is
+  // sold/traded/gifted, and enforceEquipped() then strips it if it's currently worn.
+  const heldIds = new Set(getInventory().map(i => i.itemId));
+  for (const { itemId, slot, value, label } of ITEM_GATED_COSMETICS) {
+    const has = heldIds.has(itemId);
+    const key = `${slot}:${value}`;
+    _cosmeticProgress[key] = { count: has ? 1 : 0, required: 1, hint: `Collect the ${label}` };
+    if (has && _wasComplete[key] === false && !_toasted.has(key)) {
+      _toasted.add(key);
+      newlyUnlocked.push(label);
+    }
+    _wasComplete[key] = has;
+  }
+
   if (newlyUnlocked.length) {
     persistToasted();
     showCosmeticToast(newlyUnlocked);

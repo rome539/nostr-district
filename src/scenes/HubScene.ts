@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble } from '../config/game.config';
-import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../utils/fireworks';
+import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
@@ -236,16 +236,22 @@ export class HubScene extends BaseScene {
       this.registry.set('playerName', auth.displayName || 'anon');
     }
     this.parallaxBg = this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'parallax_bg').setDepth(-2).setAlpha(0.6);
+    // Opaque sky sits in front of the parallax skyline (covering it exactly as
+    // the old baked-in sky did) but BEHIND the buildings, leaving room for the
+    // July-4 fireworks to burst between sky and skyline.
+    this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_sky').setDepth(-1.6);
     this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
     if (isJuly4thPeriod()) {
-      this.fwGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
+      // Depth -1.5: in front of the sky (-1.6), behind the buildings (-1).
+      this.fwGraphics = this.add.graphics().setDepth(-1.5).setScrollFactor(0);
       this.fwEngine = new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
         launchY:        GROUND_Y - 200,
         explodeYMin:    10,
         explodeYMax:    75,
-        particleRadius: 0.5,
-        explosionCount: 10,
-        explosionSpeed: 1.3,
+        particleRadius: 0.8,
+        explosionCount: 13,
+        explosionSpeed: 1.8,
+        shapes: FW_SHAPE_MIX,
       });
     }
     if (isHalloweenPeriod()) {

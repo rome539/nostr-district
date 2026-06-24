@@ -24,6 +24,71 @@ interface FWParticle {
   ci: number; alpha: number; life: number; maxLife: number;
 }
 
+// Burst silhouettes. Each explosion picks one at random from the engine's list.
+//   burst — classic filled radial pop (default)
+//   ring  — clean expanding circle outline
+//   heart — heart-shaped outline
+//   star  — 5-pointed spiky star
+//   palm  — fronds that shoot up and droop (willow)
+export type FWShape = 'burst' | 'ring' | 'heart' | 'star' | 'palm' | 'bitcoin' | 'ostrich';
+
+// Shared mix for every scene: mostly classic bursts with the occasional special
+// shape (each special ~6-7%). Repeats weight the random pick toward 'burst'.
+export const FW_SHAPE_MIX: FWShape[] = [
+  'burst', 'burst', 'burst', 'burst', 'burst',
+  'burst', 'burst', 'burst', 'burst',
+  'ring', 'star', 'heart', 'palm', 'bitcoin', 'ostrich',
+];
+
+// ── Picture-firework bitmaps ─────────────────────────────────────────────────
+// '#' = one particle. Converted to normalised, centred, y-up offset vectors;
+// each explosion of this shape fires one particle per '#' so the spray briefly
+// renders the figure. Coarse on purpose — they read at firework scale.
+function gridToPoints(rows: string[]): Array<[number, number]> {
+  const h = rows.length;
+  const w = Math.max(...rows.map((r) => r.length));
+  const cx = (w - 1) / 2, cy = (h - 1) / 2;
+  const half = Math.max(w, h) / 2;
+  const pts: Array<[number, number]> = [];
+  rows.forEach((row, ry) => {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === '#') pts.push([(i - cx) / half, (cy - ry) / half]);
+    }
+  });
+  return pts;
+}
+
+// Bitcoin ₿ — left spine, bowls bulging right, two vertical strokes top & bottom.
+const BITCOIN_PTS = gridToPoints([
+  '.#.#.',
+  '.#.#.',
+  '####.',
+  '.#..#',
+  '.#..#',
+  '.###.',
+  '.#..#',
+  '.#..#',
+  '####.',
+  '.#.#.',
+  '.#.#.',
+]);
+
+// Ostrich — traced from public/assets/Holiday/ostrichsprite.png (alpha pixels).
+const OSTRICH_PTS = gridToPoints([
+  '..#......',
+  '.###.....',
+  '####.....',
+  '..#..#.#.',
+  '..#.###..',
+  '.#######.',
+  '.########',
+  '..######.',
+  '...###...',
+  '...#.#...',
+  '...#.#...',
+  '..####...',
+]);
+
 export interface FireworksConfig {
   launchY?:       number;  // Y rockets launch from (default: H)
   explodeYMin?:   number;  // min Y for explosion (default: H*0.08)
@@ -36,6 +101,7 @@ export interface FireworksConfig {
   explosionCount?: number; // particles per burst (default: 28-42)
   explosionSpeed?: number; // burst spread speed (default: 2.2-4.2)
   initialDelay?:  number;  // ms before first launch (default: 0)
+  shapes?:        FWShape[]; // burst silhouettes to pick from (default: ['burst'])
 }
 
 export class FireworksEngine {
@@ -58,6 +124,7 @@ export class FireworksEngine {
       explosionCount: cfg.explosionCount ?? 30,
       explosionSpeed: cfg.explosionSpeed ?? 3.2,
       initialDelay:   cfg.initialDelay   ?? 0,
+      shapes:         cfg.shapes         ?? ['burst'],
     };
   }
 
@@ -108,17 +175,68 @@ export class FireworksEngine {
   }
 
   private explode(r: FWRocket): void {
-    const count = Math.round(this.cfg.explosionCount * (0.8 + Math.random() * 0.4));
-    const life = 900 + Math.random() * 500;
+    const baseLife = 900 + Math.random() * 500;
     const speed = this.cfg.explosionSpeed * (0.7 + Math.random() * 0.6);
+    const shape = this.cfg.shapes[Math.floor(Math.random() * this.cfg.shapes.length)];
+
+    // Picture shapes: one particle per bitmap point, scaled out from the centre.
+    if (shape === 'bitcoin' || shape === 'ostrich') {
+      const pts = shape === 'bitcoin' ? BITCOIN_PTS : OSTRICH_PTS;
+      const f = speed * 1.2; // scale of the figure (smaller = tighter picture)
+      for (const [px, py] of pts) {
+        this.particles.push({
+          x: r.x, y: r.y, vx: px * f, vy: -py * f,
+          ci: r.ci, alpha: 1, life: baseLife, maxLife: baseLife,
+        });
+      }
+      return;
+    }
+
+    const count = Math.round(this.cfg.explosionCount * (0.8 + Math.random() * 0.4));
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
-      const s = speed * (0.5 + Math.random() * 0.9);
-      this.particles.push({
-        x: r.x, y: r.y,
-        vx: Math.cos(angle) * s, vy: Math.sin(angle) * s,
-        ci: r.ci, alpha: 1, life, maxLife: life,
-      });
+      const angle = (i / count) * Math.PI * 2;
+      let vx: number, vy: number, life = baseLife;
+
+      switch (shape) {
+        case 'ring': {
+          // Near-constant speed → a clean expanding circle outline.
+          const s = speed * (1.0 + Math.random() * 0.12);
+          vx = Math.cos(angle) * s; vy = Math.sin(angle) * s;
+          break;
+        }
+        case 'heart': {
+          // Parametric heart; speed varies with the curve's radius so the spray
+          // traces a heart. Canvas Y is down, so flip vy to sit it upright.
+          const a = angle + Math.random() * 0.06;
+          const hx = 16 * Math.pow(Math.sin(a), 3);
+          const hy = 13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a);
+          const f = speed / 15;
+          vx = hx * f; vy = -hy * f;
+          break;
+        }
+        case 'star': {
+          // 5 spikes — speed peaks at five evenly spaced angles.
+          const spike = Math.pow(Math.abs(Math.cos(2.5 * angle)), 6);
+          const s = speed * (0.35 + spike) * (0.9 + Math.random() * 0.2);
+          vx = Math.cos(angle) * s; vy = Math.sin(angle) * s;
+          break;
+        }
+        case 'palm': {
+          // Fronds shoot up and droop: upward bias + longer life so gravity arcs them.
+          const s = speed * (0.45 + Math.random() * 0.5);
+          vx = Math.cos(angle) * s;
+          vy = Math.sin(angle) * s - speed * 0.5;
+          life = baseLife * 1.7;
+          break;
+        }
+        default: { // 'burst' — classic filled radial pop
+          const a = angle + Math.random() * 0.3;
+          const s = speed * (0.5 + Math.random() * 0.9);
+          vx = Math.cos(a) * s; vy = Math.sin(a) * s;
+        }
+      }
+
+      this.particles.push({ x: r.x, y: r.y, vx, vy, ci: r.ci, alpha: 1, life, maxLife: life });
     }
   }
 
@@ -156,17 +274,28 @@ export function drawFireworksCanvas(ctx: CanvasRenderingContext2D, fw: Fireworks
 
 // ── Phaser Graphics renderer — used by HubScene / Lounge ─────────────────────
 
-export function drawFireworksPhaser(g: Phaser.GameObjects.Graphics, fw: FireworksEngine): void {
+// `accept` (optional) clips drawing to points it approves — used to confine
+// fireworks to a window/sky region so falling sparks don't spill onto a floor.
+export function drawFireworksPhaser(
+  g: Phaser.GameObjects.Graphics,
+  fw: FireworksEngine,
+  accept?: (x: number, y: number) => boolean,
+): void {
   const r = fw.radius;
   for (const rocket of fw.rockets) {
     for (let i = 0; i < rocket.trail.length; i++) {
+      const pt = rocket.trail[i];
+      if (accept && !accept(pt.x, pt.y)) continue;
       g.fillStyle(0xffffff, (i / rocket.trail.length) * 0.5);
-      g.fillRect(rocket.trail[i].x - 1, rocket.trail[i].y - 1, 2, 2);
+      g.fillRect(pt.x - 1, pt.y - 1, 2, 2);
     }
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(rocket.x, rocket.y, r);
+    if (!accept || accept(rocket.x, rocket.y)) {
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(rocket.x, rocket.y, r);
+    }
   }
   for (const p of fw.particles) {
+    if (accept && !accept(p.x, p.y)) continue;
     g.fillStyle(fw.colorNum(p.ci), p.alpha * 0.85);
     g.fillCircle(p.x, p.y, r);
   }

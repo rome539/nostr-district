@@ -263,6 +263,9 @@ export const CATALOG: MarketItem[] = [
   { id: 'acc_onimask',     name: 'Oni Mask',         slot: 'accessory', value: 'onimask',        price: 1.50, tier: 'premium' },
   { id: 'acc_onimaskblue', name: 'Blue Oni Mask',    slot: 'accessory', value: 'onimaskblue',    price: 1.50, tier: 'premium' },
   { id: 'acc_onimaskgreen',name: 'Green Oni Mask',   slot: 'accessory', value: 'onimaskgreen',   price: 1.50, tier: 'premium' },
+  // Earned, not bought: usable only while you hold the Sparkler collectable (July 4th).
+  // Re-locks the moment you sell/trade/gift it. Rendered as a live hand particle effect.
+  { id: 'acc_sparkler',    name: 'Sparkler',         slot: 'accessory', value: 'sparkler',       price: 0,    tier: 'rare', earn: true },
   // ── Hair ─────────────────────────────────────────────────────────────────────
   { id: 'hair_afro',       name: 'Afro',             slot: 'hair',      value: 'afro',           price: 0.50, tier: 'basic' },
   { id: 'hair_ponytail',   name: 'Ponytail',         slot: 'hair',      value: 'ponytail',       price: 0.50, tier: 'basic' },

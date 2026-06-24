@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FireworksEngine, isJuly4thPeriod } from '../utils/fireworks';
+import { FireworksEngine, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsCanvas, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { HeartsEngine, newHeartsEngine, drawHeartsPhaser, isValentinePeriod } from '../utils/valentineFX';
 import { BaseScene } from './BaseScene';
@@ -136,6 +136,7 @@ export class RoomScene extends BaseScene {
         xMin: x1 + 10, xMax: x2 - 10,
         intervalMin: 2500, intervalMax: 4000,
         particleRadius: 0.8, explosionCount: 14, explosionSpeed: 1.8,
+        shapes: FW_SHAPE_MIX,
         initialDelay,
       });
       this.cityFwEngines = [
@@ -636,6 +637,10 @@ export class RoomScene extends BaseScene {
   protected override onEscFallthrough(): void { this.leaveRoom(); }
   protected override getEyePixelOffsets(): { lx: number; rx: number; yFrac: number } {
     return { lx: -3.5 / 76, rx: 3.5 / 76, yFrac: 45 / 76 };
+  }
+  protected override getHandPixelOffsets(): { xFrac: number; yFrac: number } {
+    // Room canvas 48×76: at the wrist height, nudged up.
+    return { xFrac: 8 / 76, yFrac: 20 / 76 };
   }
   /** Single source of truth for Room name tags (local + other players); color is per-room. */
   private get nameTagStyle(): import('./BaseScene').NameTagStyle {

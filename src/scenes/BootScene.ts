@@ -157,40 +157,47 @@ export class BootScene extends Phaser.Scene {
     };
 
     // ═══════════════════════════════════════════════
-    // SKY — deeper gradient with subtle color banding
+    // SKY — drawn to its OWN opaque canvas (texture 'district_sky'), kept
+    // separate from the buildings so the July-4 fireworks can render BEHIND the
+    // skyline: sky furthest back, fireworks in front of it, buildings in front
+    // of those. Layered in HubScene so the non-holiday look is unchanged.
     // ═══════════════════════════════════════════════
-    vGrad(0, 0, W, 230, [
-      '#010008', '#010008', '#020010', '#040016', '#06001e', '#080024', '#0a002a',
-      '#0c0030', '#0e0036', '#0d002e', '#0b0024', '#090020',
-    ]);
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = W; skyCanvas.height = H;
+    const xs = skyCanvas.getContext('2d')!;
+    xs.imageSmoothingEnabled = false;
+
+    const skyBands = ['#010008', '#010008', '#020010', '#040016', '#06001e', '#080024', '#0a002a',
+      '#0c0030', '#0e0036', '#0d002e', '#0b0024', '#090020'];
+    const skyBandH = Math.ceil(230 / skyBands.length);
+    skyBands.forEach((c, i) => { xs.fillStyle = c; xs.fillRect(0, i * skyBandH, W, skyBandH); });
 
     // Stars — more variety, twinkle hints
     for (let i = 0; i < 220; i++) {
-      const sc = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'][Math.floor(Math.random() * 7)];
-      x.fillStyle = sc;
-      x.globalAlpha = 0.15 + Math.random() * 0.7;
+      xs.fillStyle = ['#fad480', '#e87aab', '#7b68ee', '#5dcaa5', '#ffffff', '#ffffff', '#ffffff'][Math.floor(Math.random() * 7)];
+      xs.globalAlpha = 0.15 + Math.random() * 0.7;
       const sz = Math.random() > 0.88 ? 2 : 1;
-      x.fillRect(Math.random() * W, Math.random() * 180, sz, sz);
+      xs.fillRect(Math.random() * W, Math.random() * 180, sz, sz);
     }
     // A few larger "bright" stars with cross flare
     for (let i = 0; i < 10; i++) {
       const sx = Math.random() * W;
       const sy = 10 + Math.random() * 130;
-      x.fillStyle = '#fff';
-      x.globalAlpha = 0.4 + Math.random() * 0.3;
-      x.fillRect(sx, sy, 2, 2);
-      x.globalAlpha = 0.1;
-      x.fillRect(sx - 2, sy, 6, 1);
-      x.fillRect(sx, sy - 2, 1, 6);
+      xs.fillStyle = '#fff';
+      xs.globalAlpha = 0.4 + Math.random() * 0.3;
+      xs.fillRect(sx, sy, 2, 2);
+      xs.globalAlpha = 0.1;
+      xs.fillRect(sx - 2, sy, 6, 1);
+      xs.fillRect(sx, sy - 2, 1, 6);
     }
-    x.globalAlpha = 1;
+    xs.globalAlpha = 1;
 
     // Faint aurora / sky glow near horizon
-    x.globalAlpha = 0.015;
-    rect(0, 100, W, 60, P.purp);
-    x.globalAlpha = 0.01;
-    rect(0, 120, W, 40, P.pink);
-    x.globalAlpha = 1;
+    xs.globalAlpha = 0.015; xs.fillStyle = P.purp; xs.fillRect(0, 100, W, 60);
+    xs.globalAlpha = 0.01;  xs.fillStyle = P.pink; xs.fillRect(0, 120, W, 40);
+    xs.globalAlpha = 1;
+
+    this.textures.addCanvas('district_sky', skyCanvas);
 
     // ── Window drawing helper ──
     const drawWindow = (wx: number, wy: number, ww: number, wh: number, lit: boolean, color: string) => {
@@ -763,7 +770,14 @@ export class BootScene extends Phaser.Scene {
     x.fillRect(0, 0, W, H);
 
     this.textures.addCanvas('district_bg', canvas);
-    captureThumb('hub', canvas);
+    // Thumbnail needs the full look — composite the (now separate) sky under the buildings.
+    const hubThumb = document.createElement('canvas');
+    hubThumb.width = W; hubThumb.height = H;
+    const ht = hubThumb.getContext('2d')!;
+    ht.imageSmoothingEnabled = false;
+    ht.drawImage(skyCanvas, 0, 0);
+    ht.drawImage(canvas, 0, 0);
+    captureThumb('hub', hubThumb);
     captureThumb('woods', WoodsScene.generateBg());
     captureThumb('alley', AlleyScene.generateBg());
     captureThumb('cabin', CabinScene.generateBg());

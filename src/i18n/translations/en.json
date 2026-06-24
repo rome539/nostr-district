@@ -765,6 +765,7 @@
   "sys.unknown_cmd": "Unknown: /{cmd}",
   "sys.roam.on": "Roaming the district… move to take back control.",
   "sys.roam.off": "Roam off.",
+  "sys.roam.here": "You can only roam in the Hub and the Woods.",
   "sys.dm.need_key": "DMs require a Nostr key",
   "sys.dm.opening": "Opening DM…",
   "sys.not_found": "\"{name}\" not found",

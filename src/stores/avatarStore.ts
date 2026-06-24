@@ -14,7 +14,7 @@ export interface AvatarConfig {
   bottomColor: string;
   hat: 'none' | 'cap' | 'beanie' | 'tophat' | 'cowboy' | 'beret' | 'bucket' | 'crown' | 'crown_purple' | 'crown_silver' | 'crown_bronze' | 'visor' | 'fedora' | 'wizard' | 'hardhat' | 'newsboy' | 'ostrichhat' | 'halo' | 'catears' | 'horns' | 'hornsspiral' | 'knightsheadband' | 'pizzahat' | 'beasthat' | 'safarihat' | 'arenahelm';
   hatColor: string;
-  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie' | 'ballon' | 'ballonbitcoin' | 'ballonostrich' | 'guyfaux' | 'hockeymask' | 'onimask' | 'onimaskblue' | 'onimaskgreen' | 'embercloak' | 'wanderhood' | 'battlecloak' | 'arenaguard' | 'sandcloak';
+  accessory: 'none' | 'glasses' | 'bandana' | 'scarf' | 'eyepatch' | 'chain' | 'earrings' | 'sunglasses' | 'headphones' | 'watch' | 'mask' | 'monocle' | 'ring' | 'wings' | 'cape' | 'sword' | 'ostirchfloatie' | 'ballon' | 'ballonbitcoin' | 'ballonostrich' | 'guyfaux' | 'hockeymask' | 'onimask' | 'onimaskblue' | 'onimaskgreen' | 'embercloak' | 'wanderhood' | 'battlecloak' | 'arenaguard' | 'sandcloak' | 'sparkler';
   accessoryColor: string;
   eyes: 'default' | 'wide' | 'angry' | 'happy' | 'wink' | 'star' | 'hollow' | 'sleepy' | 'cross' | 'glow' | 'heart' | 'slit' | 'visor' | 'void' | 'dizzy' | 'shifty' | 'blaze' | 'frost' | 'cosmic' | 'galaxy' | 'laser' | 'aurora' | 'matrix' | 'toxic' | 'electric' | 'cry';
   eyeColor: string;
@@ -110,7 +110,7 @@ export const AVATAR_OPTIONS = {
   // (Nostr Day / District Royalty), earn-gated via the market CATALOG — listing
   // them here would duplicate their wardrobe buttons.
   hat: ['none', 'cap', 'beanie', 'bucket', 'visor', 'newsboy', 'beret', 'fedora', 'cowboy', 'tophat', 'hardhat', 'safarihat', 'beasthat', 'arenahelm', 'crown', 'crown_silver', 'crown_bronze', 'wizard', 'halo', 'catears', 'horns', 'hornsspiral'] as const,
-  accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'guyfaux', 'hockeymask', 'onimask', 'onimaskblue', 'onimaskgreen', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape', 'embercloak', 'wanderhood', 'battlecloak', 'arenaguard', 'sandcloak', 'ostirchfloatie', 'ballon', 'ballonbitcoin', 'ballonostrich'] as const,
+  accessory: ['none', 'glasses', 'sunglasses', 'monocle', 'eyepatch', 'mask', 'guyfaux', 'hockeymask', 'onimask', 'onimaskblue', 'onimaskgreen', 'bandana', 'scarf', 'chain', 'earrings', 'ring', 'watch', 'headphones', 'wings', 'cape', 'embercloak', 'wanderhood', 'battlecloak', 'arenaguard', 'sandcloak', 'ostirchfloatie', 'ballon', 'ballonbitcoin', 'ballonostrich', 'sparkler'] as const,
   eyes: ['default', 'wide', 'angry', 'happy', 'wink', 'star', 'hollow', 'sleepy', 'cross'] as const,
 };
 

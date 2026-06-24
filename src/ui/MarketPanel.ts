@@ -99,7 +99,7 @@ const CLOTHING_SLOTS = new Set<string>(Object.keys(CLOTHING_COLOR_KEYS));
 const NO_COLOR_VARIANTS: Record<string, Set<string>> = {
   // Color-cycling eyes drive their own palette, so no manual color picker.
   eyes: new Set(EYE_CYCLE_TYPES),
-  accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard']),
+  accessory: new Set(['onimask', 'onimaskblue', 'onimaskgreen', 'arenaguard', 'sparkler']),
   top: new Set(['vjacket']),
   hat: new Set(['beasthat', 'arenahelm']),
 };

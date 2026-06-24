@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, P, hexToRgb, hexToNum } from '../../config/game.config';
-import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod } from '../../utils/fireworks';
+import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../../utils/bats';
 
 let loungeBats: BatEngine | null = isHalloweenPeriod()
@@ -12,9 +12,10 @@ let loungeFireworks: FireworksEngine | null = isJuly4thPeriod()
       launchY:        190,
       explodeYMin:    20,
       explodeYMax:    140,
-      particleRadius: 0.45,
-      explosionCount: 8,
-      explosionSpeed: 1.0,
+      particleRadius: 0.75,
+      explosionCount: 11,
+      explosionSpeed: 1.4,
+      shapes: FW_SHAPE_MIX,
     })
   : null;
 
@@ -57,7 +58,9 @@ export function updateLoungeRoom(
 
   if (loungeFireworks) {
     loungeFireworks.tick(time, _delta);
-    drawFireworksPhaser(graphics, loungeFireworks);
+    // Clip to above the window sill (rockets launch from y=190) so falling
+    // sparks don't rain down over the lounge floor.
+    drawFireworksPhaser(graphics, loungeFireworks, (_x, y) => y <= 188);
   }
   if (loungeBats) {
     loungeBats.tick(time, _delta);

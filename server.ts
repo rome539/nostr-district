@@ -397,8 +397,8 @@ function recordFish(pubkey: string): void {
 //
 // The 3 regular bounties are PER-NPUB: deterministic from (period, pubkey), so each
 // player gets their own board (no two residents race for the same Pizza Receipt),
-// refreshing every 4 days. The festive holiday poster stays SHARED (seeded by
-// holiday+year). Deterministic ⇒ the server needs no storage for the board itself;
+// refreshing every 4 days. The festive holiday posters are ALSO per-npub (seeded by
+// holiday+year+pubkey), hanging the whole window. Deterministic ⇒ the server needs no storage for the board itself;
 // only CLAIMS persist: warm cache in memory/file + a durable oracle-signed relay
 // marker per bounty (d-tag `ndbounty_<bountyId>`, the bountyId now carrying the
 // pubkey so per-player claims never collide) — the same pattern as the weekly drop.
@@ -506,7 +506,8 @@ function getWeekBounties(pubkey: string): Bounty[] {
   // Per-npub board: the seed mixes the period with a hash of the pubkey, so every
   // player gets their OWN deterministic set of bounties each period (the regular 3).
   // No storage needed — identical for a given (period, npub) on any server instance.
-  // The festive holiday poster below stays SHARED (seeded by holiday+year, not pubkey).
+  // The festive holiday posters below are ALSO per-npub (seeded by holiday+year+pubkey),
+  // but hang the WHOLE window with per-player claims.
   const rng = mulberry32(((period * 2654435761) ^ pkHash(pubkey)) >>> 0);
   const pick = <T>(arr: T[], taken: Set<T>): T => {
     let v: T;
@@ -545,42 +546,62 @@ function getWeekBounties(pubkey: string): Bounty[] {
     last.tier = 'legendary';
   }
 
-  // Festive poster: during a holiday window, a 4th bounty hangs for the WHOLE
-  // window — burn the holiday's lower-tier items, get one of its legendaries.
-  // Seeded by (holiday, year): identical all window, fresh claims every year
-  // (the year is in the id, so the claims marker resets annually). It expires
-  // with the window itself, not the 4-day cycle.
+  // Festive board: a PER-NPUB set of holiday posters that hang the WHOLE window
+  // (per-player claims — pubkey is in the id). Mirrors the regular board (specific
+  // `wants` + free-pick `burnAny`) but trades holiday items for holiday rewards,
+  // and shows BOTH a rare and a legendary poster — so the seasonal legendaries are
+  // a real grind, not a 3-common freebie. Seeded by (holiday, year, pubkey):
+  // unique per player, stable all window.
   const hol = activeHolidayDrop();
   if (hol) {
     const year = new Date().getFullYear();
-    let seed = year * 7919;
-    for (const ch of hol.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-    const hrng = mulberry32(seed);
-    const legends = hol.pool.filter(id => ITEM_RARITY.get(id) === 'legendary');
-    const reward = legends.length
-      ? legends[Math.floor(hrng() * legends.length)]
-      : hol.pool[hol.pool.length - 1]; // no legendary in pool (shouldn't happen) — pay the last item
-    // Wants come from the pool's lower tiers: commons when the holiday has them,
-    // otherwise its rares (minus the reward). Tiny pools (Finney = 2 items) fall
-    // back to 3× the single remaining item.
-    const commons = hol.pool.filter(id => ITEM_RARITY.get(id) === 'common');
-    const lower = commons.length
-      ? commons
-      : hol.pool.filter(id => id !== reward && ITEM_RARITY.get(id) !== 'legendary');
-    const pickFrom = lower.length ? lower : hol.pool.filter(id => id !== reward);
-    const a = pickFrom[Math.floor(hrng() * pickFrom.length)];
-    const rest = pickFrom.filter(id => id !== a);
-    const wants = rest.length
-      ? [{ itemId: a, qty: 2 }, { itemId: rest[Math.floor(hrng() * rest.length)], qty: 1 }]
-      : [{ itemId: a, qty: 3 }];
-    bounties.push({
-      id: `bounty_hol_${hol.id}_${year}`,
-      wants,
-      rewardItemId: reward,
-      tier: 'legendary',
-      endsAt: Date.UTC(year, hol.endMD[0] - 1, hol.endMD[1], 23, 59, 59),
-      holiday: true,
-    });
+    const endsAt = Date.UTC(year, hol.endMD[0] - 1, hol.endMD[1], 23, 59, 59);
+    const hrng = mulberry32(((year * 7919) ^ pkHash(hol.id + pubkey)) >>> 0);
+    const hpick = (arr: string[], taken: Set<string>): string => {
+      let v: string, guard = 0;
+      do { v = arr[Math.floor(hrng() * arr.length)]; } while (taken.has(v) && ++guard < 8);
+      taken.add(v);
+      return v;
+    };
+    const ofTier = (t: string) => hol.pool.filter(id => ITEM_RARITY.get(id) === t);
+    const hCommon = ofTier('common'), hRare = ofTier('rare'), hLeg = ofTier('legendary');
+
+    // Holiday RARE poster — find 2 specific holiday commons + burn 3 more commons → a holiday rare.
+    if (hRare.length && hCommon.length) {
+      const taken = new Set<string>();
+      const wants = [{ itemId: hpick(hCommon, taken), qty: 1 }];
+      if (hCommon.length > 1) wants.push({ itemId: hpick(hCommon, taken), qty: 1 });
+      bounties.push({
+        id: `bounty_hol_${hol.id}_${year}_${pubkey}_r`,
+        wants,
+        burnAny: { count: 3, rarities: ['common'] },
+        rewardItemId: hRare[Math.floor(hrng() * hRare.length)],
+        tier: 'rare', endsAt, holiday: true,
+      });
+    }
+
+    // Holiday LEGENDARY poster — find 2 specific holiday rares + burn 6 more (commons/rares) → a holiday legendary.
+    // Pools with no rares (or no commons) fall back to whatever lower tier exists.
+    if (hLeg.length) {
+      const taken = new Set<string>();
+      const hunt = hRare.length ? hRare : hCommon; // the specific tier to track down
+      const wants: { itemId: string; qty: number }[] = [];
+      if (hunt.length > 1) {
+        wants.push({ itemId: hpick(hunt, taken), qty: 1 }, { itemId: hpick(hunt, taken), qty: 1 });
+      } else if (hunt.length === 1) {
+        wants.push({ itemId: hunt[0], qty: 2 });
+      } else {
+        wants.push({ itemId: hol.pool[0], qty: 3 }); // last-ditch (shouldn't hit)
+      }
+      const burnRar: ItemTier[] = hCommon.length ? ['common', 'rare'] : ['rare'];
+      bounties.push({
+        id: `bounty_hol_${hol.id}_${year}_${pubkey}_l`,
+        wants,
+        burnAny: { count: 6, rarities: burnRar },
+        rewardItemId: hLeg[Math.floor(hrng() * hLeg.length)],
+        tier: 'legendary', endsAt, holiday: true,
+      });
+    }
   }
   return bounties;
 }
@@ -693,8 +714,8 @@ const ITEM_RARITY = new Map<string, string>();
 {
   const tiers: Record<string, string[]> = {
     legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hol_diamond_heart','hw_zero_day','st_dons_ring','lo_genesis_seed','ce_fallen_star','eats_chefs_special','rl_rotary_phone'],
-    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_firecracker','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hol_cupids_arrow','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','eats_greasy_taco','eats_fortune_cookie','oc_the_devil','oc_cursed_doubloon','cr_gutter_crab','cr_moth_swarm','st_getaway_key','hw_logic_analyzer','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','rl_vinyl','rl_cartridge','rl_crt_remote','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','fish_aurora_lungfish','oc_eldritch_idol','cr_sewer_gator','hw_asic_miner','fl_elderwood_seed','hw_mainframe_core','st_kingpin_cigar'],
-    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_sparkler','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hol_red_rose','hol_chocolate_box','hol_candy_heart','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_vending_sandwich','eats_street_skewer','eats_cold_brew','oc_salt_circle','oc_the_moon','oc_pendulum','cr_fire_squirrel','cr_subway_possum','cr_alley_roach','st_pawn_ticket','st_numbers_slip','hw_trackball','hw_vacuum_tube','fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','fish_reed_perch','fish_glass_minnow'],
+    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_sparkler','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hol_cupids_arrow','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','eats_greasy_taco','eats_fortune_cookie','oc_the_devil','oc_cursed_doubloon','cr_gutter_crab','cr_moth_swarm','st_getaway_key','hw_logic_analyzer','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','rl_vinyl','rl_cartridge','rl_crt_remote','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','fish_aurora_lungfish','oc_eldritch_idol','cr_sewer_gator','hw_asic_miner','fl_elderwood_seed','hw_mainframe_core','st_kingpin_cigar'],
+    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_firecracker','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hol_red_rose','hol_chocolate_box','hol_candy_heart','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_vending_sandwich','eats_street_skewer','eats_cold_brew','oc_salt_circle','oc_the_moon','oc_pendulum','cr_fire_squirrel','cr_subway_possum','cr_alley_roach','st_pawn_ticket','st_numbers_slip','hw_trackball','hw_vacuum_tube','fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','fish_reed_perch','fish_glass_minnow'],
     junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern','eats_day_old_bagel'],
   };
   for (const [rarity, ids] of Object.entries(tiers)) for (const id of ids) ITEM_RARITY.set(id, rarity);
