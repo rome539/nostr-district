@@ -54,7 +54,7 @@ const HUB_NAME_STYLE: import('./BaseScene').NameTagStyle = { fontSize: '9px', co
 export class HubScene extends BaseScene {
   private static readonly WOODS_OPEN = true;
   private player!: Phaser.GameObjects.Image;
-  private playerGlow!: Phaser.GameObjects.Graphics;
+  private playerGlow!: Phaser.GameObjects.Image;
   private nearBuilding: BuildingZone | null = null;
   private promptText!: Phaser.GameObjects.Text;
   private promptBg!: Phaser.GameObjects.Graphics;
@@ -62,13 +62,8 @@ export class HubScene extends BaseScene {
   private playerNames = new Map<string, string>();
 
   private parallaxBg!: Phaser.GameObjects.Image;
-  private dustParticles: { x: number; y: number; vx: number; vy: number; alpha: number; size: number; color: string }[] = [];
-  private dustGraphics!: Phaser.GameObjects.Graphics;
   private neonTimer = 0;
   private neonFrame = 0;
-  private chimneyGraphics!: Phaser.GameObjects.Graphics;
-  private chimneyParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }[] = [];
-  private chimneySpawnTimer = 0;
   // [worldX, chimney-cap Y] — matches BootScene fgBuildings where ri%2===0 && w>50
   // 3 chimneys on unnamed buildings: bi=0 (left), bi=2 (mid-left), bi=12 (right)
   private readonly CHIMNEYS: [number, number][] = [
@@ -122,6 +117,8 @@ export class HubScene extends BaseScene {
     // a no-op after the first toast.
     if (auth.pubkey) tryGrantPizzaHat(auth.pubkey);
     import('../stores/halvingUnlockStore').then(({ tryGrantHalvingColor }) => tryGrantHalvingColor());
+    import('../stores/july4UnlockStore').then(({ tryGrantJuly4Color }) => tryGrantJuly4Color());
+    import('../stores/nostrBirthdayUnlockStore').then(({ tryGrantNostrichColor }) => tryGrantNostrichColor());
     this.startGame();
   }
 
@@ -236,13 +233,10 @@ export class HubScene extends BaseScene {
       this.registry.set('playerName', auth.displayName || 'anon');
     }
     this.parallaxBg = this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'parallax_bg').setDepth(-2).setAlpha(0.6);
-    // Opaque sky sits in front of the parallax skyline (covering it exactly as
-    // the old baked-in sky did) but BEHIND the buildings, leaving room for the
-    // July-4 fireworks to burst between sky and skyline.
-    this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_sky').setDepth(-1.6);
-    this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
     if (isJuly4thPeriod()) {
-      // Depth -1.5: in front of the sky (-1.6), behind the buildings (-1).
+      // July 4: sky and skyline are SEPARATE layers so the fireworks can burst between
+      // them — sky (-1.6) → fireworks (-1.5) → buildings (-1).
+      this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_sky').setDepth(-1.6);
       this.fwGraphics = this.add.graphics().setDepth(-1.5).setScrollFactor(0);
       this.fwEngine = new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
         launchY:        GROUND_Y - 200,
@@ -253,6 +247,11 @@ export class HubScene extends BaseScene {
         explosionSpeed: 1.8,
         shapes: FW_SHAPE_MIX,
       });
+      this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
+    } else {
+      // Normal: sky + buildings pre-baked into one opaque layer — one fewer full-screen
+      // image to blend every frame (nothing renders between sky and skyline off-holiday).
+      this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_combined').setDepth(-1);
     }
     if (isHalloweenPeriod()) {
       this.batGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
@@ -271,8 +270,7 @@ export class HubScene extends BaseScene {
       this.heartsGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
       this.heartsEngine = newHeartsEngine(GAME_WIDTH, GROUND_Y, { count: 8 });
     }
-    this.dustGraphics = this.add.graphics().setDepth(5); this.initDustParticles();
-this.chimneyGraphics = this.add.graphics().setDepth(1);
+    this.setupWorldFX();
     this.emoteGraphics = this.add.graphics().setDepth(15);
     this.createPlayer(); this.createInteractPrompt(); this.createBulletinBoard(); this.createCrewBoard(); this.createWoodsSign();
     // /roam: stroll right into the plaza (alley/buildings are E-gated, so safe), then
@@ -280,10 +278,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.roamConfig = { deepX: 1450, exitX: 0 };
     this.resetRoam();
     onNextAvatarSync(() => {
-      this.generateWalkFrames(getAvatar());
-      if (this.textures.exists('player')) this.textures.remove('player');
-      this.textures.addCanvas('player', renderHubSprite(getAvatar()));
-      this.player?.setTexture('player');
+      if (this.ensureHubPlayerTextures(getAvatar())) this.player?.setTexture('player');
       sendAvatarUpdate();
     });
     // Re-render the player sprite when the local user changes their outfit
@@ -291,10 +286,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     // own ComputerUI callback chain still fires too; this is the catch-all
     // for panels that don't know which scene is active.
     const unsubLocalAvatar = onLocalAvatarChange(() => {
-      this.generateWalkFrames(getAvatar());
-      if (this.textures.exists('player')) this.textures.remove('player');
-      this.textures.addCanvas('player', renderHubSprite(getAvatar()));
-      this.player?.setTexture('player');
+      if (this.ensureHubPlayerTextures(getAvatar())) this.player?.setTexture('player');
     });
     this.events.once('shutdown', unsubLocalAvatar);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
@@ -351,7 +343,6 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.batGraphics?.destroy(); this.batEngine = null;
       this.halloweenGraphics?.destroy(); this.glowingEyes = null; this.groundFog = null;
       this.valentineGraphics?.destroy(); this.heartsGraphics?.destroy(); this.heartsEngine = null;
-      this.chimneyGraphics?.destroy(); this.chimneyParticles = [];
     });
   }
 
@@ -395,8 +386,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       this.heartsEngine.tick(time, delta);
       drawHeartsPhaser(this.heartsGraphics, this.heartsEngine);
     }
-    this.updateDustParticles(delta); this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
-    this.updateChimneySmoke(delta);
+    this.updateNeonFlicker(delta); this.updatePlayerGlow(time);
 
     // Walk animation — bob up/down and alternate leg frame
     const isWalking = this.isKeyboardMoving || this.isMoving || this.targetX !== null;
@@ -631,70 +621,59 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
     this.parallaxBg.x = WORLD_WIDTH / 2 - this.cameras.main.scrollX * ANIM.parallaxFactor;
   }
 
-  private initDustParticles(): void {
-    const c = [P.pink, P.purp, P.amber, P.teal, P.lcream];
-    for (let i = 0; i < 40; i++) {
-      this.dustParticles.push({
-        x: Math.random() * WORLD_WIDTH,
-        y: 50 + Math.random() * (GROUND_Y - 60),
-        vx: -0.1 + Math.random() * 0.2,
-        vy: -0.05 + Math.random() * 0.1,
-        alpha: 0.05 + Math.random() * 0.12,
-        size: Math.random() > 0.8 ? 2 : 1,
-        color: c[Math.floor(Math.random() * c.length)],
-      });
+  /** Bake particle textures + spin up GPU emitters for the ambient FX (floating dust,
+   *  chimney smoke) and the player glow. These used to be per-frame Graphics that
+   *  re-tessellated thousands of circle/rect triangles EVERY render frame — ~80% of
+   *  this scene's render cost. Emitters batch into one draw call with a static texture;
+   *  baked images are a single quad. No per-frame tessellation, no per-frame update().
+   */
+  private setupWorldFX(): void {
+    this.bakeRadialTexture('hub_dust', 6, '255,255,255', 1);
+    this.bakeRadialTexture('hub_smoke', 32, '187,187,204', 1);
+    this.bakeRadialTexture('hub_glow', 48, '93,202,165', 0.5);
+
+    // Floating dust motes drifting across the world.
+    this.add.particles(0, 0, 'hub_dust', {
+      x: { min: 0, max: WORLD_WIDTH },
+      y: { min: 40, max: GROUND_Y - 10 },
+      lifespan: 9000,
+      speedX: { min: -6, max: 6 },
+      speedY: { min: -3, max: 3 },
+      scale: { min: 0.4, max: 0.9 },
+      alpha: { min: 0.05, max: 0.16 },
+      tint: [0xff71ce, 0x7b68ee, 0xf0b040, 0x5dcaa5, 0xfff5e6],
+      frequency: 225, // ~40 motes alive at any time (lifespan / freq)
+      quantity: 1,
+    }).setDepth(5);
+
+    // Chimney smoke — one rising/fading/growing emitter per chimney.
+    for (const [cx, cy] of this.CHIMNEYS) {
+      this.add.particles(cx + 3, cy, 'hub_smoke', {
+        lifespan: { min: 2200, max: 4000 },
+        speedX: { min: -12, max: 12 },
+        speedY: { min: -50, max: -20 },
+        scale: { start: 0.18, end: 0.78 },
+        alpha: { start: 0.26, end: 0 },
+        frequency: 180,
+        quantity: 1,
+        tint: 0xbbbbcc,
+      }).setDepth(1);
     }
+
+    // Player breathing glow — a baked radial texture, just moved + faded each frame.
+    this.playerGlow = this.add.image(0, 0, 'hub_glow').setOrigin(0.5).setScale(1, 0.34).setDepth(9);
   }
 
-  private updateDustParticles(d: number): void {
-    this.dustGraphics.clear();
-    const dt = d / 16;
-    this.dustParticles.forEach(p => {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      if (p.x < 0) p.x = WORLD_WIDTH;
-      if (p.x > WORLD_WIDTH) p.x = 0;
-      if (p.y < 40) p.y = GROUND_Y - 20;
-      if (p.y > GROUND_Y - 10) p.y = 50;
-      const rgb = hexToRgb(p.color);
-      this.dustGraphics.fillStyle(Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b), p.alpha);
-      this.dustGraphics.fillRect(p.x, p.y, p.size, p.size);
-    });
-  }
-  private updateChimneySmoke(delta: number): void {
-    this.chimneySpawnTimer += delta;
-    if (this.chimneySpawnTimer > 90) {
-      this.chimneySpawnTimer = 0;
-      for (const [cx, cy] of this.CHIMNEYS) {
-        if (Math.random() > 0.45) {
-          this.chimneyParticles.push({
-            x: cx + 3 + (Math.random() - 0.5) * 4,
-            y: cy,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: -(0.35 + Math.random() * 0.5),
-            life: 0,
-            maxLife: 2200 + Math.random() * 1800,
-            size: 3 + Math.random() * 3,
-          });
-        }
-      }
-    }
-    this.chimneyGraphics.clear();
-    const dt = delta / 16;
-    for (let i = this.chimneyParticles.length - 1; i >= 0; i--) {
-      const p = this.chimneyParticles[i];
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vx += (Math.random() - 0.5) * 0.025;
-      p.life += delta;
-      const progress = p.life / p.maxLife;
-      if (progress >= 1) { this.chimneyParticles.splice(i, 1); continue; }
-      const alpha = progress < 0.15 ? progress / 0.15 : (1 - progress) / 0.85;
-      const radius = p.size + progress * 5;
-      this.chimneyGraphics.fillStyle(0xbbbbcc, alpha * 0.28);
-      this.chimneyGraphics.fillCircle(p.x, p.y, radius);
-    }
-    if (this.chimneyParticles.length > 120) this.chimneyParticles = this.chimneyParticles.slice(-90);
+  /** One-time soft radial-gradient texture (rgb = "r,g,b"), used for emitters/glow. */
+  private bakeRadialTexture(key: string, size: number, rgb: string, innerAlpha: number): void {
+    if (this.textures.exists(key)) return;
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const ctx = c.getContext('2d')!;
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, `rgba(${rgb},${innerAlpha})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+    this.textures.addCanvas(key, c);
   }
   private updateNeonFlicker(d: number): void {
     this.neonTimer += d;
@@ -706,18 +685,11 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
 
   private updatePlayerGlow(t: number): void {
     const p = 0.06 + Math.sin(t * ANIM.breatheSpeed) * 0.025;
-    this.playerGlow.clear();
-    this.playerGlow.setPosition(this.player.x, this.player.y);
-    this.playerGlow.fillStyle(hexToNum(P.teal), p * 0.4);
-    this.playerGlow.fillEllipse(0, -1, 36, 10);
-    this.playerGlow.fillStyle(hexToNum(P.teal), p);
-    this.playerGlow.fillEllipse(0, -1, 24, 6);
+    this.playerGlow.setPosition(this.player.x, this.player.y - 1).setAlpha(p * 4);
   }
 
   // ── Player ──
   private createPlayer(): void {
-    this.playerGlow = this.add.graphics().setDepth(9);
-
     let sx = 400;
     if (this.returnFromRoom === 'woods') {
       sx = 60;
@@ -738,17 +710,11 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: P.lpurp, align: 'center',
     }).setOrigin(0.5).setDepth(11).setAlpha(myStatus ? 1 : 0);
 
-    this.generateWalkFrames(getAvatar());
-    itemImagesReady.then(() => {
-      this.generateWalkFrames(getAvatar());
-      if (this.textures.exists('player')) this.textures.remove('player');
-      this.textures.addCanvas('player', renderHubSprite(getAvatar()));
-      this.player?.setTexture('player');
-    });
-  }
-
-  private generateWalkFrames(avatar = getAvatar()): void {
-    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
+    // Cached: skips the 5 avatar canvas renders when re-entering with an unchanged
+    // avatar (the main scene re-entry spike). itemImagesReady fires once on first load.
+    this.ensureHubPlayerTextures(getAvatar());
+    this.player.setTexture('player');
+    itemImagesReady.then(() => { if (this.ensureHubPlayerTextures(getAvatar())) this.player?.setTexture('player'); });
   }
   private updateMovement(delta: number): void {
     if (!isPresenceReady()) return;
@@ -760,7 +726,7 @@ this.chimneyGraphics = this.add.graphics().setDepth(1);
       if (rv == null) { this.isKeyboardMoving = false; return; }
       vx = rv;
     } else {
-      const c = this.input.keyboard?.createCursorKeys();
+      const c = (this._cursors ??= this.input.keyboard?.createCursorKeys());
       if (c) {
         if (c.left.isDown) vx = -PLAYER_SPEED;
         else if (c.right.isDown) vx = PLAYER_SPEED;

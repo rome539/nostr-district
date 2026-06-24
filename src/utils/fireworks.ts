@@ -6,6 +6,17 @@ export function isJuly4thPeriod(): boolean {
   return d.getMonth() === 6 && d.getDate() >= 3 && d.getDate() <= 6;
 }
 
+// Wider window than the fireworks display (July 3–6): the full Independence drop
+// week (July 1–7), so a login any day that week earns the 🎆 Liberty name color.
+// NOTE: gates the 🎆 Liberty grant, which is PERMANENT + relay-backed — so unlike
+// isJuly4thPeriod (cosmetic fireworks only), the ?holiday=july4 override is DEV-only.
+// Otherwise anyone guessing the param in prod could mint the color year-round.
+export function isJuly4thWindow(): boolean {
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('holiday') === 'july4') return true;
+  const d = new Date();
+  return d.getMonth() === 6 && d.getDate() >= 1 && d.getDate() <= 7;
+}
+
 const COLORS_CSS = [
   '#ff2222', '#ff5555', '#ff8888',
   '#ffffff', '#ffeeee',
@@ -281,7 +292,11 @@ export function drawFireworksPhaser(
   fw: FireworksEngine,
   accept?: (x: number, y: number) => boolean,
 ): void {
+  // fillRect, not fillCircle: Phaser tessellates every circle into ~32 triangles, so a
+  // few hundred particles is thousands of tris/frame. At these radii (≤1.5px) a square
+  // is visually identical and ~16× cheaper to build + upload.
   const r = fw.radius;
+  const d = r * 2;
   for (const rocket of fw.rockets) {
     for (let i = 0; i < rocket.trail.length; i++) {
       const pt = rocket.trail[i];
@@ -291,12 +306,12 @@ export function drawFireworksPhaser(
     }
     if (!accept || accept(rocket.x, rocket.y)) {
       g.fillStyle(0xffffff, 1);
-      g.fillCircle(rocket.x, rocket.y, r);
+      g.fillRect(rocket.x - r, rocket.y - r, d, d);
     }
   }
   for (const p of fw.particles) {
     if (accept && !accept(p.x, p.y)) continue;
     g.fillStyle(fw.colorNum(p.ci), p.alpha * 0.85);
-    g.fillCircle(p.x, p.y, r);
+    g.fillRect(p.x - r, p.y - r, d, d);
   }
 }

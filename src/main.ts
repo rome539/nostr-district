@@ -196,6 +196,11 @@ function startGame(): void {
           pixelArt: true,
           roundPixels: true,
           antialias: false,
+          // Cap the game loop to 60fps. Phaser otherwise drives the loop off
+          // requestAnimationFrame, which fires at the DISPLAY refresh rate — on a 120Hz
+          // ProMotion Mac that's 120fps, running every per-frame system twice as often
+          // and ~doubling CPU/energy for no visible benefit at this art style.
+          fps: { limit: 60, target: 60 },
           scale: {
             mode: Phaser.Scale.FIT,
             autoCenter: Phaser.Scale.NO_CENTER,
@@ -215,6 +220,38 @@ function startGame(): void {
             },
           },
         });
+
+        // Battery saver: a Phaser game renders EVERY animation frame for as long as the
+        // tab is open. Phaser's built-in "pause on hidden" only records a timestamp — it
+        // does not stop the loop. So sleep the loop (stops requestAnimationFrame entirely
+        // → ~0 CPU) only when the TAB itself is hidden (switched away / minimized), and
+        // wake it when the tab is shown again. A visible tab keeps running even if the
+        // window loses focus (clicked into another app) — that's intentional.
+        const syncRunState = (): void => {
+          const loop = game?.loop;
+          if (!loop) return;
+          const visible = document.visibilityState === 'visible';
+          if (visible && !loop.running) loop.wake();
+          else if (!visible && loop.running) loop.sleep();
+        };
+        document.addEventListener('visibilitychange', syncRunState);
+
+        // Free the WebGL context + all canvas textures on unload/reload. Logout does a
+        // location.reload(), and Safari REUSES the same Web Content process across it —
+        // it's slow to reclaim a heavy WebGL app's GPU/canvas memory, so repeated
+        // logout→reload→login piles up gigabytes. Tearing the game down explicitly and
+        // forcing context loss frees it before the reload instead of leaving it for GC.
+        window.addEventListener('pagehide', () => {
+          if (!game) return;
+          const canvas = game.canvas;
+          const gl = (canvas?.getContext('webgl2') || canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+          try { game.destroy(true, true); } catch { /* best effort on unload */ }
+          try { (game as unknown as { runDestroy?: () => void })?.runDestroy?.(); } catch { /* force synchronous */ }
+          game = null;
+          try { (gl?.getExtension('WEBGL_lose_context') as { loseContext(): void } | null)?.loseContext(); } catch { /* best effort */ }
+          try { if (canvas) { canvas.width = 0; canvas.height = 0; } } catch { /* */ }
+        });
+
         if (import.meta.env.DEV && game) {
           (window as unknown as { __nd_game?: Phaser.Game }).__nd_game = game;
           // Side-effect import wires window.__refreshClothing() and the
@@ -400,5 +437,30 @@ const loginScreen = new LoginScreen({
     }
   },
 });
+
+// Vite HMR cleanup: a hot update re-evaluates this entry but the `__nostr_district_started`
+// flag lives on `window` (so it survives HMR), which meant the previous Phaser game and
+// LoginScreen were never torn down — they piled up across a long dev session (each game =
+// hundreds of canvas textures + audio buffers = the GBs seen in Activity Monitor). Tear
+// them down + reset the flag before replacement so the re-evaluated module rebuilds clean.
+// Dev-only: production has no HMR (and logout does a full reload), so it's never affected.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    // Phaser's game.destroy() is DEFERRED to the next game-loop tick — which never runs
+    // during an HMR dispose, so the WebGL context + canvas textures are never freed and
+    // each hot update leaks a whole game (the GBs in Activity Monitor). Force it:
+    const canvas = game?.canvas as HTMLCanvasElement | undefined;
+    const gl = (canvas?.getContext('webgl2') || canvas?.getContext('webgl')) as WebGLRenderingContext | null;
+    try { game?.destroy(true, true); } catch { /* best effort */ }
+    try { (game as unknown as { runDestroy?: () => void })?.runDestroy?.(); } catch { /* force synchronous teardown */ }
+    game = null;
+    // Drop the GPU context + textures immediately (don't wait for Safari's lazy GC).
+    try { (gl?.getExtension('WEBGL_lose_context') as { loseContext(): void } | null)?.loseContext(); } catch { /* */ }
+    // Zero the canvas backing store so its native memory is released too.
+    try { if (canvas) { canvas.width = 0; canvas.height = 0; } } catch { /* */ }
+    try { loginScreen?.destroy(); } catch { /* best effort */ }
+    w.__nostr_district_started = false;
+  });
+}
 
 } // end of HMR guard else block

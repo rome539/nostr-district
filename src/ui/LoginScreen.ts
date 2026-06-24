@@ -60,6 +60,9 @@ export class LoginScreen {
   private _hasExtension = false;
 
   private canvas: HTMLCanvasElement | null = null;
+  private bgCanvas: HTMLCanvasElement | null = null; // baked sky (back) — blitted first each frame
+  private fgCanvas: HTMLCanvasElement | null = null; // baked buildings + fog (front) — blitted last, occludes stars/fireworks
+  private accent = '#5dcaa5';                         // cached --nd-accent (reading it per-frame forced a style recalc)
   private animFrameId: number | null = null;
   private buildings: LoginBuilding[] = [];
   private stars: Star[] = [];
@@ -74,7 +77,9 @@ export class LoginScreen {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
+    this.refreshAccent();
     this.generateBuildings();
+    this.renderBackground();
     this.holidayFX.resize(window.innerWidth, window.innerHeight);
   };
 
@@ -1234,14 +1239,22 @@ export class LoginScreen {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
+    this.refreshAccent();
     this.generateBuildings();
+    this.renderBackground();
     this.holidayFX.init(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', this.handleResize);
+    // Run at full refresh rate (60fps). The heavy work is baked into an offscreen
+    // skyline that's just blitted each frame, so the per-frame cost is low.
     const loop = (time: number) => {
       this.drawFrame(time);
       this.animFrameId = requestAnimationFrame(loop);
     };
     this.animFrameId = requestAnimationFrame(loop);
+  }
+
+  private refreshAccent(): void {
+    this.accent = getComputedStyle(document.documentElement).getPropertyValue('--nd-accent').trim() || '#5dcaa5';
   }
 
   private generateBuildings(): void {
@@ -1335,32 +1348,20 @@ export class LoginScreen {
     const ctx = canvas.getContext('2d')!;
     const t = time * 0.001;
 
-    // Theme accent only for tiny neon signs — everything else is fixed night colors
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--nd-accent').trim() || '#5dcaa5';
-    const pink = '#ff71ce';
-    const purp = '#7b68ee';
+    // Baked SKY (back layer) — opaque, so this also clears the previous frame. The
+    // dynamic layers (stars, shooting star, holiday FX) draw on top of it, then the
+    // baked FOREGROUND (buildings + fog) blits last so it occludes them — same
+    // depth order as the original per-frame draw, just without recomputing it.
+    if (this.bgCanvas) ctx.drawImage(this.bgCanvas, 0, 0);
+    else ctx.clearRect(0, 0, W, H);
 
-    const groundY = Math.floor(H * 0.82);
-
-    ctx.clearRect(0, 0, W, H);
-
-    // ── Fixed starry night sky ──────────────────────────────────────────────
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0,   '#01000a');
-    sky.addColorStop(0.4, '#03010f');
-    sky.addColorStop(0.75,'#060218');
-    sky.addColorStop(1,   '#0a0320');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-
-    // Stars — each with its own color
+    // Stars — twinkle. Drawn as 1–2px fillRects (far cheaper than ~1000 arc()/frame).
     for (const s of this.stars) {
       const twinkle = s.base + Math.sin(t * s.speed + s.x * 0.05) * (1 - s.base) * 0.6;
       ctx.globalAlpha = twinkle;
       ctx.fillStyle = s.color;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
+      const sz = s.r < 0.9 ? 1 : 2;
+      ctx.fillRect(s.x | 0, s.y | 0, sz, sz);
     }
     ctx.globalAlpha = 1;
 
@@ -1441,23 +1442,65 @@ export class LoginScreen {
     // ── Holiday FX (fireworks, bats, moon, etc.) ─────────────────────────────
     this.holidayFX.tick(ctx, time);
 
-    // ── Far buildings (tiny silhouettes) ────────────────────────────────────
+    // Baked foreground (buildings + windows + signs + fog) on top — restores the
+    // skyline occluding the stars / shooting star / fireworks behind it.
+    if (this.fgCanvas) ctx.drawImage(this.fgCanvas, 0, 0);
+  }
+
+  /**
+   * Bake every time-invariant layer of the skyline (sky gradient, far/near
+   * buildings, lit windows, neon signs, fog, ground, horizon glow) into an
+   * offscreen canvas ONCE. drawFrame() then just blits this each frame instead of
+   * recomputing ~1000 building/window rects + four gradients 30–60×/second.
+   *
+   * The subtle per-frame window flicker and neon pulse are frozen here (sampled at
+   * their phase, no time term) — imperceptible next to the star twinkle, and it lets
+   * the whole skyline collapse to a single drawImage in the hot path.
+   */
+  private renderBackground(): void {
+    const W = this.canvas!.width;
+    const H = this.canvas!.height;
+    const accent = this.accent;
+    const pink = '#ff71ce';
+    const purp = '#7b68ee';
+    const groundY = Math.floor(H * 0.82);
+
+    // ── Back layer: just the sky gradient (stars/fireworks draw over this) ──────
+    if (!this.bgCanvas) this.bgCanvas = document.createElement('canvas');
+    this.bgCanvas.width = W;
+    this.bgCanvas.height = H;
+    const bg = this.bgCanvas.getContext('2d')!;
+    const sky = bg.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0,   '#01000a');
+    sky.addColorStop(0.4, '#03010f');
+    sky.addColorStop(0.75,'#060218');
+    sky.addColorStop(1,   '#0a0320');
+    bg.fillStyle = sky;
+    bg.fillRect(0, 0, W, H);
+
+    // ── Front layer: buildings + windows + signs + fog (transparent above) ─────
+    if (!this.fgCanvas) this.fgCanvas = document.createElement('canvas');
+    this.fgCanvas.width = W;
+    this.fgCanvas.height = H;
+    const ctx = this.fgCanvas.getContext('2d')!;
+    ctx.clearRect(0, 0, W, H);
+
+    // Far buildings (tiny silhouettes)
     for (const b of this.buildings) {
       if (!b.far) continue;
       ctx.fillStyle = b.shade;
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
 
-    // ── Near buildings with sparse windows and rare neon ────────────────────
+    // Near buildings with sparse windows and rare neon
     for (const b of this.buildings) {
       if (b.far) continue;
       ctx.fillStyle = b.shade;
       ctx.fillRect(b.x, b.y, b.w, b.h);
 
-      // Lit windows — warm pale amber/white at distance
+      // Lit windows — warm pale amber/white at distance (frozen brightness)
       for (const w of b.windows) {
-        const flicker = Math.sin(t * 0.6 + w.flicker * 3.7) > 0.96 ? 0.05 : 1;
-        const a = (0.2 + Math.sin(t * 0.2 + w.flicker) * 0.07) * flicker;
+        const a = 0.2 + Math.sin(w.flicker) * 0.07;
         ctx.fillStyle = `rgba(220,190,130,${a.toFixed(3)})`;
         ctx.fillRect(w.x, w.y, 5, 6);
       }
@@ -1465,7 +1508,7 @@ export class LoginScreen {
       // Tiny neon sign (uses theme accent so it feels part of the world)
       if (b.sign) {
         const col = b.sign.hue === 'accent' ? accent : b.sign.hue === 'purp' ? purp : pink;
-        const pulse = 0.4 + Math.sin(t * 1.6 + b.x * 0.015) * 0.35;
+        const pulse = 0.4 + Math.sin(b.x * 0.015) * 0.35;
         ctx.save();
         ctx.shadowColor = col;
         ctx.shadowBlur = 6 * pulse;
@@ -1475,8 +1518,7 @@ export class LoginScreen {
       }
     }
 
-    // ── Fog / distance haze — multiple layers ────────────────────────────────
-    // Deep fog at horizon blending buildings into darkness
+    // Fog / distance haze — deep fog at horizon
     const fog1 = ctx.createLinearGradient(0, groundY - 80, 0, groundY + 20);
     fog1.addColorStop(0, 'rgba(3,1,14,0)');
     fog1.addColorStop(0.5, 'rgba(4,1,16,0.55)');

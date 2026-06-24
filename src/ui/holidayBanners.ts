@@ -499,6 +499,24 @@ export function findHoliday(id: string): Holiday | null {
   return HOLIDAYS.find(h => h.id === id) ?? null;
 }
 
+/** True if `now` falls inside holiday `id`'s REAL-calendar window — no `?holiday=`
+ *  override. Used to gate permanent seasonal rewards (e.g. the 🦤 Nostrich color),
+ *  where honouring the URL param would let anyone mint the reward out of season. */
+export function isHolidayWindowNow(id: string, now: Date = new Date()): boolean {
+  const h = findHoliday(id);
+  if (!h) return false;
+  const m = now.getMonth() + 1, d = now.getDate();
+  if (h.specificDates) {
+    return h.specificDates.some(w => w.year === now.getFullYear()
+      && afterOrEqual(m, d, w.monthStart, w.dayStart) && beforeOrEqual(m, d, w.monthEnd, w.dayEnd));
+  }
+  if (h.monthDayStart && h.monthDayEnd) {
+    return afterOrEqual(m, d, h.monthDayStart[0], h.monthDayStart[1])
+        && beforeOrEqual(m, d, h.monthDayEnd[0], h.monthDayEnd[1]);
+  }
+  return false;
+}
+
 export function getActiveHoliday(now: Date = new Date()): Holiday | null {
   // Simulate any holiday with a URL param — http://localhost:3000/?holiday=halloween
   // Drives the banner/theme (and the matching overrides cover scavenge spots +

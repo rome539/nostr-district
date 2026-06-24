@@ -827,7 +827,7 @@ export class RoomScene extends BaseScene {
   private updateMovement(delta: number): void {
     if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
-    const c = this.input.keyboard?.createCursorKeys();
+    const c = (this._cursors ??= this.input.keyboard?.createCursorKeys());
     let vx = 0, vy = 0;
     const sp = 250;
     if (c) {

@@ -10,6 +10,7 @@ import { GifPicker, isGifUrl, gifSrcAttr } from './GifPicker';
 import { renderEmojis } from '../nostr/emojiService';
 import { attachEmojiAutocomplete } from './emojiAutocomplete';
 import { maybeTranslate } from '../i18n/translator';
+import { OSTRICH_SENTINEL_L, OSTRICH_SENTINEL_R, ostrichImgHtml } from '../utils/ostrichGlyph';
 
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 
@@ -227,9 +228,14 @@ export class ChatUI {
     // Single tight glow — the old double-layer (6px + 12px) washed names into
     // unreadable blobs at chat font size.
     const neonGlow = NEON_COLORS.has(color) ? `;text-shadow:0 0 3px ${color}99` : '';
+    // 🦤 Nostrich: swap the sentinel chars (inserted after escapeHtml, so the <img>
+    // markup survives) for the purple-ostrich images flanking the name.
+    const nameInner = escapeHtml(name)
+      .split(OSTRICH_SENTINEL_L).join(ostrichImgHtml(false))
+      .split(OSTRICH_SENTINEL_R).join(ostrichImgHtml(true));
     const nameHtml = (pubkey && this.onNameClick)
-      ? `<span style="color:${color};font-weight:bold;cursor:pointer;${neonGlow}" data-pk="${pubkey}">${escapeHtml(name)}</span>`
-      : `<span style="color:${color};font-weight:bold;${neonGlow}">${escapeHtml(name)}</span>`;
+      ? `<span style="color:${color};font-weight:bold;cursor:pointer;${neonGlow}" data-pk="${pubkey}">${nameInner}</span>`
+      : `<span style="color:${color};font-weight:bold;${neonGlow}">${nameInner}</span>`;
     msg.innerHTML = `${nameHtml}: <span class="cu-msg-body" style="cursor:pointer;" title="Click to toggle original language">${renderContent(text, emojis)}</span>`;
     if (pubkey && this.onNameClick) {
       msg.querySelector('span')!.addEventListener('click', () => this.onNameClick!(pubkey, name));

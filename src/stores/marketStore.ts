@@ -70,7 +70,30 @@ export function getRainbowColor(time: number): string {
   return `hsl(${hue},90%,68%)`;
 }
 
-export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', '#f0b040', '#c0c8d0']);
+// 🎆 Liberty (July 4th) — the flag palette. Shared by the flowing name gradient
+// (getGradientStops) and the cycling solid chat color (getAnimatedColor). Looped
+// red→white→blue→white so the cycle returns to red seamlessly.
+const LIBERTY_RGB: [number, number, number][] = [
+  [228, 44, 44],   // red
+  [244, 244, 244], // white
+  [48, 92, 232],   // blue
+  [244, 244, 244], // white (back to red)
+];
+function lerpRgb(a: [number, number, number], b: [number, number, number], t: number): string {
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+/** Continuous sample of the looped red→white→blue palette at param p (loops every 1). */
+function libertyAt(p: number): string {
+  const n = LIBERTY_RGB.length;
+  const x = (((p % 1) + 1) % 1) * n;
+  const i = Math.floor(x) % n;
+  return lerpRgb(LIBERTY_RGB[i], LIBERTY_RGB[(i + 1) % n], x - Math.floor(x));
+}
+
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', 'liberty', 'nostrich', '#f0b040', '#c0c8d0']);
 
 export function isAnimatedColor(color: string): boolean {
   return ANIMATED_COLORS.has(color);
@@ -129,6 +152,13 @@ export function getAnimatedColor(color: string, time: number): string {
       const lit = 44 + glint * 48;  // 44% deep molten → 92% white-hot glint
       return `hsl(${hue},${sat}%,${lit}%)`;
     }
+    case 'liberty': return libertyAt(time / 3000); // ~3s red→white→blue cycle (chat fallback)
+    case 'nostrich': { // 🦤 Nostrich — nostr-purple with a brief white-hot glint (like ₿ Bullion)
+      const glint = Math.pow(Math.sin(time / 240) * 0.5 + 0.5, 5);
+      const sat = 90 - glint * 55; // purple → washes toward white on the glint
+      const lit = 70 + glint * 22; // 70% → 92% white-hot
+      return `hsl(258,${sat}%,${lit}%)`;
+    }
     case 'vhs': { // retro VHS chroma — magenta↔cyan bleed with brief tracking-error glints
       const drift = Math.sin(time / 600) * 0.5 + 0.5;             // magenta↔cyan
       const hue = 300 - drift * 120;                              // 300 magenta → 180 cyan
@@ -146,7 +176,7 @@ export function getAnimatedColor(color: string, time: number): string {
 // the name that FLOWS left→right over time — distinctly different from a hue cycle.
 // The name-tag (Phaser setFill) + shop preview (canvas gradient) use getGradientStops;
 // contexts that can't gradient (chat) fall back to the solid getAnimatedColor value.
-export const GRADIENT_COLORS = new Set(['halving', 'vhs']);
+export const GRADIENT_COLORS = new Set(['halving', 'vhs', 'liberty']);
 export function isGradientColor(color: string): boolean { return GRADIENT_COLORS.has(color); }
 
 // Mempool fee hue at a continuous param t (ping-pong teal↔red, period 1).
@@ -170,6 +200,15 @@ export function getGradientStops(value: string, time: number): { pos: number; co
       const pos = i / N;
       const hue = feeHueAt(pos * 1.3 + time / 3500); // spread across the name + time sweep
       out.push({ pos, color: `hsl(${hue.toFixed(0)},80%,54%)` });
+    }
+    return out;
+  }
+  if (value === 'liberty') {
+    // Flag bands streaming left→right: red→white→blue flowing across the name.
+    const N = 10;
+    for (let i = 0; i <= N; i++) {
+      const pos = i / N;
+      out.push({ pos, color: libertyAt(pos * 1.2 + time / 3200) });
     }
     return out;
   }
@@ -425,6 +464,8 @@ export const CATALOG: MarketItem[] = [
   { id: 'rod_cryptid',     name: 'Cryptid Rod',       slot: 'rodSkin',   value: 'cryptid',   price: 0, tier: 'rare', earn: true },
   { id: 'color_bullion',   name: '₿ Bullion',         slot: 'nameColor', value: 'bullion',   price: 0, tier: 'rare', earn: true },
   { id: 'color_halving',   name: '⛏ Halving',         slot: 'nameColor', value: 'halving',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during Halving week' }, // seasonal: only obtainable in the Halving celebration window
+  { id: 'color_liberty',   name: '🎆 Liberty',        slot: 'nameColor', value: 'liberty',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during July 4th week' }, // seasonal: only obtainable in the Independence (July 1–7) window
+  { id: 'color_nostrich',  name: '🦤 Nostrich',       slot: 'nameColor', value: 'nostrich',  price: 0, tier: 'rare', earn: true, earnHint: "Log in during Nostr's Birthday" }, // seasonal: only obtainable in the Nostr's Birthday (Nov 7–11) window
   { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
   { id: 'color_vhs',       name: 'VHS',               slot: 'nameColor', value: 'vhs',       price: 0, tier: 'rare', earn: true },
   // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)

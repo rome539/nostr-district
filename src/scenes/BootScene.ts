@@ -777,6 +777,10 @@ export class BootScene extends Phaser.Scene {
     ht.imageSmoothingEnabled = false;
     ht.drawImage(skyCanvas, 0, 0);
     ht.drawImage(canvas, 0, 0);
+    // Reuse that composite as a single sky+buildings texture: outside the July-4 window
+    // nothing renders between the sky and the skyline, so the hub draws ONE opaque layer
+    // instead of two stacked full-screen images (one fewer full-screen blend per frame).
+    this.textures.addCanvas('district_combined', hubThumb);
     captureThumb('hub', hubThumb);
     captureThumb('woods', WoodsScene.generateBg());
     captureThumb('alley', AlleyScene.generateBg());

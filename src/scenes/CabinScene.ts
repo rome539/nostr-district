@@ -83,11 +83,7 @@ export class CabinScene extends BaseScene {
 
     this.createPlayer();
     const rerenderPlayerSprite = () => {
-      const av = getAvatar();
-      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
-      if (this.textures.exists('player')) this.textures.remove('player');
-      this.textures.addCanvas('player', renderHubSprite(av));
-      this.player?.setTexture('player');
+      if (this.ensureHubPlayerTextures(getAvatar())) this.player?.setTexture('player');
     };
     onNextAvatarSync(rerenderPlayerSprite);
     const unsubLocalAvatar = onLocalAvatarChange(rerenderPlayerSprite);
@@ -463,7 +459,7 @@ export class CabinScene extends BaseScene {
     if (this.shouldBlockPanelKeys()) { this.isKeyboardMoving = false; return; }
     if (!isPresenceReady()) return;
     const CABIN_SPEED = PLAYER_SPEED * 1.5;
-    const c = this.input.keyboard?.createCursorKeys();
+    const c = (this._cursors ??= this.input.keyboard?.createCursorKeys());
     let vx = 0;
     if (c) {
       if (c.left.isDown) vx = -CABIN_SPEED;
@@ -1137,15 +1133,8 @@ export class CabinScene extends BaseScene {
   // PLAYER
   // ══════════════════════════════════════════════════════════════════
   private createPlayer(): void {
-    const avatar = getAvatar();
-    for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(avatar, i)); }
-    itemImagesReady.then(() => {
-      const av = getAvatar();
-      for (let i = 0; i < 4; i++) { if (this.textures.exists(`player_walk${i}`)) this.textures.remove(`player_walk${i}`); this.textures.addCanvas(`player_walk${i}`, renderHubSprite(av, i)); }
-      if (this.textures.exists('player')) this.textures.remove('player');
-      this.textures.addCanvas('player', renderHubSprite(av));
-      this.player?.setTexture('player');
-    });
+    this.ensureHubPlayerTextures(getAvatar());
+    itemImagesReady.then(() => { if (this.ensureHubPlayerTextures(getAvatar())) this.player?.setTexture('player'); });
     this.player = this.add.image(140, this.playerY, 'player').setOrigin(0.5, 1).setScale(2).setDepth(10);
     this.playerSprite = this.player;
     const name = this.registry.get('playerName') || 'guest';

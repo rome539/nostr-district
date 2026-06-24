@@ -75,15 +75,29 @@ export const DEFAULT_RELAYS = [
 // rest of the session.
 const PROXY_FLAP_WINDOW_MS = 3000;
 
+// ── Circuit breaker for chronically-bad relays ──
+// A connection that never stays open at least STABLE_MS (or fails to open at
+// all) counts as a "strike". After MAX_STRIKES consecutive strikes the relay is
+// quarantined: reconnects pause for QUARANTINE_MS, then it gets one fresh shot.
+// This stops dead/flapping relays (relay.nostr.net, offchain.pub) from looping
+// reconnects forever without removing them from the pool — a stable connection
+// clears the strikes and the relay returns to normal.
+const STABLE_MS = 45000;     // a connection must hold this long to be "healthy"
+const MAX_STRIKES = 5;       // consecutive unstable connects before quarantine
+const QUARANTINE_MS = 300000; // 5-minute cooldown before retrying a bad relay
+
 interface ManagedRelay {
   url: string;
   ws: WebSocket | null;
   backoff: number;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   keepaliveTimer: ReturnType<typeof setInterval> | null;
+  stableTimer?: ReturnType<typeof setTimeout> | null; // fires once a connection proves stable → resets backoff + strikes
   isDMRelay: boolean;
   useDirect: boolean; // true after proxy fails — use direct connection
   openedAt?: number;  // timestamp of last successful onopen (for flap detection)
+  strikes: number;    // consecutive unstable connects (circuit breaker)
+  quarantinedUntil?: number; // timestamp until which reconnects are paused
   pingSubId?: string;
   pingStart?: number;
   latencyMs?: number;
@@ -120,6 +134,7 @@ export class RelayManager {
         keepaliveTimer: null,
         isDMRelay: dmSet.has(url),
         useDirect: false,
+        strikes: 0,
       });
     }
   }
@@ -141,6 +156,7 @@ export class RelayManager {
     for (const relay of this.relays.values()) {
       if (relay.reconnectTimer) clearTimeout(relay.reconnectTimer);
       if (relay.keepaliveTimer) clearInterval(relay.keepaliveTimer);
+      if (relay.stableTimer) clearTimeout(relay.stableTimer);
       if (relay.ws) {
         relay.ws.onopen = null;
         relay.ws.onmessage = null;
@@ -186,10 +202,15 @@ export class RelayManager {
     }
 
     relay.ws.onopen = () => {
-      console.log(`[Relay] Connected: ${relay.url}`);
-      relay.backoff = 1000; // reset backoff on successful connection
+      if (import.meta.env.DEV) console.log(`[Relay] Connected: ${relay.url}`);
       relay.openedAt = Date.now();
       this.updateConnectedCount();
+      // Reset backoff + strikes only once the connection proves STABLE (stays open
+      // STABLE_MS). A relay that connects then drops (flapping, e.g. relay.nostr.net)
+      // never reaches this, so its strikes accumulate toward the circuit breaker
+      // instead of resetting its backoff on every brief connect.
+      if (relay.stableTimer) clearTimeout(relay.stableTimer);
+      relay.stableTimer = setTimeout(() => { relay.backoff = 1000; relay.strikes = 0; }, STABLE_MS);
 
       // Start keepalive ping every 30s
       if (relay.keepaliveTimer) clearInterval(relay.keepaliveTimer);
@@ -275,29 +296,44 @@ export class RelayManager {
     relay.ws.onerror = () => {
       // If we were trying the proxy and it failed, fall back to direct
       if (!relay.useDirect && RELAY_PROXY_BASE) {
-        console.log(`[Relay] Proxy failed for ${relay.url}, falling back to direct`);
+        if (import.meta.env.DEV) console.log(`[Relay] Proxy failed for ${relay.url}, falling back to direct`);
         relay.useDirect = true;
       }
       // onclose will fire after this, so we handle reconnect there
     };
 
     relay.ws.onclose = () => {
-      console.log(`[Relay] Disconnected: ${relay.url}`);
+      if (import.meta.env.DEV) console.log(`[Relay] Disconnected: ${relay.url}`);
       if (relay.keepaliveTimer) {
         clearInterval(relay.keepaliveTimer);
         relay.keepaliveTimer = null;
       }
+      // Cancel the pending "stable → reset backoff" check: the socket dropped before it
+      // proved stable, so its backoff must keep escalating rather than reset.
+      if (relay.stableTimer) { clearTimeout(relay.stableTimer); relay.stableTimer = null; }
 
       // Proxy flap detection: if we connected via the proxy and the socket
       // closed almost immediately after opening, the upstream relay is
       // likely rejecting our Cloudflare egress IP. Drop to a direct
       // connection on the next attempt instead of looping forever.
+      const everOpened = relay.openedAt !== undefined;
+      const openMs = everOpened ? Date.now() - relay.openedAt! : 0;
       const wasProxied = !relay.useDirect && RELAY_PROXY_BASE !== null;
-      const openMs = relay.openedAt ? Date.now() - relay.openedAt : Infinity;
-      if (wasProxied && openMs < PROXY_FLAP_WINDOW_MS) {
-        console.log(`[Relay] Proxy flap for ${relay.url} (${openMs}ms) — falling back to direct`);
+      if (wasProxied && everOpened && openMs < PROXY_FLAP_WINDOW_MS) {
+        if (import.meta.env.DEV) console.log(`[Relay] Proxy flap for ${relay.url} (${openMs}ms) — falling back to direct`);
         relay.useDirect = true;
         relay.backoff = 1000; // retry direct immediately, don't punish with backoff
+        relay.strikes = 0;    // a proxy flap isn't the relay's fault — don't quarantine it
+      } else if (!everOpened || openMs < STABLE_MS) {
+        // Circuit breaker: the socket failed to open, or dropped before proving
+        // stable. Count a strike; quarantine the relay once it hits MAX_STRIKES.
+        relay.strikes += 1;
+        if (relay.strikes >= MAX_STRIKES && !relay.quarantinedUntil) {
+          relay.quarantinedUntil = Date.now() + QUARANTINE_MS;
+          if (import.meta.env.DEV) {
+            console.log(`[Relay] Quarantining ${relay.url} for ${QUARANTINE_MS / 60000}min after ${relay.strikes} unstable connects`);
+          }
+        }
       }
 
       relay.openedAt = undefined;
@@ -311,10 +347,22 @@ export class RelayManager {
     if (this._destroyed) return;
     if (relay.reconnectTimer) return; // already scheduled
 
-    const delay = relay.backoff + Math.random() * 1000;
+    const now = Date.now();
+    const quarantined = relay.quarantinedUntil && relay.quarantinedUntil > now;
+    const delay = quarantined
+      ? relay.quarantinedUntil! - now + Math.random() * 1000
+      : relay.backoff + Math.random() * 1000;
+
     relay.reconnectTimer = setTimeout(() => {
       relay.reconnectTimer = null;
-      relay.backoff = Math.min(relay.backoff * 1.5, 30000); // cap at 30s
+      if (relay.quarantinedUntil && Date.now() >= relay.quarantinedUntil) {
+        // Coming out of quarantine — give the relay a clean slate for one shot.
+        relay.quarantinedUntil = undefined;
+        relay.strikes = 0;
+        relay.backoff = 1000;
+      } else {
+        relay.backoff = Math.min(relay.backoff * 1.5, 30000); // cap at 30s
+      }
       this.connectRelay(relay);
     }, delay);
   }

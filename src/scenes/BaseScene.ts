@@ -58,6 +58,7 @@ import { SettingsPanel } from '../ui/SettingsPanel';
 import { WalletPanel } from '../ui/WalletPanel';
 import { HotkeyModal } from '../ui/HotkeyModal';
 import { EmoteSet, EMOTE_FLAVORS, EMOTE_OFF_MSGS } from '../entities/EmoteSet';
+import { renderHubSprite, itemImagesReady } from '../entities/AvatarRenderer';
 import { SoundEngine } from '../audio/SoundEngine';
 import { EYE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../entities/avatar/eyeCycles';
 import { CHAR_ANIMS, charAnimStates } from '../entities/nameAnim';
@@ -90,6 +91,7 @@ import { AvatarConfig, deserializeAvatar, getDefaultAvatar, getAvatar } from '..
 import { getRainbowColor, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops } from '../stores/marketStore';
 import { MarketPanel } from '../ui/MarketPanel';
 import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
+import { NameOstrichPair, OSTRICH_SENTINEL_L, OSTRICH_SENTINEL_R } from '../utils/ostrichGlyph';
 import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
@@ -101,6 +103,11 @@ import { addSeenPubkey } from '../stores/seenPlayersStore';
 // ── Aura particle system (Phaser ParticleEmitter) ────────────────────────────
 
 // s = spriteHeight / 96  (room at scale 3 is the reference; hub/woods=0.33, alley/cabin=0.67)
+// Whether the item PNGs have finished loading — folded into the avatar-texture cache key
+// so the first render AFTER they load isn't skipped (same avatar hash, different output).
+let _hubItemsReady = false;
+itemImagesReady.then(() => { _hubItemsReady = true; });
+
 const EYE_VFX_TYPES   = new Set(['cry']); // particle emitter eyes
 const NEON_COLORS     = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
 // Color-cycling eyes (palettes + speeds) — single source of truth in eyeCycles.ts.
@@ -144,6 +151,14 @@ function makeEyeVfxConfig(type: string, s: number): Phaser.Types.GameObjects.Par
 export function bullionName(name: string, nameColor?: string): string {
   const base = name.replace(/^₿ | ₿$/g, '');
   return nameColor === 'bullion' ? `₿ ${base} ₿` : base;
+}
+
+// Chat-name decoration: ₿ Bullion adds text brackets; 🦤 Nostrich wraps the name in
+// sentinel chars that ChatUI swaps for the purple-ostrich <img> (no ostrich glyph
+// exists, so it can't be a plain string wrap like bullion).
+export function decorateChatName(name: string, nameColor?: string): string {
+  const base = bullionName(name, nameColor);
+  return nameColor === 'nostrich' ? `${OSTRICH_SENTINEL_L}${base}${OSTRICH_SENTINEL_R}` : base;
 }
 
 // Paint a gradient name color (e.g. ⛏ Halving) as a horizontal gradient that flows
@@ -402,6 +417,9 @@ export interface OtherPlayer extends BaseOtherPlayer {
   // walk-frame animation (RoomScene)
   walkFrame?: number;
   walkTimer?: number;
+  // Cached parse of `avatar` — re-parsed only when the string changes (see otherAvatar()).
+  _avatarKey?: string;
+  _avatarParsed?: AvatarConfig | null;
 }
 
 /** Per-scene rendering & layout constants consumed by addOtherPlayer / updateOtherPlayers. */
@@ -486,6 +504,12 @@ export abstract class BaseScene extends Phaser.Scene {
   // Sparkler accessory — a live hand particle, one per player wearing it.
   private _localHandSparkler: HandSparkler | null = null;
   private _otherSparklerMap  = new Map<string, HandSparkler>();
+  // 🦤 Nostrich name color — purple ostriches flanking the name tag, one pair per player.
+  private _localOstrich      : NameOstrichPair | null = null;
+  private _otherOstrichMap   = new Map<string, NameOstrichPair>();
+  // Cursor keys, created ONCE and reused. createCursorKeys() rebuilds an object + re-adds
+  // six keys on every call — calling it per frame (every scene did) is pure churn.
+  protected _cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private _otherStillMap    = new Map<string, { lastTargetX: number; stillSince: number }>();
   private _localEyeL: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private _localEyeR: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -631,9 +655,11 @@ export abstract class BaseScene extends Phaser.Scene {
    * the scene.
    */
   public _devRefreshAvatars(): void {
-    // Local player — re-emit walk frames + standing sprite.
-    const concrete = this as unknown as { generateWalkFrames?: (a: AvatarConfig) => void };
-    concrete.generateWalkFrames?.(getAvatar());
+    // Local player — force a rebuild of the walk frames (the PNG bytes on disk changed
+    // but the avatar config didn't, so reset the cache key first), then the standing
+    // sprite via the scene-correct renderer.
+    BaseScene._hubPlayerTexHash = '';
+    this.ensureHubPlayerTextures(getAvatar());
     if (this.textures.exists('player')) this.textures.remove('player');
     this.textures.addCanvas('player', this.renderOtherAvatar(getAvatar()));
     this.playerSprite?.setTexture('player');
@@ -661,6 +687,8 @@ export abstract class BaseScene extends Phaser.Scene {
     if (ae) { ae.emitter?.destroy(); ae.fw?.destroy(); this._otherAuraMap.delete(pk); }
     const hs = this._otherSparklerMap.get(pk);
     if (hs) { hs.destroy(); this._otherSparklerMap.delete(pk); }
+    const op = this._otherOstrichMap.get(pk);
+    if (op) { op.destroy(); this._otherOstrichMap.delete(pk); }
     this._otherStillMap.delete(pk);
     const ee = this._otherEyeMap.get(pk);
     if (ee) { ee.left.destroy(); ee.right.destroy(); this._otherEyeMap.delete(pk); }
@@ -671,6 +699,13 @@ export abstract class BaseScene extends Phaser.Scene {
     this.tweens.add({ targets: [o.sprite, o.nameText, o.statusText], alpha: 0, duration: 300, onComplete: () => {
       o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
       this.dyingSprites.delete(pk);
+      // Free the per-player avatar texture — Phaser textures are GLOBAL and are NOT
+      // released by sprite.destroy(), so every player who leaves would otherwise leak a
+      // canvas forever. Guard against a quick re-join that already recreated it.
+      if (!this.otherPlayers.has(pk)) {
+        const texKey = `${this.getOtherPlayerConfig().texKeyPrefix}${pk}`;
+        if (this.textures.exists(texKey)) this.textures.remove(texKey);
+      }
     }});
   }
 
@@ -916,6 +951,41 @@ export abstract class BaseScene extends Phaser.Scene {
     };
   }
 
+  /** Parsed avatar for an other-player, cached on the record. Re-parses only when the
+   *  serialized string actually changes — avoids a JSON.parse per player PER FRAME, the
+   *  dominant cost in updateOtherPlayers when the room is busy. */
+  protected otherAvatar(o: OtherPlayer): AvatarConfig | null {
+    if (!o.avatar) { o._avatarParsed = null; o._avatarKey = undefined; return null; }
+    if (o._avatarKey !== o.avatar) {
+      o._avatarKey = o.avatar;
+      o._avatarParsed = deserializeAvatar(o.avatar);
+    }
+    return o._avatarParsed ?? null;
+  }
+
+  // The hub-style player textures ('player' + 'player_walk0-3') are global and shared by
+  // the hub/woods/alley/cabin scenes. Re-rendering all 5 avatar canvases on every scene
+  // entry (via renderHubSprite) is the main re-entry CPU spike. Skip it when the avatar is
+  // byte-identical to what's already baked; re-render when it actually changes (new hash)
+  // or when item PNGs finish loading (hash includes that). Returns true if it rebuilt.
+  private static _hubPlayerTexHash = '';
+  protected ensureHubPlayerTextures(avatar: AvatarConfig): boolean {
+    const hash = JSON.stringify(avatar) + (_hubItemsReady ? '|i' : '');
+    if (hash === BaseScene._hubPlayerTexHash
+      && this.textures.exists('player') && this.textures.exists('player_walk3')) {
+      return false;
+    }
+    BaseScene._hubPlayerTexHash = hash;
+    if (this.textures.exists('player')) this.textures.remove('player');
+    this.textures.addCanvas('player', renderHubSprite(avatar));
+    for (let i = 0; i < 4; i++) {
+      const k = `player_walk${i}`;
+      if (this.textures.exists(k)) this.textures.remove(k);
+      this.textures.addCanvas(k, renderHubSprite(avatar, i));
+    }
+    return true;
+  }
+
   protected updateOtherPlayers(time: number, delta: number): void {
     // Gate Phaser scene input while a full-screen DOM panel (bazaar/wallet/market)
     // is open. Phaser processes pointer events on the NEXT frame, but a DOM panel
@@ -956,16 +1026,32 @@ export abstract class BaseScene extends Phaser.Scene {
       o.emotes?.updateAll(this.emoteGraphics, delta, o.sprite.x, o.sprite.y, o.facingRight, cfg.emoteContext);
       o.sprite.setAlpha(o.emotes?.isActive('ghost') ? 0.3 : 1);
 
+      // Visibility cull: animated name cosmetics (colors, gradients, name motion,
+      // ostrich) are pointless for a player scrolled off-screen — freeze them. The
+      // aura/sparkler/eye blocks below are already distance-gated (nearEnough).
+      const wv = this.cameras.main.worldView;
+      const onScreen = o.sprite.x >= wv.x - 90 && o.sprite.x <= wv.right + 90;
+
       if (o.avatar) {
-        const oa = deserializeAvatar(o.avatar);
+        const oa = this.otherAvatar(o);
         if (oa) {
           // ₿ Bullion name wrap (before name-motion so a wave set rebuilds with it)
           const wantN = bullionName(o.nameText.text, oa.nameColor);
           if (o.nameText.text !== wantN) o.nameText.setText(wantN);
 
+          if (onScreen) {
           // Color animation
           if (oa.nameColor && isGradientColor(oa.nameColor)) applyNameGradient(o.nameText, oa.nameColor, time);
           else if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
+
+          // 🦤 Nostrich — purple ostriches flanking this player's name tag.
+          if (oa.nameColor === 'nostrich') {
+            let op = this._otherOstrichMap.get(pk);
+            if (!op) { op = new NameOstrichPair(this); this._otherOstrichMap.set(pk, op); }
+            op.update(o.nameText, o.nameText.depth, time);
+          } else {
+            this._otherOstrichMap.get(pk)?.hide();
+          }
 
           // Name tag motion
           if (oa.nameAnim) {
@@ -1022,6 +1108,12 @@ export abstract class BaseScene extends Phaser.Scene {
             } else {
               o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
             }
+          }
+          } else {
+            // Off-screen: skip all animated name work above; clear transient visuals.
+            this._otherOstrichMap.get(pk)?.hide();
+            const ws = this._waveCharsMap.get(pk);
+            if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
           }
 
           // Stillness tracking
@@ -1156,6 +1248,13 @@ export abstract class BaseScene extends Phaser.Scene {
         const current = this.playerName?.style.color;
         if (current !== av.nameColor) this.playerName?.setColor(av.nameColor);
       }
+    }
+
+    // 🦤 Nostrich — purple ostriches flanking the name tag.
+    if (av.nameColor === 'nostrich' && this.playerName) {
+      (this._localOstrich ??= new NameOstrichPair(this)).update(this.playerName, this.playerName.depth, time);
+    } else {
+      this._localOstrich?.hide();
     }
 
     // Name tag motion
@@ -1822,8 +1921,8 @@ export abstract class BaseScene extends Phaser.Scene {
             senderNameColor = oa?.nameColor;
           }
         }
-        // ₿ Bullion holders get their chat name bracketed too
-        this.chatUI.addMessage(bullionName(name, senderNameColor), text, isMe ? myChatColor : senderChatColor, pk, emojis, isMe);
+        // ₿ Bullion / 🦤 Nostrich holders get their chat name decorated too
+        this.chatUI.addMessage(decorateChatName(name, senderNameColor), text, isMe ? myChatColor : senderChatColor, pk, emojis, isMe);
         if (!isMe && !this.chatUI.isFocused()) this.snd.chatPing();
         const by = this.getBubbleYOffset();
         if (isMe) {
@@ -2487,15 +2586,21 @@ export abstract class BaseScene extends Phaser.Scene {
   protected shutdownCommonPanels(): void {
     this.unsubProfile?.();
     this.unsubProfile = undefined;
+    // Free every per-player avatar texture (global — not released by sprite.destroy()),
+    // otherwise each scene transition leaks one canvas per nearby player.
+    const _texPrefix = this.getOtherPlayerConfig().texKeyPrefix;
+    const _freeTex = (pk: string) => { const k = `${_texPrefix}${pk}`; if (this.textures.exists(k)) this.textures.remove(k); };
     // Cancel any in-flight fade-out tweens and destroy their objects
-    this.dyingSprites.forEach(o => {
+    this.dyingSprites.forEach((o, pk) => {
       this.tweens.killTweensOf([o.sprite, o.nameText, o.statusText]);
       o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
+      _freeTex(pk);
     });
     this.dyingSprites.clear();
     // Destroy all remaining live other-player objects
-    this.otherPlayers.forEach(o => {
+    this.otherPlayers.forEach((o, pk) => {
       o.sprite.destroy(); o.nameText.destroy(); o.statusText.destroy(); if (o.clickZone) o.clickZone.destroy();
+      _freeTex(pk);
     });
     this.otherPlayers.clear();
     this._waveCharsMap.forEach(ws => this._clearWaveSet(ws));
@@ -2534,6 +2639,14 @@ export abstract class BaseScene extends Phaser.Scene {
     this._localHandSparkler = null;
     this._otherSparklerMap.forEach(hs => hs.destroy());
     this._otherSparklerMap.clear();
+    this._localOstrich?.destroy();
+    this._localOstrich = null;
+    this._otherOstrichMap.forEach(op => op.destroy());
+    this._otherOstrichMap.clear();
+    // Drop the cached cursor keys: Phaser reuses the scene instance across transitions
+    // but rebuilds the keyboard plugin, so the cached objects become stale and can report
+    // a held key forever (auto-walk after re-entering a scene). Recreated lazily next time.
+    this._cursors = undefined;
     this._otherStillMap.clear();
     this._localEyeL?.destroy();
     this._localEyeR?.destroy();

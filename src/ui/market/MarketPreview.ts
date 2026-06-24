@@ -11,6 +11,7 @@ import { renderHubSprite } from '../../entities/AvatarRenderer';
 import { EYE_PALETTES as EYE_CYCLE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotionStep } from '../../entities/avatar/eyeCycles';
 import { CHAR_ANIMS, charAnimStates, NameCharState } from '../../entities/nameAnim';
 import { MarketItem, isAnimatedColor, getAnimatedColor, isGradientColor, getGradientStops, ROD_SKINS } from '../../stores/marketStore';
+import { drawOstrich, ostrichDrawWidth, nostrichShimmerCss } from '../../utils/ostrichGlyph';
 
 const SLOT_BADGE = `color:var(--nd-subtext);background:color-mix(in srgb,var(--nd-dpurp) 20%,transparent);border:1px solid color-mix(in srgb,var(--nd-dpurp) 35%,transparent);`;
 const NEON_COLORS = new Set(['#39ff14', '#ff2d78', '#ffaa00']);
@@ -785,7 +786,8 @@ export class MarketPreview {
     // passed in pre-resolved to an hsl, so `color` alone can't reveal it's bullion).
     if (rawValue === 'bullion') name = `₿ ${name} ₿`;
 
-    const maxW = W - 8;
+    // 🦤 Nostrich reserves room on each side so the flanking ostriches don't clip.
+    const maxW = W - 8 - (rawValue === 'nostrich' ? 36 : 0);
     let fSize  = 13;
     ctx.font   = `bold ${fSize}px monospace`;
     let tw     = ctx.measureText(name).width;
@@ -816,13 +818,25 @@ export class MarketPreview {
 
     const fill = isRainbow ? rainbowGrad(nx, nx + pw) : gradColor ? flowGrad(nx, nx + pw) : color;
     const isNeon = NEON_COLORS.has(color);
+    // 🦤 Nostrich extends the pill to cover the flanking ostriches (one continuous bar,
+    // like the in-world backing) instead of leaving them floating off the box edge.
+    const oExt = rawValue === 'nostrich' ? ostrichDrawWidth(ph - 5) + 4 + 3 : 0;
     ctx.fillStyle = '#0a0014ee';
-    ctx.beginPath(); ctx.roundRect(nx, ny, pw, ph, 4); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(nx - oExt, ny, pw + oExt * 2, ph, 4); ctx.fill();
     ctx.fillStyle = fill; ctx.font = `bold ${fSize}px monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (isNeon) { ctx.shadowColor = color; ctx.shadowBlur = 8; }
     ctx.fillText(name, W / 2, ny + ph / 2 + 0.5, pw - pad);
     ctx.shadowBlur = 0;
+
+    // 🦤 Nostrich — shimmering purple ostriches flanking the name pill, matching the
+    // in-world glint (this canvas re-renders each frame for the animated nostrich color).
+    if (rawValue === 'nostrich') {
+      const oh = ph - 5, ow = ostrichDrawWidth(oh), oy = ny + (ph - oh) / 2;
+      const shimmer = nostrichShimmerCss(Date.now());
+      drawOstrich(ctx, nx - 4 - ow, oy, oh, false, shimmer);
+      drawOstrich(ctx, nx + pw + 4, oy, oh, true, shimmer);
+    }
 
     const msg    = 'Hello!';
     const cfSize = 12;
@@ -870,7 +884,7 @@ export class MarketPreview {
     let   name      = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
     if (rawValue === 'bullion') name = `₿ ${name} ₿`; // ₿ Bullion wraps the tag
 
-    const maxW  = W - 8;
+    const maxW  = W - 8 - (rawValue === 'nostrich' ? 36 : 0); // 🦤 reserve flank room
     let fSize   = 13;
     ctx.font    = `bold ${fSize}px monospace`;
     let tw      = ctx.measureText(name).width;
@@ -916,8 +930,9 @@ export class MarketPreview {
     ctx.rotate(angle);
     ctx.translate(-cx, -cy);
 
+    const oExt = rawValue === 'nostrich' ? ostrichDrawWidth(ph - 5) + 4 + 3 : 0; // cover flanking ostriches
     ctx.fillStyle = '#0a0014ee';
-    ctx.beginPath(); ctx.roundRect(nx, ny, pw, ph, 4); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(nx - oExt, ny, pw + oExt * 2, ph, 4); ctx.fill();
     ctx.font = `bold ${fSize}px monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (shadowColor) { ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur; }
@@ -952,6 +967,14 @@ export class MarketPreview {
     }
 
     ctx.restore();
+
+    // 🦤 Nostrich — shimmering purple ostriches flanking the name pill (outside the tag transform).
+    if (rawValue === 'nostrich') {
+      const oh = ph - 5, ow = ostrichDrawWidth(oh), oy = ny + (ph - oh) / 2;
+      const shimmer = nostrichShimmerCss(Date.now());
+      drawOstrich(ctx, nx - 4 - ow, oy, oh, false, shimmer);
+      drawOstrich(ctx, nx + pw + 4, oy, oh, true, shimmer);
+    }
     return c;
   }
 
