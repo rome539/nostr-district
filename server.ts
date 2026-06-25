@@ -713,9 +713,9 @@ const SCAV_TIER_FALLBACK: Record<string, string[]> = {
 const ITEM_RARITY = new Map<string, string>();
 {
   const tiers: Record<string, string[]> = {
-    legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hol_diamond_heart','hw_zero_day','st_dons_ring','lo_genesis_seed','ce_fallen_star','eats_chefs_special','rl_rotary_phone'],
-    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_sparkler','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hol_cupids_arrow','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','eats_greasy_taco','eats_fortune_cookie','oc_the_devil','oc_cursed_doubloon','cr_gutter_crab','cr_moth_swarm','st_getaway_key','hw_logic_analyzer','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','rl_vinyl','rl_cartridge','rl_crt_remote','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','fish_aurora_lungfish','oc_eldritch_idol','cr_sewer_gator','hw_asic_miner','fl_elderwood_seed','hw_mainframe_core','st_kingpin_cigar'],
-    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_firecracker','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hol_red_rose','hol_chocolate_box','hol_candy_heart','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_vending_sandwich','eats_street_skewer','eats_cold_brew','oc_salt_circle','oc_the_moon','oc_pendulum','cr_fire_squirrel','cr_subway_possum','cr_alley_roach','st_pawn_ticket','st_numbers_slip','hw_trackball','hw_vacuum_tube','fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','fish_reed_perch','fish_glass_minnow'],
+    legendary: ['fish_ostrich','fish_golden_satoshi','fish_enchanted_trident','fish_coelacanth','fish_meteor','hw_quantum_key','st_zk_proof','st_kingpin_ledger','lo_manifesto','lo_satoshi_email','oc_hanged_man','cr_night_owl','hol_phantom_key','hol_reaper_coin','hol_liberty_coin','hol_eagle_feather','hol_signed_paper','hol_double_spend','hol_genesis_coin','hol_pizza_coin','hol_running_btc','hol_frost_coin','hol_first_note','hol_diamond_heart','hol_full_moon','hw_zero_day','st_dons_ring','lo_genesis_seed','ce_fallen_star','eats_chefs_special','rl_rotary_phone'],
+    rare: ['fish_darkwater_bass','fish_luminous_eel','fish_crystal_perch','fish_ghost_pike','fish_midnight_sturgeon','fish_starscale_koi','fish_abyssal_anglerfish','fish_ancient_goldfish','fish_love_letter','hw_signal_relay','hw_encrypted_drive','hw_burner_pager','hw_rogue_dish','st_forged_id','st_contraband_pkg','st_skeleton_key','st_blackmarket_map','lo_genesis_fragment','lo_whitepaper_page','lo_block_plaque','lo_pow_relic','oc_the_fool','oc_scrying_mirror','cr_raccoon','cr_roost_bat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_sparkler','hol_bottle_rocket','hol_satoshi_quill','hol_hashcash_stamp','hol_block_zero','hol_chancellor','hol_btc_pizza','hol_pepperoni','hol_rpow_token','hol_gift_box','hol_relay_stone','hol_zap_bolt','hol_cupids_arrow','hol_osmanthus','hol_jade_rabbit','hw_gpu_card','hw_oscilloscope','st_stash_key','st_wiretap','lo_pizza_receipt','lo_node_map','oc_voodoo_doll','oc_grimoire','cr_white_crow','cr_pipe_snake','eats_lucky_cat','eats_neon_sushi','eats_midnight_special','eats_greasy_taco','eats_fortune_cookie','oc_the_devil','oc_cursed_doubloon','cr_gutter_crab','cr_moth_swarm','st_getaway_key','hw_logic_analyzer','fl_wild_honeycomb','fl_moonpetal','fl_mandrake','rl_vinyl','rl_cartridge','rl_crt_remote','ce_blackhole_marble','ce_constellation_map','ce_comet_fragment','fish_aurora_lungfish','oc_eldritch_idol','cr_sewer_gator','hw_asic_miner','fl_elderwood_seed','hw_mainframe_core','st_kingpin_cigar'],
+    common: ['fish_tiny_carp','fish_silver_trout','fish_moonfish','fish_bluegill','fish_mud_catfish','fish_speckled_sunfish','fish_lake_minnow','fish_striped_dace','fish_green_sunperch','fish_whiskered_loach','fish_spotted_rudd','fish_common_bream','fish_river_roach','fish_flathead_chub','fish_golden_shiner','fish_pumpkinseed','hw_data_chip','hw_circuit_board','hw_cooling_fan','hw_solder_iron','st_burner_phone','st_ghost_token','st_counterfeit_bill','st_lockpick_set','lo_satoshi_coin','lo_relay_key','lo_lightning_bolt','lo_seed_phrase','lo_node_badge','oc_black_candle','oc_evil_eye','cr_sewer_rat','cr_alley_cat','hol_candy_corn','hol_skull_candle','hol_black_cat','hol_firecracker','hol_flag_pin','hol_snowflake','hol_pine_sprig','hol_warm_mittens','hol_ostrich_egg','hol_purple_pill','hol_red_rose','hol_chocolate_box','hol_candy_heart','hol_mooncake','hol_paper_lantern','hol_pomelo','hw_ram_stick','hw_capacitor','hw_ribbon_cable','st_brass_knuckles','st_switchblade','st_burner_sim','lo_paper_wallet','lo_mempool_vial','lo_hash_stone','oc_spirit_board','oc_bone_dice','oc_the_tower','cr_street_pigeon','cr_gutter_frog','cr_junkyard_dog','eats_instant_ramen','eats_dumpling','eats_energy_drink','eats_cart_hotdog','eats_vending_sandwich','eats_street_skewer','eats_cold_brew','oc_salt_circle','oc_the_moon','oc_pendulum','cr_fire_squirrel','cr_subway_possum','cr_alley_roach','st_pawn_ticket','st_numbers_slip','hw_trackball','hw_vacuum_tube','fl_glowcap','fl_fox_fern','fl_nettle_sprig','fl_pinecone','rl_cassette','rl_arcade_token','rl_floppy','rl_polaroid','ce_stardust','ce_moonstone','ce_meteor_shard','ce_solar_glass','fish_reed_perch','fish_glass_minnow'],
     junk: ['fish_old_boot','fish_bottle_message','fish_rusty_tin_can','fish_waterlogged_hat','fish_tangled_line','fish_broken_lantern','eats_day_old_bagel'],
   };
   for (const [rarity, ids] of Object.entries(tiers)) for (const id of ids) ITEM_RARITY.set(id, rarity);
@@ -731,12 +731,24 @@ const SCAV_SCENE_POOLS: Record<string, string[]> = {
 };
 
 // Holiday drop windows (must match HOLIDAY_DROPS in tradeItemStore.ts)
-const SCAV_HOLIDAY_DROPS: { id: string; startMD: [number, number]; endMD: [number, number]; pool: string[] }[] = [
+// `dates` (year-specific) takes priority over startMD/endMD for lunar/drifting holidays.
+const SCAV_HOLIDAY_DROPS: { id: string; startMD: [number, number]; endMD: [number, number]; pool: string[]; dates?: { year: number; startMD: [number, number]; endMD: [number, number] }[] }[] = [
   { id: 'genesis',    startMD: [1, 1],   endMD: [1, 6],   pool: ['hol_block_zero', 'hol_chancellor', 'hol_genesis_coin'] },
   { id: 'finney',     startMD: [1, 9],   endMD: [1, 15],  pool: ['hol_rpow_token', 'hol_running_btc'] },
   { id: 'valentine',  startMD: [2, 8],   endMD: [2, 14],  pool: ['hol_red_rose', 'hol_chocolate_box', 'hol_candy_heart', 'hol_cupids_arrow', 'hol_diamond_heart'] },
   { id: 'pizza_day',  startMD: [5, 18],  endMD: [5, 25],  pool: ['hol_btc_pizza', 'hol_pepperoni', 'hol_pizza_coin'] },
   { id: 'july4',      startMD: [7, 1],   endMD: [7, 7],   pool: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'] },
+  { id: 'mid_autumn', startMD: [9, 23],  endMD: [9, 26],  pool: ['hol_mooncake', 'hol_paper_lantern', 'hol_pomelo', 'hol_osmanthus', 'hol_jade_rabbit', 'hol_full_moon'],
+    dates: [
+      { year: 2025, startMD: [10, 4],  endMD: [10, 7] },
+      { year: 2026, startMD: [9, 23],  endMD: [9, 26] },
+      { year: 2027, startMD: [9, 13],  endMD: [9, 16] },
+      { year: 2028, startMD: [10, 1],  endMD: [10, 4] },
+      { year: 2029, startMD: [9, 20],  endMD: [9, 23] },
+      { year: 2030, startMD: [9, 10],  endMD: [9, 13] },
+      { year: 2031, startMD: [9, 29],  endMD: [10, 2] },
+      { year: 2032, startMD: [9, 17],  endMD: [9, 20] },
+    ] },
   { id: 'halloween',  startMD: [10, 27], endMD: [10, 31], pool: ['hol_candy_corn', 'hol_skull_candle', 'hol_black_cat', 'hol_jack_o_lantern', 'hol_witch_hat', 'hol_cauldron', 'hol_phantom_key', 'hol_reaper_coin'] },
   { id: 'whitepaper', startMD: [11, 1],  endMD: [11, 6],  pool: ['hol_satoshi_quill', 'hol_hashcash_stamp', 'hol_signed_paper', 'hol_double_spend'] },
   { id: 'nostr_day',  startMD: [11, 7],  endMD: [11, 13], pool: ['hol_ostrich_egg', 'hol_purple_pill', 'hol_relay_stone', 'hol_zap_bolt', 'hol_first_note'] },
@@ -756,6 +768,15 @@ function activeHolidayDrop(): { id: string; startMD: [number, number]; endMD: [n
   const now = new Date();
   const t = (now.getMonth() + 1) * 100 + now.getDate();
   for (const h of SCAV_HOLIDAY_DROPS) {
+    if (h.dates) {
+      // Lunar/drifting holiday: only match a window listed for the current year, and
+      // return that year's resolved start/end so downstream (bounty endsAt) is correct.
+      const w = h.dates.find(d => d.year === now.getFullYear());
+      if (w && t >= w.startMD[0] * 100 + w.startMD[1] && t <= w.endMD[0] * 100 + w.endMD[1]) {
+        return { id: h.id, startMD: w.startMD, endMD: w.endMD, pool: h.pool };
+      }
+      continue;
+    }
     if (t >= h.startMD[0] * 100 + h.startMD[1] && t <= h.endMD[0] * 100 + h.endMD[1]) return h;
   }
   return null;
@@ -884,6 +905,7 @@ const VALID_ITEM_IDS = new Set([
   // Holiday items
   'hol_candy_corn','hol_skull_candle','hol_black_cat','hol_jack_o_lantern','hol_witch_hat','hol_cauldron','hol_phantom_key','hol_reaper_coin',
   'hol_sparkler','hol_flag_pin','hol_firecracker','hol_bottle_rocket','hol_liberty_coin','hol_eagle_feather',
+  'hol_mooncake','hol_paper_lantern','hol_pomelo','hol_osmanthus','hol_jade_rabbit','hol_full_moon',
   'hol_satoshi_quill','hol_hashcash_stamp','hol_signed_paper','hol_double_spend',
   'hol_block_zero','hol_chancellor','hol_genesis_coin',
   'hol_btc_pizza','hol_pepperoni','hol_pizza_coin',

@@ -5,11 +5,13 @@
 import { FireworksEngine, drawFireworksCanvas, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsCanvas, isHalloweenPeriod } from '../utils/bats';
 import { HeartsEngine, newHeartsEngine, drawHeartsCanvas, isValentinePeriod } from '../utils/valentineFX';
+import { LanternEngine, newLanternEngine, drawLanternsCanvas, isMidAutumnPeriod } from '../utils/lanterns';
 
 export class LoginHolidayFX {
   private fireworks: FireworksEngine | null = null;
   private bats: BatEngine | null = null;
   private hearts: HeartsEngine | null = null;
+  private lanterns: LanternEngine | null = null;
   private W = 0;
   private H = 0;
 
@@ -20,6 +22,7 @@ export class LoginHolidayFX {
       this.bats = newBatEngine(W, { yMin: 30, yMax: H * 0.6, count: 7, speedMin: 0.5, speedMax: 1.2 });
     }
     this.hearts = isValentinePeriod() ? newHeartsEngine(W, H, { yMin: 20, yMax: H, count: 10, speedMin: 0.3, speedMax: 0.7 }) : null;
+    this.lanterns = isMidAutumnPeriod() ? newLanternEngine(W, H, { yTop: 10, yBottom: H, count: 11, speedMin: 0.12, speedMax: 0.3 }) : null;
   }
 
   resize(W: number, H: number): void {
@@ -38,6 +41,28 @@ export class LoginHolidayFX {
       this.drawHeartMoon(ctx, time);
       if (this.hearts) { this.hearts.tick(time, 16); drawHeartsCanvas(ctx, this.hearts); }
     }
+
+    if (isMidAutumnPeriod()) {
+      this.drawFullMoon(ctx, time);
+      if (this.lanterns) { this.lanterns.tick(time, 16); drawLanternsCanvas(ctx, this.lanterns, time); }
+    }
+  }
+
+  // 🏮 The full moon — centerpiece of the Mid-Autumn Festival: pale cream-gold disc + glow.
+  private drawFullMoon(ctx: CanvasRenderingContext2D, time: number): void {
+    const mx = this.W * 0.8, my = this.H * 0.16, r = 30;
+    const pulse = 0.10 + Math.sin(time * 0.0008) * 0.03;
+    const grd = ctx.createRadialGradient(mx, my, r * 0.6, mx, my, r * 2.6);
+    grd.addColorStop(0, `rgba(255,236,180,${pulse})`);
+    grd.addColorStop(1, 'rgba(255,236,180,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(mx, my, r * 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f5e6b8';
+    ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e8d49a';
+    ctx.beginPath(); ctx.arc(mx - r * 0.3,  my - r * 0.2,  r * 0.22, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + r * 0.25, my + r * 0.1,  r * 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + r * 0.05, my - r * 0.35, r * 0.12, 0, Math.PI * 2); ctx.fill();
   }
 
   private drawHeartMoon(ctx: CanvasRenderingContext2D, time: number): void {

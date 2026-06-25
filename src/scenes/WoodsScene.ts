@@ -11,6 +11,7 @@
 
 import Phaser from 'phaser';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
+import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../utils/lanterns';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
 import { BaseScene } from './BaseScene';
@@ -152,6 +153,8 @@ export class WoodsScene extends BaseScene {
   private shootingStarGraphics!: Phaser.GameObjects.Graphics;
   private batGraphics: Phaser.GameObjects.Graphics | null = null;
   private batEngine: BatEngine | null = null;
+  private lanternGraphics: Phaser.GameObjects.Graphics | null = null;
+  private lanternEngine: LanternEngine | null = null;
   private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
   private glowingEyes: GlowingEyesEngine | null = null;
   private groundFog: GroundFogEngine | null = null;
@@ -207,6 +210,13 @@ export class WoodsScene extends BaseScene {
     this.add.image(W / 2, GAME_HEIGHT / 2, 'woods_bg').setDepth(-1);
 
     this.shootingStarGraphics = this.add.graphics().setDepth(-1);
+    if (isMidAutumnPeriod()) {
+      // 🏮 Mid-Autumn: sky lanterns drift up through the woods sky (camera-fixed, behind characters).
+      this.lanternGraphics = this.add.graphics().setDepth(-0.5).setScrollFactor(0);
+      this.lanternEngine = newLanternEngine(GAME_WIDTH, GAME_HEIGHT, {
+        yTop: -24, yBottom: FLOOR_Y - 30, count: 9, speedMin: 0.1, speedMax: 0.28,
+      });
+    }
     if (isHalloweenPeriod()) {
       this.batGraphics = this.add.graphics().setDepth(0);
       this.batEngine = newBatEngine(W, {
@@ -366,6 +376,7 @@ export class WoodsScene extends BaseScene {
       this.boatPromptBg?.destroy(); this.boatPromptText?.destroy(); this.boatPromptArrow?.destroy();
       this.fishingLineGraphics?.destroy();
       this.boatGraphics?.destroy();
+      this.lanternGraphics?.destroy(); this.lanternEngine = null;
     });
   }
 
@@ -858,6 +869,11 @@ export class WoodsScene extends BaseScene {
       this.batGraphics.clear();
       this.batEngine.tick(time, delta);
       drawBatsPhaser(this.batGraphics, this.batEngine, time);
+    }
+    if (this.lanternEngine && this.lanternGraphics) {
+      this.lanternGraphics.clear();
+      this.lanternEngine.tick(time, delta);
+      drawLanternsPhaser(this.lanternGraphics, this.lanternEngine, time);
     }
     if (this.halloweenGraphics) {
       this.halloweenGraphics.clear();

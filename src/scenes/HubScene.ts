@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { GAME_WIDTH, GAME_HEIGHT, WORLD_WIDTH, GROUND_Y, PLAYER_SPEED, P, ANIM, hexToNum, hexToRgb, fitPromptBubble } from '../config/game.config';
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
+import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../utils/lanterns';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { drawPumpkinPhaser, GlowingEyesEngine, drawEyesPhaser, GroundFogEngine, drawFogPhaser } from '../utils/halloweenFX';
 import { isValentinePeriod, HeartsEngine, newHeartsEngine, drawHeartsPhaser, drawHeartLanternPhaser } from '../utils/valentineFX';
@@ -79,6 +80,8 @@ export class HubScene extends BaseScene {
   private fwEngine: FireworksEngine | null = null;
   private batGraphics: Phaser.GameObjects.Graphics | null = null;
   private batEngine: BatEngine | null = null;
+  private lanternGraphics: Phaser.GameObjects.Graphics | null = null;
+  private lanternEngine: LanternEngine | null = null;
   private halloweenGraphics: Phaser.GameObjects.Graphics | null = null;
   private glowingEyes: GlowingEyesEngine | null = null;
   private groundFog: GroundFogEngine | null = null;
@@ -120,6 +123,7 @@ export class HubScene extends BaseScene {
     import('../stores/july4UnlockStore').then(({ tryGrantJuly4Color }) => tryGrantJuly4Color());
     import('../stores/nostrBirthdayUnlockStore').then(({ tryGrantNostrichColor }) => tryGrantNostrichColor());
     import('../stores/halloweenUnlockStore').then(({ tryGrantHalloweenColor }) => tryGrantHalloweenColor());
+    import('../stores/midAutumnUnlockStore').then(({ tryGrantMidAutumnColor }) => tryGrantMidAutumnColor());
     this.startGame();
   }
 
@@ -254,6 +258,13 @@ export class HubScene extends BaseScene {
       // image to blend every frame (nothing renders between sky and skyline off-holiday).
       this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_combined').setDepth(-1);
     }
+    if (isMidAutumnPeriod()) {
+      // 🏮 Mid-Autumn: sky lanterns drift up the sky in front of the skyline, behind characters.
+      this.lanternGraphics = this.add.graphics().setDepth(-0.5).setScrollFactor(0);
+      this.lanternEngine = newLanternEngine(GAME_WIDTH, GAME_HEIGHT, {
+        yTop: -24, yBottom: GROUND_Y - 30, count: 9, speedMin: 0.1, speedMax: 0.28,
+      });
+    }
     if (isHalloweenPeriod()) {
       this.batGraphics = this.add.graphics().setDepth(0).setScrollFactor(0);
       this.batEngine = newBatEngine(GAME_WIDTH, {
@@ -342,6 +353,7 @@ export class HubScene extends BaseScene {
       this.scavenge?.destroy();
       this.fwGraphics?.destroy(); this.fwEngine = null;
       this.batGraphics?.destroy(); this.batEngine = null;
+      this.lanternGraphics?.destroy(); this.lanternEngine = null;
       this.halloweenGraphics?.destroy(); this.glowingEyes = null; this.groundFog = null;
       this.valentineGraphics?.destroy(); this.heartsGraphics?.destroy(); this.heartsEngine = null;
     });
@@ -359,6 +371,11 @@ export class HubScene extends BaseScene {
       this.batGraphics.clear();
       this.batEngine.tick(time, delta);
       drawBatsPhaser(this.batGraphics, this.batEngine, time);
+    }
+    if (this.lanternEngine && this.lanternGraphics) {
+      this.lanternGraphics.clear();
+      this.lanternEngine.tick(time, delta);
+      drawLanternsPhaser(this.lanternGraphics, this.lanternEngine, time);
     }
     if (this.halloweenGraphics) {
       this.halloweenGraphics.clear();

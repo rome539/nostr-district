@@ -2,9 +2,14 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, P, hexToRgb, hexToNum } from '../../config/game.config';
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../../utils/bats';
+import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../../utils/lanterns';
 
 let loungeBats: BatEngine | null = isHalloweenPeriod()
   ? newBatEngine(GAME_WIDTH, { yMin: 20, yMax: 160, count: 4, speedMin: 0.3, speedMax: 0.65 })
+  : null;
+
+let loungeLanterns: LanternEngine | null = isMidAutumnPeriod()
+  ? newLanternEngine(GAME_WIDTH, GAME_HEIGHT, { yTop: -10, yBottom: 172, count: 5, sizeMin: 1.5, sizeMax: 3, speedMin: 0.1, speedMax: 0.26 })
   : null;
 
 let loungeFireworks: FireworksEngine | null = isJuly4thPeriod()
@@ -65,5 +70,10 @@ export function updateLoungeRoom(
   if (loungeBats) {
     loungeBats.tick(time, _delta);
     drawBatsPhaser(graphics, loungeBats, time);
+  }
+  if (loungeLanterns) {
+    loungeLanterns.tick(time, _delta);
+    // Clip to above the window sill so lanterns stay in the window, not over the floor.
+    drawLanternsPhaser(graphics, loungeLanterns, time, (_x, y) => y <= 185);
   }
 }

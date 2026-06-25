@@ -252,6 +252,20 @@ const VALENTINE_THEME: HolidayTheme = {
   extraColor:  '#ff9cc0',
 };
 
+const MID_AUTUMN_THEME: HolidayTheme = {
+  bg:          'color-mix(in srgb, black 58%, #c01f2a)',
+  border:      'color-mix(in srgb, #f0c050 55%, transparent)',
+  emojiGlow:   'color-mix(in srgb, #f0b030 60%, transparent)',
+  titleColor:  '#ffd56a',
+  textColor:   '#ffcf7a',
+  subColor:    '#f0b88a',
+  panelBg:     'color-mix(in srgb, black 80%, #5a1418)',
+  panelBorder: 'color-mix(in srgb, #f0c050 35%, transparent)',
+  linkColor:   '#ffd56a',
+  strongColor: '#ffdf8a',
+  extraColor:  '#f5c88a',
+};
+
 const HOLIDAYS: Holiday[] = [
   {
     id:              'pizza_day',
@@ -322,6 +336,26 @@ const HOLIDAYS: Holiday[] = [
     anniversaryYear: 1776,
     externalLink:    'https://en.wikipedia.org/wiki/Independence_Day_(United_States)',
     theme:           JULY4_THEME,
+  },
+  {
+    // Mid-Autumn / Mooncake Festival — the 15th day of the 8th lunar month, so the
+    // date drifts each year (specificDates, like the Halving). Lanterns + full moon.
+    id:              'mid_autumn',
+    emoji:           '🏮',
+    specificDates: [
+      { year: 2025, monthStart: 10, dayStart: 4,  monthEnd: 10, dayEnd: 7 },
+      { year: 2026, monthStart: 9,  dayStart: 23, monthEnd: 9,  dayEnd: 26 },
+      { year: 2027, monthStart: 9,  dayStart: 13, monthEnd: 9,  dayEnd: 16 },
+      { year: 2028, monthStart: 10, dayStart: 1,  monthEnd: 10, dayEnd: 4 },
+      { year: 2029, monthStart: 9,  dayStart: 20, monthEnd: 9,  dayEnd: 23 },
+      { year: 2030, monthStart: 9,  dayStart: 10, monthEnd: 9,  dayEnd: 13 },
+      { year: 2031, monthStart: 9,  dayStart: 29, monthEnd: 10, dayEnd: 2 },
+      { year: 2032, monthStart: 9,  dayStart: 17, monthEnd: 9,  dayEnd: 20 },
+    ],
+    i18nPrefix:      'login.mid_autumn',
+    anniversaryYear: null,
+    externalLink:    'https://en.wikipedia.org/wiki/Mid-Autumn_Festival',
+    theme:           MID_AUTUMN_THEME,
   },
   {
     id:              'halloween',

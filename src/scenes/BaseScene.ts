@@ -92,6 +92,7 @@ import { getRainbowColor, isAnimatedColor, getAnimatedColor, isGradientColor, ge
 import { MarketPanel } from '../ui/MarketPanel';
 import { bazaarPanel, BazaarPanel } from '../ui/BazaarPanel';
 import { NameOstrichPair, OSTRICH_SENTINEL_L, OSTRICH_SENTINEL_R } from '../utils/ostrichGlyph';
+import { makeLanternTextureCanvas } from '../utils/lanterns';
 import { BountyBoardPanel } from '../ui/BountyBoardPanel';
 import { TutorialOverlay } from '../ui/TutorialOverlay';
 import { getRoomConfig } from '../stores/roomStore';
@@ -333,6 +334,18 @@ function makeAuraConfig(type: string, s: number): Phaser.Types.GameObjects.Parti
       gravityY:  r(12),
       emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, -r(34), r(10)) } as any,
       blendMode: 'ADD',
+    };
+    case 'lantern': return { // Mid-Autumn set — RELEASES the exact world lantern sprite,
+      // floating slowly up and away. No tint: the texture is already colored.
+      speed:    { min: r(1.5), max: r(5) },     // slow drift
+      angle:    { min: 258, max: 282 },         // up with a slight spread
+      lifespan: { min: 3800, max: 5200 },        // slow rise, fades before the next releases
+      scale:    { start: s * 0.95, end: s * 0.85 },
+      alpha:    { start: 1, end: 0, ease: 'cubic.in' }, // hold bright, only fade near the end (not the whole flight)
+      frequency: 6000,                           // release interval > lifespan → only ONE lantern at a time
+      quantity:  1,
+      gravityY:  r(-3),                          // gentle, slow rise
+      emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, r(7)) } as any,
     };
     case 'spores': return { // Undergrowth (Flora) set — slow drifting green spores, gently rising
       speed:    { min: r(2), max: r(9) },
@@ -861,6 +874,12 @@ export abstract class BaseScene extends Phaser.Scene {
       f.generateTexture('aura_fish', 14, 8);
       f.destroy();
     }
+    // Lantern aura — bakes the EXACT world lantern sprite (red body, gold caps, glowing
+    // core, tassel, soft glow) so the released lanterns match the floating world ones.
+    // Pre-colored, so the emitter must NOT tint it.
+    if (!this.textures.exists('aura_lantern')) {
+      this.textures.addCanvas('aura_lantern', makeLanternTextureCanvas(5));
+    }
   }
 
   /** Create the local player's name-tag Text from a shared NameTagStyle. */
@@ -921,7 +940,7 @@ export abstract class BaseScene extends Phaser.Scene {
   private _makeAuraEmitter(type: string, x: number, y: number, spriteHeight: number): Phaser.GameObjects.Particles.ParticleEmitter {
     this._ensureAuraDotTexture();
     const s = Math.max(0.2, spriteHeight / 96); // 96 = room reference (32px texture × scale 3)
-    const tex = type === 'bats' ? 'aura_bat' : type === 'school' ? 'aura_fish' : 'aura_dot'; // bats/school use real silhouettes
+    const tex = type === 'bats' ? 'aura_bat' : type === 'school' ? 'aura_fish' : type === 'lantern' ? 'aura_lantern' : 'aura_dot'; // bats/school/lantern use real silhouettes
     return this.add.particles(x, y, tex, makeAuraConfig(type, s)).setDepth(13);
   }
 

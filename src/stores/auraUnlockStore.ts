@@ -23,13 +23,13 @@ import {
  */
 
 const THRESHOLDS: Record<string, number> = { ice: 7, void: 30, rainbow: 4 };
-const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold', 'runes', 'bats', 'snow', 'fireworks', 'steam', 'spores', 'nebula', 'school'];
+const SET_BASED_AURAS = ['smoke', 'fire', 'sparkle', 'electric', 'gold', 'runes', 'bats', 'snow', 'fireworks', 'steam', 'spores', 'nebula', 'school', 'lantern'];
 
 const LABELS: Record<string, string> = {
   smoke: 'Smoke Aura', fire: 'Fire Aura', sparkle: 'Sparkle Aura', ice: 'Ice Aura',
   electric: 'Electric Aura', void: 'Void Aura', gold: 'Gold Aura', rainbow: 'Rainbow Aura',
   runes: 'Runes Aura', bats: 'Bat Aura', snow: 'Snowfall Aura', fireworks: 'Fireworks Aura', steam: 'Steam Aura',
-  spores: 'Spores Aura', nebula: 'Nebula Aura', school: 'School Aura',
+  spores: 'Spores Aura', nebula: 'Nebula Aura', school: 'School Aura', lantern: 'Lantern Aura',
 };
 
 export const AURA_HINTS: Record<string, string> = {
@@ -45,6 +45,7 @@ export const AURA_HINTS: Record<string, string> = {
   bats:     'Complete the "All Hallows" set (Halloween drops)',
   snow:     'Complete the "Cold Storage" set (winter drops)',
   fireworks:'Complete the "Independence" set (July 4th drops)',
+  lantern:  'Complete the "Mid-Autumn" set (Mooncake Festival drops)',
   steam:    'Complete the "Greasy Spoon" set (every Eats item)',
   spores:   'Complete the "Undergrowth" set (every Flora item)',
   nebula:   'Complete the "Falling Sky" set (every Celestial item)',

@@ -129,7 +129,13 @@ function halloweenAt(p: number): [number, number, number] {
   ];
 }
 
-export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', 'liberty', 'nostrich', 'halloween', '#f0b040', '#c0c8d0']);
+// 🏮 Lantern (Mid-Autumn) — deep lantern red with a warm gold glint. The name is a
+// red base with a gold shine sweeping across (gradient); chat falls back to a red↔gold
+// glint pulse. Lantern red + festival gold.
+const LANTERN_RED: [number, number, number] = [196, 30, 38];
+const LANTERN_GOLD: [number, number, number] = [255, 198, 74];
+
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', 'liberty', 'nostrich', 'halloween', 'midautumn', '#f0b040', '#c0c8d0']);
 
 export function isAnimatedColor(color: string): boolean {
   return ANIMATED_COLORS.has(color);
@@ -190,6 +196,15 @@ export function getAnimatedColor(color: string, time: number): string {
       return `hsl(${hue},${sat}%,${lit}%)`;
     }
     case 'liberty': return libertyAt(time / 3000); // ~3s red→white→blue cycle (chat fallback)
+    case 'midautumn': { // 🏮 Lantern — deep red with sparse warm GOLD flares (single-color echo of the embers)
+      const ph = time / 1700, prog = ph - Math.floor(ph);
+      const flare = prog < 0.2 ? prog / 0.2 : Math.pow(1 - (prog - 0.2) / 0.8, 1.5); // brief flare, slow fade
+      const k = Math.min(1, flare * 0.85);
+      const r = Math.round(LANTERN_RED[0] + (LANTERN_GOLD[0] - LANTERN_RED[0]) * k);
+      const g = Math.round(LANTERN_RED[1] + (LANTERN_GOLD[1] - LANTERN_RED[1]) * k);
+      const b = Math.round(LANTERN_RED[2] + (LANTERN_GOLD[2] - LANTERN_RED[2]) * k);
+      return `rgb(${r},${g},${b})`;
+    }
     case 'halloween': { // 🎃 Hallows — cycle the orange→purple→green palette (whole word in
       // unison, no left→right flow) while the whole thing BREATHES brighter/dimmer, for an
       // eerie pulsing glow that still carries the tri-color Halloween identity.
@@ -222,7 +237,7 @@ export function getAnimatedColor(color: string, time: number): string {
 // the name that FLOWS left→right over time — distinctly different from a hue cycle.
 // The name-tag (Phaser setFill) + shop preview (canvas gradient) use getGradientStops;
 // contexts that can't gradient (chat) fall back to the solid getAnimatedColor value.
-export const GRADIENT_COLORS = new Set(['halving', 'vhs', 'liberty']);
+export const GRADIENT_COLORS = new Set(['halving', 'vhs', 'liberty', 'midautumn']);
 export function isGradientColor(color: string): boolean { return GRADIENT_COLORS.has(color); }
 
 // Mempool fee hue at a continuous param t (ping-pong teal↔red, period 1).
@@ -263,6 +278,32 @@ export function getGradientStops(value: string, time: number): { pos: number; co
       r = Math.round(r + (255 - r) * shine);
       g = Math.round(g + (255 - g) * shine);
       b = Math.round(b + (255 - b) * shine);
+      out.push({ pos, color: `rgb(${r},${g},${b})` });
+    }
+    return out;
+  }
+  if (value === 'midautumn') {
+    // 🏮 Lantern — DRIFTING EMBERS, not a sweep (Liberty) or a central glow. A deep-red
+    // name with a few small GOLD sparks that flare and fade at scattered letters, each
+    // re-igniting at a new random spot — like embers floating up off a paper lantern.
+    const N = 18;
+    const WIDTH = 0.07;          // narrow spark
+    const PERIODS = [1500, 1900, 2300]; // staggered so they never pulse in unison
+    const hash = (n: number) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+    const embers = PERIODS.map((T, k) => {
+      const ph = time / T + k * 0.37;
+      const cycle = Math.floor(ph), prog = ph - cycle;        // progress 0..1 in this flare
+      const amp = prog < 0.25 ? prog / 0.25 : Math.pow(1 - (prog - 0.25) / 0.75, 1.5); // quick flare, slow fade
+      return { pos: hash(k * 7.3 + cycle * 2.1), amp: Math.max(0, amp) }; // new spot each cycle
+    });
+    for (let i = 0; i <= N; i++) {
+      const pos = i / N;
+      let glow = 0;
+      for (const e of embers) { const d = pos - e.pos; glow += e.amp * Math.exp(-(d * d) / (2 * WIDTH * WIDTH)); }
+      glow = Math.min(1, glow);
+      const r = Math.round(LANTERN_RED[0] + (LANTERN_GOLD[0] - LANTERN_RED[0]) * glow);
+      const g = Math.round(LANTERN_RED[1] + (LANTERN_GOLD[1] - LANTERN_RED[1]) * glow);
+      const b = Math.round(LANTERN_RED[2] + (LANTERN_GOLD[2] - LANTERN_RED[2]) * glow);
       out.push({ pos, color: `rgb(${r},${g},${b})` });
     }
     return out;
@@ -510,6 +551,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'aura_spores',    name: 'Spores Aura',    slot: 'aura', value: 'spores',    price: 0, tier: 'rare', earn: true },
   { id: 'aura_nebula',    name: 'Nebula Aura',    slot: 'aura', value: 'nebula',    price: 0, tier: 'rare', earn: true },
   { id: 'aura_school',    name: 'School Aura',    slot: 'aura', value: 'school',    price: 0, tier: 'rare', earn: true },
+  { id: 'aura_lantern',   name: 'Lantern Aura',   slot: 'aura', value: 'lantern',   price: 0, tier: 'rare', earn: true },
   // Set-completion rods + name colors (bazaar collection rewards, never sold)
   { id: 'rod_driftwood',   name: 'Driftwood Rod',     slot: 'rodSkin',   value: 'driftwood', price: 0, tier: 'rare', earn: true },
   { id: 'rod_abyssal',     name: 'Abyssal Rod',       slot: 'rodSkin',   value: 'abyssal',   price: 0, tier: 'rare', earn: true },
@@ -522,6 +564,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'color_liberty',   name: '🎆 Liberty',        slot: 'nameColor', value: 'liberty',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during July 4th week' }, // seasonal: only obtainable in the Independence (July 1–7) window
   { id: 'color_nostrich',  name: '🦤 Nostrich',       slot: 'nameColor', value: 'nostrich',  price: 0, tier: 'rare', earn: true, earnHint: "Log in during Nostr's Birthday" }, // seasonal: only obtainable in the Nostr's Birthday (Nov 7–11) window
   { id: 'color_halloween', name: '🎃 Hallows',        slot: 'nameColor', value: 'halloween', price: 0, tier: 'rare', earn: true, earnHint: 'Log in during Halloween week' }, // seasonal: only obtainable in the Halloween (Oct 25–31) window
+  { id: 'color_midautumn', name: '🏮 Lantern',        slot: 'nameColor', value: 'midautumn', price: 0, tier: 'rare', earn: true, earnHint: 'Log in during the Mid-Autumn Festival' }, // seasonal: only obtainable in the Mid-Autumn window (lunar, ~Sept)
   { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
   { id: 'color_vhs',       name: 'VHS',               slot: 'nameColor', value: 'vhs',       price: 0, tier: 'rare', earn: true },
   // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)

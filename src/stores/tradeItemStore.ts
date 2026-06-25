@@ -141,6 +141,13 @@ export const ITEM_CATALOG: ItemDef[] = [
   { id: 'hol_bottle_rocket',  name: 'Bottle Rocket',      category: 'holiday', rarity: 'rare',      emoji: '🚀', description: 'Aim away from face. Allegedly.' },
   { id: 'hol_liberty_coin',   name: 'Liberty Coin',       category: 'holiday', rarity: 'legendary', emoji: '🎆', description: 'Minted for the free and the sovereign.' },
   { id: 'hol_eagle_feather',  name: 'Eagle Feather',      category: 'holiday', rarity: 'legendary', emoji: '🦅', description: 'Fell from the highest flight on the freest day.' },
+  // Mid-Autumn Festival 🏮
+  { id: 'hol_mooncake',       name: 'Mooncake',           category: 'holiday', rarity: 'common',    emoji: '🥮', description: 'Lotus paste and a salted yolk moon inside.' },
+  { id: 'hol_paper_lantern',  name: 'Paper Lantern',      category: 'holiday', rarity: 'common',    emoji: '🏮', description: 'A small light to carry under a big moon.' },
+  { id: 'hol_pomelo',         name: 'Pomelo',             category: 'holiday', rarity: 'common',    emoji: '🍈', description: 'Peeled into a hat for the children. Tradition.' },
+  { id: 'hol_osmanthus',      name: 'Osmanthus Sprig',    category: 'holiday', rarity: 'rare',      emoji: '🌼', description: 'Its scent means autumn has arrived.' },
+  { id: 'hol_jade_rabbit',    name: 'Jade Rabbit',        category: 'holiday', rarity: 'rare',      emoji: '🐇', description: 'Pounding the elixir on the moon, forever.' },
+  { id: 'hol_full_moon',      name: 'Full Moon',          category: 'holiday', rarity: 'legendary', emoji: '🌕', description: 'The roundest, brightest moon of the year. Reunion.' },
   // Bitcoin Whitepaper Day 📄
   { id: 'hol_satoshi_quill',  name: 'Satoshi\'s Quill',   category: 'holiday', rarity: 'rare',      emoji: '🪶', description: 'The pen is mightier than the central bank.' },
   { id: 'hol_hashcash_stamp', name: 'Hashcash Stamp',     category: 'holiday', rarity: 'rare',      emoji: '📬', description: 'Proof-of-work, before it had a name.' },
@@ -511,6 +518,14 @@ export const ITEM_SETS: ItemSet[] = [
     itemIds: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'],
     rewardLabel: 'Patriot',
     rewardAura: 'fireworks',
+  },
+  {
+    id: 'set_mid_autumn',
+    name: 'Mid-Autumn',
+    description: 'Collect every Mid-Autumn Festival item.',
+    itemIds: ['hol_mooncake', 'hol_paper_lantern', 'hol_pomelo', 'hol_osmanthus', 'hol_jade_rabbit', 'hol_full_moon'],
+    rewardLabel: 'Lantern Keeper',
+    rewardAura: 'lantern',
   },
   {
     id: 'set_genesis',
@@ -2091,7 +2106,12 @@ export interface ScavengeSpot { id: string; x: number; pool: string[]; accent?: 
 // During a holiday window (~1 week, centered on the core days) TWO EXTRA scavenge
 // spots appear that drop that holiday's themed items — distinct accent colour.
 
-interface HolidayDrop { id: string; accent: string; startMD: [number, number]; endMD: [number, number]; pool: string[]; }
+interface HolidayDrop {
+  id: string; accent: string; startMD: [number, number]; endMD: [number, number]; pool: string[];
+  // Year-specific windows for lunar/drifting holidays (e.g. Mid-Autumn). When present,
+  // these take priority over startMD/endMD and only match in a listed year.
+  dates?: { year: number; startMD: [number, number]; endMD: [number, number] }[];
+}
 
 const HOLIDAY_DROPS: HolidayDrop[] = [
   { id: 'genesis',    accent: '#f0a030', startMD: [1, 1],   endMD: [1, 6],   pool: ['hol_block_zero', 'hol_chancellor', 'hol_genesis_coin'] },
@@ -2099,6 +2119,17 @@ const HOLIDAY_DROPS: HolidayDrop[] = [
   { id: 'valentine',  accent: '#ff6b9d', startMD: [2, 8],   endMD: [2, 14],  pool: ['hol_red_rose', 'hol_chocolate_box', 'hol_candy_heart', 'hol_cupids_arrow', 'hol_diamond_heart'] },
   { id: 'pizza_day',  accent: '#ffb000', startMD: [5, 18],  endMD: [5, 25],  pool: ['hol_btc_pizza', 'hol_pepperoni', 'hol_pizza_coin'] },
   { id: 'july4',      accent: '#ff5566', startMD: [7, 1],   endMD: [7, 7],   pool: ['hol_sparkler', 'hol_flag_pin', 'hol_firecracker', 'hol_bottle_rocket', 'hol_liberty_coin', 'hol_eagle_feather'] },
+  { id: 'mid_autumn', accent: '#f0c050', startMD: [9, 23],  endMD: [9, 26],  pool: ['hol_mooncake', 'hol_paper_lantern', 'hol_pomelo', 'hol_osmanthus', 'hol_jade_rabbit', 'hol_full_moon'],
+    dates: [
+      { year: 2025, startMD: [10, 4],  endMD: [10, 7] },
+      { year: 2026, startMD: [9, 23],  endMD: [9, 26] },
+      { year: 2027, startMD: [9, 13],  endMD: [9, 16] },
+      { year: 2028, startMD: [10, 1],  endMD: [10, 4] },
+      { year: 2029, startMD: [9, 20],  endMD: [9, 23] },
+      { year: 2030, startMD: [9, 10],  endMD: [9, 13] },
+      { year: 2031, startMD: [9, 29],  endMD: [10, 2] },
+      { year: 2032, startMD: [9, 17],  endMD: [9, 20] },
+    ] },
   { id: 'halloween',  accent: '#ff6a00', startMD: [10, 27], endMD: [10, 31], pool: ['hol_candy_corn', 'hol_skull_candle', 'hol_black_cat', 'hol_jack_o_lantern', 'hol_witch_hat', 'hol_cauldron', 'hol_phantom_key', 'hol_reaper_coin'] },
   { id: 'whitepaper', accent: '#c070d0', startMD: [11, 1],  endMD: [11, 6],  pool: ['hol_satoshi_quill', 'hol_hashcash_stamp', 'hol_signed_paper', 'hol_double_spend'] },
   { id: 'nostr_day',  accent: '#9a6eff', startMD: [11, 7],  endMD: [11, 13], pool: ['hol_ostrich_egg', 'hol_purple_pill', 'hol_relay_stone', 'hol_zap_bolt', 'hol_first_note'] },
@@ -2117,6 +2148,12 @@ export function getActiveHolidayDrop(): HolidayDrop | null {
   const now = new Date();
   const t = mdNum(now.getMonth() + 1, now.getDate());
   for (const h of HOLIDAY_DROPS) {
+    if (h.dates) {
+      // Lunar/drifting holiday: only match a window listed for the current year.
+      const w = h.dates.find(d => d.year === now.getFullYear());
+      if (w && t >= mdNum(...w.startMD) && t <= mdNum(...w.endMD)) return h;
+      continue;
+    }
     if (t >= mdNum(...h.startMD) && t <= mdNum(...h.endMD)) return h;
   }
   return null;

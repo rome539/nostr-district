@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { FireworksEngine, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsCanvas, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { HeartsEngine, newHeartsEngine, drawHeartsPhaser, isValentinePeriod } from '../utils/valentineFX';
+import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../utils/lanterns';
 import { BaseScene } from './BaseScene';
 import { getStatus } from '../stores/statusStore';
 import { onNextAvatarSync } from '../nostr/nostrService';
@@ -69,6 +70,7 @@ export class RoomScene extends BaseScene {
   private cityFwEngines: FireworksEngine[] = [];
   private cityBatEngine: BatEngine | null = null;
   private cityHeartsEngine: HeartsEngine | null = null;
+  private cityLanternEngine: LanternEngine | null = null;
   private bgTexKey = '';
   private bgOffscreen: HTMLCanvasElement | null = null;
   private bgLiveCanvas: HTMLCanvasElement | null = null;
@@ -155,6 +157,12 @@ export class RoomScene extends BaseScene {
       // Hearts drift up through the city sky behind the windows
       this.cityHeartsEngine = newHeartsEngine(GAME_WIDTH, 220, {
         yMin: 25, yMax: 220, count: 6, speedMin: 0.15, speedMax: 0.4,
+      });
+    }
+    if (isMidAutumnPeriod()) {
+      // 🏮 Lanterns drift up through the city sky behind the windows
+      this.cityLanternEngine = newLanternEngine(GAME_WIDTH, GAME_HEIGHT, {
+        yTop: 0, yBottom: 240, count: 6, sizeMin: 1.5, sizeMax: 3, speedMin: 0.1, speedMax: 0.26,
       });
     }
     this.voidStarsGraphics       = this.add.graphics();
@@ -542,7 +550,7 @@ export class RoomScene extends BaseScene {
   // window-clipped graphics layer as the fireworks (only where inside a window
   // pane and not over a decoration), so they appear behind the glass.
   private updateCityWindowCritters(time: number, delta: number): void {
-    if (!this.cityBatEngine && !this.cityHeartsEngine) return;
+    if (!this.cityBatEngine && !this.cityHeartsEngine && !this.cityLanternEngine) return;
     const accept = (x: number, y: number) => this.inCityWindow(x, y) && !this.inCityDecoration(x, y);
     if (this.cityBatEngine) {
       this.cityBatEngine.tick(time, delta);
@@ -551,6 +559,10 @@ export class RoomScene extends BaseScene {
     if (this.cityHeartsEngine) {
       this.cityHeartsEngine.tick(time, delta);
       drawHeartsPhaser(this.shootingStarGraphics, this.cityHeartsEngine, accept);
+    }
+    if (this.cityLanternEngine) {
+      this.cityLanternEngine.tick(time, delta);
+      drawLanternsPhaser(this.shootingStarGraphics, this.cityLanternEngine, time, accept);
     }
   }
 
