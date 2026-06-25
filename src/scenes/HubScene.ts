@@ -119,6 +119,7 @@ export class HubScene extends BaseScene {
     import('../stores/halvingUnlockStore').then(({ tryGrantHalvingColor }) => tryGrantHalvingColor());
     import('../stores/july4UnlockStore').then(({ tryGrantJuly4Color }) => tryGrantJuly4Color());
     import('../stores/nostrBirthdayUnlockStore').then(({ tryGrantNostrichColor }) => tryGrantNostrichColor());
+    import('../stores/halloweenUnlockStore').then(({ tryGrantHalloweenColor }) => tryGrantHalloweenColor());
     this.startGame();
   }
 

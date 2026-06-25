@@ -24,9 +24,18 @@ const COLORS_CSS = [
 ];
 const COLORS_NUM = COLORS_CSS.map(c => parseInt(c.replace('#', ''), 16));
 
+// Hue groups into the palette above — used to build multi-color bursts that are
+// guaranteed to mix distinct colors (a red AND a blue, sometimes white) rather than
+// three near-identical reds. Keeps multi bursts unmistakably patriotic.
+const RED_CI = [0, 1, 2];
+const WHITE_CI = [3, 4];
+const BLUE_CI = [5, 6, 7];
+const pick = <T,>(a: T[]): T => a[(Math.random() * a.length) | 0];
+
 interface FWRocket {
   x: number; y: number; vy: number; targetY: number;
   ci: number;
+  multi: number[] | null; // when set, each particle draws a color from this palette
   trail: Array<{ x: number; y: number }>;
 }
 
@@ -175,13 +184,19 @@ export class FireworksEngine {
 
   private launchRocket(): void {
     const ci = Math.floor(Math.random() * COLORS_CSS.length);
+    // ~40% of bursts are multi-color: a red + a blue, plus white about half the time.
+    let multi: number[] | null = null;
+    if (Math.random() < 0.4) {
+      multi = [pick(RED_CI), pick(BLUE_CI)];
+      if (Math.random() < 0.5) multi.push(pick(WHITE_CI));
+    }
     const { launchY, explodeYMin, explodeYMax, xMin, xMax } = this.cfg;
     this.rockets.push({
       x: xMin + Math.random() * (xMax - xMin),
       y: launchY,
       vy: -(3.8 + Math.random() * 2.8),
       targetY: explodeYMin + Math.random() * (explodeYMax - explodeYMin),
-      ci, trail: [],
+      ci, multi, trail: [],
     });
   }
 
@@ -202,6 +217,10 @@ export class FireworksEngine {
       }
       return;
     }
+
+    // Single-color burst → every particle is r.ci; multi-color → each draws from the
+    // rocket's small red/blue(/white) palette for a confetti mix.
+    const pci = () => (r.multi ? pick(r.multi) : r.ci);
 
     const count = Math.round(this.cfg.explosionCount * (0.8 + Math.random() * 0.4));
     for (let i = 0; i < count; i++) {
@@ -247,7 +266,7 @@ export class FireworksEngine {
         }
       }
 
-      this.particles.push({ x: r.x, y: r.y, vx, vy, ci: r.ci, alpha: 1, life, maxLife: life });
+      this.particles.push({ x: r.x, y: r.y, vx, vy, ci: pci(), alpha: 1, life, maxLife: life });
     }
   }
 

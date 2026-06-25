@@ -90,7 +90,8 @@ export function ostrichDrawWidth(h: number): number {
 // Shimmer: a brief white-hot glint raking across the purple, like ₿ Bullion's coin
 // flash. Lerps the tint purple → near-white lavender on the glint.
 function shimmerTint(time: number): number {
-  const glint = Math.pow(Math.sin(time / 240) * 0.5 + 0.5, 5); // sharp, brief
+  const gl = time % 3600; // a quick ~450ms flash, then a long quiet gap (rare, not slow)
+  const glint = gl < 450 ? Math.pow(Math.sin((gl / 450) * Math.PI), 2) : 0;
   const a = [0x9a, 0x6e, 0xff], b = [0xf2, 0xe8, 0xff];
   const r = Math.round(a[0] + (b[0] - a[0]) * glint);
   const g = Math.round(a[1] + (b[1] - a[1]) * glint);

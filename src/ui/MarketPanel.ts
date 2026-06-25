@@ -529,6 +529,11 @@ export class MarketPanel {
       const SLOT_ORDER = ['hair','top','bottom','hat','accessory','eyes','nameColor','chatColor','rodSkin','nameAnim','aura','furniture','wallTheme'];
       const slotIdx = (s: string) => { const i = SLOT_ORDER.indexOf(s); return i === -1 ? 999 : i; };
       return [...filtered].sort((a, b) => {
+        // Earn/unlock-gated items (price 0) sort to the very back of the whole list — past
+        // every buyable item across all slots — so they collect on the last page(s) instead
+        // of floating to the front of each slot group.
+        const ea = a.earn ? 1 : 0, eb = b.earn ? 1 : 0;
+        if (ea !== eb) return ea - eb;
         const so = slotIdx(a.slot) - slotIdx(b.slot);
         return so !== 0 ? so : a.price - b.price;
       });

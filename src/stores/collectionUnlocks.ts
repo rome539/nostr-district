@@ -61,10 +61,35 @@ function persistToasted(): void {
   try { localStorage.setItem(toastedStorageKey(_toastedPk), JSON.stringify([..._toasted])); } catch { /* ignore */ }
 }
 
+// Static hint + target for every set/item-gated cosmetic, derived straight from the
+// definitions (no inventory needed). Lets the shop show "how to unlock" + the target
+// count for GUESTS and before the live entitlement recompute has run — recompute()
+// only fires on real login, so without this fallback those rows render a bare "0 / 0".
+let _staticInfo: Record<string, { required: number; hint: string }> | null = null;
+function staticCosmeticInfo(key: string): { required: number; hint: string } | undefined {
+  if (!_staticInfo) {
+    _staticInfo = {};
+    for (const set of ITEM_SETS) {
+      const rewards = [set.rewardCosmetic, ...(set.rewardCosmetics ?? [])].filter(Boolean) as { slot: string; value: string }[];
+      for (const r of rewards) {
+        _staticInfo[`${r.slot}:${r.value}`] = { required: set.itemIds.length, hint: `Complete the "${set.name}" set` };
+      }
+    }
+    for (const g of ITEM_GATED_COSMETICS) {
+      _staticInfo[`${g.slot}:${g.value}`] = { required: 1, hint: `Collect the ${g.label}` };
+    }
+  }
+  return _staticInfo[key];
+}
+
 /** Live progress/entitlement for a set cosmetic. unlocked = currently holds the full set. */
 export function getSetCosmeticProgress(slot: string, value: string): { count: number; required: number; unlocked: boolean; hint: string } {
-  const p = _cosmeticProgress[`${slot}:${value}`] ?? { count: 0, required: 0, hint: '' };
-  return { count: p.count, required: p.required, unlocked: p.required > 0 && p.count >= p.required, hint: p.hint };
+  const key = `${slot}:${value}`;
+  const p = _cosmeticProgress[key];
+  if (p) return { count: p.count, required: p.required, unlocked: p.required > 0 && p.count >= p.required, hint: p.hint };
+  // Guest / pre-login fallback: target + hint from the static definitions, count 0.
+  const stat = staticCosmeticInfo(key);
+  return { count: 0, required: stat?.required ?? 0, unlocked: false, hint: stat?.hint ?? '' };
 }
 
 /** True if this slot:value is a set-reward cosmetic (known to the live entitlement map). */

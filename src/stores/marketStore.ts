@@ -92,8 +92,44 @@ function libertyAt(p: number): string {
   const i = Math.floor(x) % n;
   return lerpRgb(LIBERTY_RGB[i], LIBERTY_RGB[(i + 1) % n], x - Math.floor(x));
 }
+/** Same looped palette as an RGB tuple (for blending a shine highlight over it). */
+function libertyRgbAt(p: number): [number, number, number] {
+  const n = LIBERTY_RGB.length;
+  const x = (((p % 1) + 1) % 1) * n;
+  const i = Math.floor(x) % n;
+  const t = x - Math.floor(x);
+  const a = LIBERTY_RGB[i], b = LIBERTY_RGB[(i + 1) % n];
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
 
-export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', 'liberty', 'nostrich', '#f0b040', '#c0c8d0']);
+// 🎃 Hallows (Halloween) — pumpkin orange → witch purple → toxic green, looped so the
+// cycle returns to orange seamlessly. The name cycles THROUGH these (the whole word in
+// unison) while breathing brighter/dimmer — keeps the tri-color Halloween identity but
+// with a pulsing, non-flowing motion.
+const HALLOWEEN_RGB: [number, number, number][] = [
+  [255, 117, 24],  // pumpkin orange
+  [150, 50, 220],  // witch purple
+  [120, 200, 60],  // toxic green
+];
+/** Continuous RGB sample of the looped Halloween palette at param p (loops every 1). */
+function halloweenAt(p: number): [number, number, number] {
+  const n = HALLOWEEN_RGB.length;
+  const x = (((p % 1) + 1) % 1) * n;
+  const i = Math.floor(x) % n;
+  const t = x - Math.floor(x);
+  const a = HALLOWEEN_RGB[i], b = HALLOWEEN_RGB[(i + 1) % n];
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
+
+export const ANIMATED_COLORS = new Set(['rainbow', 'fire', 'ice', 'electric', 'bullion', 'halving', 'vhs', 'liberty', 'nostrich', 'halloween', '#f0b040', '#c0c8d0']);
 
 export function isAnimatedColor(color: string): boolean {
   return ANIMATED_COLORS.has(color);
@@ -146,15 +182,25 @@ export function getAnimatedColor(color: string, time: number): string {
       // with a sharp WHITE-HOT glint raking through, like light catching a coin —
       // unmistakably treasure, and far more dramatic than the buyable Gold's matte
       // sheen (hue stays amber-gold so it never reads as the flat Orange either).
-      const glint = Math.pow(Math.sin(time / 240) * 0.5 + 0.5, 5); // brief, sharp sparkle
+      const gl = time % 3600; // a quick ~450ms flash, then a long quiet gap (rare, not slow)
+      const glint = gl < 450 ? Math.pow(Math.sin((gl / 450) * Math.PI), 2) : 0;
       const hue = 38 + glint * 10;  // warm amber-gold → bright gold on the flash
       const sat = 92 - glint * 42;  // rich gold → washes toward white-gold at the glint
       const lit = 44 + glint * 48;  // 44% deep molten → 92% white-hot glint
       return `hsl(${hue},${sat}%,${lit}%)`;
     }
     case 'liberty': return libertyAt(time / 3000); // ~3s red→white→blue cycle (chat fallback)
+    case 'halloween': { // 🎃 Hallows — cycle the orange→purple→green palette (whole word in
+      // unison, no left→right flow) while the whole thing BREATHES brighter/dimmer, for an
+      // eerie pulsing glow that still carries the tri-color Halloween identity.
+      const [r, g, b] = halloweenAt(time / 4200);                  // ~4.2s through all 3 colors
+      const breathe = 0.72 + (Math.sin(time / 1050) * 0.5 + 0.5) * 0.28; // 0.72 dim → 1.0 full (stays legible)
+      const cl = (v: number) => Math.round(v * breathe);
+      return `rgb(${cl(r)},${cl(g)},${cl(b)})`;
+    }
     case 'nostrich': { // 🦤 Nostrich — nostr-purple with a brief white-hot glint (like ₿ Bullion)
-      const glint = Math.pow(Math.sin(time / 240) * 0.5 + 0.5, 5);
+      const gl = time % 3600; // a quick ~450ms flash, then a long quiet gap (rare, not slow)
+      const glint = gl < 450 ? Math.pow(Math.sin((gl / 450) * Math.PI), 2) : 0;
       const sat = 90 - glint * 55; // purple → washes toward white on the glint
       const lit = 70 + glint * 22; // 70% → 92% white-hot
       return `hsl(258,${sat}%,${lit}%)`;
@@ -204,11 +250,20 @@ export function getGradientStops(value: string, time: number): { pos: number; co
     return out;
   }
   if (value === 'liberty') {
-    // Flag bands streaming left→right: red→white→blue flowing across the name.
-    const N = 10;
+    // Distinct from Halving's scroll: the red→white→blue flag bands stay FIXED across the
+    // name and a bright white SHINE sweeps left→right over them (light glinting on silk).
+    const N = 12;
+    const sweep = (time / 1500) % 1; // highlight position, ~1.5s pass
     for (let i = 0; i <= N; i++) {
       const pos = i / N;
-      out.push({ pos, color: libertyAt(pos * 1.2 + time / 3200) });
+      let [r, g, b] = libertyRgbAt(pos); // fixed flag gradient (no time term → no scroll)
+      const raw = Math.abs(pos - sweep);
+      const d = Math.min(raw, 1 - raw); // wrap-around so the glint re-enters seamlessly
+      const shine = Math.exp(-(d * d) / (2 * 0.05 * 0.05)) * 0.85; // narrow bright band
+      r = Math.round(r + (255 - r) * shine);
+      g = Math.round(g + (255 - g) * shine);
+      b = Math.round(b + (255 - b) * shine);
+      out.push({ pos, color: `rgb(${r},${g},${b})` });
     }
     return out;
   }
@@ -466,6 +521,7 @@ export const CATALOG: MarketItem[] = [
   { id: 'color_halving',   name: '⛏ Halving',         slot: 'nameColor', value: 'halving',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during Halving week' }, // seasonal: only obtainable in the Halving celebration window
   { id: 'color_liberty',   name: '🎆 Liberty',        slot: 'nameColor', value: 'liberty',   price: 0, tier: 'rare', earn: true, earnHint: 'Log in during July 4th week' }, // seasonal: only obtainable in the Independence (July 1–7) window
   { id: 'color_nostrich',  name: '🦤 Nostrich',       slot: 'nameColor', value: 'nostrich',  price: 0, tier: 'rare', earn: true, earnHint: "Log in during Nostr's Birthday" }, // seasonal: only obtainable in the Nostr's Birthday (Nov 7–11) window
+  { id: 'color_halloween', name: '🎃 Hallows',        slot: 'nameColor', value: 'halloween', price: 0, tier: 'rare', earn: true, earnHint: 'Log in during Halloween week' }, // seasonal: only obtainable in the Halloween (Oct 25–31) window
   { id: 'color_alleygray', name: 'Alley Gray',        slot: 'nameColor', value: '#9099a8',   price: 0, tier: 'rare', earn: true },
   { id: 'color_vhs',       name: 'VHS',               slot: 'nameColor', value: 'vhs',       price: 0, tier: 'rare', earn: true },
   // Ostrich hat — was a free avatar option; now the Nostr Day set reward (the nostrich!)
