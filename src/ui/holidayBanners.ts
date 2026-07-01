@@ -279,11 +279,13 @@ const HOLIDAYS: Holiday[] = [
   },
   {
     // Bitcoin Whitepaper Day — Satoshi published the 9-page paper to the
-    // cryptography mailing list on October 31, 2008.
+    // cryptography mailing list on October 31, 2008. Banner spans the drop week
+    // (Nov 1–6) and starts Nov 1 so it doesn't collide with Halloween, which
+    // owns Oct 31 (Halloween drops + banner run Oct 27–31).
     id:              'whitepaper',
     emoji:           '📄',
-    monthDayStart:   [10, 31],
-    monthDayEnd:     [11, 4],
+    monthDayStart:   [11, 1],
+    monthDayEnd:     [11, 6],
     i18nPrefix:      'login.whitepaper',
     anniversaryYear: 2008,
     externalLink:    'https://bitcoin.org/bitcoin.pdf',
@@ -305,12 +307,12 @@ const HOLIDAYS: Holiday[] = [
   {
     // Running Bitcoin Day (Hal Finney) — Jan 12, 2009: Satoshi sent Hal the
     // first Bitcoin transaction (10 BTC), and his "Running bitcoin" tweet
-    // (Jan 11) is iconic in the cypherpunk lineage. Wide window starts Jan 10
-    // so it doesn't overlap with Genesis (Jan 1-6).
+    // (Jan 11) is iconic in the cypherpunk lineage. Window spans the drop week
+    // (Jan 9–15); starts Jan 9 so it still clears Genesis (Jan 1-6).
     id:              'finney',
     emoji:           '🖖',
-    monthDayStart:   [1, 10],
-    monthDayEnd:     [1, 14],
+    monthDayStart:   [1, 9],
+    monthDayEnd:     [1, 15],
     i18nPrefix:      'login.finney',
     anniversaryYear: 2009,
     externalLink:    'https://twitter.com/halfin/status/1110302988',
@@ -330,8 +332,11 @@ const HOLIDAYS: Holiday[] = [
   {
     id:              'july4',
     emoji:           '🎆',
-    monthDayStart:   [7, 3],
-    monthDayEnd:     [7, 6],
+    // Banner spans the full Independence drop week (Jul 1–7) so it announces the
+    // event the moment items start dropping — wider than the fireworks display
+    // (Jul 3–6, gated separately by isJuly4thPeriod in utils/fireworks.ts).
+    monthDayStart:   [7, 1],
+    monthDayEnd:     [7, 7],
     i18nPrefix:      'login.july4',
     anniversaryYear: 1776,
     externalLink:    'https://en.wikipedia.org/wiki/Independence_Day_(United_States)',
@@ -358,21 +363,24 @@ const HOLIDAYS: Holiday[] = [
     theme:           MID_AUTUMN_THEME,
   },
   {
+    // Window spans the drop week (Oct 27–31). Owns Oct 31 outright — Whitepaper
+    // starts Nov 1 to avoid the collision.
     id:              'halloween',
     emoji:           '🎃',
-    monthDayStart:   [10, 29],
-    monthDayEnd:     [10, 30],
+    monthDayStart:   [10, 27],
+    monthDayEnd:     [10, 31],
     i18nPrefix:      'login.halloween',
     anniversaryYear: null,
     theme:           HALLOWEEN_THEME,
   },
   {
     // Nostr's birthday — fiatjaf published the protocol spec on Nov 7, 2020.
-    // Starts Nov 7 so it doesn't overlap Whitepaper (Oct 31–Nov 4).
+    // Window spans the drop week (Nov 7–13); starts Nov 7, right after the
+    // Whitepaper window ends (Nov 6).
     id:              'nostr_day',
     emoji:           '💜',
     monthDayStart:   [11, 7],
-    monthDayEnd:     [11, 11],
+    monthDayEnd:     [11, 13],
     i18nPrefix:      'login.nostr_day',
     anniversaryYear: 2020,
     externalLink:    'https://github.com/nostr-protocol/nostr',
