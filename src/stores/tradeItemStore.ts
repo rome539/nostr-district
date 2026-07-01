@@ -657,6 +657,12 @@ export function isTrustedOracle(pubkey: string): boolean {
 // Loaded into memory on login via fetchInventoryFromRelays.
 
 let _inventory: OwnedItem[] = [];
+// True once fetchInventoryFromRelays has completed at least one successful rebuild.
+// Possession-based entitlement (collectionUnlocks) MUST wait for this before
+// stripping equipped cosmetics — otherwise an empty pre-fetch inventory reads as
+// "you own nothing" and un-equips items you actually hold (e.g. the sparkler).
+let _inventoryLoaded = false;
+export function isInventoryLoaded(): boolean { return _inventoryLoaded; }
 let _mintedEvents: Map<string, object> = new Map(); // instanceId → raw signed event
 // Persistent accumulation of every item event seen this session, keyed by d-tag
 // (newest wins). Lets partial relay coverage converge across fetches/browsers.
@@ -826,6 +832,7 @@ export async function fetchInventoryFromRelays(ownerPubkey: string): Promise<voi
       receiveMintedEvent(event);
     }
     console.log(`[Items] Inventory: ${_inventory.length} items (${burned} burned) from ${_itemEventsByDTag.size} known events`);
+    _inventoryLoaded = true; // possession-based entitlement may now enforce safely
     reconcileOutgoingOffers(); // self-heal: clear offers whose staked item burned away
     window.dispatchEvent(new CustomEvent('nd-inventory-update'));
   } catch (e) {

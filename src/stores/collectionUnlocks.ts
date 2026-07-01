@@ -1,4 +1,4 @@
-import { getInventory, getSetProgress, ITEM_SETS, ITEM_CATALOG } from './tradeItemStore';
+import { getInventory, getSetProgress, ITEM_SETS, ITEM_CATALOG, isInventoryLoaded } from './tradeItemStore';
 import { updateSetAuraProgress } from './auraUnlockStore';
 import { checkFishHat } from './fishingUnlockStore';
 import { isUnlocksLoaded } from './unlockStore';
@@ -126,7 +126,11 @@ function showCosmeticToast(labels: string[]): void {
 // Note: client-side enforcement — same trust level as the avatar itself.
 let _enforcing = false;
 async function enforceEquipped(): Promise<void> {
-  if (_enforcing || !isUnlocksLoaded()) return;
+  // Gate on BOTH data sources this enforcement reads: the relay unlock state AND
+  // the trade inventory. Possession-based cosmetics (the sparkler, set rewards)
+  // are owned via the inventory — enforcing before it has loaded reads an empty
+  // inventory as "owns nothing" and strips legitimately-equipped items on login.
+  if (_enforcing || !isUnlocksLoaded() || !isInventoryLoaded()) return;
   _enforcing = true;
   try {
     const [{ getAvatar, setAvatar }, { isOwned, isEarnGated }] = await Promise.all([
