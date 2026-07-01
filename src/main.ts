@@ -196,11 +196,17 @@ function startGame(): void {
           pixelArt: true,
           roundPixels: true,
           antialias: false,
-          // Cap the game loop to 60fps. Phaser otherwise drives the loop off
-          // requestAnimationFrame, which fires at the DISPLAY refresh rate — on a 120Hz
+          // Cap the game loop on high-refresh displays. Phaser otherwise drives the loop
+          // off requestAnimationFrame, which fires at the DISPLAY refresh rate — on a 120Hz
           // ProMotion Mac that's 120fps, running every per-frame system twice as often
           // and ~doubling CPU/energy for no visible benefit at this art style.
-          fps: { limit: 60, target: 60 },
+          // The limit must sit BETWEEN 60 and 120, never AT 60: Phaser's limiter skips any
+          // rAF tick whose accumulated delta is under 1000/limit ms, and on a 60Hz panel
+          // the ~16.7ms ticks jitter both sides of 16.67 — limit:60 randomly drops frames
+          // (render stutters between 30-60fps and the camera visibly drags on walks).
+          // At limit:90 a 60Hz tick (16.7ms ≥ 11.1ms) always renders, while 120Hz ticks
+          // (8.3ms) accumulate two-per-render → still an effective 60fps cap there.
+          fps: { limit: 90, target: 60 },
           scale: {
             mode: Phaser.Scale.FIT,
             autoCenter: Phaser.Scale.NO_CENTER,

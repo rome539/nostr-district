@@ -1005,6 +1005,24 @@ export abstract class BaseScene extends Phaser.Scene {
     return true;
   }
 
+  // Animated name cosmetics (color cycles, gradients, neon breathing) go through
+  // Text.setColor/setFill/setShadow — and EVERY one of those calls re-rasterizes the
+  // text canvas and re-uploads its texture, even when the value didn't change. At 60fps
+  // that's a per-name-tag texture upload every frame. The cycles they animate have
+  // 1.5–8s periods, so stepping them at ~11Hz (every 90ms) is visually identical and
+  // ~85% cheaper. Positioning/scale/alpha stay per-frame (transform-only, no re-raster).
+  private static readonly NAME_FX_MS = 90;
+  private _otherNameFxAt = 0;
+  private _localNameFxAt = 0;
+
+  /** True if the text currently has a visible shadow. Guards the per-frame shadow
+   *  "reset": Text.setShadow() always re-rasterizes even when clearing an already
+   *  clear shadow, which taxed every undecorated name tag on screen every frame. */
+  private static textHasShadow(t: Phaser.GameObjects.Text): boolean {
+    const s = t.style;
+    return s.shadowColor !== 'transparent' && (s.shadowBlur > 0 || s.shadowOffsetX !== 0 || s.shadowOffsetY !== 0);
+  }
+
   protected updateOtherPlayers(time: number, delta: number): void {
     // Gate Phaser scene input while a full-screen DOM panel (bazaar/wallet/market)
     // is open. Phaser processes pointer events on the NEXT frame, but a DOM panel
@@ -1013,6 +1031,9 @@ export abstract class BaseScene extends Phaser.Scene {
     // scene input means those clicks never reach the game while a panel is up.
     const block = this.shouldBlockPanelKeys();
     if (this.input.enabled === block) this.input.enabled = !block;
+
+    const fxDue = time - this._otherNameFxAt >= BaseScene.NAME_FX_MS;
+    if (fxDue) this._otherNameFxAt = time;
 
     const cfg = this.getOtherPlayerConfig();
     this.otherPlayers.forEach((o, pk) => {
@@ -1059,9 +1080,11 @@ export abstract class BaseScene extends Phaser.Scene {
           if (o.nameText.text !== wantN) o.nameText.setText(wantN);
 
           if (onScreen) {
-          // Color animation
-          if (oa.nameColor && isGradientColor(oa.nameColor)) applyNameGradient(o.nameText, oa.nameColor, time);
-          else if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
+          // Color animation — stepped at NAME_FX_MS (see fxDue above)
+          if (fxDue) {
+            if (oa.nameColor && isGradientColor(oa.nameColor)) applyNameGradient(o.nameText, oa.nameColor, time);
+            else if (oa.nameColor && isAnimatedColor(oa.nameColor)) o.nameText.setColor(getAnimatedColor(oa.nameColor, time));
+          }
 
           // 🦤 Nostrich — purple ostriches flanking this player's name tag.
           if (oa.nameColor === 'nostrich') {
@@ -1089,7 +1112,10 @@ export abstract class BaseScene extends Phaser.Scene {
               }
               this._applyCharAnim(ws, o.nameText.x, o.nameText.y, time, currentColor, oa.nameAnim);
             } else {
-              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+              o.nameText.setScale(1).setAngle(0).setAlpha(1);
+              if (oa.nameAnim !== 'glow' && !NEON_COLORS.has(oa.nameColor) && BaseScene.textHasShadow(o.nameText)) {
+                o.nameText.setShadow(0, 0, 'transparent', 0);
+              }
               switch (oa.nameAnim) {
                 case 'bob':   o.nameText.y += Math.sin(time / 400) * 3; break;
                 case 'pulse': o.nameText.setScale(1 + Math.sin(time / 350) * 0.08); break;
@@ -1108,6 +1134,7 @@ export abstract class BaseScene extends Phaser.Scene {
                   o.nameText.setAngle(Math.sin(time / 550) * 10);
                   break;
                 case 'glow': {
+                  if (!fxDue) break;
                   const glowColor = o.nameText.style.color as string;
                   const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
                   const blur = 10 + Math.sin(time / 600) * 4;
@@ -1115,17 +1142,18 @@ export abstract class BaseScene extends Phaser.Scene {
                   break;
                 }
               }
-              if (NEON_COLORS.has(oa.nameColor) && oa.nameAnim !== 'glow') {
+              if (fxDue && NEON_COLORS.has(oa.nameColor) && oa.nameAnim !== 'glow') {
                 o.nameText.setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
               }
             }
           } else {
             const ws = this._waveCharsMap.get(pk);
             if (ws) { this._clearWaveSet(ws); this._waveCharsMap.delete(pk); o.nameText.setVisible(true); }
+            o.nameText.setScale(1).setAngle(0).setAlpha(1);
             if (NEON_COLORS.has(oa.nameColor)) {
-              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
-            } else {
-              o.nameText.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+              if (fxDue) o.nameText.setShadow(0, 0, oa.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+            } else if (BaseScene.textHasShadow(o.nameText)) {
+              o.nameText.setShadow(0, 0, 'transparent', 0);
             }
           }
           } else {
@@ -1250,6 +1278,9 @@ export abstract class BaseScene extends Phaser.Scene {
   /** Call once per frame in each scene's update() to animate name tag + aura. */
   protected updateLocalNameColor(time: number, delta = 16): void {
     const av = getAvatar();
+    // Step animated color/shadow work at NAME_FX_MS — see the note above updateOtherPlayers.
+    const fxDue = time - this._localNameFxAt >= BaseScene.NAME_FX_MS;
+    if (fxDue) this._localNameFxAt = time;
 
     // ₿ Bullion name wrap (applied before name-motion so the wave set rebuilds with it)
     if (this.playerName) {
@@ -1258,7 +1289,7 @@ export abstract class BaseScene extends Phaser.Scene {
     }
 
     // Color animation
-    if (av.nameColor) {
+    if (av.nameColor && fxDue) {
       if (isGradientColor(av.nameColor) && this.playerName) {
         applyNameGradient(this.playerName, av.nameColor, time);
       } else if (isAnimatedColor(av.nameColor)) {
@@ -1290,7 +1321,10 @@ export abstract class BaseScene extends Phaser.Scene {
         }
         this._applyCharAnim(this._playerWaveSet, this.playerName.x, this.playerName.y, time, color, av.nameAnim);
       } else {
-        this.playerName.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+        this.playerName.setScale(1).setAngle(0).setAlpha(1);
+        if (av.nameAnim !== 'glow' && !NEON_COLORS.has(av.nameColor) && BaseScene.textHasShadow(this.playerName)) {
+          this.playerName.setShadow(0, 0, 'transparent', 0);
+        }
         switch (av.nameAnim) {
           case 'bob':   this.playerName.y += Math.sin(time / 400) * 3; break;
           case 'pulse': this.playerName.setScale(1 + Math.sin(time / 350) * 0.08); break;
@@ -1309,6 +1343,7 @@ export abstract class BaseScene extends Phaser.Scene {
             this.playerName.setAngle(Math.sin(time / 550) * 10);
             break;
           case 'glow': {
+            if (!fxDue) break;
             const glowColor = this.playerName.style.color as string;
             const flicker = Math.random() < 0.015 ? 0.25 : Math.random() < 0.04 ? 0.75 : 1;
             const blur = 10 + Math.sin(time / 600) * 4;
@@ -1316,16 +1351,17 @@ export abstract class BaseScene extends Phaser.Scene {
             break;
           }
         }
-        if (NEON_COLORS.has(av.nameColor) && av.nameAnim !== 'glow') {
+        if (fxDue && NEON_COLORS.has(av.nameColor) && av.nameAnim !== 'glow') {
           this.playerName.setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
         }
       }
     } else {
       if (this._playerWaveSet) { this._clearWaveSet(this._playerWaveSet); this._playerWaveSet = null; this.playerName?.setVisible(true); }
+      this.playerName?.setScale(1).setAngle(0).setAlpha(1);
       if (NEON_COLORS.has(av.nameColor)) {
-        this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
-      } else {
-        this.playerName?.setScale(1).setAngle(0).setAlpha(1).setShadow(0, 0, 'transparent', 0);
+        if (fxDue) this.playerName?.setShadow(0, 0, av.nameColor, 8 + Math.sin(time / 600) * 3, false, true);
+      } else if (this.playerName && BaseScene.textHasShadow(this.playerName)) {
+        this.playerName.setShadow(0, 0, 'transparent', 0);
       }
     }
 
