@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FireworksEngine, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
+import { FireworksEngine, drawFireworksCanvas, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
 import { BatEngine, newBatEngine, drawBatsCanvas, drawBatsPhaser, isHalloweenPeriod } from '../utils/bats';
 import { HeartsEngine, newHeartsEngine, drawHeartsPhaser, isValentinePeriod } from '../utils/valentineFX';
 import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../utils/lanterns';
@@ -146,6 +146,9 @@ export class RoomScene extends BaseScene {
         new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(309, 492, 1800)),
         new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, winCfg(565, 747, 3600)),
       ];
+      // Distant city show behind glass — muffled booms only, no whistle.
+      // (SoundEngine throttles, so the three engines can't stack booms.)
+      for (const fw of this.cityFwEngines) fw.onExplode = () => this.snd.fireworkBoom(0.25);
     }
     if (isHalloweenPeriod()) {
       // Bats confined to the window y-range so they appear in the city sky
@@ -457,24 +460,11 @@ export class RoomScene extends BaseScene {
       this.cityBatEngine.tick(time, delta);
       drawBatsCanvas(ctx, this.cityBatEngine, time);
     }
-    // Fireworks
+    // Fireworks — shared renderer (flash/glitter/smear); ctx is already clipped
+    // to the window panes above.
     for (const fw of this.cityFwEngines) {
       fw.tick(time, delta);
-      for (const r of fw.rockets) {
-        for (let i = 0; i < r.trail.length; i++) {
-          ctx.globalAlpha = (i / r.trail.length) * 0.5;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(r.trail[i].x - 1, r.trail[i].y - 1, 2, 2);
-        }
-        ctx.globalAlpha = 0.9;
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(r.x, r.y, fw.radius, 0, Math.PI * 2); ctx.fill();
-      }
-      for (const p of fw.particles) {
-        ctx.globalAlpha = p.alpha * 0.9;
-        ctx.fillStyle = fw.colorCss(p.ci);
-        ctx.beginPath(); ctx.arc(p.x, p.y, fw.radius, 0, Math.PI * 2); ctx.fill();
-      }
+      drawFireworksCanvas(ctx, fw);
     }
     ctx.restore();
     // Push updated canvas to GPU
@@ -523,26 +513,10 @@ export class RoomScene extends BaseScene {
   private updateCityWindowFireworks(time: number, delta: number): void {
     if (!this.cityFwEngines.length) return;
     const g = this.shootingStarGraphics;
+    const accept = (x: number, y: number) => this.inCityWindow(x, y) && !this.inCityDecoration(x, y);
     for (const fw of this.cityFwEngines) {
       fw.tick(time, delta);
-      for (const r of fw.rockets) {
-        for (let i = 0; i < r.trail.length; i++) {
-          const pt = r.trail[i];
-          if (!this.inCityWindow(pt.x, pt.y) || this.inCityDecoration(pt.x, pt.y)) continue;
-          g.fillStyle(0xffffff, (i / r.trail.length) * 0.5);
-          g.fillRect(pt.x - 1, pt.y - 1, 2, 2);
-        }
-        if (this.inCityWindow(r.x, r.y) && !this.inCityDecoration(r.x, r.y)) {
-          g.fillStyle(0xffffff, 0.9);
-          g.fillCircle(r.x, r.y, fw.radius);
-        }
-      }
-      for (const p of fw.particles) {
-        if (!this.inCityWindow(p.x, p.y)) continue;
-        if (this.inCityDecoration(p.x, p.y)) continue;
-        g.fillStyle(fw.colorNum(p.ci), p.alpha * 0.85);
-        g.fillCircle(p.x, p.y, fw.radius);
-      }
+      drawFireworksPhaser(g, fw, accept);
     }
   }
 

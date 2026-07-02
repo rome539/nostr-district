@@ -635,6 +635,55 @@ export class SoundEngine {
 
   // ── SFX ───────────────────────────────────────────────────────────────────────
 
+  /** Firework burst: deep pitch-dropping thump + low rumble + sparse glitter
+   *  crackle (timed to match the visual burn-out sparkle). `vol` 0..1 scales the
+   *  whole hit — rooms pass a low value so window fireworks sound behind glass.
+   *  Throttled: volleys and multi-engine scenes would otherwise stack booms. */
+  private _lastFwBoom = 0;
+  fireworkBoom(vol = 1): void {
+    const nowMs = performance.now();
+    if (nowMs - this._lastFwBoom < 120) return;
+    this._lastFwBoom = nowMs;
+    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+    const v = Math.max(0, Math.min(1, vol));
+    // The boom body — a sine that falls 140→45Hz like a distant shell report
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.35);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.16 * v, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(g); g.connect(d);
+    o.start(t); o.stop(t + 0.55);
+    // Air rumble under it
+    this.noiseShot(0.4, 'lowpass', 240, 0.7, 0.10 * v, d);
+    // Glitter crackle — a few scattered high pops trailing 0.1-0.6s behind
+    for (let i = 0; i < 5; i++) {
+      const dl = 0.12 + Math.random() * 0.5;
+      this.noiseShot(0.03 + Math.random() * 0.04, 'bandpass', 2500 + Math.random() * 2500, 2.5, 0.035 * v, d, dl);
+    }
+  }
+
+  /** Soft rising whistle as a firework shell climbs (pairs with fireworkBoom). */
+  fireworkWhistle(vol = 1): void {
+    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+    const v = Math.max(0, Math.min(1, vol));
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(650, t);
+    o.frequency.exponentialRampToValueAtTime(1500, t + 0.5);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.018 * v, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g); g.connect(d);
+    o.start(t); o.stop(t + 0.6);
+    // faint air hiss riding along
+    this.noiseShot(0.45, 'highpass', 3200, 1.0, 0.012 * v, d);
+  }
+
   zapSound(): void {
     const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
     // Electric crackle — noise burst with high-freq filter

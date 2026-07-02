@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, P, hexToRgb, hexToNum } from '../../config/game.config';
 import { FireworksEngine, drawFireworksPhaser, isJuly4thPeriod, FW_SHAPE_MIX } from '../../utils/fireworks';
+import { SoundEngine } from '../../audio/SoundEngine';
 import { BatEngine, newBatEngine, drawBatsPhaser, isHalloweenPeriod } from '../../utils/bats';
 import { LanternEngine, newLanternEngine, drawLanternsPhaser, isMidAutumnPeriod } from '../../utils/lanterns';
 
@@ -23,6 +24,8 @@ let loungeFireworks: FireworksEngine | null = isJuly4thPeriod()
       shapes: FW_SHAPE_MIX,
     })
   : null;
+// Seen through the lounge window — quiet, muffled booms, no whistle.
+if (loungeFireworks) loungeFireworks.onExplode = () => SoundEngine.get().fireworkBoom(0.3);
 
 export function updateLoungeRoom(
   graphics: Phaser.GameObjects.Graphics,

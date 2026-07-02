@@ -24,6 +24,15 @@ const COLORS_CSS = [
 ];
 const COLORS_NUM = COLORS_CSS.map(c => parseInt(c.replace('#', ''), 16));
 
+// White-hot variants — newborn sparks flash these for their first ~fifth of life,
+// like the incandescent core of a real burst, then cool to the palette color.
+const brighten = (n: number): number => {
+  const f = (v: number) => Math.round(v + (255 - v) * 0.6);
+  return (f((n >> 16) & 0xff) << 16) | (f((n >> 8) & 0xff) << 8) | f(n & 0xff);
+};
+const COLORS_NUM_BRIGHT = COLORS_NUM.map(brighten);
+const COLORS_CSS_BRIGHT = COLORS_NUM_BRIGHT.map(n => `#${n.toString(16).padStart(6, '0')}`);
+
 // Hue groups into the palette above — used to build multi-color bursts that are
 // guaranteed to mix distinct colors (a red AND a blue, sometimes white) rather than
 // three near-identical reds. Keeps multi bursts unmistakably patriotic.
@@ -42,7 +51,12 @@ interface FWRocket {
 interface FWParticle {
   x: number; y: number; vx: number; vy: number;
   ci: number; alpha: number; life: number; maxLife: number;
+  px: number; py: number; // previous tick's position — renderers smear a ghost here
+  tw: number;             // per-spark twinkle phase for the burn-out glitter
 }
+
+// Brief expanding glow at a burst point (the detonation "pop" of light).
+interface FWFlash { x: number; y: number; ci: number; life: number; maxLife: number; }
 
 // Burst silhouettes. Each explosion picks one at random from the engine's list.
 //   burst — classic filled radial pop (default)
@@ -127,7 +141,16 @@ export interface FireworksConfig {
 export class FireworksEngine {
   readonly rockets: FWRocket[] = [];
   readonly particles: FWParticle[] = [];
+  readonly flashes: FWFlash[] = [];
+  now = 0;                       // last tick's time — renderers use it for the glitter strobe
+  // Optional audio hooks — the engine stays render/sound-agnostic; each surface
+  // wires these to SoundEngine at its own volume (hub loud, room windows muffled,
+  // aura silent). Before the first user gesture the AudioContext is suspended and
+  // any triggered sound is simply swallowed, so pre-gesture wiring is safe.
+  onLaunch: ((x: number, y: number) => void) | null = null;
+  onExplode: ((x: number, y: number) => void) | null = null;
   private nextLaunch = Infinity; // set on first tick once we know current time
+  private volleyLeft = 0;        // rockets still owed in the current quick-fire volley
   private started = false;
   private cfg: Required<FireworksConfig>;
 
@@ -150,6 +173,7 @@ export class FireworksEngine {
 
   tick(time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs, 64) / 16;
+    this.now = time;
 
     if (!this.started) {
       this.started = true;
@@ -158,7 +182,23 @@ export class FireworksEngine {
 
     if (time > this.nextLaunch) {
       this.launchRocket();
-      this.nextLaunch = time + this.cfg.intervalMin + Math.random() * this.cfg.intervalMax;
+      // Occasional volley: 1-2 quick follow-up shells so bursts sometimes overlap in
+      // the air — evenly spaced lone pops read as mechanical, real shows fire clusters.
+      if (this.volleyLeft > 0) {
+        this.volleyLeft--;
+        this.nextLaunch = time + 130 + Math.random() * 170;
+      } else if (Math.random() < 0.16) {
+        this.volleyLeft = Math.random() < 0.35 ? 2 : 1;
+        this.nextLaunch = time + 130 + Math.random() * 170;
+      } else {
+        this.nextLaunch = time + this.cfg.intervalMin + Math.random() * this.cfg.intervalMax;
+      }
+    }
+
+    for (let i = this.flashes.length - 1; i >= 0; i--) {
+      const f = this.flashes[i];
+      f.life -= deltaMs;
+      if (f.life <= 0) this.flashes.splice(i, 1);
     }
 
     for (let i = this.rockets.length - 1; i >= 0; i--) {
@@ -171,6 +211,8 @@ export class FireworksEngine {
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
+      p.px = p.x;
+      p.py = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 0.055 * dt;
@@ -191,13 +233,15 @@ export class FireworksEngine {
       if (Math.random() < 0.5) multi.push(pick(WHITE_CI));
     }
     const { launchY, explodeYMin, explodeYMax, xMin, xMax } = this.cfg;
+    const x = xMin + Math.random() * (xMax - xMin);
     this.rockets.push({
-      x: xMin + Math.random() * (xMax - xMin),
+      x,
       y: launchY,
       vy: -(3.8 + Math.random() * 2.8),
       targetY: explodeYMin + Math.random() * (explodeYMax - explodeYMin),
       ci, multi, trail: [],
     });
+    this.onLaunch?.(x, launchY);
   }
 
   private explode(r: FWRocket): void {
@@ -205,14 +249,18 @@ export class FireworksEngine {
     const speed = this.cfg.explosionSpeed * (0.7 + Math.random() * 0.6);
     const shape = this.cfg.shapes[Math.floor(Math.random() * this.cfg.shapes.length)];
 
+    // Detonation flash — a ~200ms glow pop at the burst point.
+    this.flashes.push({ x: r.x, y: r.y, ci: r.multi ? pick(r.multi) : r.ci, life: 200, maxLife: 200 });
+    this.onExplode?.(r.x, r.y);
+
     // Picture shapes: one particle per bitmap point, scaled out from the centre.
     if (shape === 'bitcoin' || shape === 'ostrich') {
       const pts = shape === 'bitcoin' ? BITCOIN_PTS : OSTRICH_PTS;
-      const f = speed * 1.2; // scale of the figure (smaller = tighter picture)
+      const f = speed * 1.0; // scale of the figure (smaller = tighter picture)
       for (const [px, py] of pts) {
         this.particles.push({
-          x: r.x, y: r.y, vx: px * f, vy: -py * f,
-          ci: r.ci, alpha: 1, life: baseLife, maxLife: baseLife,
+          x: r.x, y: r.y, px: r.x, py: r.y, vx: px * f, vy: -py * f,
+          ci: r.ci, alpha: 1, life: baseLife, maxLife: baseLife, tw: Math.random() * 10,
         });
       }
       return;
@@ -266,43 +314,79 @@ export class FireworksEngine {
         }
       }
 
-      this.particles.push({ x: r.x, y: r.y, vx, vy, ci: pci(), alpha: 1, life, maxLife: life });
+      this.particles.push({ x: r.x, y: r.y, px: r.x, py: r.y, vx, vy, ci: pci(), alpha: 1, life, maxLife: life, tw: Math.random() * 10 });
     }
   }
 
   get radius(): number { return this.cfg.particleRadius; }
   colorCss(ci: number): string { return COLORS_CSS[ci]; }
   colorNum(ci: number): number { return COLORS_NUM[ci]; }
+  colorCssBright(ci: number): string { return COLORS_CSS_BRIGHT[ci]; }
+  colorNumBright(ci: number): number { return COLORS_NUM_BRIGHT[ci]; }
 }
 
-// ── Canvas (DOM) renderer — used by LoginScreen ──────────────────────────────
+// ── Canvas (DOM) renderer — used by LoginScreen / Room city windows ──────────
 
 export function drawFireworksCanvas(ctx: CanvasRenderingContext2D, fw: FireworksEngine): void {
   const r = fw.radius;
+  const d = r * 2;
+  const now = fw.now;
   ctx.save();
+  // Additive: overlapping sparks bloom instead of occluding (drawn over dark sky).
+  ctx.globalCompositeOperation = 'lighter';
+
+  // Detonation flash — expanding, fading glow under the sparks.
+  for (const f of fw.flashes) {
+    const t = 1 - f.life / f.maxLife;
+    const fade = (1 - t) * (1 - t);
+    const rad = (3 + r * 9) * (0.3 + 0.7 * t);
+    ctx.globalAlpha = 0.35 * fade;
+    ctx.fillStyle = fw.colorCss(f.ci);
+    ctx.beginPath(); ctx.arc(f.x, f.y, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.85 * fade;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(f.x, f.y, rad * 0.45, 0, Math.PI * 2); ctx.fill();
+  }
+
   for (const rocket of fw.rockets) {
     for (let i = 0; i < rocket.trail.length; i++) {
       ctx.globalAlpha = (i / rocket.trail.length) * 0.6;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(rocket.trail[i].x - 1, rocket.trail[i].y - 1, 2, 2);
     }
+    // Warm ember glow around the climbing shell, white-hot core on top.
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ffc878';
+    ctx.fillRect(rocket.x - d, rocket.y - d, d * 2, d * 2);
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(rocket.x, rocket.y, r, 0, Math.PI * 2);
     ctx.fill();
   }
+
   for (const p of fw.particles) {
-    ctx.globalAlpha = p.alpha * 0.9;
-    ctx.fillStyle = fw.colorCss(p.ci);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fill();
+    const lf = p.alpha; // life fraction, 1 at birth → 0 at death
+    let a = lf * 0.9;
+    // Burn-out glitter: dying sparks strobe instead of fading flat.
+    if (lf < 0.45) a *= 0.3 + 0.7 * Math.abs(Math.sin(now * 0.02 + p.tw));
+    // Sparks shrink as they cool; newborn ones flash white-hot.
+    const ds = Math.max(1, d * (0.55 + 0.45 * lf));
+    const col = lf > 0.82 ? fw.colorCssBright(p.ci) : fw.colorCss(p.ci);
+    // One-tick motion smear while the spark is still fast (young).
+    if (lf > 0.5) {
+      ctx.globalAlpha = a * 0.3;
+      ctx.fillStyle = col;
+      ctx.fillRect(p.px - ds / 2, p.py - ds / 2, ds, ds);
+    }
+    ctx.globalAlpha = a;
+    ctx.fillStyle = col;
+    ctx.fillRect(p.x - ds / 2, p.y - ds / 2, ds, ds);
   }
   ctx.restore();
 }
 
-// ── Phaser Graphics renderer — used by HubScene / Lounge ─────────────────────
+// ── Phaser Graphics renderer — used by HubScene / Lounge / Room windows ──────
 
 // `accept` (optional) clips drawing to points it approves — used to confine
 // fireworks to a window/sky region so falling sparks don't spill onto a floor.
@@ -313,9 +397,24 @@ export function drawFireworksPhaser(
 ): void {
   // fillRect, not fillCircle: Phaser tessellates every circle into ~32 triangles, so a
   // few hundred particles is thousands of tris/frame. At these radii (≤1.5px) a square
-  // is visually identical and ~16× cheaper to build + upload.
+  // is visually identical and ~16× cheaper to build + upload. The only circles below
+  // are the detonation flashes — at most a couple alive at once.
   const r = fw.radius;
   const d = r * 2;
+  const now = fw.now;
+
+  // Detonation flash — expanding, fading glow under the sparks.
+  for (const f of fw.flashes) {
+    if (accept && !accept(f.x, f.y)) continue;
+    const t = 1 - f.life / f.maxLife; // 0 → 1 over the flash
+    const fade = (1 - t) * (1 - t);
+    const rad = (3 + r * 9) * (0.3 + 0.7 * t);
+    g.fillStyle(fw.colorNum(f.ci), 0.35 * fade);
+    g.fillCircle(f.x, f.y, rad);
+    g.fillStyle(0xffffff, 0.85 * fade);
+    g.fillCircle(f.x, f.y, rad * 0.45);
+  }
+
   for (const rocket of fw.rockets) {
     for (let i = 0; i < rocket.trail.length; i++) {
       const pt = rocket.trail[i];
@@ -324,13 +423,29 @@ export function drawFireworksPhaser(
       g.fillRect(pt.x - 1, pt.y - 1, 2, 2);
     }
     if (!accept || accept(rocket.x, rocket.y)) {
+      // Warm ember glow around the climbing shell, white-hot core on top.
+      g.fillStyle(0xffc878, 0.3);
+      g.fillRect(rocket.x - d, rocket.y - d, d * 2, d * 2);
       g.fillStyle(0xffffff, 1);
       g.fillRect(rocket.x - r, rocket.y - r, d, d);
     }
   }
+
   for (const p of fw.particles) {
     if (accept && !accept(p.x, p.y)) continue;
-    g.fillStyle(fw.colorNum(p.ci), p.alpha * 0.85);
-    g.fillRect(p.x - r, p.y - r, d, d);
+    const lf = p.alpha; // life fraction, 1 at birth → 0 at death
+    let a = lf * 0.9;
+    // Burn-out glitter: dying sparks strobe instead of fading flat.
+    if (lf < 0.45) a *= 0.3 + 0.7 * Math.abs(Math.sin(now * 0.02 + p.tw));
+    // Sparks shrink as they cool; newborn ones flash white-hot.
+    const ds = Math.max(1, d * (0.55 + 0.45 * lf));
+    const col = lf > 0.82 ? fw.colorNumBright(p.ci) : fw.colorNum(p.ci);
+    // One-tick motion smear while the spark is still fast (young).
+    if (lf > 0.5) {
+      g.fillStyle(col, a * 0.3);
+      g.fillRect(p.px - ds / 2, p.py - ds / 2, ds, ds);
+    }
+    g.fillStyle(col, a);
+    g.fillRect(p.x - ds / 2, p.y - ds / 2, ds, ds);
   }
 }

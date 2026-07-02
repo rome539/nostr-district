@@ -242,7 +242,9 @@ export class HubScene extends BaseScene {
       // July 4: sky and skyline are SEPARATE layers so the fireworks can burst between
       // them — sky (-1.6) → fireworks (-1.5) → buildings (-1).
       this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_sky').setDepth(-1.6);
-      this.fwGraphics = this.add.graphics().setDepth(-1.5).setScrollFactor(0);
+      // ADD blend: overlapping sparks bloom against the dark sky. Safe here because
+      // this Graphics is dedicated to fireworks (the lounge's shared layer is not).
+      this.fwGraphics = this.add.graphics().setDepth(-1.5).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD);
       this.fwEngine = new FireworksEngine(GAME_WIDTH, GAME_HEIGHT, {
         launchY:        GROUND_Y - 200,
         explodeYMin:    10,
@@ -252,6 +254,9 @@ export class HubScene extends BaseScene {
         explosionSpeed: 1.8,
         shapes: FW_SHAPE_MIX,
       });
+      // The show is overhead in the open sky — full whistle-and-boom.
+      this.fwEngine.onLaunch = () => this.snd.fireworkWhistle(0.6);
+      this.fwEngine.onExplode = () => this.snd.fireworkBoom(0.9);
       this.add.image(WORLD_WIDTH / 2, GAME_HEIGHT / 2, 'district_bg').setDepth(-1);
     } else {
       // Normal: sky + buildings pre-baked into one opaque layer — one fewer full-screen

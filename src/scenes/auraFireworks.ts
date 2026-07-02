@@ -18,7 +18,8 @@ export class AuraFireworks {
 
   constructor(scene: Phaser.Scene, depth: number, spriteScale: number) {
     this.s = spriteScale;
-    this.g = scene.add.graphics().setDepth(depth);
+    // ADD blend to match the other aura emitters (they all emit blendMode: 'ADD').
+    this.g = scene.add.graphics().setDepth(depth).setBlendMode(Phaser.BlendModes.ADD);
     this.engine = new FireworksEngine(BOX_W, BOX_H, {
       launchY:        BOX_H,
       explodeYMin:    6,

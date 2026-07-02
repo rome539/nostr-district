@@ -3,6 +3,7 @@
  * LoginScreen.ts just calls tick() each frame. Add new holidays here only.
  */
 import { FireworksEngine, drawFireworksCanvas, isJuly4thPeriod, FW_SHAPE_MIX } from '../utils/fireworks';
+import { SoundEngine } from '../audio/SoundEngine';
 import { BatEngine, newBatEngine, drawBatsCanvas, isHalloweenPeriod } from '../utils/bats';
 import { HeartsEngine, newHeartsEngine, drawHeartsCanvas, isValentinePeriod } from '../utils/valentineFX';
 import { LanternEngine, newLanternEngine, drawLanternsCanvas, isMidAutumnPeriod } from '../utils/lanterns';
@@ -18,6 +19,13 @@ export class LoginHolidayFX {
   init(W: number, H: number): void {
     this.W = W; this.H = H;
     this.fireworks = isJuly4thPeriod() ? new FireworksEngine(W, H, { shapes: FW_SHAPE_MIX }) : null;
+    if (this.fireworks) {
+      // Soft show behind the login card. Inaudible until the first click/keypress
+      // anywhere on the page (browser autoplay policy — main.ts unlocks on gesture);
+      // booms before that are simply swallowed by the suspended AudioContext.
+      this.fireworks.onLaunch = () => SoundEngine.get().fireworkWhistle(0.4);
+      this.fireworks.onExplode = () => SoundEngine.get().fireworkBoom(0.55);
+    }
     if (isHalloweenPeriod()) {
       this.bats = newBatEngine(W, { yMin: 30, yMax: H * 0.6, count: 7, speedMin: 0.5, speedMax: 1.2 });
     }
