@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script>
+// ── ND July 4 promo — no gameplay; the real fireworks math, re-staged ───────
+//  0-3    lone rocket climbs a dark sky
+//  3-10   burst → JULY 4 title; red/white/blue show over the skyline
+// 10-15   shaped shells showcase: ring, star, heart, ₿, nostrich
+// 15-21   Liberty name color feature (flag gradient + shine sweep)
+// 21-25   sparkler + bounty board line
+// 25-30   finale barrage → end card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee',
+      CREAM='#fff5e6', BG='#0a0014';
+const FW_RED='#ff3333', FW_WHITE='#ffffff', FW_BLUE='#4477ff';
+const RWB = [FW_RED, FW_WHITE, FW_BLUE, '#ff8888', '#88aaff'];
+
+let seed = 7476;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const stars = Array.from({ length: 80 }, () => ({ x: (rnd()*W)|0, y: (rnd()*280)|0, ph: rnd()*6.28, s: rnd()<0.2?2:1 }));
+const builds = [];
+{ let x=-10; while (x<W+10){ const w=50+rnd()*70,h=80+rnd()*130; const win=[];
+  for(let wy=12;wy<h-10;wy+=18) for(let wx=8;wx<w-10;wx+=14) if(rnd()<0.4) win.push([wx,wy,[PINK,TEAL,AMBER,PURP,CREAM][(rnd()*5)|0]]);
+  builds.push({x,w,h,win}); x+=w+4; } }
+
+// ── picture bitmaps (same as src/utils/fireworks.ts) ──
+function gridToPoints(rows){ const h=rows.length, w=Math.max(...rows.map(r=>r.length));
+  const cx=(w-1)/2, cy=(h-1)/2, half=Math.max(w,h)/2, pts=[];
+  rows.forEach((row,ry)=>{ for(let i=0;i<row.length;i++) if(row[i]==='#') pts.push([(i-cx)/half,(cy-ry)/half]); });
+  return pts; }
+const BITCOIN_PTS = gridToPoints(['.#.#.','.#.#.','####.','.#..#','.#..#','.###.','.#..#','.#..#','####.','.#.#.','.#.#.']);
+const OSTRICH_PTS = gridToPoints(['..#......','.###.....','####.....','..#..#.#.','..#.###..','.#######.','.########','..######.','...###...','...#.#...','...#.#...','..####...']);
+
+// ── fireworks engine-lite (ports the game's shape math) ──
+const rockets = [], parts = [];
+function launch(x, targetY, shape, color, opts = {}) {
+  rockets.push({ x, y: H - 30, vy: -(240 + rnd()*120), targetY, shape, color, trail: [], ...opts });
+}
+function explode(r) {
+  const n = r.count ?? 44, sp = r.speed ?? 130, life = 1.15 + rnd()*0.4;
+  const col = () => r.color === 'rwb' ? RWB[(rnd()*RWB.length)|0] : r.color;
+  if (r.shape === 'bitcoin' || r.shape === 'ostrich') {
+    const pts = r.shape === 'bitcoin' ? BITCOIN_PTS : OSTRICH_PTS;
+    for (const [px, py] of pts)
+      parts.push({ x: r.x, y: r.y, vx: px*sp*0.9, vy: -py*sp*0.9, c: col(), life: life*1.4, t: 0 });
+    return;
+  }
+  for (let i = 0; i < n; i++) {
+    const a = (i/n)*6.283; let vx, vy, lf = life;
+    switch (r.shape) {
+      case 'ring': { const s = sp*(1+rnd()*0.1); vx=Math.cos(a)*s; vy=Math.sin(a)*s; break; }
+      case 'star': { const spike=Math.pow(Math.abs(Math.cos(2.5*a)),6); const s=sp*(0.35+spike)*(0.9+rnd()*0.2); vx=Math.cos(a)*s; vy=Math.sin(a)*s; break; }
+      case 'heart': { const hx=16*Math.pow(Math.sin(a),3); const hy=13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a); const f=sp/15; vx=hx*f; vy=-hy*f; break; }
+      default: { const aa=a+rnd()*0.3, s=sp*(0.5+rnd()*0.9); vx=Math.cos(aa)*s; vy=Math.sin(aa)*s; }
+    }
+    parts.push({ x: r.x, y: r.y, vx, vy, c: col(), life: lf, t: 0 });
+  }
+  flashes.push({ x: r.x, y: r.y, c: r.color === 'rwb' ? FW_WHITE : r.color, t: 0 });
+}
+const flashes = [];
+
+function tickFw(dt, t) {
+  for (let i = rockets.length-1; i >= 0; i--) {
+    const r = rockets[i];
+    r.trail.push([r.x, r.y]); if (r.trail.length > 7) r.trail.shift();
+    r.y += r.vy * dt;
+    if (r.y <= r.targetY) { explode(r); rockets.splice(i, 1); }
+  }
+  for (let i = parts.length-1; i >= 0; i--) {
+    const p = parts[i]; p.t += dt;
+    if (p.t >= p.life) { parts.splice(i, 1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 42*dt; p.vx *= 0.985; p.vy *= 0.985;
+  }
+  for (let i = flashes.length-1; i >= 0; i--) { flashes[i].t += dt; if (flashes[i].t > 0.22) flashes.splice(i,1); }
+}
+function drawFw(t) {
+  for (const f of flashes) {
+    const k = f.t / 0.22, rad = (14 + 30*k);
+    ctx.globalAlpha = (1-k)*(1-k)*0.5; ctx.fillStyle = f.c;
+    ctx.beginPath(); ctx.arc(f.x, f.y, rad, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = (1-k)*0.9; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(f.x, f.y, rad*0.4, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  for (const r of rockets) {
+    r.trail.forEach(([tx,ty],i)=>{ ctx.globalAlpha=(i/r.trail.length)*0.5; ctx.fillStyle='#fff'; ctx.fillRect(tx-1,ty-1,2,2); });
+    ctx.globalAlpha=1; ctx.fillStyle='#ffe0a0'; ctx.fillRect(r.x-2,r.y-2,4,4);
+    ctx.fillStyle='#fff'; ctx.fillRect(r.x-1,r.y-1,2,2);
+  }
+  for (const p of parts) {
+    const lf = 1 - p.t/p.life;
+    ctx.globalAlpha = lf < 0.42 ? lf * (0.35+0.65*Math.abs(Math.sin(t*20+p.x))) : lf;
+    ctx.fillStyle = p.c;
+    const sz = lf > 0.8 ? 3 : 2;
+    ctx.fillRect(p.x|0, p.y|0, sz, sz);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Liberty gradient (ports marketStore's fixed flag bands + traveling shine)
+const LIB = [[228,44,44],[244,244,244],[48,92,232],[244,244,244]];
+function libAt(p){ const n=LIB.length, x=(((p%1)+1)%1)*n, i=Math.floor(x)%n, f=x-Math.floor(x);
+  const a=LIB[i], b=LIB[(i+1)%n];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f]; }
+function libertyGradient(x0, x1, t) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  const sweep = (t/1.5) % 1;
+  for (let i = 0; i <= 12; i++) {
+    const pos = i/12; let [r,gg,b] = libAt(pos);
+    const raw = Math.abs(pos-sweep), d = Math.min(raw, 1-raw);
+    const sh = Math.exp(-(d*d)/(2*0.05*0.05))*0.85;
+    r+= (255-r)*sh; gg+=(255-gg)*sh; b+=(255-b)*sh;
+    g.addColorStop(pos, `rgb(${r|0},${gg|0},${b|0})`);
+  }
+  return g;
+}
+
+function neon(txt, x, y, size, color, glow=16, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=18) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// scheduled launches: [time, x, y, shape, color]
+const SHOW = [];
+{ // 3-10 main show
+  SHOW.push([2.0, W/2, 120, 'burst', 'rwb', { count: 60, speed: 150, vy: -330 }]);
+  for (let t0 = 3.4; t0 < 9.4; t0 += 0.45 + rnd()*0.3)
+    SHOW.push([t0, 90+rnd()*(W-180), 70+rnd()*140, ['burst','burst','ring','star','heart'][(rnd()*5)|0], 'rwb', { vy: -330 }]);
+  // shaped showcase — fixed vy so bursts land ~1.2s after launch, in caption sync
+  SHOW.push([ 9.8, 250, 130, 'ring',    FW_WHITE, { count: 50, vy: -320 }]);
+  SHOW.push([10.5, 710, 150, 'star',    AMBER,    { count: 55, vy: -320 }]);
+  SHOW.push([11.2, 480, 110, 'heart',   PINK,     { count: 52, speed: 150, vy: -320 }]);
+  SHOW.push([12.0, 300, 140, 'bitcoin', AMBER,    { speed: 140, vy: -320 }]);
+  SHOW.push([12.9, 660, 130, 'ostrich', PURP,     { speed: 150, vy: -320 }]);
+  // 15.2-19 finale barrage
+  for (let t0 = 15.2; t0 < 18.8; t0 += 0.28) SHOW.push([t0, 80+rnd()*(W-160), 60+rnd()*160, ['burst','ring','star'][(rnd()*3)|0], 'rwb', { count: 46, speed: 140, vy: -330 }]);
+}
+let showIdx = 0;
+
+// sparkler particles
+const sparks = [];
+let prev = 0;
+
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+
+  // stars
+  for (const s of stars) { ctx.globalAlpha = 0.3+0.6*(0.5+0.5*Math.sin(t*2+s.ph)); ctx.fillStyle=CREAM; ctx.fillRect(s.x,s.y,s.s,s.s); }
+  ctx.globalAlpha = 1;
+
+  // skyline (always, low)
+  for (const b of builds) {
+    ctx.fillStyle = '#120726'; ctx.fillRect(b.x, H-40-b.h, b.w, b.h+40);
+    for (const [wx,wy,c] of b.win) { ctx.globalAlpha=0.45; ctx.fillStyle=c; ctx.fillRect(b.x+wx, H-40-b.h+wy, 6, 9); }
+    ctx.globalAlpha = 1;
+  }
+
+  // fire scheduled shells
+  while (showIdx < SHOW.length && SHOW[showIdx][0] <= t) {
+    const [, x, y, shape, color, opts] = SHOW[showIdx++];
+    launch(x, y, shape, color, opts);
+  }
+  tickFw(dt, t);
+  drawFw(t);
+
+  // ── act copy ──
+  if (t < 3) {
+    neon(type('this week in the district…', 0.4, t), W/2, 440, 26, CREAM, 8);
+  } else if (t < 10) {
+    if (t > 3.1) {
+      const k = Math.min(1, (t-3.1)/0.3);
+      ctx.save(); ctx.translate(W/2, 150); ctx.scale(1+0.5*(1-k), 1+0.5*(1-k));
+      neon('JULY 4', 0, 0, 92, FW_WHITE, 26);
+      ctx.restore();
+      neon('fireworks over the district · july 3–6', W/2, 225, 26, FW_RED, 10);
+    }
+  } else if (t < 15) {
+    neon('shaped shells', W/2, 420, 34, CREAM, 12);
+    if (t > 13.2) neon('yes — that is a ₿', 300, 210, 20, AMBER, 8);
+    if (t > 14.1) neon('…and a nostrich', 660, 210, 20, PURP, 8);
+  } else if (t < 20) {
+    // finale barrage — the earn as a plain text line, no mockups
+    neon('log in july 1–7 · earn the liberty name color', W/2, 420, 26, CREAM, 10);
+  } else {
+    // end card
+    const a = Math.min(1, (t-20)/0.7);
+    ctx.fillStyle = `rgba(10,0,20,${0.5*a})`; ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = a;
+    neon('thedistrict.online', W/2, 240, 54, TEAL, 20);
+    ctx.font = 'bold 24px "Courier New", monospace'; ctx.fillStyle = CREAM; ctx.textAlign='center';
+    ctx.fillText('see you under the fireworks', W/2, 300);
+    ctx.globalAlpha = 1;
+  }
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 23.8) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-23.8)/1.1)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const t0 = performance.now();
+  const stream = cv.captureStream(60);
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const buf = await blob.arrayBuffer();
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    resolve(btoa(s));
+  };
+  rec.start(500);
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t >= durS) { rec.stop(); return; }
+    draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

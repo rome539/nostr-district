@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script>
+// ── ND motion promo: no gameplay, pure canvas animation ─────────────────────
+// Timeline (seconds):
+//  0.0-3.4  typewriter: "your feed has an algorithm."
+//  3.4-6.6  typewriter: "your city doesn't."
+//  6.6-7.2  blink, hard cut
+//  7.2-12   pixel skyline rises, stars fade in
+// 10.4-13   "NOSTR DISTRICT" neon flickers on
+// 13-21.5   feature signs light up: CHAT / ZAP / TRADE / FISH / BUILD
+// 21.5-27.5 fireworks finale + "every citizen a keypair"
+// 27.5-35   end card: thedistrict.online / your keys · your city
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK = '#ff71ce', TEAL = '#5dcaa5', AMBER = '#f0b040',
+      PURP = '#7b68ee', CREAM = '#fff5e6', RED = '#e84040', BG = '#0a0014';
+
+// deterministic rand
+let seed = 42;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+// Stars
+const stars = Array.from({ length: 90 }, () => ({
+  x: (rnd() * W) | 0, y: (rnd() * 300) | 0, ph: rnd() * 6.28, s: rnd() < 0.2 ? 2 : 1,
+}));
+
+// Skyline buildings
+const builds = [];
+{
+  let x = -10;
+  while (x < W + 10) {
+    const w = 50 + rnd() * 70;
+    const h = 90 + rnd() * 150;
+    const win = [];
+    for (let wy = 12; wy < h - 10; wy += 18) {
+      for (let wx = 8; wx < w - 10; wx += 14) {
+        if (rnd() < 0.45) win.push([wx, wy, [PINK, TEAL, AMBER, PURP, CREAM][(rnd() * 5) | 0], rnd() < 0.12]);
+      }
+    }
+    builds.push({ x, w, h, win });
+    x += w + 4;
+  }
+}
+
+// Fireworks particles
+const parts = [];
+function burst(x, y, color, n = 42, sp = 95) {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * 6.283 + rnd() * 0.25;
+    const s = sp * (0.45 + rnd() * 0.75);
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, c: color, life: 1.15 + rnd() * 0.35, t: 0 });
+  }
+}
+let lastBurst = -1;
+const burstCols = [PINK, TEAL, AMBER, PURP, CREAM, RED];
+
+// neon flicker envelope: 0..1 given time since "on"
+function flick(dt) {
+  if (dt < 0) return 0;
+  if (dt < 0.12) return 0.9;
+  if (dt < 0.22) return 0.1;
+  if (dt < 0.34) return 1;
+  if (dt < 0.42) return 0.25;
+  if (dt < 0.55) return 1;
+  return 0.92 + 0.08 * Math.sin(dt * 30);
+}
+
+function type(text, started, t, cps = 16) {
+  const n = Math.max(0, Math.min(text.length, Math.floor((t - started) * cps)));
+  return text.slice(0, n);
+}
+const cursorOn = (t) => Math.floor(t / 0.53) % 2 === 0;
+
+function neonText(txt, x, y, size, color, glow, align = 'center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = glow;
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+
+function signBox(x, y, w, h, color, a) {
+  ctx.globalAlpha = a;
+  ctx.shadowColor = color; ctx.shadowBlur = 18 * a;
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+const SIGNS = [
+  { label: 'CHAT',  color: TEAL,  at: 13.0 },
+  { label: 'ZAP',   color: AMBER, at: 14.6 },
+  { label: 'TRADE', color: PINK,  at: 16.2 },
+  { label: 'FISH',  color: '#7ee081', at: 17.8 },
+  { label: 'BUILD', color: PURP,  at: 19.4 },
+];
+
+let prev = 0;
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Act 1: typewriter ──
+  if (t < 7.2) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 40px "Courier New", monospace';
+    if (t < 3.4) {
+      const s = type('your feed has an algorithm.', 0.4, t);
+      ctx.fillStyle = CREAM;
+      ctx.fillText(s + (cursorOn(t) ? '_' : ''), 120, H / 2);
+    } else {
+      const s = type("your city doesn't.", 3.8, t);
+      ctx.fillStyle = TEAL;
+      ctx.shadowColor = TEAL; ctx.shadowBlur = 12;
+      ctx.fillText(s + (cursorOn(t) ? '_' : ''), 120, H / 2);
+      ctx.shadowBlur = 0;
+    }
+  } else {
+    // ── Act 2+: the district ──
+    const rise = Math.min(1, Math.max(0, (t - 7.2) / 3.2)); // skyline rise 7.2-10.4
+    const ease = 1 - Math.pow(1 - rise, 3);
+
+    // stars
+    for (const st of stars) {
+      const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2 + st.ph));
+      ctx.globalAlpha = tw * ease;
+      ctx.fillStyle = CREAM;
+      ctx.fillRect(st.x, st.y, st.s, st.s);
+    }
+    ctx.globalAlpha = 1;
+
+    // fireworks (behind skyline glow, above stars)
+    if (t > 21.5 && t < 30.5 && t - lastBurst > 0.55) {
+      lastBurst = t;
+      burst(120 + rnd() * (W - 240), 90 + rnd() * 140, burstCols[(rnd() * burstCols.length) | 0]);
+    }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.t += dt;
+      if (p.t >= p.life) { parts.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 42 * dt;
+      p.vx *= 0.985; p.vy *= 0.985;
+      const lf = 1 - p.t / p.life;
+      ctx.globalAlpha = lf < 0.4 ? lf * (0.4 + 0.6 * Math.abs(Math.sin(t * 22 + p.x))) : lf;
+      ctx.fillStyle = p.c;
+      const sz = lf > 0.8 ? 3 : 2;
+      ctx.fillRect(p.x | 0, p.y | 0, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+
+    // skyline
+    const baseY = H - 60 * ease;
+    for (const b of builds) {
+      const bh = b.h * ease;
+      ctx.fillStyle = '#120726';
+      ctx.fillRect(b.x, baseY - bh, b.w, bh + 60);
+      for (const [wx, wy, c, bright] of b.win) {
+        if (wy > bh - 8) continue;
+        ctx.globalAlpha = bright ? 0.85 : 0.35;
+        ctx.fillStyle = c;
+        ctx.fillRect(b.x + wx, baseY - bh + wy, 6, 9);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // street
+    ctx.fillStyle = '#160b2e';
+    ctx.fillRect(0, baseY + 40, W, H - baseY);
+
+    // ── title neon ──
+    if (t < 27.5) {
+      const f = flick(t - 10.4);
+      if (f > 0) {
+        ctx.globalAlpha = f;
+        neonText('NOSTR DISTRICT', W / 2, 92, 64, PINK, 26);
+        ctx.globalAlpha = 1;
+        signBox(W / 2, 92, 620, 96, PINK, f * 0.9);
+      }
+    }
+
+    // ── feature signs ──
+    if (t < 27.5) {
+      SIGNS.forEach((s, i) => {
+        const f = flick(t - s.at);
+        if (f <= 0) return;
+        const x = 130 + i * 175;
+        const y = 250 + (i % 2) * 46;
+        if (t - s.at < 0.15 && t - s.at > 0) burst(x, y, s.color, 14, 55);
+        ctx.globalAlpha = f;
+        neonText(s.label, x, y, 30, s.color, 16);
+        ctx.globalAlpha = 1;
+        signBox(x, y, 128, 52, s.color, f * 0.8);
+      });
+      // tagline
+      if (t > 22.5) {
+        const s = type('every citizen a keypair_', 22.5, t, 20);
+        ctx.font = 'bold 26px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = CREAM;
+        ctx.fillText(s, W / 2, 415);
+      }
+    }
+
+    // ── end card ──
+    if (t >= 27.5) {
+      const a = Math.min(1, (t - 27.5) / 0.8);
+      ctx.fillStyle = `rgba(10,0,20,${0.72 * a})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = a;
+      neonText('thedistrict.online', W / 2, 235, 58, TEAL, 22);
+      ctx.font = 'bold 26px "Courier New", monospace';
+      ctx.fillStyle = CREAM;
+      ctx.textAlign = 'center';
+      ctx.fillText('your keys · your city', W / 2, 300);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // CRT scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.42)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+
+  // global fade-out
+  if (t > 33.6) {
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(1, (t - 33.6) / 1.2)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// export for the capture driver
+window.__run = (durS) => new Promise((resolve) => {
+  const t0 = performance.now();
+  const stream = cv.captureStream(60);
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 10_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const buf = await blob.arrayBuffer();
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    resolve(btoa(s));
+  };
+  rec.start(500);
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t >= durS) { rec.stop(); return; }
+    draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

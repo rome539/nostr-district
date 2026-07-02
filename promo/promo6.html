@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script src="fishdata.js"></script>
+<script>
+// ── "THE LEGENDS" — fishing teaser, wanted-poster style ─────────────────────
+// Uses the REAL in-game legendary sprites + the server's official names/weights.
+//  0-3.4   ripples on dark water + typewriter → title
+//  3.4-21  five posters nail in (~3.5s each); sprite silhouette → reveal;
+//          the Leviathan Coelacanth NEVER reveals (stays a silhouette)
+//  21-24.4 recap board — all five posters
+//  24.4-28 end card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const AMBER='#f0b040', CREAM='#fff5e6', TEAL='#5dcaa5', BGTOP='#06100a', BGBOT='#0a1a10';
+let seed = 8;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const IMGS = {};
+for (const k of Object.keys(window.FISH)) { const im = new Image(); im.src = window.FISH[k]; IMGS[k] = im; }
+
+// official server data (LEGENDARY_FISH_META)
+const POSTERS = [
+  { key: 'ostrich',    name: 'OSTRICH',                kg: '63.5 kg', line: 'yes — underwater',              at: 3.4 },
+  { key: 'coin',       name: 'GOLDEN SATOSHI COIN',    kg: '0.01 kg', line: 'worth every gram',              at: 6.9 },
+  { key: 'trident',    name: 'ENCHANTED TRIDENT',      kg: '8.4 kg',  line: 'still humming',                 at: 10.4 },
+  { key: 'meteor',     name: 'METEOR FROM ANDROMEDA',  kg: '??? kg',  line: 'it fell. it swims.',            at: 13.9 },
+  { key: 'coelacanth', name: 'LEVIATHAN COELACANTH',   kg: '91.2 kg', line: 'no confirmed sightings',        at: 17.4, silhouette: true },
+];
+
+// fireflies
+const flies = Array.from({ length: 26 }, () => ({ x: rnd()*W, y: rnd()*H, ph: rnd()*6.28, sp: 3+rnd()*8 }));
+// ripples
+const ripples = Array.from({ length: 5 }, (_, i) => ({ x: 150+rnd()*(W-300), y: 380+rnd()*100, t0: i*0.55+0.2 }));
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=18) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// Draw one poster card. reveal: 0..1 (silhouette → art). wob: settle wobble angle.
+function poster(cx, cy, w, h, p, reveal, wob, small=false) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(wob);
+  // paper
+  ctx.fillStyle = '#e8d8b0';
+  ctx.fillRect(-w/2, -h/2, w, h);
+  ctx.fillStyle = '#c8b488';
+  ctx.fillRect(-w/2, -h/2, w, 6);
+  ctx.fillRect(-w/2, h/2-6, w, 6);
+  ctx.strokeStyle = '#6a5430'; ctx.lineWidth = 3;
+  ctx.strokeRect(-w/2, -h/2, w, h);
+  // nail
+  ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.arc(0, -h/2+12, 4, 0, 6.283); ctx.fill();
+  // header
+  ctx.font = `bold ${small?14:24}px "Courier New", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#7a1f1f';
+  ctx.fillText('WANTED', 0, -h/2 + (small?26:44));
+  ctx.font = `bold ${small?8:13}px "Courier New", monospace`;
+  ctx.fillStyle = '#5a4426';
+  ctx.fillText('— the district lake —', 0, -h/2 + (small?38:64));
+  // sprite area
+  const im = IMGS[p.key];
+  if (im && im.complete && im.naturalWidth) {
+    const maxW = w*0.62, maxH = h*0.42;
+    const sc = Math.min(maxW/im.naturalWidth, maxH/im.naturalHeight);
+    const dw = im.naturalWidth*sc, dh = im.naturalHeight*sc;
+    const iy = -h*0.04;
+    if (reveal >= 1 && !p.silhouette) {
+      ctx.drawImage(im, -dw/2, iy-dh/2, dw, dh);
+    } else {
+      // silhouette: draw sprite then stamp dark over it (keeps alpha shape)
+      ctx.save();
+      ctx.drawImage(im, -dw/2, iy-dh/2, dw, dh);
+      ctx.globalCompositeOperation = 'source-atop';
+      const dark = p.silhouette ? 0.92 : 0.92*(1-reveal);
+      ctx.fillStyle = `rgba(20,16,10,${dark})`;
+      ctx.fillRect(-dw/2-2, iy-dh/2-2, dw+4, dh+4);
+      ctx.restore();
+      if (p.silhouette && !small) {
+        ctx.font = 'bold 30px "Courier New", monospace';
+        ctx.fillStyle = '#e8d8b0';
+        ctx.fillText('?', 0, iy);
+      }
+    }
+  }
+  // name + weight + flavor
+  ctx.font = `bold ${small?9:17}px "Courier New", monospace`;
+  ctx.fillStyle = '#2a2014';
+  ctx.fillText(p.name, 0, h/2 - (small?34:62));
+  ctx.font = `bold ${small?8:14}px "Courier New", monospace`;
+  ctx.fillStyle = '#7a1f1f';
+  ctx.fillText(`last weighed: ${p.kg}`, 0, h/2 - (small?22:38));
+  if (!small) {
+    ctx.font = 'italic bold 13px "Courier New", monospace';
+    ctx.fillStyle = '#5a4426';
+    ctx.fillText(`"${p.line}"`, 0, h/2 - 18);
+  }
+  ctx.restore();
+}
+
+let prev = 0, shake = 0;
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  shake = Math.max(0, shake - dt*5);
+  const sx = shake > 0 ? (rnd()-0.5)*shake*16 : 0;
+  const sy = shake > 0 ? (rnd()-0.5)*shake*16 : 0;
+
+  // bg — deep woods gradient + lantern breathing light
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, BGTOP); g.addColorStop(1, BGBOT);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const lamp = ctx.createRadialGradient(W/2, 180, 40, W/2, 180, 560);
+  lamp.addColorStop(0, `rgba(240,176,64,${0.10+0.03*Math.sin(t*2.2)})`);
+  lamp.addColorStop(1, 'rgba(240,176,64,0)');
+  ctx.fillStyle = lamp; ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // fireflies
+  for (const f of flies) {
+    f.x += Math.sin(t*0.6+f.ph)*f.sp*dt; f.y += Math.cos(t*0.45+f.ph)*f.sp*dt*0.6;
+    ctx.globalAlpha = 0.25 + 0.5*(0.5+0.5*Math.sin(t*2.5+f.ph));
+    ctx.fillStyle = '#d8e86a';
+    ctx.fillRect(f.x|0, f.y|0, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  if (t < 3.4) {
+    // ripples + intro line
+    for (const rp of ripples) {
+      const rt = t - rp.t0;
+      if (rt < 0 || rt > 1.6) continue;
+      ctx.strokeStyle = TEAL; ctx.globalAlpha = (1-rt/1.6)*0.5; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(rp.x, rp.y, rt*70, rt*22, 0, 0, 6.283); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    neon(type('the district lake keeps five secrets…', 0.3, t), W/2, 150, 28, CREAM, 8);
+    if (t > 2.5) {
+      const k = Math.min(1, (t-2.5)/0.25);
+      ctx.save(); ctx.translate(W/2, 260); ctx.scale(1+0.6*(1-k), 1+0.6*(1-k));
+      neon('THE LEGENDS', 0, 0, 72, AMBER, 24);
+      ctx.restore();
+    }
+  } else if (t < 21) {
+    neon('THE LEGENDS', W/2, 52, 40, AMBER, 16);
+    // current poster (large, centered)
+    for (let i = 0; i < POSTERS.length; i++) {
+      const p = POSTERS[i];
+      const nt = t - p.at;
+      const end = (POSTERS[i+1]?.at ?? 21);
+      if (nt < 0 || t >= end) continue;
+      if (nt < 0.05 && shake < 0.5) shake = 0.9; // nail thunk
+      const drop = Math.min(1, nt/0.22);
+      const wob = Math.sin(nt*10)*0.05*Math.exp(-nt*3);
+      const reveal = p.silhouette ? 0 : Math.min(1, Math.max(0, (nt-1.0)/0.15));
+      poster(W/2, -180 + (H/2+58+180)*drop*drop*(3-2*drop) + 0, 340, 380, p, reveal, wob);
+    }
+  } else if (t < 24.4) {
+    neon('THE LEGENDS', W/2, 52, 40, AMBER, 16);
+    // recap: all five, small
+    POSTERS.forEach((p, i) => {
+      const nt = t - 21 - i*0.12;
+      if (nt < 0) return;
+      const k = Math.min(1, nt/0.2);
+      poster(110 + i*185, 290 + 20*(1-k), 160, 210, p, p.silhouette ? 0 : 1, Math.sin(i*2.3)*0.03, true);
+    });
+    neon('five legendary catches wait in the lake', W/2, 470, 22, CREAM, 8);
+  } else {
+    const a = Math.min(1, (t-24.4)/0.7);
+    ctx.globalAlpha = a;
+    neon('cast a line — the woods are open', W/2, 210, 34, AMBER, 14);
+    neon('thedistrict.online', W/2, 285, 46, TEAL, 18);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 26.9) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-26.9)/1.0)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  // wait for sprites before starting the clock
+  const ready = Object.values(IMGS).every(im => im.complete);
+  const start = () => {
+    const t0 = performance.now();
+    const stream = cv.captureStream(60);
+    const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const buf = await blob.arrayBuffer();
+      let s = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      resolve(btoa(s));
+    };
+    rec.start(500);
+    const loop = () => {
+      const t = (performance.now() - t0) / 1000;
+      if (t >= durS) { rec.stop(); return; }
+      draw(t);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  };
+  if (ready) start(); else setTimeout(start, 600);
+});
+</script>
+</body>
+</html>

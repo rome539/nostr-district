@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script src="furndata.js"></script>
+<script>
+// ── "MAKE IT HOME" — room decoration cut ─────────────────────────────────────
+// Every sprite is a REAL furniture PNG from public/assets/furniture. The stage
+// is deliberately abstract (dark platform, not a fake room). Counts are real:
+// ~61 furniture pieces (FurnitureId union), 11 floors, 5 walls, 11 posters,
+// 8-color palettes on recolorable pieces, arrange mode = real feature.
+//  0-3     title
+//  3-11.5  a corner gets furnished, piece by piece
+// 11.5-16  by the numbers
+// 16-22    category showcase rows (neon / cozy / green / trophies)
+// 22-26    arrange mode — same couch, anywhere
+// 26-30    end card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee', CREAM='#fff5e6', BG='#0a0014';
+let seed = 10;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const stars = Array.from({ length: 60 }, () => ({ x:(rnd()*W)|0, y:(rnd()*H)|0, ph:rnd()*6.28, s:rnd()<0.2?2:1 }));
+// In-game, colorable PNG furniture is drawn with Phaser setTint (multiply) using
+// the piece's palette color — replicate that so the couches look like they do in
+// a real room, not like white tint-bases. Defaults = first swatch in FURNITURE_DATA.
+const TINTS = { couch: '#3d2860', armchair: '#3d2860', beanbag: '#c44060' };
+const IM = {};
+for (const k of Object.keys(window.FURN)) {
+  const im = new Image();
+  im.src = window.FURN[k];
+  im.onload = () => {
+    if (!TINTS[k]) { IM[k] = im; return; }
+    const c = document.createElement('canvas');
+    c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const x = c.getContext('2d');
+    x.drawImage(im, 0, 0);
+    x.globalCompositeOperation = 'multiply';
+    x.fillStyle = TINTS[k];
+    x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = 'destination-in';
+    x.drawImage(im, 0, 0);
+    IM[k] = c;
+    IM[k].complete = true; IM[k].naturalWidth = c.width; IM[k].naturalHeight = c.height;
+  };
+  IM[k] = im;
+}
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=20) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// draw sprite anchored at bottom-center, fit into maxH (and a width cap so wide
+// pieces like the sword mount don't sprawl over their row)
+function piece(key, cx, bottomY, maxH, alpha=1, popK=1, maxW=150) {
+  const im = IM[key];
+  if (!im || !im.complete || !im.naturalWidth) return;
+  const sc = Math.min(maxH / im.naturalHeight, maxW / im.naturalWidth);
+  const w = im.naturalWidth*sc*popK, h = im.naturalHeight*sc*popK;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(im, Math.round(cx-w/2), Math.round(bottomY-h), w, h);
+  ctx.globalAlpha = 1;
+}
+
+const sparks = [];
+function sparkle(x, y, col, n=12) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd()*6.283, s = 30+rnd()*80;
+    sparks.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s-20, c: col, life: 0.3+rnd()*0.3, t: 0 });
+  }
+}
+
+// the corner build — [time, key, x, bottomY(from floor), maxH, wall?]
+const FLOOR_Y = 430;
+const BUILD = [
+  [3.4,  'persianrug',  480, FLOOR_Y+26, 60],
+  [4.2,  'couch',       410, FLOOR_Y,    96],
+  [5.0,  'endtable',    560, FLOOR_Y,    62],
+  [5.8,  'plant3',      640, FLOOR_Y,    92],
+  [6.6,  'radio',       250, FLOOR_Y,    86],
+  [7.4,  'nostr',       330, 250,        66],
+  [8.2,  'tapestry',    560, 268,        86],
+  [9.0,  'ivy',         700, 240,        80],
+  [9.8,  'coelacanth',  450, 205,        56],
+  [10.6, 'safe',        740, FLOOR_Y,    70],
+];
+
+const ROWS = [
+  { at: 16.4, label: 'NEON',     col: PINK,  keys: ['nostr','neonskull','neoncoffee','neon58k'] },
+  { at: 17.8, label: 'COZY',     col: AMBER, keys: ['couch','armchair','beanbag','tigerskin'] },
+  { at: 19.2, label: 'GREEN',    col: TEAL,  keys: ['plant1','plant3','plant6','cactus','daffodils'] },
+  { at: 20.6, label: 'TROPHIES', col: PURP,  keys: ['swordmount','coelacanth','ufopinup','djtable'] },
+];
+
+let prev = 0, built = -1;
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) { ctx.globalAlpha = 0.12+0.25*(0.5+0.5*Math.sin(t*1.6+s.ph)); ctx.fillStyle = CREAM; ctx.fillRect(s.x,s.y,s.s,s.s); }
+  ctx.globalAlpha = 1;
+
+  for (let i = sparks.length-1; i >= 0; i--) {
+    const p = sparks[i]; p.t += dt;
+    if (p.t >= p.life) { sparks.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 110*dt;
+    ctx.globalAlpha = 1-p.t/p.life; ctx.fillStyle = p.c;
+    ctx.fillRect(p.x|0, p.y|0, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  if (t < 3) {
+    neon(type('MAKE IT HOME', 0.3, t, 12), W/2, 210, 72, AMBER, 24);
+    if (t > 1.4) neon('your room in the district', W/2, 290, 26, CREAM, 8);
+  } else if (t < 15.99) {
+    // stage: abstract platform (deliberately not a fake room)
+    if (t < 11.5 || true) { /* platform persists through the numbers card */ }
+    ctx.fillStyle = '#151028';
+    ctx.fillRect(120, FLOOR_Y, 720, 6);
+    ctx.fillStyle = '#0e0a1e';
+    ctx.fillRect(120, FLOOR_Y+6, 720, 40);
+
+    if (t < 15) {
+      BUILD.forEach(([at, key, x, by, mh], i) => {
+        if (t < at) return;
+        if (i > built) { built = i; sparkle(x, by-mh/2, [PINK,TEAL,AMBER,PURP][i%4]); }
+        const k = Math.min(1, (t-at)/0.18);
+        piece(key, x, by, mh, k, 1 + 0.25*(1-k));
+      });
+      if (t > 4) neon('placed piece by piece — your way', W/2, 500, 22, TEAL, 8);
+    }
+    // numbers card overlays the finished corner
+    if (t >= 11.5) {
+      ctx.fillStyle = 'rgba(10,0,20,0.72)';
+      ctx.fillRect(0, 0, W, H);
+      neon('the catalog', W/2, 120, 30, AMBER, 12);
+      if (t > 12.2) neon(type('60+ furniture pieces · recolorable', 12.2, t, 28), W/2, 200, 28, CREAM, 8);
+      if (t > 13.2) neon(type('11 floors · 5 walls · 11 posters', 13.2, t, 28), W/2, 255, 28, CREAM, 8);
+      if (t > 14.2) neon(type('lighting · music · pets', 14.2, t, 28), W/2, 310, 26, TEAL, 8);
+    }
+  } else if (t < 22) {
+    neon('the catalog', W/2, 56, 30, AMBER, 12);
+    ROWS.forEach((row, ri) => {
+      if (t < row.at) return;
+      const a = Math.min(1, (t-row.at)/0.3);
+      ctx.globalAlpha = a;
+      neon(row.label, 120, 130 + ri*105, 22, row.col, 10, 'left');
+      ctx.globalAlpha = 1;
+      row.keys.forEach((k, i) => {
+        const at2 = row.at + 0.1 + i*0.12;
+        if (t < at2) return;
+        const kk = Math.min(1, (t-at2)/0.15);
+        piece(k, 320 + i*130, 175 + ri*105, 74, kk);
+      });
+    });
+  } else if (t < 26) {
+    // arrange mode: the couch teleports around a dotted grid
+    neon('arrange mode', W/2, 80, 32, PINK, 12);
+    ctx.fillStyle = 'rgba(123,104,238,0.35)';
+    for (let gx = 140; gx <= 820; gx += 68)
+      for (let gy = 170; gy <= 430; gy += 65)
+        ctx.fillRect(gx, gy, 2, 2);
+    const SPOTS = [[300,300],[640,240],[480,420],[220,430],[700,400],[480,260]];
+    const idx = Math.min(SPOTS.length-1, Math.floor((t-22.4)/0.6));
+    if (t > 22.4) {
+      const [sx2, sy2] = SPOTS[idx];
+      const k = Math.min(1, ((t-22.4)%0.6)/0.12);
+      piece('couch', sx2, sy2, 90, 1, 1 + 0.2*(1-k));
+    }
+    neon('put anything anywhere', W/2, 490, 24, CREAM, 8);
+  } else {
+    const a = Math.min(1, (t-26)/0.7);
+    ctx.globalAlpha = a;
+    neon('make it home', W/2, 195, 46, AMBER, 18);
+    neon('thedistrict.online', W/2, 265, 44, TEAL, 18);
+    ctx.font = 'bold 20px "Courier New", monospace'; ctx.fillStyle = CREAM; ctx.textAlign = 'center';
+    ctx.fillText('then invite them over', W/2, 320);
+    ctx.globalAlpha = 1;
+  }
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 28.9) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-28.9)/1.0)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const start = () => {
+    const t0 = performance.now();
+    const stream = cv.captureStream(60);
+    const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const buf = await blob.arrayBuffer();
+      let s = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      resolve(btoa(s));
+    };
+    rec.start(500);
+    const loop = () => {
+      const t = (performance.now() - t0) / 1000;
+      if (t >= durS) { rec.stop(); return; }
+      draw(t);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  };
+  const ready = Object.values(IM).every(im => im.complete);
+  if (ready) start(); else setTimeout(start, 600);
+});
+</script>
+</body>
+</html>

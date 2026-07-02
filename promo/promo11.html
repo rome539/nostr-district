@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script src="breezdata.js"></script>
+<script src="avatardata.js"></script>
+<script>
+// ── "the district runs on lightning" — Breez Spark wallet cut v2 ────────────
+// Every claim is verifiable in the code: self-custodial Spark wallet
+// (sparkService.ts), seed derived from the user's Nostr signer, mnemonic
+// NIP-44 self-encrypted on Nostr (no localStorage), lightning address,
+// send/receive/zaps. Shop checkout (MarketPanel → payLightningAddress →
+// sendSparkPayment) and Bazaar buys pay from the same wallet. Zap amounts are
+// the real ZapModal presets [21,100,500,1000,5000]. Street players are REAL
+// avatars rendered by the game's own AvatarRenderer (avatardata.js).
+//  0-3      title
+//  3-10     street: real players zapping each other
+// 10-15.5   spend it: shop + bazaar cards
+// 15.5-21   wallet truths I
+// 21-26     wallet truths II
+// 26-29.5   receive · send · zap beat
+// 29.5-35   Breez Spark logo card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee', CREAM='#fff5e6', BG='#0a0014';
+const BREEZ_BLUE = '#0a84ff';
+const GOLD = '#ffd700', RARE = '#70b0ff';
+let seed = 21001;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const stars = Array.from({ length: 80 }, () => ({ x:(rnd()*W)|0, y:(rnd()*260)|0, ph:rnd()*6.28, s:rnd()<0.2?2:1 }));
+const builds = [];
+{ let x=-10; while (x<W+10){ const w=50+rnd()*70,h=70+rnd()*130; const win=[];
+  for(let wy=12;wy<h-10;wy+=18) for(let wx=8;wx<w-10;wx+=14) if(rnd()<0.42) win.push([wx,wy,[PINK,TEAL,AMBER,PURP,CREAM][(rnd()*5)|0]]);
+  builds.push({x,w,h,win}); x+=w+4; } }
+
+const LOGO = new Image(); LOGO.src = window.BREEZ_LOGO;
+
+// ── street cast: 6 REAL avatars (game renderer output), distinct outfits ──
+// indices into window.AVATARS (see gen-avatars.mjs outfit list)
+const CAST_IDX = [1, 2, 4, 6, 8, 10];
+const CAST_X   = [110, 258, 408, 556, 706, 852];
+const NAMES    = ['miko', 'ronin', 'pep', 'clover', 'dex', 'luna'];
+const NAMECOL  = [PINK, CREAM, TEAL, AMBER, CREAM, PURP];
+const AV_SCALE = 2;                         // 48×76 sprite → 96×152
+const STREET_Y = H - 26;                    // feet line
+const players = CAST_IDX.map((idx, i) => {
+  const img = new Image(); img.src = window.AVATARS[idx];
+  return { img, x: CAST_X[i], name: NAMES[i], col: NAMECOL[i] };
+});
+const chest = (p) => [p.x, STREET_Y - 76 * AV_SCALE * 0.55];
+
+// ── zaps between players: bolt travels 0.35s, discharge sparkle + amount pop ──
+// amounts = real ZapModal presets
+const ZAP_EVENTS = [
+  { t: 3.6, from: 0, to: 3, amt: 21   },
+  { t: 4.5, from: 4, to: 1, amt: 100  },
+  { t: 5.4, from: 2, to: 5, amt: 500  },
+  { t: 6.2, from: 5, to: 0, amt: 21   },
+  { t: 7.1, from: 1, to: 2, amt: 1000 },
+  { t: 8.0, from: 3, to: 4, amt: 100  },
+  { t: 8.8, from: 0, to: 2, amt: 21   },
+];
+const TRAVEL = 0.35;
+let zapIdx = 0;
+const arcs = [];   // { pts, t0, ev }
+const pops = [];   // { x, y, t0, amt }
+function spawnZap(ev, now) {
+  const [x1, y1] = chest(players[ev.from]);
+  const [x2, y2] = chest(players[ev.to]);
+  const n = 8, pts = [[x1, y1]];
+  const lift = -30 - rnd()*40; // arc rises over the street
+  for (let i = 1; i < n; i++) {
+    const f = i/n;
+    pts.push([x1 + (x2-x1)*f, y1 + (y2-y1)*f + Math.sin(Math.PI*f)*lift + (rnd()-0.5)*26]);
+  }
+  pts.push([x2, y2]);
+  arcs.push({ pts, t0: now, ev });
+}
+const sparks = [];
+function sparkle(x, y, col, n=16, sp=90) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd()*6.283, s = 30+rnd()*sp;
+    sparks.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s-20, c: col, life: 0.3+rnd()*0.35, t: 0 });
+  }
+}
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=22) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// ── spend-it cards (promo8 treatment): real shop prices, real catalog items ──
+function card(x, y, w, h, border, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(18,7,38,0.92)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = border; ctx.lineWidth = 2;
+  ctx.shadowColor = border; ctx.shadowBlur = 14;
+  ctx.strokeRect(x, y, w, h);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+function popScale(k) { return k < 1 ? 1 + 0.35*(1-k)*(1-k) : 1; }
+
+let prev = 0;
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) { ctx.globalAlpha = 0.2+0.4*(0.5+0.5*Math.sin(t*1.8+s.ph)); ctx.fillStyle = CREAM; ctx.fillRect(s.x,s.y,s.s,s.s); }
+  ctx.globalAlpha = 1;
+
+  // skyline + street (acts 1-2 only)
+  if (t < 10.2) {
+    for (const b of builds) {
+      ctx.fillStyle = '#120726'; ctx.fillRect(b.x, H-110-b.h, b.w, b.h);
+      for (const [wx,wy,c] of b.win) { ctx.globalAlpha=0.45; ctx.fillStyle=c; ctx.fillRect(b.x+wx, H-110-b.h+wy, 6, 9); }
+      ctx.globalAlpha = 1;
+    }
+    // sidewalk + road
+    ctx.fillStyle = '#160a2e'; ctx.fillRect(0, H-110, W, 110);
+    ctx.fillStyle = '#1f1040'; ctx.fillRect(0, H-110, W, 4);   // curb highlight
+    ctx.fillStyle = '#0d0520'; ctx.fillRect(0, H-16, W, 16);   // gutter shadow
+  }
+
+  // sparks
+  for (let i = sparks.length-1; i >= 0; i--) {
+    const p = sparks[i]; p.t += dt;
+    if (p.t >= p.life) { sparks.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 100*dt;
+    ctx.globalAlpha = 1-p.t/p.life; ctx.fillStyle = p.c;
+    ctx.fillRect(p.x|0, p.y|0, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  if (t < 3) {
+    neon('⚡', W/2, 150, 74, AMBER, 26);
+    neon(type('the district runs on lightning', 0.5, t), W/2, 250, 40, CREAM, 14);
+  } else if (t < 10.2) {
+    // ── street scene: real players, zap bolts between them ──
+    while (zapIdx < ZAP_EVENTS.length && ZAP_EVENTS[zapIdx].t <= t) { spawnZap(ZAP_EVENTS[zapIdx], t); zapIdx++; }
+
+    const fade = Math.min(1, (t-3)/0.5) * Math.min(1, (10.2-t)/0.4);
+    ctx.globalAlpha = fade;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p.img.complete || !p.img.naturalWidth) continue;
+      const w = p.img.naturalWidth * AV_SCALE, h = p.img.naturalHeight * AV_SCALE;
+      // sender does a tiny hop as their bolt fires
+      let hop = 0;
+      for (const a of arcs) if (a.ev.from === i) { const k = (t - a.t0)/0.25; if (k >= 0 && k < 1) hop = -6*Math.sin(Math.PI*k); }
+      ctx.drawImage(p.img, p.x - w/2, STREET_Y - h + hop, w, h);
+      // name tag (game shows names above players)
+      ctx.font = 'bold 13px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = p.col;
+      ctx.fillText(p.name, p.x, STREET_Y - h - 12 + hop);
+    }
+    ctx.globalAlpha = 1;
+
+    // bolts: progressive travel then linger-fade
+    for (let i = arcs.length-1; i >= 0; i--) {
+      const a = arcs[i]; const age = t - a.t0;
+      if (age >= TRAVEL + 0.28) { arcs.splice(i,1); continue; }
+      if (age === TRAVEL || (age > TRAVEL && age - dt < TRAVEL)) {
+        const [ex, ey] = a.pts[a.pts.length-1];
+        sparkle(ex, ey, AMBER, 18);
+        pops.push({ x: a.pts[a.pts.length-1][0], y: ey - 60, t0: t, amt: a.ev.amt });
+      }
+      const frac = Math.min(1, age / TRAVEL);
+      const segs = Math.max(1, Math.floor(a.pts.length * frac));
+      const k = age <= TRAVEL ? 1 : 1 - (age - TRAVEL)/0.28;
+      ctx.strokeStyle = '#ffe060'; ctx.lineWidth = 3;
+      ctx.shadowColor = AMBER; ctx.shadowBlur = 14;
+      ctx.globalAlpha = k * fade;
+      ctx.beginPath();
+      for (let j = 0; j <= segs && j < a.pts.length; j++) {
+        const [px, py] = a.pts[j]; const jy = py + (rnd()-0.5)*5;
+        j ? ctx.lineTo(px, jy) : ctx.moveTo(px, jy);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+    // "⚡ 21" amount pops over the receiver (real ZapModal presets)
+    for (let i = pops.length-1; i >= 0; i--) {
+      const p = pops[i]; const age = t - p.t0;
+      if (age > 1.0) { pops.splice(i,1); continue; }
+      ctx.globalAlpha = (1 - age) * fade;
+      neon(`⚡${p.amt}`, p.x, p.y - 44*age, 22, AMBER, 10);
+      ctx.globalAlpha = 1;
+    }
+    neon('zap anyone on the street', W/2, 60, 30, AMBER, 12);
+  } else if (t < 15.5) {
+    // ── spend it: shop + bazaar, same wallet ──
+    neon('spend it without leaving the city', W/2, 70, 30, AMBER, 12);
+    const cw = 340, ch = 260, cy = 130;
+    if (t > 10.7) {
+      const k = Math.min(1, (t-10.7)/0.3), s = popScale(k);
+      ctx.save(); ctx.translate(120 + cw/2, cy + ch/2); ctx.scale(s, s); ctx.translate(-(120 + cw/2), -(cy + ch/2));
+      card(120, cy, cw, ch, PINK, k);
+      neon('THE SHOP', 120 + cw/2, cy + 36, 26, PINK, 12);
+      neon('Bomber Jacket · $1.50', 120 + cw/2, cy + 95, 18, CREAM, 6);
+      neon("Traveler's Coat · $1.50", 120 + cw/2, cy + 135, 18, CREAM, 6);
+      neon('Flannel · $0.50', 120 + cw/2, cy + 175, 18, CREAM, 6);
+      neon('new looks, priced in sats', 120 + cw/2, cy + 222, 14, PINK, 6);
+      ctx.restore();
+    }
+    if (t > 11.5) {
+      const k = Math.min(1, (t-11.5)/0.3), s = popScale(k);
+      const x0 = W - 120 - cw;
+      ctx.save(); ctx.translate(x0 + cw/2, cy + ch/2); ctx.scale(s, s); ctx.translate(-(x0 + cw/2), -(cy + ch/2));
+      card(x0, cy, cw, ch, TEAL, k);
+      neon('THE BAZAAR', x0 + cw/2, cy + 36, 26, TEAL, 12);
+      neon('🔑 Quantum Key', x0 + cw/2, cy + 95, 18, GOLD, 8);
+      neon('📡 Signal Relay', x0 + cw/2, cy + 135, 18, RARE, 8);
+      neon("📕 Kingpin's Ledger", x0 + cw/2, cy + 175, 18, GOLD, 8);
+      neon('player listings · live bids', x0 + cw/2, cy + 222, 14, TEAL, 6);
+      ctx.restore();
+    }
+    if (t > 12.6) neon(type('one wallet pays for all of it', 12.6, t), W/2, 460, 26, CREAM, 10);
+  } else if (t < 21) {
+    neon('⚡ the wallet is built in', W/2, 110, 34, AMBER, 14);
+    if (t > 16.5) neon(type('self-custodial · powered by spark', 16.5, t), W/2, 210, 28, CREAM, 8);
+    if (t > 18.1) neon(type('derived from your nostr keys', 18.1, t), W/2, 265, 28, CREAM, 8);
+    if (t > 19.6) {
+      const k = Math.min(1, (t-19.6)/0.25);
+      ctx.save(); ctx.translate(W/2, 360); ctx.scale(1+0.4*(1-k), 1+0.4*(1-k));
+      neon('same keys → same wallet, any browser', 0, 0, 30, TEAL, 12);
+      ctx.restore();
+    }
+  } else if (t < 26) {
+    neon('⚡ yours, not ours', W/2, 110, 34, AMBER, 14);
+    if (t > 21.7) neon(type('your own lightning address', 21.7, t), W/2, 210, 28, CREAM, 8);
+    if (t > 23.2) neon(type('seed encrypted to your keys — stored on nostr', 23.2, t), W/2, 265, 26, CREAM, 8);
+    if (t > 24.8) neon('nothing left behind in the browser', W/2, 350, 26, TEAL, 10);
+  } else if (t < 29.5) {
+    // receive · send · zap — bolt fountain
+    const cx = W/2, cy = 250;
+    if (rnd() < 0.5) sparkle(cx + (rnd()-0.5)*260, 60, AMBER, 3, 30);
+    const pulse = 1 + 0.08*Math.sin(t*8);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(pulse, pulse);
+    neon('⚡', 0, 0, 100, AMBER, 30);
+    ctx.restore();
+    neon('receive · send · zap — without leaving the game', W/2, 440, 27, CREAM, 10);
+  } else {
+    // Breez Spark card
+    const a = Math.min(1, (t-29.5)/0.7);
+    ctx.globalAlpha = a;
+    ctx.font = 'bold 24px "Courier New", monospace'; ctx.fillStyle = CREAM; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('powered by', W/2, 100);
+    // official Breez mark — smooth-scaled (it's not pixel art)
+    if (LOGO.complete && LOGO.naturalWidth) {
+      const size = 165 * (1 + 0.5*(1-a));
+      ctx.imageSmoothingEnabled = true;
+      ctx.shadowColor = BREEZ_BLUE; ctx.shadowBlur = 30*a;
+      ctx.drawImage(LOGO, W/2 - size/2, 215 - size/2, size, size);
+      ctx.shadowBlur = 0;
+      ctx.imageSmoothingEnabled = false;
+    }
+    neon('BREEZ SDK · SPARK', W/2, 335, 40, BREEZ_BLUE, 18);
+    if (t > 31) {
+      ctx.globalAlpha = Math.min(1, (t-31)/0.5) * a;
+      neon('thedistrict.online', W/2, 420, 30, TEAL, 12);
+      ctx.globalAlpha = a;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 33.9) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-33.9)/1.0)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const start = () => {
+    const t0 = performance.now();
+    const stream = cv.captureStream(60);
+    const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const buf = await blob.arrayBuffer();
+      let s = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      resolve(btoa(s));
+    };
+    rec.start(500);
+    const loop = () => {
+      const t = (performance.now() - t0) / 1000;
+      if (t >= durS) { rec.stop(); return; }
+      draw(t);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  };
+  const ready = () => LOGO.complete && players.every(p => p.img.complete);
+  const wait = () => ready() ? start() : setTimeout(wait, 100);
+  wait();
+});
+</script>
+</body>
+</html>

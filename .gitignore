@@ -16,3 +16,10 @@ vite.config.ts.timestamp-*.mjs
 .oracle-key-dev
 .fishing-buckets.json
 .bounty-claims.json
+
+# promo kit (promo/) — scripts+data are tracked, render output is not
+promo/*.mp4
+promo/*.webm
+promo/*.wav
+promo/*.png
+!promo/breez-logo.png

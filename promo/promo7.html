@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script>
+// ── "A city with seasons" — evergreen calendar teaser ────────────────────────
+// One skyline, four real seasonal FX, drawn with the game's own shape code
+// (valentineFX drawHeart, bats drawBat, lanterns drawLanternShape, fireworks).
+// Real windows: Feb 8-14 · Jul 3-6 · Mid-Autumn night · Oct 29-31.
+//  0-3    title
+//  3-8    FEBRUARY — hearts + heart moon
+//  8-13   JULY — red/white/blue fireworks
+// 13-18   MID-AUTUMN — full moon + sky lanterns
+// 18-23   OCTOBER — spooky moon + bats
+// 23-29.6 the FULL holiday calendar, listed (all 11 events from holidayBanners.ts)
+// 29.2-34 end card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee', CREAM='#fff5e6', BG='#0a0014';
+let seed = 2026;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const stars = Array.from({ length: 85 }, () => ({ x:(rnd()*W)|0, y:(rnd()*300)|0, ph:rnd()*6.28, s:rnd()<0.2?2:1 }));
+const builds = [];
+{ let x=-10; while (x<W+10){ const w=50+rnd()*70,h=80+rnd()*140; const win=[];
+  for(let wy=12;wy<h-10;wy+=18) for(let wx=8;wx<w-10;wx+=14) if(rnd()<0.42) win.push([wx,wy,[PINK,TEAL,AMBER,PURP,CREAM][(rnd()*5)|0]]);
+  builds.push({x,w,h,win}); x+=w+4; } }
+
+// ── hearts (port of valentineFX drawHeart + engine) ──
+function drawHeart(fill, cx, cy, u) {
+  const left = cx-3.5*u, top = cy-3*u;
+  fill(left+1*u, top, 2*u, u); fill(left+4*u, top, 2*u, u);
+  fill(left, top+1*u, 7*u, u); fill(left, top+2*u, 7*u, u);
+  fill(left+1*u, top+3*u, 5*u, u); fill(left+2*u, top+4*u, 3*u, u);
+  fill(left+3*u, top+5*u, 1*u, u);
+}
+const HEART_COLORS = ['#ff5d8f','#ff90b3','#e23d6a','#ffb3c8'];
+const hearts = Array.from({ length: 10 }, () => ({
+  x: rnd()*W, y: 20+rnd()*(H-60), vy: -(0.18+rnd()*0.32)*60,
+  ph: rnd()*6.28, ps: 1.2+rnd()*1.8, size: 1+(rnd()>0.5?1:0)+1,
+  c: HEART_COLORS[(rnd()*4)|0], a: 0.55+rnd()*0.35,
+}));
+function tickHearts(dt, t) {
+  for (const h of hearts) {
+    h.y += h.vy*dt; h.x += Math.sin(t*h.ps+h.ph)*0.4*60*dt/60;
+    if (h.y < 8) { h.y = H-20; h.x = rnd()*W; }
+  }
+}
+
+// ── bats (port of bats.ts drawBat + engine) ──
+const bats = Array.from({ length: 7 }, () => ({
+  x: rnd()*W, baseY: 40+rnd()*160, vx: (rnd()>0.5?1:-1)*(0.4+rnd()*0.5)*60,
+  ph: rnd()*6.28, ps: 1.4+rnd()*1.9, amp: 6+rnd()*10, s: (1+(rnd()>0.5?1:0))*2, wp: rnd()*6.28, y: 0,
+}));
+function tickBats(dt, t) {
+  for (const b of bats) {
+    b.x += b.vx*dt;
+    b.y = b.baseY + Math.sin(t*b.ps+b.ph)*b.amp;
+    if (b.x < -24) b.x = W+20; if (b.x > W+24) b.x = -20;
+  }
+}
+function drawBatShape(fill, b, t) {
+  const wingUp = Math.sin(t*9+b.wp) > 0, s = b.s;
+  fill(b.x-s, b.y-s, s*2, s*2);
+  if (wingUp) { fill(b.x-s*4, b.y-s*2, s*3, s); fill(b.x+s, b.y-s*2, s*3, s); }
+  else { fill(b.x-s*4, b.y, s*3, s); fill(b.x+s, b.y, s*3, s); }
+}
+
+// ── lanterns (port of lanterns.ts drawLanternShape + engine) ──
+const lanterns = Array.from({ length: 9 }, () => ({
+  baseX: 16+rnd()*(W-32), x: 0, y: 30+rnd()*(H-120), vy: -(0.12+rnd()*0.18)*60,
+  ph: rnd()*6.28, ps: 0.8+rnd()*1.2, amp: 4+rnd()*10, size: 4+rnd()*4, fp: rnd()*6.28, warm: rnd()>0.6,
+}));
+function tickLanterns(dt, t) {
+  for (const l of lanterns) {
+    l.y += l.vy*dt;
+    l.x = l.baseX + Math.sin(t*l.ps*0.5+l.ph)*l.amp;
+    if (l.y < -30) { l.y = H-70; l.baseX = 16+rnd()*(W-32); }
+  }
+}
+function drawLantern(l, t, alpha) {
+  const s = l.size;
+  const flick = 0.78 + Math.sin(t*6+l.fp)*0.12 + (rnd()<0.04?0.1:0);
+  const body = l.warm ? '#e85a2a' : '#d0322e';
+  const cx = l.x, cy = l.y, bw = s*2, bh = s*0.7;
+  const rect = (x,y,w,h,c,a) => { ctx.globalAlpha = a*alpha; ctx.fillStyle = c; ctx.fillRect(x,y,w,h); };
+  rect(cx-s*2.2, cy-s*2.2, s*4.4, s*4.4, '#ffb24d', 0.10*flick);
+  rect(cx-s*1.5, cy-s*1.6, s*3.0, s*3.2, '#ffb24d', 0.14*flick);
+  rect(cx-bw*0.35, cy-s*1.5, bw*0.7, bh, body, 0.95);
+  rect(cx-bw*0.5,  cy-s*0.8, bw,     bh, body, 0.95);
+  rect(cx-bw*0.5,  cy-s*0.1, bw,     bh, body, 0.95);
+  rect(cx-bw*0.35, cy+s*0.6, bw*0.7, bh, body, 0.95);
+  rect(cx-s*0.5, cy-s*1.85, s, s*0.4, '#f2c659', 0.95);
+  rect(cx-s*0.5, cy+s*1.3,  s, s*0.4, '#f2c659', 0.95);
+  rect(cx-s*0.4, cy-s*0.45, s*0.8, s*0.9, '#f2c659', Math.min(1, 0.3+0.55*flick));
+  rect(cx-s*0.12, cy+s*1.75, s*0.24, s*0.9, '#f2c659', 0.8);
+  ctx.globalAlpha = 1;
+}
+
+// ── fireworks-lite (rwb bursts, from the July piece) ──
+const rockets = [], parts = [];
+const RWB = ['#ff3333','#ffffff','#4477ff','#ff8888','#88aaff'];
+function launch(x, targetY) { rockets.push({ x, y: H-30, vy: -320, targetY, trail: [] }); }
+function tickFw(dt, t) {
+  for (let i = rockets.length-1; i >= 0; i--) {
+    const r = rockets[i];
+    r.trail.push([r.x, r.y]); if (r.trail.length > 7) r.trail.shift();
+    r.y += r.vy*dt;
+    if (r.y <= r.targetY) {
+      const n = 40+((rnd()*14)|0);
+      for (let k = 0; k < n; k++) {
+        const a = (k/n)*6.283+rnd()*0.3, s = 120*(0.5+rnd()*0.8);
+        parts.push({ x:r.x, y:r.y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, c:RWB[(rnd()*5)|0], life:1.1+rnd()*0.4, t:0 });
+      }
+      rockets.splice(i,1);
+    }
+  }
+  for (let i = parts.length-1; i >= 0; i--) {
+    const p = parts[i]; p.t += dt;
+    if (p.t >= p.life) { parts.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 42*dt; p.vx *= 0.985; p.vy *= 0.985;
+  }
+}
+function drawFwParts(t, alpha) {
+  for (const r of rockets) {
+    r.trail.forEach(([tx,ty],i)=>{ ctx.globalAlpha=(i/r.trail.length)*0.5*alpha; ctx.fillStyle='#fff'; ctx.fillRect(tx-1,ty-1,2,2); });
+    ctx.globalAlpha=alpha; ctx.fillStyle='#fff'; ctx.fillRect(r.x-1,r.y-1,3,3);
+  }
+  for (const p of parts) {
+    const lf = 1-p.t/p.life;
+    ctx.globalAlpha = (lf < 0.42 ? lf*(0.35+0.65*Math.abs(Math.sin(t*20+p.x))) : lf)*alpha;
+    ctx.fillStyle = p.c;
+    ctx.fillRect(p.x|0, p.y|0, lf>0.8?3:2, lf>0.8?3:2);
+  }
+  ctx.globalAlpha = 1;
+}
+let lastLaunch = -1;
+
+// ── moons (from loginHolidayFX styles) ──
+function heartMoon(t, a) {
+  const cx = W*0.78, cy = 95, s = 30;
+  const pulse = 0.10+Math.sin(t)*0.04;
+  const grd = ctx.createRadialGradient(cx,cy,s*0.5,cx,cy,s*2.6);
+  grd.addColorStop(0, `rgba(255,93,143,${pulse*a})`); grd.addColorStop(1, 'rgba(255,93,143,0)');
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,s*2.6,0,6.283); ctx.fill();
+  ctx.globalAlpha = a; ctx.fillStyle = '#e23d6a';
+  drawHeart((x,y,w,h)=>ctx.fillRect(x,y,w,h), cx, cy, s/3);
+  ctx.globalAlpha = a*0.9; ctx.fillStyle = '#ff90b3';
+  drawHeart((x,y,w,h)=>ctx.fillRect(x,y,w,Math.max(1,h*0.5)), cx, cy-2, s/5);
+  ctx.globalAlpha = 1;
+}
+function fullMoon(t, a, spooky) {
+  const cx = W*0.78, cy = 95, r = spooky ? 28 : 30;
+  const col = spooky ? '255,130,0' : '255,236,180';
+  const pulse = (spooky?0.08:0.10)+Math.sin(t*0.8)*0.03;
+  const grd = ctx.createRadialGradient(cx,cy,r*0.6,cx,cy,r*2.4);
+  grd.addColorStop(0, `rgba(${col},${pulse*a})`); grd.addColorStop(1, `rgba(${col},0)`);
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,r*2.4,0,6.283); ctx.fill();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = spooky ? '#e87010' : '#f5e6b8';
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,6.283); ctx.fill();
+  ctx.fillStyle = spooky ? '#c85800' : '#e8d49a';
+  ctx.beginPath(); ctx.arc(cx-r*0.3,cy-r*0.2,r*0.22,0,6.283); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.25,cy+r*0.1,r*0.16,0,6.283); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=18) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// season alpha envelope: fade in/out around [a,b]
+const env = (t, a, b) => Math.min(1, Math.max(0, (t-a)/0.7)) * Math.min(1, Math.max(0, (b-t)/0.7));
+
+const SEASONS = [
+  { a: 3,  b: 8.6,  label: 'FEBRUARY 8–14',  sub: 'hearts over the district', col: '#ff5d8f' },
+  { a: 8,  b: 13.6, label: 'JULY 3–6',       sub: 'fireworks week',           col: '#ff3333' },
+  { a: 13, b: 18.6, label: 'MID-AUTUMN',     sub: 'lantern night',            col: '#f2c659' },
+  { a: 18, b: 23.6, label: 'OCTOBER 29–31',  sub: 'the bats come out',        col: '#7b68ee' },
+];
+
+let prev = 0;
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+
+  // seasonal sky tints
+  const tints = [
+    [env(t,3,8.6),   '40,10,30'],   // feb pink-ish
+    [env(t,8,13.6),  '18,8,40'],    // july deep blue
+    [env(t,13,18.6), '35,22,8'],    // mid-autumn warm
+    [env(t,18,23.6), '25,10,4'],    // october orange-dark
+  ];
+  for (const [a, c] of tints) {
+    if (a <= 0) continue;
+    ctx.fillStyle = `rgba(${c},${0.5*a})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // stars
+  for (const s of stars) { ctx.globalAlpha = 0.3+0.6*(0.5+0.5*Math.sin(t*2+s.ph)); ctx.fillStyle = CREAM; ctx.fillRect(s.x,s.y,s.s,s.s); }
+  ctx.globalAlpha = 1;
+
+  // moons per season
+  const aFeb = env(t,3,8.6), aJul = env(t,8,13.6), aMid = env(t,13,18.6), aOct = env(t,18,23.6);
+  const montage = env(t,23,29.6);
+  if (aFeb > 0) heartMoon(t, aFeb);
+  if (aMid > 0) fullMoon(t, aMid, false);
+  if (aOct > 0) fullMoon(t, aOct, true);
+
+  // FX engines — tick always (cheap), draw gated by season alpha
+  tickHearts(dt, t); tickBats(dt, t); tickLanterns(dt, t);
+  if (aJul > 0.2 && t - lastLaunch > 0.6) { lastLaunch = t; launch(80+rnd()*(W-160), 60+rnd()*130); }
+  tickFw(dt, t);
+
+  const heartsA = aFeb;
+  if (heartsA > 0) {
+    for (const h of hearts) {
+      ctx.globalAlpha = h.a*heartsA; ctx.fillStyle = h.c;
+      drawHeart((x,y,w,hh)=>ctx.fillRect(x,y,w,hh), h.x, h.y, h.size);
+    }
+    ctx.globalAlpha = 1;
+  }
+  const fwA = aJul;
+  if (fwA > 0) drawFwParts(t, fwA);
+  const lanA = aMid;
+  if (lanA > 0) for (const l of lanterns) drawLantern(l, t, lanA);
+  const batA = aOct;
+  if (batA > 0) {
+    for (const b of bats) {
+      ctx.fillStyle = `rgba(26,10,46,${0.7*batA})`;
+      drawBatShape((x,y,w,h)=>ctx.fillRect(x-1,y-1,w+2,h+2), b, t);
+      ctx.fillStyle = `rgba(61,31,92,${0.95*batA})`;
+      drawBatShape((x,y,w,h)=>ctx.fillRect(x,y,w,h), b, t);
+    }
+  }
+
+  // skyline (in front of sky FX, behind text)
+  for (const b of builds) {
+    ctx.fillStyle = '#120726';
+    ctx.fillRect(b.x, H-40-b.h, b.w, b.h+40);
+    for (const [wx,wy,c] of b.win) { ctx.globalAlpha = 0.45; ctx.fillStyle = c; ctx.fillRect(b.x+wx, H-40-b.h+wy, 6, 9); }
+    ctx.globalAlpha = 1;
+  }
+
+  // copy
+  if (t < 3) {
+    neon(type('a city with seasons', 0.4, t), W/2, 250, 52, CREAM, 16);
+  } else if (t < 23) {
+    for (const s of SEASONS) {
+      const a = env(t, s.a, s.b);
+      if (a <= 0) continue;
+      ctx.globalAlpha = a;
+      // month plate, top-left
+      ctx.fillStyle = 'rgba(10,0,20,0.75)';
+      ctx.fillRect(40, 40, 320, 74);
+      ctx.strokeStyle = s.col; ctx.lineWidth = 2; ctx.strokeRect(40, 40, 320, 74);
+      neon(s.label, 200, 68, 28, s.col, 10);
+      neon(s.sub, 200, 96, 16, CREAM, 4);
+      ctx.globalAlpha = 1;
+    }
+  } else if (t < 29.6) {
+    // ── the FULL holiday calendar — all 11 events from holidayBanners.ts,
+    //    chronological, real windows, real banner emoji ──
+    ctx.globalAlpha = montage;
+    neon('same streets · always in season', W/2, 52, 30, CREAM, 12);
+    ctx.globalAlpha = 1;
+    const CAL = [
+      { e:'⛓️', n:'GENESIS BLOCK',   d:'JAN 1–6',      col:'#c8d0e0' },
+      { e:'🖖', n:'RUNNING BITCOIN', d:'JAN 9–15',     col:'#9fd8ec' },
+      { e:'💝', n:'VALENTINE',       d:'FEB 8–14',     col:'#ff5d8f' },
+      { e:'⏳', n:'THE HALVING',     d:'EVERY 4 YRS',  col:'#f0b040' },
+      { e:'🍕', n:'PIZZA DAY',       d:'MAY 18–25',    col:'#ff8c42' },
+      { e:'🎆', n:'INDEPENDENCE',    d:'JUL 1–7',      col:'#ff4444' },
+      { e:'🏮', n:'MID-AUTUMN',      d:'LUNAR · SEP',  col:'#ffd56a' },
+      { e:'🎃', n:'HALLOWEEN',       d:'OCT 27–31',    col:'#e87010' },
+      { e:'📄', n:'WHITEPAPER DAY',  d:'NOV 1–6',      col:'#fff5e6' },
+      { e:'💜', n:'NOSTR DAY',       d:'NOV 7–13',     col:'#b388ff' },
+      { e:'❄️', n:'WINTER',          d:'DEC 20–31',    col:'#a8d8ff' },
+    ];
+    const rw2 = 425, rh2 = 48, gap2 = 8, y0 = 88;
+    for (let i = 0; i < CAL.length; i++) {
+      const h = CAL[i];
+      const a = Math.min(1, Math.max(0, (t - (23.3 + i*0.3))/0.3)) * montage;
+      if (a <= 0) continue;
+      const colX = i < 6 ? 45 : W - 45 - rw2;
+      const ry = y0 + (i % 6)*(rh2+gap2) + 8*(1-a);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(10,0,20,0.88)';
+      ctx.fillRect(colX, ry, rw2, rh2);
+      ctx.strokeStyle = h.col; ctx.lineWidth = 2;
+      ctx.shadowColor = h.col; ctx.shadowBlur = 8;
+      ctx.strokeRect(colX, ry, rw2, rh2);
+      ctx.shadowBlur = 0;
+      ctx.font = '20px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(h.e, colX + 28, ry + rh2/2 + 1);
+      neon(h.n, colX + 52, ry + rh2/2, 17, h.col, 6, 'left');
+      neon(h.d, colX + rw2 - 16, ry + rh2/2, 14, CREAM, 4, 'right');
+      ctx.globalAlpha = 1;
+    }
+    if (t > 27.2) {
+      ctx.globalAlpha = Math.min(1, (t-27.2)/0.4) * montage;
+      neon('eleven reasons a year to come back', W/2, 462, 20, TEAL, 8);
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (t >= 29.2) {
+    const a = Math.min(1, (t-29.2)/0.7);
+    ctx.fillStyle = `rgba(10,0,20,${0.55*a})`; ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = a;
+    neon('thedistrict.online', W/2, 240, 50, TEAL, 20);
+    ctx.font = 'bold 24px "Courier New", monospace'; ctx.fillStyle = CREAM; ctx.textAlign = 'center';
+    ctx.fillText('come see what the sky is doing', W/2, 300);
+    ctx.globalAlpha = 1;
+  }
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 32.9) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-32.9)/1.0)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const t0 = performance.now();
+  const stream = cv.captureStream(60);
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const buf = await blob.arrayBuffer();
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    resolve(btoa(s));
+  };
+  rec.start(500);
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t >= durS) { rec.stop(); return; }
+    draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

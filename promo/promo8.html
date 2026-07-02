@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script>
+// ── "THE BAZAAR" — item-economy cut ──────────────────────────────────────────
+// Every card is a REAL item from ITEM_CATALOG (names, emoji, rarity), rendered
+// the way the bazaar renders them: emoji + name + the canonical RARITY_COLOR.
+//  0-3     title
+//  3-9.5   rarity ladder: junk → common → rare → legendary (real accent colors)
+//  9.5-16.5 card river — 24 real items drift by (207 items · 11 categories)
+// 16.5-22.5 how items find you (scavenge / weekly drop / lake / bounties)
+// 22.5-26.2 trade beat — two cards swap with a zap
+// 26.2-30  end card
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const AMBER='#f0b040', CREAM='#fff5e6', TEAL='#5dcaa5', PINK='#ff71ce', BG='#0a0014';
+// canonical RARITY_COLOR from tradeItemStore.ts
+const RC = { junk:'#888888', common:'#a0c8a0', rare:'#70b0ff', legendary:'#ffd700' };
+let seed = 21;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const stars = Array.from({ length: 70 }, () => ({ x:(rnd()*W)|0, y:(rnd()*H)|0, ph:rnd()*6.28, s:rnd()<0.2?2:1 }));
+
+// real catalog items (id-accurate names/emoji/rarity)
+const LADDER = [
+  { e:'🥾', n:'Old Boot',        r:'junk',      tag:'JUNK' },
+  { e:'🐟', n:'Tiny Carp',       r:'common',    tag:'COMMON' },
+  { e:'🐠', n:'Ghost Pike',      r:'rare',      tag:'RARE' },
+  { e:'🔑', n:'Quantum Key',     r:'legendary', tag:'LEGENDARY' },
+];
+const RIVER = [
+  { e:'💾', n:'Data Chip',            r:'common' },   { e:'📡', n:'Signal Relay',        r:'rare' },
+  { e:'📱', n:'Burner Phone',         r:'common' },   { e:'👻', n:'Ghost Token',         r:'common' },
+  { e:'🔐', n:'Skeleton Key',         r:'rare' },     { e:'🗺️', n:'Black Market Map',    r:'rare' },
+  { e:'🕯️', n:'Black Candle',        r:'common' },   { e:'🧿', n:'Evil Eye',            r:'common' },
+  { e:'🃏', n:'The Fool',             r:'rare' },     { e:'🪞', n:'Scrying Mirror',      r:'rare' },
+  { e:'🐀', n:'Sewer Rat',            r:'common' },   { e:'🐈', n:'Alley Cat',           r:'common' },
+  { e:'🦝', n:'Dumpster Raccoon',     r:'rare' },     { e:'📜', n:'Cypherpunk Manifesto',r:'legendary' },
+  { e:'✉️', n:"Satoshi's Last Email", r:'legendary' },{ e:'🦉', n:'Night Watcher',       r:'legendary' },
+  { e:'🎆', n:'Liberty Coin',         r:'legendary' },{ e:'📕', n:"Kingpin's Ledger",    r:'legendary' },
+  { e:'🧮', n:'Zero-Knowledge Proof', r:'legendary' },{ e:'☠️', n:'The Hanged Man',      r:'legendary' },
+  { e:'📟', n:'Burner Pager',         r:'rare' },     { e:'💿', n:'Encrypted Drive',     r:'rare' },
+  { e:'🛰️', n:'Rogue Dish',          r:'rare' },     { e:'🌀', n:'Cooling Fan',         r:'common' },
+];
+
+function card(cx, cy, w, h, item, glow=1, emojiSize=0.38, angle=0) {
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(angle);
+  const col = RC[item.r];
+  ctx.shadowColor = col; ctx.shadowBlur = 16*glow;
+  ctx.fillStyle = '#141024';
+  ctx.fillRect(-w/2, -h/2, w, h);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.strokeRect(-w/2, -h/2, w, h);
+  ctx.font = `${(h*emojiSize)|0}px "Apple Color Emoji", sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(item.e, 0, -h*0.14);
+  let nfs = Math.max(10, (h*0.105)|0);
+  ctx.font = `bold ${nfs}px "Courier New", monospace`;
+  while (nfs > 7 && ctx.measureText(item.n).width > w - 14) {
+    nfs--; ctx.font = `bold ${nfs}px "Courier New", monospace`;
+  }
+  ctx.fillStyle = CREAM;
+  ctx.fillText(item.n, 0, h*0.22);
+  ctx.font = `bold ${Math.max(8, (h*0.085)|0)}px "Courier New", monospace`;
+  ctx.fillStyle = col;
+  ctx.fillText((item.tag ?? item.r).toUpperCase(), 0, h*0.36);
+  ctx.restore();
+}
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+const type = (s, t0, t, cps=18) => s.slice(0, Math.max(0, Math.min(s.length, Math.floor((t-t0)*cps))));
+
+// sparkle particles for card slams / zap
+const sparks = [];
+function sparkle(x, y, col, n=16) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd()*6.283, s = 40+rnd()*120;
+    sparks.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, c: col, life: 0.4+rnd()*0.4, t: 0 });
+  }
+}
+
+const WAYS = [
+  { e:'🔍', txt: 'scavenge spots hide in the streets', at: 17.0 },
+  { e:'📦', txt: 'a drop lands every week',            at: 18.4 },
+  { e:'🎣', txt: 'the lake gives what it gives',       at: 19.8 },
+  { e:'🎯', txt: 'bounties pay in rarities',           at: 21.2 },
+];
+
+let prev = 0, shake = 0;
+const slamAt = (i) => 3.6 + i*1.35;
+
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  shake = Math.max(0, shake - dt*5);
+  const sx = shake > 0 ? (rnd()-0.5)*shake*12 : 0;
+  const sy = shake > 0 ? (rnd()-0.5)*shake*12 : 0;
+
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  for (const s of stars) { ctx.globalAlpha = 0.15+0.3*(0.5+0.5*Math.sin(t*1.8+s.ph)); ctx.fillStyle = CREAM; ctx.fillRect(s.x,s.y,s.s,s.s); }
+  ctx.globalAlpha = 1;
+
+  ctx.save(); ctx.translate(sx, sy);
+
+  // sparks
+  for (let i = sparks.length-1; i >= 0; i--) {
+    const p = sparks[i]; p.t += dt;
+    if (p.t >= p.life) { sparks.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 60*dt;
+    ctx.globalAlpha = 1-p.t/p.life; ctx.fillStyle = p.c;
+    ctx.fillRect(p.x|0, p.y|0, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  if (t < 3) {
+    neon(type('THE BAZAAR', 0.3, t, 10), W/2, 220, 76, AMBER, 24);
+    if (t > 1.6) neon('every item a signed nostr event', W/2, 300, 24, TEAL, 8);
+  } else if (t < 9.5) {
+    neon('THE BAZAAR', W/2, 56, 38, AMBER, 14);
+    neon('four rarities', W/2, 480, 24, CREAM, 8);
+    LADDER.forEach((it, i) => {
+      const at = slamAt(i);
+      if (t < at) return;
+      if (t - at < 0.05 && shake < 0.4) { shake = 0.7; sparkle(190 + i*195, 265, RC[it.r]); }
+      const k = Math.min(1, (t-at)/0.18);
+      const sc = 1 + (1-k)*0.5;
+      ctx.save();
+      ctx.translate(190 + i*195, 265); ctx.scale(sc, sc);
+      const pulse = it.r === 'legendary' ? 1 + 0.15*Math.sin(t*6) : 1;
+      card(0, 0, 168, 176, it, pulse);
+      ctx.restore();
+    });
+  } else if (t < 16.5) {
+    neon('THE BAZAAR', W/2, 56, 38, AMBER, 14);
+    // two lanes drifting opposite ways
+    const lane = (items, y, speed, dir) => {
+      const total = items.length * 160;
+      for (let i = 0; i < items.length; i++) {
+        let x = (i*160 + dir*t*speed) % total;
+        if (x < 0) x += total;
+        x += -80;
+        if (x < -100 || x > W+100) continue;
+        card(x, y, 140, 118, items[i], 0.7, 0.42);
+      }
+    };
+    lane(RIVER.slice(0, 12), 200, 55, -1);
+    lane(RIVER.slice(12),    345, 48,  1);
+    neon('207 items · 11 categories', W/2, 480, 26, CREAM, 10);
+  } else if (t < 22.5) {
+    neon('how they find you', W/2, 80, 32, AMBER, 12);
+    WAYS.forEach((w2, i) => {
+      if (t < w2.at) return;
+      const a = Math.min(1, (t-w2.at)/0.3);
+      ctx.globalAlpha = a;
+      ctx.font = '30px "Apple Color Emoji", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(w2.e, 240, 160 + i*80);
+      neon(type(w2.txt, w2.at, t, 30), 300, 160 + i*80, 24, CREAM, 6, 'left');
+      ctx.globalAlpha = 1;
+    });
+  } else if (t < 26.2) {
+    // trade beat: two cards swap along arcs, zap at the crossing
+    const k = Math.min(1, (t-22.9)/1.6);
+    const e2 = k*k*(3-2*k);
+    const ax = 260 + (700-260)*e2, ay = 235 - Math.sin(e2*Math.PI)*90;
+    const bx = 700 - (700-260)*e2, by = 235 + Math.sin(e2*Math.PI)*90;
+    card(ax, ay, 150, 128, { e:'🦉', n:'Night Watcher', r:'legendary' }, 1);
+    card(bx, by, 150, 128, { e:'🃏', n:'The Fool', r:'rare' }, 1);
+    if (Math.abs(e2-0.5) < 0.02 && sparks.length < 30) sparkle(W/2, 235, AMBER, 26);
+    if (t > 22.9 && Math.abs(t-23.7) < 0.35) neon('⚡', W/2, 235, 44, AMBER, 20);
+    neon('trade · gift · bid — player to player', W/2, 440, 28, TEAL, 10);
+  } else {
+    const a = Math.min(1, (t-26.2)/0.7);
+    ctx.globalAlpha = a;
+    neon('the bazaar is open', W/2, 200, 44, AMBER, 18);
+    neon('thedistrict.online', W/2, 275, 44, TEAL, 18);
+    ctx.font = 'bold 20px "Courier New", monospace'; ctx.fillStyle = CREAM; ctx.textAlign = 'center';
+    ctx.fillText('every item a signed nostr event', W/2, 330);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  // scanlines + vignette
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if (t > 28.9) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1,(t-28.9)/1.0)})`; ctx.fillRect(0,0,W,H); }
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const t0 = performance.now();
+  const stream = cv.captureStream(60);
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const buf = await blob.arrayBuffer();
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    resolve(btoa(s));
+  };
+  rec.start(500);
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t >= durS) { rec.stop(); return; }
+    draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

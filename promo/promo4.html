@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<script>
+// ── ND "pirate broadcast" promo — maximalist cut ────────────────────────────
+//  0-2.2   static + SIGNAL INTERCEPTED
+//  2.2-6   word slams: YOUR FEED / IS NOT / YOURS
+//  6-9     npub matrix rain + "escape the algorithm"
+//  9-12    warp tunnel accelerating…
+//  12-16   …slams into the skyline, sign drops, fireworks
+//  16-21   feature carousel strobing around a spinning ₿
+//  21-24.5 giant neon ostrich struts across
+//  24.5-27 datamosh glitch collapse
+//  27-32   dead-quiet end card + CRT power-off
+const W = 960, H = 540;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee',
+      CREAM='#fff5e6', RED='#e84040', BG='#0a0014';
+const PALETTE = [PINK, TEAL, AMBER, PURP, CREAM];
+
+let seed = 1337;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+const HEXC = '0123456789abcdef';
+const NPUBC = 'npub1qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+// matrix columns
+const cols = Array.from({ length: 60 }, (_, i) => ({
+  x: i * 16, y: rnd() * -H, sp: 180 + rnd() * 320, ch: [],
+}));
+
+// skyline
+const builds = [];
+{ let x = -10; while (x < W + 10) { const w = 50 + rnd() * 70, h = 90 + rnd() * 150;
+  const win = [];
+  for (let wy = 12; wy < h - 10; wy += 18) for (let wx = 8; wx < w - 10; wx += 14)
+    if (rnd() < 0.5) win.push([wx, wy, PALETTE[(rnd() * 5) | 0]]);
+  builds.push({ x, w, h, win }); x += w + 4; } }
+
+// warp stars
+const warp = Array.from({ length: 220 }, () => ({ a: rnd() * 6.283, r: rnd() * 40, sp: 0.4 + rnd() * 1.2, c: PALETTE[(rnd() * 5) | 0] }));
+
+// fireworks
+const parts = [];
+function burst(x, y, color, n = 40, sp = 110) {
+  for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + rnd() * 0.3, s = sp * (0.4 + rnd() * 0.8);
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, c: color, life: 1 + rnd() * 0.4, t: 0 }); } }
+let lastBurst = -1;
+
+// Ostrich bitmap — same silhouette the in-game picture-firework uses
+const OSTRICH = [
+  '..#......', '.###.....', '####.....', '..#..#.#.', '..#.###..',
+  '.#######.', '.########', '..######.', '...###...', '...#.#...',
+  '...#.#...', '..####...',
+];
+
+function rgbSlam(txt, x, y, size, amt) {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = '#ff2244'; ctx.fillText(txt, x - amt, y);
+  ctx.fillStyle = '#22ddff'; ctx.fillText(txt, x + amt, y);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = CREAM; ctx.fillText(txt, x, y);
+}
+
+function drawSkyline(baseY, wobble, t) {
+  for (const b of builds) {
+    const wx0 = wobble ? Math.sin(t * 3 + b.x * 0.02) * 4 : 0;
+    ctx.fillStyle = '#120726';
+    ctx.fillRect(b.x + wx0, baseY - b.h, b.w, b.h + 80);
+    for (const [wx, wy, c] of b.win) {
+      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 4 + wx + wy);
+      ctx.fillStyle = c;
+      ctx.fillRect(b.x + wx + wx0, baseY - b.h + wy, 6, 9);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+let prev = 0, shake = 0;
+const slams = [
+  { at: 2.4, txt: 'YOUR FEED' }, { at: 3.6, txt: 'IS NOT' }, { at: 4.8, txt: 'YOURS' },
+];
+
+function draw(t) {
+  const dt = Math.min(0.05, t - prev); prev = t;
+  shake = Math.max(0, shake - dt * 6);
+  const sx = shake > 0 ? (rnd() - 0.5) * shake * 22 : 0;
+  const sy = shake > 0 ? (rnd() - 0.5) * shake * 22 : 0;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.fillStyle = BG;
+  ctx.fillRect(-30, -30, W + 60, H + 60);
+
+  // ── 0-2.2 static hijack ──
+  if (t < 2.2) {
+    for (let i = 0; i < 1400; i++) {
+      ctx.fillStyle = rnd() < 0.5 ? '#1a1a2a' : '#3a3a4a';
+      ctx.fillRect((rnd() * W) | 0, (rnd() * H) | 0, 3, 2);
+    }
+    // rolling tear bar
+    const ty = (t * 400) % (H + 80) - 40;
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, ty, W, 26);
+    if (Math.floor(t / 0.28) % 2 === 0) {
+      rgbSlam('SIGNAL INTERCEPTED', W / 2, H / 2, 44, 4);
+      ctx.font = 'bold 18px "Courier New", monospace';
+      ctx.fillStyle = TEAL; ctx.textAlign = 'center';
+      ctx.fillText('>> unauthorized broadcast from the district <<', W / 2, H / 2 + 46);
+    }
+  }
+
+  // ── 2.2-6 word slams ──
+  else if (t < 6) {
+    for (const s of slams) {
+      if (t >= s.at && t - s.at < 0.05 && shake < 0.4) shake = 1;
+      if (t >= s.at) {
+        const age = t - s.at;
+        const sc = 1 + Math.max(0, 0.35 - age * 2);
+        ctx.save();
+        ctx.translate(W / 2, H / 2 + (slams.indexOf(s) - 1) * 110);
+        ctx.scale(sc, sc);
+        rgbSlam(s.txt, 0, 0, 70, 5 + Math.max(0, 6 - age * 25));
+        ctx.restore();
+      }
+    }
+  }
+
+  // ── 6-9 npub matrix rain ──
+  else if (t < 9) {
+    ctx.font = 'bold 15px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    for (const c of cols) {
+      c.y += c.sp * dt;
+      if (c.y > H + 100) { c.y = -rnd() * 300; c.sp = 180 + rnd() * 320; }
+      for (let k = 0; k < 14; k++) {
+        const yy = c.y - k * 16;
+        if (yy < -20 || yy > H + 20) continue;
+        ctx.globalAlpha = Math.max(0, 1 - k / 14) * 0.9;
+        ctx.fillStyle = k === 0 ? CREAM : (c.x % 48 === 0 ? PURP : TEAL);
+        ctx.fillText(NPUBC[((c.x + k * 7 + ((c.y / 16) | 0)) % NPUBC.length + NPUBC.length) % NPUBC.length], c.x, yy);
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (t > 6.8) rgbSlam('escape the algorithm', W / 2, H / 2, 46, 3);
+  }
+
+  // ── 9-12 warp tunnel ──
+  else if (t < 12) {
+    const acc = (t - 9) / 3;
+    for (const s of warp) {
+      s.r += (60 + acc * 900) * s.sp * dt;
+      if (s.r > 560) { s.r = rnd() * 30; s.a = rnd() * 6.283; }
+      const x = W / 2 + Math.cos(s.a) * s.r;
+      const y = H / 2 + Math.sin(s.a) * s.r * 0.62;
+      const len = Math.min(40, s.r * 0.12 * (0.3 + acc));
+      ctx.strokeStyle = s.c;
+      ctx.globalAlpha = Math.min(1, s.r / 120);
+      ctx.lineWidth = s.r > 300 ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - Math.cos(s.a) * len, y - Math.sin(s.a) * len * 0.62);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 30px "Courier New", monospace';
+    ctx.textAlign = 'center'; ctx.fillStyle = CREAM;
+    if (t > 10) ctx.fillText('there is a place…', W / 2, H / 2);
+  }
+
+  // ── 12-24.5 the district ──
+  else if (t < 24.5) {
+    if (t - 12 < 0.06 && shake < 0.5) { shake = 1.4; burst(W / 2, 160, PINK, 70, 150); }
+    drawSkyline(H - 40, true, t);
+
+    // fireworks
+    if (t < 23 && t - lastBurst > 0.5) { lastBurst = t; burst(90 + rnd() * (W - 180), 70 + rnd() * 150, PALETTE[(rnd() * 5) | 0]); }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]; p.t += dt;
+      if (p.t >= p.life) { parts.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 45 * dt; p.vx *= 0.985; p.vy *= 0.985;
+      const lf = 1 - p.t / p.life;
+      ctx.globalAlpha = lf;
+      ctx.fillStyle = p.c;
+      ctx.fillRect(p.x | 0, p.y | 0, lf > 0.75 ? 3 : 2, lf > 0.75 ? 3 : 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // sign drops from above 12.2-12.8
+    const drop = Math.min(1, Math.max(0, (t - 12.2) / 0.5));
+    const signY = -80 + (92 + 80) * (1 - Math.pow(1 - drop, 2));
+    if (drop >= 1 && t - 12.7 < 0.06 && shake < 0.6) shake = 0.9;
+    rgbSlam('NOSTR DISTRICT', W / 2, signY, 60, t < 13.5 ? 6 : 2);
+
+    // 16-21: carousel around spinning ₿
+    if (t >= 16 && t < 21) {
+      const words = ['CHAT', 'ZAP', 'TRADE', 'FISH', 'HOME'];
+      const cx = W / 2, cy = 300;
+      // spinning ₿ — horizontal squash = spin
+      const sp = Math.cos(t * 6);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(Math.max(0.12, Math.abs(sp)), 1);
+      ctx.font = 'bold 120px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = AMBER; ctx.shadowBlur = 30;
+      ctx.fillStyle = AMBER;
+      ctx.fillText('₿', 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      words.forEach((w2, i) => {
+        const a = t * 1.6 + (i / words.length) * 6.283;
+        const x = cx + Math.cos(a) * 300;
+        const y = cy + Math.sin(a) * 105;
+        const front = Math.sin(a) > -0.15;
+        ctx.globalAlpha = front ? 1 : 0.28;
+        neonWord(w2, x, y, front ? 34 : 26, PALETTE[i % 5]);
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // 21-24.5: THE OSTRICH
+    if (t >= 21) {
+      const ox = -220 + ((t - 21) / 3.2) * (W + 460);
+      const bob = Math.abs(Math.sin(t * 9)) * -14;
+      const cell = 16;
+      if (Math.floor(t * 9) % 2 === 0 && shake < 0.25) shake = 0.28; // stomps
+      ctx.save();
+      ctx.translate(ox, H - 40 - OSTRICH.length * cell + bob);
+      ctx.shadowColor = PURP; ctx.shadowBlur = 22;
+      for (let ry = 0; ry < OSTRICH.length; ry++)
+        for (let rx = 0; rx < OSTRICH[ry].length; rx++)
+          if (OSTRICH[ry][rx] === '#') {
+            ctx.fillStyle = ry < 4 ? '#9a86ff' : PURP;
+            ctx.fillRect(rx * cell * -1 + OSTRICH[ry].length * cell, ry * cell, cell - 1, cell - 1); // flipped → walks right
+          }
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      ctx.font = 'bold 26px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.fillStyle = CREAM;
+      ctx.fillText('the nostrich rides at dawn', W / 2, 120);
+    }
+  }
+
+  // ── 24.5-27 datamosh collapse ──
+  else if (t < 27) {
+    // smear: re-draw slices of the current canvas at random offsets
+    drawSkyline(H - 40, true, t);
+    for (let i = 0; i < 26; i++) {
+      const yy = (rnd() * H) | 0, hh = 8 + (rnd() * 40) | 0;
+      const off = ((rnd() - 0.5) * 180 * ((27 - t) / 2.5)) | 0;
+      ctx.drawImage(cv, 0, yy, W, hh, off, yy, W, hh);
+    }
+    if (Math.floor(t / 0.22) % 3 !== 0) rgbSlam('CONNECTION LOST?', W / 2, H / 2, 44, 10);
+    ctx.fillStyle = `rgba(0,0,0,${(t - 24.5) / 2.5 * 0.75})`;
+    ctx.fillRect(-30, -30, W + 60, H + 60);
+  }
+
+  // ── 27-32 quiet end card ──
+  else {
+    const s = 'thedistrict.online';
+    const n = Math.min(s.length, Math.floor((t - 27.4) * 16));
+    ctx.font = 'bold 54px "Courier New", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = TEAL; ctx.shadowBlur = 18;
+    ctx.fillStyle = TEAL;
+    ctx.fillText(s.slice(0, n) + (Math.floor(t / 0.53) % 2 === 0 ? '_' : ''), W / 2, 240);
+    ctx.shadowBlur = 0;
+    if (t > 29.2) {
+      ctx.font = 'bold 24px "Courier New", monospace';
+      ctx.fillStyle = CREAM;
+      ctx.fillText('no lords · no feeds · your keys', W / 2, 300);
+    }
+    // CRT power-off at 31.2
+    if (t > 31.2) {
+      const k = Math.min(1, (t - 31.2) / 0.45);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-30, -30, W + 60, (H / 2 - 2) * k + 0.01 + 30);
+      ctx.fillRect(-30, H - (H / 2 - 2) * k, W + 60, (H / 2) * k + 30);
+      ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - k * 0.4)})`;
+      ctx.fillRect(0, H / 2 - 1.5, W, 3 * (1 - k * 0.9) + 0.4);
+      if (t > 31.75) { ctx.fillStyle = '#000'; ctx.fillRect(-30, -30, W + 60, H + 60); }
+    }
+  }
+
+  ctx.restore();
+
+  // scanlines + vignette (always)
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+
+function neonWord(txt, x, y, size, color) {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = 14;
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+
+window.__run = (durS) => new Promise((resolve) => {
+  const t0 = performance.now();
+  const stream = cv.captureStream(60);
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const buf = await blob.arrayBuffer();
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    resolve(btoa(s));
+  };
+  rec.start(500);
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t >= durS) { rec.stop(); return; }
+    draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
