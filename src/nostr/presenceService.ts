@@ -704,7 +704,13 @@ export function sendPosition(x: number, y: number, facingRight?: boolean): void 
   }
 }
 
+// Last time the local player sent an actual chat message (not a '/' command or
+// emote broadcast). The auto-AFK timer treats chatting as being present.
+let lastLocalChatAt = 0;
+export function getLastLocalChatAt(): number { return lastLocalChatAt; }
+
 export function sendChat(text: string): void {
+  if (!text.startsWith('/')) lastLocalChatAt = Date.now();
   if (ws?.readyState === WebSocket.OPEN) {
     const emojis = extractEmojiTags(text);
     ws.send(JSON.stringify({ type: 'chat', text, ...(emojis.length ? { emojis } : {}) }));

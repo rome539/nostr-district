@@ -75,7 +75,7 @@ import { ZapModal } from '../ui/ZapModal';
 import { destroyPlayerMenu, showPlayerMenu, mutedPlayers } from '../ui/PlayerMenu';
 import {
   sendChat, sendNameUpdate, sendRoomChange, sendRoomResponse, sendRoomRequest,
-  setPresenceCallbacks, sendAvatarUpdate,
+  setPresenceCallbacks, sendAvatarUpdate, getLastLocalChatAt,
   setRoomRequestHandler, setRoomGrantedHandler, setRoomDeniedHandler, setRoomKickHandler, clearRoomRequestHandler,
   requestOnlinePlayers,
   PresenceCallback,
@@ -1275,8 +1275,46 @@ export abstract class BaseScene extends Phaser.Scene {
     });
   }
 
+  // ── Auto-AFK ──────────────────────────────────────────────────────────────
+  // Stand still (and silent) for 3 minutes → the zzz emote starts (broadcast, so
+  // everyone sees you dozing); moving OR sending a chat message wakes you.
+  // ZzzEmote.stopsOnMove already kills the local visuals the frame movement
+  // starts, but that stop is silent — the wake here also broadcasts zzz_off so
+  // REMOTE clients wake your avatar too.
+  private static readonly AFK_MS = 3 * 60_000;
+  private _afkX = NaN;
+  private _afkY = 0;
+  private _afkActiveAt = Date.now();
+  private _afkAuto = false; // zzz was started by the AFK timer (vs. a manual /zzz)
+
+  private updateAutoAfk(): void {
+    if (!this.playerSprite) return;
+    const x = this.playerSprite.x, y = this.playerSprite.y;
+    if (isNaN(this._afkX)) { this._afkX = x; this._afkY = y; this._afkActiveAt = Date.now(); return; }
+    // y threshold sits above the ±2px walk-bob so idle bobbing can't read as movement
+    const moved = Math.abs(x - this._afkX) > 0.5 || Math.abs(y - this._afkY) > 2.5;
+    const chatted = getLastLocalChatAt() > this._afkActiveAt;
+    if (moved || chatted) {
+      if (moved) { this._afkX = x; this._afkY = y; }
+      this._afkActiveAt = Date.now();
+      if (this._afkAuto) {
+        this._afkAuto = false;
+        this.emoteSet.stop('zzz');
+        sendChat('/emote zzz_off');
+      }
+    } else if (!this._afkAuto && !this.emoteSet.isActive('zzz')
+        && Date.now() - this._afkActiveAt >= BaseScene.AFK_MS) {
+      // _afkAuto also acts as a once-per-idle latch: if the player manually wakes
+      // (/zzz off) without moving, we don't instantly re-sleep them.
+      this._afkAuto = true;
+      this.emoteSet.start('zzz');
+      sendChat('/emote zzz_on');
+    }
+  }
+
   /** Call once per frame in each scene's update() to animate name tag + aura. */
   protected updateLocalNameColor(time: number, delta = 16): void {
+    this.updateAutoAfk();
     const av = getAvatar();
     // Step animated color/shadow work at NAME_FX_MS — see the note above updateOtherPlayers.
     const fxDue = time - this._localNameFxAt >= BaseScene.NAME_FX_MS;
