@@ -270,6 +270,9 @@ export class ZapModal {
       if (result.status === 'paid') {
         ZapModal.destroy();
         SoundEngine.get().zapSound();
+        // Private two-party lightning strike — drawn locally, only if the
+        // recipient is standing in the sender's current scene.
+        window.dispatchEvent(new CustomEvent('nd-zap-bolt', { detail: { pubkey: recipientPubkey, direction: 'out' } }));
         sendChat(`/zap:${sats}`);
         return;
       }

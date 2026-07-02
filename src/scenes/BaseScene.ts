@@ -64,6 +64,7 @@ import { EYE_PALETTES, EYE_CYCLE_MS, EYE_CYCLE_TYPES, EYE_MOTION_TYPES, eyeMotio
 import { CHAR_ANIMS, charAnimStates } from '../entities/nameAnim';
 import { AuraFireworks } from './auraFireworks';
 import { HandSparkler } from './handSparkler';
+import { ZapBoltFX } from './zapBolt';
 import { ComputerUI } from '../ui/ComputerUI';
 import { MuteList } from '../ui/MuteList';
 import { PlayerPicker } from '../ui/PlayerPicker';
@@ -520,6 +521,11 @@ export abstract class BaseScene extends Phaser.Scene {
   // 🦤 Nostrich name color — purple ostriches flanking the name tag, one pair per player.
   private _localOstrich      : NameOstrichPair | null = null;
   private _otherOstrichMap   = new Map<string, NameOstrichPair>();
+  // ⚡ Zap bolt — private lightning between zapper and recipient (see zapBolt.ts).
+  // Fired via the 'nd-zap-bolt' window event; only drawn if the other party's
+  // sprite is in this scene. Lazily created on first strike.
+  private _zapBolt: ZapBoltFX | null = null;
+  private readonly _zapBoltHandler = (e: Event) => this.onZapBolt(e as CustomEvent);
   // Cursor keys, created ONCE and reused. createCursorKeys() rebuilds an object + re-adds
   // six keys on every call — calling it per frame (every scene did) is pure churn.
   protected _cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -627,6 +633,7 @@ export abstract class BaseScene extends Phaser.Scene {
       this.snd.tradeSound();
       window.dispatchEvent(new CustomEvent('nd-toast', { detail: { msg: `You received an item${fromName ? ` from ${fromName}` : ''}!`, color: '#c0a8ff', open: 'inventory' } }));
     });
+    window.addEventListener('nd-zap-bolt', this._zapBoltHandler);
     this.emoteSet.stopAll();
     this.isLeavingScene = false;
     this.walkTime  = 0;
@@ -1281,7 +1288,7 @@ export abstract class BaseScene extends Phaser.Scene {
   // ZzzEmote.stopsOnMove already kills the local visuals the frame movement
   // starts, but that stop is silent — the wake here also broadcasts zzz_off so
   // REMOTE clients wake your avatar too.
-  private static readonly AFK_MS = 3 * 60_000;
+  private static readonly AFK_MS = 10 * 60_000;
   private _afkX = NaN;
   private _afkY = 0;
   private _afkActiveAt = Date.now();
@@ -1312,9 +1319,32 @@ export abstract class BaseScene extends Phaser.Scene {
     }
   }
 
+  // ── ⚡ Zap bolt (private, two-party) ─────────────────────────────────────
+  // detail: { pubkey, direction } — 'out' = we zapped them (ZapModal),
+  // 'in' = they zapped us (zapService receipt/WS handlers). The bolt is a
+  // local-only render: if the other party's sprite isn't in this scene,
+  // nothing is drawn, and no other client ever receives anything.
+  private onZapBolt(e: CustomEvent): void {
+    const pubkey: string | undefined    = e.detail?.pubkey;
+    const direction: 'in' | 'out'       = e.detail?.direction === 'out' ? 'out' : 'in';
+    if (!pubkey || !this.playerSprite || !this.otherPlayers.has(pubkey)) return;
+    // Anchors re-read sprite positions each frame so the bolt tracks walkers;
+    // aim slightly above center, roughly chest height.
+    const other = () => {
+      const o = this.otherPlayers.get(pubkey);
+      return o && o.sprite.active ? { x: o.sprite.x, y: o.sprite.y - 8 } : null;
+    };
+    const self = () =>
+      this.playerSprite?.active ? { x: this.playerSprite.x, y: this.playerSprite.y - 8 } : null;
+    if (!this._zapBolt) this._zapBolt = new ZapBoltFX(this);
+    if (direction === 'out') this._zapBolt.strike(self, other);
+    else                     this._zapBolt.strike(other, self);
+  }
+
   /** Call once per frame in each scene's update() to animate name tag + aura. */
   protected updateLocalNameColor(time: number, delta = 16): void {
     this.updateAutoAfk();
+    this._zapBolt?.update(delta);
     const av = getAvatar();
     // Step animated color/shadow work at NAME_FX_MS — see the note above updateOtherPlayers.
     const fxDue = time - this._localNameFxAt >= BaseScene.NAME_FX_MS;
@@ -2679,6 +2709,9 @@ export abstract class BaseScene extends Phaser.Scene {
   protected shutdownCommonPanels(): void {
     this.unsubProfile?.();
     this.unsubProfile = undefined;
+    window.removeEventListener('nd-zap-bolt', this._zapBoltHandler);
+    this._zapBolt?.destroy();
+    this._zapBolt = null;
     // Free every per-player avatar texture (global — not released by sprite.destroy()),
     // otherwise each scene transition leaks one canvas per nearby player.
     const _texPrefix = this.getOtherPlayerConfig().texKeyPrefix;

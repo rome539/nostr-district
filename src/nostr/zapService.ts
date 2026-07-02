@@ -734,6 +734,12 @@ export function startGlobalZapToasts(): void {
   _globalZapPubkey = pubkey;
 
   _globalZapUnsub = subscribeToZapReceipts(pubkey, async (senderPubkey, amountSats, comment) => {
+    // Private two-party lightning strike — the active scene draws it only if
+    // the sender's sprite is present. Fire before the async name resolution
+    // so the bolt lands with the payment, not with the toast.
+    if (senderPubkey) {
+      window.dispatchEvent(new CustomEvent('nd-zap-bolt', { detail: { pubkey: senderPubkey, direction: 'in' } }));
+    }
     const name = await resolveSenderName(senderPubkey);
     // Late import to avoid a circular dependency through the UI layer.
     const { showZapToast } = await import('../ui/ZapToast');
@@ -749,6 +755,7 @@ export function startGlobalZapToasts(): void {
   // Lightning row.
   setIncomingZapHandler(async (senderPk, senderName, amountSats, comment) => {
     if (!senderPk || amountSats <= 0) return;
+    window.dispatchEvent(new CustomEvent('nd-zap-bolt', { detail: { pubkey: senderPk, direction: 'in' } }));
     // Pre-claim the amount SYNCHRONOUSLY (top-level import) so the Spark
     // generic-Lightning toast dedupes against us even if its
     // payment_succeeded event fires before our async work finishes.
