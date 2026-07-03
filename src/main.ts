@@ -53,6 +53,14 @@ window.addEventListener('pagehide', (e) => {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) SoundEngine.get().unlock();
   });
+
+  // Eager resume attempt at page load, no gesture. Browsers ALLOW this for
+  // sites they trust with audio (Chrome's media-engagement score, Brave's /
+  // Firefox's per-site autoplay permission) — so for returning players the
+  // login-screen fireworks are audible immediately, including right after a
+  // logout reload. On a fresh visitor this rejects harmlessly and the gesture
+  // listeners above take over.
+  SoundEngine.get().unlock();
 }
 import {
   loginWithExtension,
