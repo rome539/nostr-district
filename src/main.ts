@@ -235,21 +235,6 @@ function startGame(): void {
           },
         });
 
-        // Battery saver: a Phaser game renders EVERY animation frame for as long as the
-        // tab is open. Phaser's built-in "pause on hidden" only records a timestamp — it
-        // does not stop the loop. So sleep the loop (stops requestAnimationFrame entirely
-        // → ~0 CPU) only when the TAB itself is hidden (switched away / minimized), and
-        // wake it when the tab is shown again. A visible tab keeps running even if the
-        // window loses focus (clicked into another app) — that's intentional.
-        const syncRunState = (): void => {
-          const loop = game?.loop;
-          if (!loop) return;
-          const visible = document.visibilityState === 'visible';
-          if (visible && !loop.running) loop.wake();
-          else if (!visible && loop.running) loop.sleep();
-        };
-        document.addEventListener('visibilitychange', syncRunState);
-
         // Free the WebGL context + all canvas textures on unload/reload. Logout does a
         // location.reload(), and Safari REUSES the same Web Content process across it —
         // it's slow to reclaim a heavy WebGL app's GPU/canvas memory, so repeated
