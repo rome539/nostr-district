@@ -217,6 +217,14 @@ All kind 30078 events are namespaced by their `d` tag:
 | `nd-m-{crewId}` | each member | Per-member crew membership status (`active: true/false, role`) |
 | `nd-invite-{token}` | invitee | Consumed invite token record (one-time use, cross-device) |
 
+### The district relay
+
+The district runs its own allowlist relay at `wss://nostr.thedistrict.online` —
+the canonical durable store for economy events (items, listings, bids, burns)
+and citizens' encrypted wallet-mnemonic backups. Public relays remain as
+redundancy. Source, accept policy, and full ops runbook (deploy, rollback,
+backfill, monitoring): [`relay/`](relay/README.md).
+
 ## NIPs Implemented
 
 | NIP | Standard | Usage |
