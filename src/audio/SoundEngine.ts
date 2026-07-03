@@ -644,7 +644,14 @@ export class SoundEngine {
     const nowMs = performance.now();
     if (nowMs - this._lastFwBoom < 120) return;
     this._lastFwBoom = nowMs;
-    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+    const ctx = this.ac();
+    // Skip (don't schedule) while the context isn't running: nodes anchor to
+    // ctx.currentTime, which FREEZES when the context is suspended (autoplay
+    // lock, or macOS idling the audio device). Scheduling anyway queues every
+    // boom on the same frozen instant — they all detonate at once on the
+    // resume gesture and the clipped pile can wedge the output.
+    if (ctx.state !== 'running') return;
+    const t = ctx.currentTime; const d = this.sfx();
     const v = Math.max(0, Math.min(1, vol));
     // The boom body — a sine that falls 140→45Hz like a distant shell report
     const o = ctx.createOscillator();
@@ -668,7 +675,9 @@ export class SoundEngine {
 
   /** Soft rising whistle as a firework shell climbs (pairs with fireworkBoom). */
   fireworkWhistle(vol = 1): void {
-    const ctx = this.ac(); const t = ctx.currentTime; const d = this.sfx();
+    const ctx = this.ac();
+    if (ctx.state !== 'running') return; // see fireworkBoom — never queue on a frozen clock
+    const t = ctx.currentTime; const d = this.sfx();
     const v = Math.max(0, Math.min(1, vol));
     const o = ctx.createOscillator();
     o.type = 'sine';

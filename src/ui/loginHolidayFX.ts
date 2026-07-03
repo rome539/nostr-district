@@ -22,7 +22,9 @@ export class LoginHolidayFX {
     if (this.fireworks) {
       // Soft show behind the login card. Inaudible until the first click/keypress
       // anywhere on the page (browser autoplay policy — main.ts unlocks on gesture);
-      // booms before that are simply swallowed by the suspended AudioContext.
+      // SoundEngine SKIPS booms while the context isn't running — scheduling them
+      // would queue every one on the frozen clock and fire them all at once on
+      // the unlock gesture.
       this.fireworks.onLaunch = () => SoundEngine.get().fireworkWhistle(0.4);
       this.fireworks.onExplode = () => SoundEngine.get().fireworkBoom(0.55);
     }
