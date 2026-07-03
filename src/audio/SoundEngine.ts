@@ -558,13 +558,16 @@ export class SoundEngine {
 
   private noiseShot(dur: number, ftype: BiquadFilterType, ffreq: number, fq: number, gain: number, dest: AudioNode, delay = 0): void {
     const ctx = this.ac();
-    const t   = ctx.currentTime + delay;
+    const t   = ctx.currentTime + 0.02 + delay; // +20ms — see fireworkBoom
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf(dur);
     const f = ctx.createBiquadFilter();
     f.type = ftype; f.frequency.value = ffreq; f.Q.value = fq;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(gain, t);
+    // 3ms attack — noise jumping 0→full in one sample is a hard step
+    // transient that reads as a click on speakers.
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + Math.min(0.003, dur * 0.2));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f); f.connect(g); g.connect(dest);
     src.start(t); src.stop(t + dur + 0.01);
@@ -651,7 +654,9 @@ export class SoundEngine {
     // boom on the same frozen instant — they all detonate at once on the
     // resume gesture and the clipped pile can wedge the output.
     if (ctx.state !== 'running') return;
-    const t = ctx.currentTime; const d = this.sfx();
+    // +20ms lead: scheduling AT currentTime races the audio thread; a late
+    // main thread clamps attack ramps away (sound starts at full gain).
+    const t = ctx.currentTime + 0.02; const d = this.sfx();
     const v = Math.max(0, Math.min(1, vol));
     // The boom body — a sine that falls 140→45Hz like a distant shell report
     const o = ctx.createOscillator();
@@ -666,10 +671,11 @@ export class SoundEngine {
     o.start(t); o.stop(t + 0.55);
     // Air rumble under it
     this.noiseShot(0.4, 'lowpass', 240, 0.7, 0.10 * v, d);
-    // Glitter crackle — a few scattered high pops trailing 0.1-0.6s behind
-    for (let i = 0; i < 5; i++) {
+    // Glitter shimmer — sparse soft pops trailing 0.1-0.6s behind. Kept gentle:
+    // short high-Q noise bursts at higher gain read as static clicks on speakers.
+    for (let i = 0; i < 3; i++) {
       const dl = 0.12 + Math.random() * 0.5;
-      this.noiseShot(0.03 + Math.random() * 0.04, 'bandpass', 2500 + Math.random() * 2500, 2.5, 0.035 * v, d, dl);
+      this.noiseShot(0.05 + Math.random() * 0.06, 'bandpass', 2200 + Math.random() * 2000, 1.6, 0.02 * v, d, dl);
     }
   }
 
@@ -677,7 +683,7 @@ export class SoundEngine {
   fireworkWhistle(vol = 1): void {
     const ctx = this.ac();
     if (ctx.state !== 'running') return; // see fireworkBoom — never queue on a frozen clock
-    const t = ctx.currentTime; const d = this.sfx();
+    const t = ctx.currentTime + 0.02; const d = this.sfx(); // +20ms — see fireworkBoom
     const v = Math.max(0, Math.min(1, vol));
     const o = ctx.createOscillator();
     o.type = 'sine';
@@ -689,8 +695,10 @@ export class SoundEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
     o.connect(g); g.connect(d);
     o.start(t); o.stop(t + 0.6);
-    // faint air hiss riding along
-    this.noiseShot(0.45, 'highpass', 3200, 1.0, 0.012 * v, d);
+    // NO air hiss: quiet high-passed noise intermittently reads as a POP/click
+    // on speakers (A/B-confirmed by ear against a hissless whistle, 2026-07-03
+    // — it was never an envelope or scheduling bug). The rising sine alone
+    // carries the launch.
   }
 
   zapSound(): void {
