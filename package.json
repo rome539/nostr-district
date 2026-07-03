@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "itch:push": "npm run build && butler push dist rome539/the-district:html5",
     "server": "tsx server.ts",
     "start": "tsx server.ts"
   },

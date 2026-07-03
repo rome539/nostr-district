@@ -98,6 +98,10 @@ Drives the real game as a guest and records the Phaser canvas.
   first FURNITURE_DATA swatch (couch/armchair #3d2860, beanbag #c44060); untinted
   white pieces are also an accurate state. Real counts: ~61 furniture · 11 floors ·
   5 walls · 11 posters.
+- `cover.html` + `capture-cover.mjs` (2026-07-03) — STATIC itch.io cover, 630×500 (itch's
+  recommended size) + @2x nearest-neighbor. Neon title, skyline, 4 real avatars
+  (promo11 cast subset), frozen zap bolt w/ real ⚡21 preset, fireworks. `window.__shot()`
+  returns PNGs instead of `__run()` webm — screenshot pipeline, no ffmpeg needed.
 - `promo11.html` + `breezdata.js` + `breez-logo.png` — Breez Spark wallet cut (35s).
   Street scene reuses the REAL avatars from avatardata.js (6 outfits, name tags) with
   zap bolts arcing between players; amounts are the real ZapModal presets (21/100/500/

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="630" height="500"></canvas>
+<script src="avatardata.js"></script>
+<script>
+// ── itch.io cover, concept B: "citizen grid" ─────────────────────────────────
+// Character-select wall: 20 REAL avatars (14 outfits + 6 of the color sweep,
+// all from the game's own AvatarRenderer) in a 5×4 grid, title band across the
+// middle. Copy: "every citizen a keypair" (approved). Static; __shot() → PNGs.
+const W = 630, H = 500;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', PURP='#7b68ee', CREAM='#fff5e6';
+let seed = 20260703;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+const COLS = 5, ROWS = 4, CW = W / COLS, CH = H / ROWS;
+// dim cell tints from the house palette
+const CELL = ['#1b0d31', '#0d2018', '#2a1808', '#141033', '#220e20'];
+const EDGE = [PINK, TEAL, AMBER, PURP, CREAM];
+
+// 20 distinct sprites: all 14 outfits + 6 sweep colorways, shuffled once
+const srcs = [...window.AVATARS, ...window.SWEEP.slice(0, 6)];
+for (let i = srcs.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; [srcs[i], srcs[j]] = [srcs[j], srcs[i]]; }
+const imgs = srcs.map(s => { const im = new Image(); im.src = s; return im; });
+
+function neon(txt, x, y, size, color, glow=12, align='center') {
+  ctx.font = `bold ${size}px "Courier New", monospace`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.shadowColor = color; ctx.shadowBlur = glow;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowBlur = 0;
+}
+
+function draw() {
+  // the grid of citizens
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      const x = c * CW, y = r * CH;
+      ctx.fillStyle = CELL[(c + r * 2) % CELL.length];
+      ctx.fillRect(x, y, CW, CH);
+      // faint colored floor line per cell
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = EDGE[(c + r * 3) % EDGE.length];
+      ctx.fillRect(x + 8, y + CH - 12, CW - 16, 2);
+      ctx.globalAlpha = 1;
+      // avatar, feet on the floor line
+      const im = imgs[i];
+      const s = 1.4, w = im.naturalWidth * s, h = im.naturalHeight * s;
+      ctx.drawImage(im, (x + CW/2 - w/2) | 0, (y + CH - 11 - h) | 0, w | 0, h | 0);
+      // cell seam
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, CW - 2, CH - 2);
+    }
+  }
+
+  // ── title band across the middle ──
+  const bandY = 200, bandH = 100;
+  ctx.fillStyle = 'rgba(8,0,16,0.92)';
+  ctx.fillRect(0, bandY, W, bandH);
+  ctx.fillStyle = PINK;
+  ctx.shadowColor = PINK; ctx.shadowBlur = 10;
+  ctx.fillRect(0, bandY, W, 3);
+  ctx.fillRect(0, bandY + bandH - 3, W, 3);
+  ctx.shadowBlur = 0;
+  neon('NOSTR DISTRICT', W/2, bandY + 40, 52, PINK, 22);
+  neon('every citizen a keypair', W/2, bandY + 78, 19, CREAM, 7);
+
+  // scanlines + vignette (brand DNA)
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.5, W/2, H/2, H*1.0);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+
+window.__shot = () => new Promise((resolve) => {
+  const ready = () => imgs.every(im => im.complete && im.naturalWidth);
+  const go = () => {
+    draw();
+    const up = document.createElement('canvas');
+    up.width = W * 2; up.height = H * 2;
+    const uc = up.getContext('2d');
+    uc.imageSmoothingEnabled = false;
+    uc.drawImage(cv, 0, 0, W * 2, H * 2);
+    resolve({ native: cv.toDataURL('image/png').split(',')[1], x2: up.toDataURL('image/png').split(',')[1] });
+  };
+  const wait = () => ready() ? go() : setTimeout(wait, 100);
+  wait();
+});
+</script>
+</body>
+</html>

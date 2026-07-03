@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="630" height="500"></canvas>
+<script src="avatardata.js"></script>
+<script>
+// ── itch.io cover, concept C: "minimal poster" ───────────────────────────────
+// One REAL avatar blown up huge (×6 — the pixels ARE the art), amber moon
+// behind, flat type stacked left with a hard pink drop shadow. A single zap
+// bolt strikes the citizen from off-frame with the real ⚡21 preset.
+// Copy: "your keys · your city" (approved). Static; __shot() → PNGs.
+const W = 630, H = 500;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const PINK='#ff71ce', TEAL='#5dcaa5', AMBER='#f0b040', CREAM='#fff5e6', BG='#0d0620';
+let seed = 2101;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+// the star citizen: outfit #2 (mohawk/jacket — the sweep base, most iconic)
+const hero = new Image(); hero.src = window.AVATARS[2];
+const HS = 6;                      // 48×76 → 288×456
+const HX = 452, HFEET = 520;       // feet just below frame — poster crop
+
+function draw() {
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+
+  // sparse stars
+  for (let i = 0; i < 46; i++) {
+    ctx.globalAlpha = 0.2 + rnd() * 0.5;
+    ctx.fillStyle = CREAM;
+    ctx.fillRect((rnd() * W) | 0, (rnd() * H) | 0, rnd() < 0.15 ? 2 : 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  // amber moon behind the citizen (flat disc + one ring)
+  ctx.fillStyle = AMBER;
+  ctx.beginPath(); ctx.arc(HX, 218, 168, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = AMBER; ctx.globalAlpha = 0.35; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(HX, 218, 186, 0, 6.283); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // giant citizen, feet cropped by the frame
+  const w = hero.naturalWidth * HS, h = hero.naturalHeight * HS;
+  ctx.drawImage(hero, HX - w/2, HFEET - h, w, h);
+
+  // zap bolt from off-frame top-right into the citizen's chest (stays clear
+  // of the type on the left)
+  const tx = HX - 30, ty = 330;
+  const pts = [[W + 20, -16]];
+  const n = 8;
+  for (let i = 1; i < n; i++) {
+    const f = i / n;
+    pts.push([W + 20 + (tx - W - 20) * f, -16 + (ty + 16) * f + (rnd() - 0.5) * 30]);
+  }
+  pts.push([tx, ty]);
+  for (const [lw, col, al] of [[7, AMBER, 0.3], [3, '#ffe060', 1]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    ctx.shadowColor = AMBER; ctx.shadowBlur = 12;
+    ctx.globalAlpha = al;
+    ctx.beginPath();
+    pts.forEach(([px, py], j) => j ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  for (let i = 0; i < 12; i++) {
+    const a = rnd() * 6.283, r = 5 + rnd() * 18;
+    ctx.globalAlpha = 0.4 + rnd() * 0.6;
+    ctx.fillStyle = i % 3 ? '#ffe060' : CREAM;
+    ctx.fillRect((tx + Math.cos(a) * r) | 0, (ty + Math.sin(a) * r) | 0, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+
+  // ⚡21 pop (real ZapModal preset)
+  ctx.font = 'bold 26px "Courier New", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = AMBER;
+  ctx.fillText('⚡21', 296, 366);
+
+  // ── flat poster type, hard pink drop shadow ──
+  const stack = (txt, x, y, size) => {
+    ctx.font = `bold ${size}px "Courier New", monospace`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = PINK; ctx.fillText(txt, x + 5, y + 5);
+    ctx.fillStyle = CREAM; ctx.fillText(txt, x, y);
+  };
+  stack('NOSTR',    36, 156, 72);
+  stack('DISTRICT', 36, 232, 72);
+  ctx.font = 'bold 21px "Courier New", monospace';
+  ctx.fillStyle = TEAL;
+  ctx.fillText('your keys · your city', 38, 292);
+
+  // scanlines, light — no vignette (poster stays flat)
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+}
+
+window.__shot = () => new Promise((resolve) => {
+  const ready = () => hero.complete && hero.naturalWidth;
+  const go = () => {
+    draw();
+    const up = document.createElement('canvas');
+    up.width = W * 2; up.height = H * 2;
+    const uc = up.getContext('2d');
+    uc.imageSmoothingEnabled = false;
+    uc.drawImage(cv, 0, 0, W * 2, H * 2);
+    resolve({ native: cv.toDataURL('image/png').split(',')[1], x2: up.toDataURL('image/png').split(',')[1] });
+  };
+  const wait = () => ready() ? go() : setTimeout(wait, 100);
+  wait();
+});
+</script>
+</body>
+</html>
