@@ -833,7 +833,7 @@ export class PollBoard {
     if (ev === undefined) {
       try {
         const found = await queryEvents({ ids: [eid] }, relays.length ? relays.concat([
-          'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub',
+          'wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom',
         ]) : undefined);
         ev = found[0] ?? null;
       } catch { ev = null; }

@@ -201,7 +201,7 @@ export class BunkerClient {
         this.appName = opts.appName || 'Nostr App';
         this.appUrl = opts.appUrl || '';
         this.perms = opts.perms || '';
-        this.relays = opts.relays || ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
+        this.relays = opts.relays || ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'];
         this.storageKey = opts.storageKey || null;
         this.sessionMaxAge = opts.sessionMaxAge || 24 * 60 * 60 * 1000;
         this.heartbeatMs = opts.heartbeatMs !== undefined ? opts.heartbeatMs : 30000;

@@ -41,19 +41,16 @@ function proxyUrl(relayWss: string): string {
 
 // ── Dedicated relay list for reliable DM (NIP-17 gift-wrap) delivery ──
 export const DM_RELAYS = [
-  'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://offchain.pub',
+  'wss://nostr.mom',
   'wss://relay.0xchat.com',
 ];
 
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
   'wss://relay.primal.net',
   'wss://nos.lol',
   'wss://relay.mostr.pub',
-  'wss://offchain.pub',
   'wss://relay.0xchat.com',
   'wss://nostr21.com',
   'wss://nostr-pub.wellorder.net',

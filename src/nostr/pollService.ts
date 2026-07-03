@@ -27,7 +27,6 @@ export interface PollResults {
 
 const POLL_RELAYS = [
   'wss://nos.lol',
-  'wss://relay.damus.io',
   'wss://purplepag.es',
 ];
 

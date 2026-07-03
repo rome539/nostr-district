@@ -15,7 +15,6 @@ const DITTO_RELAY = 'wss://relay.ditto.pub';
 
 const ALL_RELAYS = [
   DITTO_RELAY,
-  'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.mostr.pub',
   'wss://nostr.wine',

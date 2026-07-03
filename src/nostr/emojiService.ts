@@ -12,7 +12,6 @@ const emojiMap = new Map<string, string>(); // shortcode (lowercase) → image U
 
 const EMOJI_RELAYS = [
   'wss://nos.lol',
-  'wss://relay.damus.io',
   'wss://purplepag.es',
 ];
 

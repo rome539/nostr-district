@@ -12,10 +12,8 @@ const bytesToHex = (b: Uint8Array): string => Buffer.from(b).toString('hex');
 // MUST stay in sync with ITEM_QUERY_RELAYS in src/nostr/nostrService.ts
 const PUBLISH_RELAYS = [
   'wss://nostr.thedistrict.online', // our own relay — canonical store for the item economy
-  'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://offchain.pub',
   'wss://nostr.mom',
   'wss://relay.snort.social',
 ];

@@ -311,10 +311,12 @@ type FetchBackupResult =
   | { status: 'error' };
 
 const MNEMONIC_BACKUP_RELAYS = [
-  'wss://relay.damus.io',
+  // Our own relay first — accepts exactly this mnemonic-backup d-tag since
+  // relay v2 (relay/main.go); the one backup home that can't shut down on us.
+  'wss://nostr.thedistrict.online',
   'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://offchain.pub',
+  'wss://nostr.mom',
   'wss://nostr.wine',
   'wss://relay.0xchat.com',
   'wss://nostr21.com',

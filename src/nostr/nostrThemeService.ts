@@ -21,7 +21,6 @@ export const FALLBACK_RELAYS = [
   'wss://relay.ditto.pub',    // Ditto's public relay — primary source for kind 16767/36767
   'wss://nos.lol',
   'wss://nostr.wine',
-  'wss://relay.damus.io',
   'wss://relay.primal.net',
   'wss://purplepag.es',
   'wss://relay.mostr.pub',
@@ -174,7 +173,6 @@ export function fetchKind16767(pubkey: string): Promise<NostrTheme | null> {
   const relays = [
     'wss://relay.ditto.pub',
     ...FALLBACK_RELAYS,
-    'wss://relay.damus.io',
     'wss://relay.mostr.pub',
     'wss://nostr-pub.wellorder.net',
   ].filter((r, i, a) => a.indexOf(r) === i);

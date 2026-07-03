@@ -154,7 +154,6 @@ async function fetchLNURLPData(url: string): Promise<any> {
 // ── Kind 0 fetch ──────────────────────────────────────────────────────────────
 
 const RELAYS = [
-  'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.primal.net',
   'wss://relay.mostr.pub',

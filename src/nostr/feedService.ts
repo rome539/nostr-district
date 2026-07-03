@@ -31,7 +31,6 @@ const REFILL_FETCH_LIMIT = 30;
 const REFILL_INTERVAL_MS = 15000;
 const FEED_RELAYS = [
   'wss://nos.lol',
-  'wss://relay.damus.io',
   'wss://relay.primal.net',
 ];
 let latestCreatedAt = 0;
@@ -150,7 +149,7 @@ async function startLiveSubscription(): Promise<void> {
     const since = Math.floor(Date.now() / 1000) - 300; // last 5 min
 
     const sub = pool.subscribeMany(
-      ['wss://relay.damus.io'],
+      ['wss://nos.lol'],
       // @ts-ignore
       [{ kinds: [1], since }],
       {

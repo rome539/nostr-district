@@ -15,7 +15,6 @@ import {
 
 const PACK_RELAYS = [
   'wss://nos.lol',
-  'wss://relay.damus.io',
   'wss://purplepag.es',
   'wss://nostr.wine',
   'wss://relay.primal.net',

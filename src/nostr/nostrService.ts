@@ -198,7 +198,7 @@ export async function publishEvent(event: any): Promise<boolean> {
       } catch (_) { resolve({ url, ok: false, msg: 'failed to open' }); }
     });
 
-  const relays = ['wss://nostr.thedistrict.online', 'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
+  const relays = ['wss://nostr.thedistrict.online', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'];
   const results = await Promise.all(relays.map(publishToRelay));
   const accepted = results.filter(r => r.ok).length;
   // Per-relay breakdown so the relay's accept/reject is visible in the console.
@@ -211,7 +211,7 @@ export async function publishEvent(event: any): Promise<boolean> {
  * Query events from relays via raw WebSocket REQ — mirrors publishEvent's reliability.
  * Collects events from each relay until EOSE or timeout, then dedupes by id.
  */
-const DEFAULT_QUERY_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'];
+const DEFAULT_QUERY_RELAYS = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'];
 
 // ── Shared relay connection pool ──────────────────────────────────────────────
 // One persistent WebSocket per relay, reused across every query/subscription and
@@ -750,7 +750,7 @@ export async function startBunkerFlow(
     NostrTools,
     pool: null,
     appName: 'Nostr District',
-    relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
+    relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'],
     perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
     storageKey: 'nostr_district_bunker',
     onStatusChange: (status: string, msg: string) => {
@@ -859,7 +859,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
 
   bunkerClient = new BunkerClient({
     NostrTools, pool: null, appName: 'Nostr District',
-    relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
+    relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'],
     // sign_event:9734 is REQUIRED for shop purchases — the LNURL zap request
     // is signed by the bunker, embedded in the LNURL callback, and used by
     // the store's LNURL provider to publish the kind:9735 receipt that
@@ -900,7 +900,7 @@ export async function loginWithBunkerUrl(bunkerUrl: string): Promise<void> {
       bunkerClient.destroy();
       bunkerClient = new BunkerClient({
         NostrTools, pool: null, appName: 'Nostr District',
-        relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://offchain.pub'],
+        relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom'],
         perms: 'sign_event:1,sign_event:0,sign_event:13,sign_event:14,sign_event:20000,sign_event:30078,sign_event:9734,nip44_encrypt,nip44_decrypt',
         storageKey: 'nostr_district_bunker',
         clientSkHex: savedSession?.sk ?? null,

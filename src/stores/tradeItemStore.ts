@@ -793,10 +793,8 @@ export async function fetchInventoryFromRelays(ownerPubkey: string): Promise<voi
     // the items + burn tombstones, regardless of browser relay reachability.
     const ITEM_RELAYS = [
       'wss://nostr.thedistrict.online', // our own relay — canonical store for the item economy
-      'wss://relay.damus.io',
       'wss://nos.lol',
       'wss://relay.primal.net',
-      'wss://offchain.pub',
       'wss://nostr.mom',
       'wss://relay.snort.social',
     ];
@@ -1170,8 +1168,8 @@ export async function reclaimOrphanedEscrows(): Promise<number> {
   try {
     const { queryEvents } = await import('../nostr/nostrService');
     const ITEM_RELAYS = [
-      'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net',
-      'wss://offchain.pub', 'wss://nostr.mom', 'wss://relay.snort.social',
+      'wss://nos.lol', 'wss://relay.primal.net',
+      'wss://nostr.mom', 'wss://relay.snort.social',
     ];
     // Items currently OWNED BY the oracle = the escrow pool (small set across all users).
     const held = await queryEvents({
@@ -1371,8 +1369,8 @@ export async function fetchMarketListings(): Promise<RemoteListing[]> {
 
 const MARKET_RELAYS = [
   'wss://nostr.thedistrict.online', // our own relay — canonical store for the item economy
-  'wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net',
-  'wss://offchain.pub', 'wss://nostr.mom', 'wss://relay.snort.social',
+  'wss://nos.lol', 'wss://relay.primal.net',
+  'wss://nostr.mom', 'wss://relay.snort.social',
 ];
 
 function eventToRemoteListing(e: any): RemoteListing | null {

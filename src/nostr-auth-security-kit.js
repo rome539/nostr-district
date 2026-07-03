@@ -505,7 +505,7 @@ export function createNostrAuth(deps) {
         crypto.getRandomValues(secretBytes);
         const secret = Array.from(secretBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-        const bunkerRelays = relays || ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://nos.lol'];
+        const bunkerRelays = relays || ['wss://relay.nsec.app', 'wss://nos.lol'];
         const relayParams = bunkerRelays.map(r => `relay=${encodeURIComponent(r)}`).join('&');
         const connectURI = `nostrconnect://${localPubkey}?${relayParams}&secret=${secret}&name=${encodeURIComponent(appName)}`;
 
