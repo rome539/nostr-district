@@ -4,6 +4,7 @@ if (!globalThis.crypto) (globalThis as any).crypto = webcrypto;
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { finalizeEvent, getPublicKey, generateSecretKey, getEventHash, verifyEvent, nip44 } from 'nostr-tools';
+import { invoiceMatchesAmount } from './src/utils/bolt11';
 
 const hexToBytes = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex, 'hex'));
 const bytesToHex = (b: Uint8Array): string => Buffer.from(b).toString('hex');
@@ -114,6 +115,18 @@ function queryRelays(filter: any): Promise<any[]> {
 //   4. The key is portable: Fly.io, VPS, Render, etc — just set the env var
 
 const DEV_KEY_FILE = '.oracle-key-dev'; // gitignored — local dev only
+
+// Losing ORACLE_PRIVATE_KEY in production used to silently drop the server into
+// the keyless dev sandbox: a fresh generated key, an in-memory relay, and a
+// scavenge path happy to mint anything. Production must fail loudly instead.
+// Railway sets NODE_ENV=production; ND_ALLOW_SANDBOX is the deliberate override
+// for anyone who really does want a keyless run there.
+if (!process.env.ORACLE_PRIVATE_KEY && process.env.NODE_ENV === 'production' && !process.env.ND_ALLOW_SANDBOX) {
+  console.error('[Oracle] FATAL: ORACLE_PRIVATE_KEY is not set in a production environment.');
+  console.error('[Oracle] Refusing to start in keyless sandbox mode — the economy would run on a throwaway key.');
+  console.error('[Oracle] Set ORACLE_PRIVATE_KEY, or set ND_ALLOW_SANDBOX=1 if a sandbox really is intended here.');
+  process.exit(1);
+}
 
 let ORACLE_SK: Uint8Array;
 if (process.env.ORACLE_PRIVATE_KEY) {
@@ -301,7 +314,7 @@ async function loadFishRecord(pubkey: string): Promise<void> {
   if (fishRecLoaded.has(pubkey)) return;
   fishRecLoaded.add(pubkey);
   try {
-    const ev = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndfishrec_${pubkey}`] })).get(`ndfishrec_${pubkey}`);
+    const ev = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndfishrec_${pubkey}`] }), ORACLE_AUTHORS).get(`ndfishrec_${pubkey}`);
     if (ev?.content) {
       const relayCatches = JSON.parse(ev.content).catches;
       if (Array.isArray(relayCatches) && relayCatches.length > (fishRecords[pubkey]?.length ?? 0)) {
@@ -332,7 +345,7 @@ async function backfillFishRecord(pubkey: string, name: string): Promise<void> {
   await loadFishRecord(pubkey);
   // Build ACCURATE entries from the legendary fish the player still owns: the real
   // fish name + its mint timestamp (= when it was caught), not a generic placeholder.
-  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [pubkey], '#t': ['nditem'] }));
+  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [pubkey], '#t': ['nditem'] }), ORACLE_AUTHORS);
   const caught: { name: string; kg: string; ts: number }[] = [];
   for (const ev of owned.values()) {
     if (isBurned(ev)) continue;
@@ -859,14 +872,47 @@ function setReservedForWinner(instanceId: string, on: boolean): void {
 // buyer can't pay for it in the gap before the first transfer completes. Long
 // enough to cover a QR/Lightning payment done out-of-band on another device.
 const RESERVE_MS = 300_000; // 5 min
-const reservations = new Map<string, number>(); // instanceId → expiry timestamp
-function isReserved(id: string): boolean {
-  const exp = reservations.get(id);
-  if (!exp) return false;
-  if (Date.now() > exp) { reservations.delete(id); return false; }
+// After the reservation lapses we keep checking the invoice at a slow cadence up
+// to this long, so a payment that lands late still delivers instead of vanishing.
+const LATE_SWEEP_MS = 30 * 60_000; // 30 min
+// A buyer can hold this many items at once. Reserving is free and locks an item
+// for 5 minutes, so without a cap one client could loop the market and keep
+// every listing permanently unbuyable.
+const MAX_RESERVATIONS_PER_BUYER = 3;
+const reservations = new Map<string, { expires: number; buyer: string }>();
+
+function reservationFor(id: string): { expires: number; buyer: string } | null {
+  const r = reservations.get(id);
+  if (!r) return null;
+  if (Date.now() > r.expires) { reservations.delete(id); return null; }
+  return r;
+}
+function isReserved(id: string): boolean { return reservationFor(id) !== null; }
+
+/**
+ * Atomically claim an item for a buyer. MUST be called before any `await` in the
+ * purchase path: the check and the claim used to be separated by a relay query
+ * and an LNURL round-trip, so two buyers could both pass the check, both be
+ * handed an invoice for the same item, and both pay — with only one getting it.
+ * Returns false if someone else holds it or the buyer is at their cap.
+ */
+function tryReserve(id: string, buyer: string): boolean {
+  const held = reservationFor(id);
+  if (held) return held.buyer === buyer;   // re-entry by the same buyer is fine
+  let active = 0;
+  for (const key of [...reservations.keys()]) {
+    const r = reservationFor(key);
+    if (r?.buyer === buyer) active++;
+  }
+  if (active >= MAX_RESERVATIONS_PER_BUYER) return false;
+  reservations.set(id, { expires: Date.now() + RESERVE_MS, buyer });
   return true;
 }
-function reserve(id: string): void { reservations.set(id, Date.now() + RESERVE_MS); }
+
+/** Release a claim, but only the holder's own — never someone else's. */
+function releaseReservation(id: string, buyer: string): void {
+  if (reservations.get(id)?.buyer === buyer) reservations.delete(id);
+}
 
 // Bids are RELAY-BACKED — published as signed Nostr events by the bidder (kind
 // 30078, t=ndbid). The server doesn't store them; it reads the bidder's signed bid
@@ -1016,7 +1062,7 @@ function transferItem(event: any, fromPubkey: string, toPubkey: string): object 
 // they can't be fed a forged or stale (already-spent) event by the client.
 async function fetchOwnedItem(instanceId: string, ownerPubkey: string): Promise<any | null> {
   if (!instanceId) return null;
-  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [ownerPubkey], '#t': ['nditem'] }));
+  const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [ownerPubkey], '#t': ['nditem'] }), ORACLE_AUTHORS);
   const ev = owned.get(instanceId);
   if (!ev || isBurned(ev)) return null;
   return ev;
@@ -1148,14 +1194,50 @@ function publishOracleProfile(): void {
 
 // LNURL-pay: resolve a lud16 to a bolt11 invoice + (LUD-21) verify URL. The
 // invoice pays the SELLER directly — the oracle never custodies funds.
+// ── SSRF guard for seller-supplied Lightning addresses ───────────────────────
+// Blocks the obvious internal targets. This is a filter on names, not a full
+// SSRF defence — a public hostname can still resolve to a private address — but
+// it stops the cheap version: listing `x@localhost` or `x@169.254.169.254` and
+// pointing the oracle's outbound fetches at the host it runs on.
+const PRIVATE_HOST_RE = new RegExp([
+  '^localhost$', '\\.localhost$', '^.*\\.local$',
+  '^127\\.', '^10\\.', '^192\\.168\\.', '^169\\.254\\.',
+  '^172\\.(1[6-9]|2[0-9]|3[01])\\.',
+  '^0\\.', '^\\[?::1\\]?$', '^\\[?f[cd]', // ipv6 loopback + unique-local
+].join('|'), 'i');
+
+function isPublicLnurlHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (!h || h.length > 253) return false;
+  if (h.includes('/') || h.includes('@') || h.includes(':')) return false; // no port/path/userinfo smuggling
+  if (!/^[a-z0-9.-]+$/.test(h)) return false;
+  if (!h.includes('.')) return false;                                      // bare names are internal
+  if (PRIVATE_HOST_RE.test(h)) return false;
+  return true;
+}
+
+function isPublicLnurlUrl(raw: string): boolean {
+  try {
+    const u = new URL(String(raw));
+    if (u.protocol !== 'https:') return false;
+    return isPublicLnurlHost(u.hostname);
+  } catch { return false; }
+}
+
 async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
     Promise<{ bolt11: string; verify: string | null } | null> {
   try {
     const [user, domain] = String(lud16).split('@');
     if (!user || !domain) return null;
-    const metaRes = await fetch(`https://${domain}/.well-known/lnurlp/${user}`);
+    // The lud16 comes from a seller's listing, so it chooses a host the server
+    // will connect to. Reject private/loopback targets and anything that isn't a
+    // plain public hostname, and re-check the callback URL the host hands back —
+    // otherwise a listing could point the oracle at internal infrastructure.
+    if (!isPublicLnurlHost(domain)) return null;
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(user)) return null;
+    const metaRes = await fetch(`https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`);
     const meta: any = await metaRes.json();
-    if (!meta?.callback) return null;
+    if (!meta?.callback || !isPublicLnurlUrl(meta.callback)) return null;
     const msats = sats * 1000;
     if (meta.minSendable && msats < meta.minSendable) return null;
     if (meta.maxSendable && msats > meta.maxSendable) return null;
@@ -1168,6 +1250,13 @@ async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
     const invRes = await fetch(`${meta.callback}${sep}${params.toString()}`);
     const inv: any = await invRes.json();
     if (!inv?.pr) return null;
+    // The seller's LNURL server chooses the invoice; the buyer is shown `sats`
+    // and pays what we hand them. An invoice for a different amount — or one we
+    // can't parse — is not something to forward.
+    if (!invoiceMatchesAmount(inv.pr, msats)) {
+      console.warn(`[Oracle] LNURL for ${lud16} returned an invoice that does not match ${sats} sats — rejected.`);
+      return null;
+    }
     return { bolt11: inv.pr, verify: inv.verify || null };
   } catch { return null; }
 }
@@ -1175,6 +1264,8 @@ async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
 // Poll an LNURL verify URL — true once the invoice is settled.
 async function lnurlIsSettled(verifyUrl: string): Promise<boolean> {
   try {
+    // Also seller-controlled, and polled on a timer — same host rules as above.
+    if (!isPublicLnurlUrl(verifyUrl)) return false;
     const r = await fetch(verifyUrl);
     const d: any = await r.json();
     return !!d?.settled;
@@ -1182,12 +1273,23 @@ async function lnurlIsSettled(verifyUrl: string): Promise<boolean> {
 }
 
 // Reduce relay events to the newest event per d-tag (so a burn tombstone wins).
-function newestPerD(events: any[]): Map<string, any> {
+// `allowedAuthors` is not optional in spirit: relays are untrusted, and the
+// `authors` field of a filter is a request, not a guarantee — a hostile or buggy
+// relay can answer with anything. Every caller here feeds the result into an
+// ownership or money decision, so we re-check the author and the signature on
+// the way in rather than hoping each call site remembers to.
+function newestPerD(events: any[], allowedAuthors: readonly string[]): Map<string, any> {
+  const allowed = new Set(allowedAuthors.map(a => a.toLowerCase()));
   const byD = new Map<string, any>();
   for (const e of events) {
-    const d = e.tags?.find((t: string[]) => t[0] === 'd')?.[1];
+    const d = e?.tags?.find((t: string[]) => t[0] === 'd')?.[1];
     if (!d) continue;
-    if (!byD.has(d) || e.created_at > byD.get(d).created_at) byD.set(d, e);
+    if (typeof e.pubkey !== 'string' || !allowed.has(e.pubkey.toLowerCase())) continue;
+    if (byD.has(d) && e.created_at <= byD.get(d).created_at) continue;
+    // Verify last — it's the expensive check, and the cheap ones above already
+    // discarded most of what a hostile relay would send.
+    try { if (!verifyEvent(e)) continue; } catch { continue; }
+    byD.set(d, e);
   }
   return byD;
 }
@@ -1197,17 +1299,34 @@ const tagVal = (e: any, name: string): string | undefined => e?.tags?.find((t: s
 // Poll an LNURL verify URL; once the invoice settles, release the escrowed item to
 // the buyer (transfer oracle → buyer), mark it sold, and notify everyone. Used by
 // both direct buys and accepted bids. `buyerWs` is where the buyer is connected.
-function pollAndRelease(instanceId: string, buyer: string, buyerWs: WebSocket | undefined, verifyUrl: string): void {
+function pollAndRelease(instanceId: string, buyer: string, buyerWs: WebSocket | undefined, verifyUrl: string, seller: string): void {
   const send = (m: object) => { if (buyerWs?.readyState === WebSocket.OPEN) buyerWs.send(JSON.stringify(m)); };
   const started = Date.now();
+  let notifiedTimeout = false;
+
+  // A settled payment we can't fulfil. Tell the buyer plainly, and DM both sides
+  // so the seller knows a refund is owed — silence here reads to the buyer as
+  // the game having stolen their sats.
+  const reportUndeliverable = (reason: string, sellerPk = seller) => {
+    console.error(`[Oracle] PAID BUT UNDELIVERED: ${instanceId} buyer=${buyer.slice(0, 8)}… reason=${reason}`);
+    send({ type: 'item_purchase_error', instanceId, reason });
+    dmFromOracle(buyer, `Your Nostr District payment went through, but the item couldn't be delivered (${reason}). The seller has been notified and owes you a refund — their Lightning address received the payment directly.`);
+    if (sellerPk) {
+      dmFromOracle(sellerPk, `Heads up: a buyer paid for your listing but the item could not be delivered (${reason}), so the payment landed in your wallet without the item changing hands. Please refund them.`);
+    }
+  };
   const poll = async () => {
     if (soldInstances.has(instanceId)) return;
     if (await lnurlIsSettled(verifyUrl)) {
-      const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+      const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
       const ev = held.get(instanceId);
-      if (!ev || isBurned(ev)) { send({ type: 'item_purchase_error', instanceId, reason: 'item_gone' }); return; }
+      // Payment has settled by this point, so these two exits mean the buyer paid
+      // and gets nothing. The oracle never holds the funds (they went straight to
+      // the seller's wallet), so it can't refund — the most it can do is make sure
+      // neither side finds out by accident.
+      if (!ev || isBurned(ev)) { reportUndeliverable('item_gone'); return; }
       const newEvent = transferItem(ev, ORACLE_PUBKEY, buyer);
-      if (!newEvent) { send({ type: 'item_purchase_error', instanceId, reason: 'transfer_failed' }); return; }
+      if (!newEvent) { reportUndeliverable('transfer_failed', tagVal(ev, 'escrow_seller')); return; }
       recordSold(instanceId);
       publishToRelays(newEvent);
       // Clear any "you won" marker so the winner isn't re-prompted to pay
@@ -1239,7 +1358,17 @@ function pollAndRelease(instanceId: string, buyer: string, buyerWs: WebSocket | 
       }
       return;
     }
-    if (Date.now() - started > RESERVE_MS) { send({ type: 'purchase_timeout', instanceId }); return; }
+    const elapsed = Date.now() - started;
+    if (elapsed > LATE_SWEEP_MS) return;
+    if (elapsed > RESERVE_MS) {
+      // The reservation has lapsed, so the UI is told the window closed — but we
+      // keep checking at a slow cadence. Payment goes straight to the seller and
+      // the oracle holds no funds, so abandoning the poll here meant a buyer who
+      // paid a minute late simply lost their sats with nothing to show for it.
+      if (!notifiedTimeout) { notifiedTimeout = true; send({ type: 'purchase_timeout', instanceId }); }
+      setTimeout(poll, 30_000);
+      return;
+    }
     setTimeout(poll, 2500);
   };
   setTimeout(poll, 2500);
@@ -1268,7 +1397,73 @@ for (const id of [...Object.values(SCAV_SCENE_POOLS).flat(), ...SCAV_HOLIDAY_DRO
   if (!ITEM_RARITY.has(id))   console.error(`[Scavenge] RARITY DRIFT: ${id} has no rarity entry`);
 }
 
-const wss = new WebSocketServer({ port: 3100 });
+// ── Client authentication (NIP-42 style) ─────────────────────────────────────
+// Every connection is handed a random challenge on open. To claim a real pubkey
+// the client must return a kind:22242 event signed by that key over the exact
+// challenge. Without this, `join` was a bare assertion — anyone could claim any
+// pubkey and the oracle would gift/burn/sell that victim's items on request.
+//
+// Re-signing on every reconnect would mean a signer prompt each time (painful on
+// bunker/extension, and a declined prompt can drop a bunker session), so a
+// successful auth also mints a short-lived session token the client replays on
+// reconnect. Tokens live in memory only: a server restart just forces one more
+// signature.
+const AUTH_KIND = 22242;
+const AUTH_MAX_SKEW_S = 300;              // signed event must be this fresh
+const SESSION_TTL_MS  = 12 * 60 * 60 * 1000;
+
+const sessionTokens = new Map<string, { pubkey: string; expires: number }>();
+
+function newNonce(): string {
+  return bytesToHex(webcrypto.getRandomValues(new Uint8Array(32)));
+}
+
+function issueSessionToken(pubkey: string): string {
+  const token = newNonce();
+  sessionTokens.set(token, { pubkey, expires: Date.now() + SESSION_TTL_MS });
+  return token;
+}
+
+function redeemSessionToken(token: unknown): string | null {
+  if (typeof token !== 'string') return null;
+  const entry = sessionTokens.get(token);
+  if (!entry) return null;
+  if (entry.expires < Date.now()) { sessionTokens.delete(token); return null; }
+  return entry.pubkey;
+}
+
+// Drop expired tokens hourly so the map can't grow without bound.
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, entry] of sessionTokens) if (entry.expires < now) sessionTokens.delete(token);
+}, 60 * 60 * 1000).unref?.();
+
+const isRealPubkey = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
+
+/**
+ * Verify a client's auth event against the challenge we issued this connection.
+ * Returns the authenticated pubkey, or null with the reason logged by caller.
+ */
+function verifyAuthEvent(ev: any, challenge: string): string | null {
+  if (!ev || typeof ev !== 'object') return null;
+  if (ev.kind !== AUTH_KIND) return null;
+  if (!isRealPubkey(ev.pubkey)) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof ev.created_at !== 'number' || Math.abs(now - ev.created_at) > AUTH_MAX_SKEW_S) return null;
+  const sent = ev.tags?.find((t: string[]) => t[0] === 'challenge')?.[1];
+  // Constant-time-ish: challenges are random 32-byte nonces, so a plain compare
+  // leaks nothing useful, but the value must match exactly.
+  if (typeof sent !== 'string' || sent !== challenge) return null;
+  try { if (!verifyEvent(ev)) return null; } catch { return null; }
+  return ev.pubkey.toLowerCase();
+}
+
+const wss = new WebSocketServer({
+  port: 3100,
+  // Default is 100 MiB per frame — far more than any legitimate message here,
+  // and a cheap way for one connection to balloon server memory.
+  maxPayload: 256 * 1024,
+});
 console.log('[Presence] Server running on ws://localhost:3100');
 
 // Bounty claim ledger cleanup — on boot (covers restart-heavy deploys) + every 8 days.
@@ -1301,12 +1496,49 @@ wss.on('connection', (ws) => {
 
   let myPubkey: string | null = null;
 
+  // Per-connection challenge. The client must echo it back inside a signed
+  // kind:22242 event (or present a token from an earlier signature) before it
+  // can join as a real pubkey.
+  const challenge = newNonce();
+  ws.send(JSON.stringify({ type: 'auth_challenge', challenge }));
+
   ws.on('message', (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
 
       if (msg.type === 'join') {
-        myPubkey = msg.pubkey || `guest_${Math.random().toString(36).slice(2, 8)}`;
+        // Resolve the caller's identity BEFORE trusting anything else in the
+        // message. Three outcomes: a valid session token, a fresh signature, or
+        // a guest — and guest ids are minted here, never accepted from the wire
+        // (a client-chosen "guest_x" could otherwise collide with a live one).
+        let authedPubkey: string | null = redeemSessionToken(msg.token);
+        let freshToken: string | null = null;
+
+        if (!authedPubkey && msg.auth) {
+          authedPubkey = verifyAuthEvent(msg.auth, challenge);
+          if (authedPubkey) freshToken = issueSessionToken(authedPubkey);
+        }
+
+        // If the client named an identity, the proof has to be for THAT identity.
+        // Seating a validly-signed but different key would leave client and
+        // server disagreeing about who this connection is.
+        if (authedPubkey && isRealPubkey(msg.pubkey) && msg.pubkey.toLowerCase() !== authedPubkey) {
+          ws.send(JSON.stringify({ type: 'auth_required', challenge }));
+          return;
+        }
+
+        if (authedPubkey) {
+          myPubkey = authedPubkey;
+        } else if (isRealPubkey(msg.pubkey)) {
+          // Claimed a real identity but couldn't prove it. Refuse rather than
+          // silently downgrading to a guest, so the client can re-sign.
+          ws.send(JSON.stringify({ type: 'auth_required', challenge }));
+          return;
+        } else {
+          myPubkey = `guest_${bytesToHex(webcrypto.getRandomValues(new Uint8Array(6)))}`;
+        }
+
+        ws.send(JSON.stringify({ type: 'auth_ok', pubkey: myPubkey, token: freshToken }));
         // Dev sandbox: adopt the joining client's ?holiday= override (null clears it).
         if (DEV_SANDBOX && 'testHoliday' in msg) {
           devTestHoliday = typeof msg.testHoliday === 'string' && msg.testHoliday ? msg.testHoliday : null;
@@ -1823,27 +2055,33 @@ wss.on('connection', (ws) => {
       // relays that ignore NIP-09 deletions.
       if (msg.type === 'item_discard_request' && myPubkey) {
         if (!ORACLE_SK) return;
-        const ev = msg.event;
-        const ownerTag = ev?.tags?.find((t: string[]) => t[0] === 'p')?.[1];
-        const dTag     = ev?.tags?.find((t: string[]) => t[0] === 'd')?.[1];
-        if (!dTag || !isOracleKey(ev.pubkey) || ownerTag !== myPubkey) {
-          ws.send(JSON.stringify({ type: 'item_discard_error', reason: 'not_owner' }));
-          return;
-        }
-        // Tombstone: same d-tag, KEEPS p + t so the owner's query still returns it,
-        // adds a 'burned' marker + newer created_at. The client dedupes by d-tag
-        // (newest wins) and filters burned — so only ONE relay needs this event.
-        const tombstone = finalizeEvent({
-          kind: 30078,
-          pubkey: ORACLE_PUBKEY,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [['d', dTag], ['p', myPubkey], ['t', 'nditem'], ['burned', '1']],
-          content: '',
-        }, ORACLE_SK);
-        publishToRelays(tombstone);
-        recordBurned(dTag);
-        console.log(`[Oracle] Burned item ${dTag} for ${myPubkey.slice(0,8)}…`);
-        ws.send(JSON.stringify({ type: 'item_discarded', eventId: ev.id }));
+        const burner     = myPubkey;
+        const instanceId = msg.event?.tags?.find((t: string[]) => t[0] === 'd')?.[1];
+        const fail = () => ws.send(JSON.stringify({ type: 'item_discard_error', reason: 'not_owner' }));
+        if (typeof instanceId !== 'string' || !instanceId) { fail(); return; }
+        (async () => {
+          // Authoritative ownership from relays — same rule as gift/swap. The
+          // client-supplied event is only a pointer to WHICH instance to burn;
+          // its pubkey/p-tag are attacker-controlled and prove nothing. Trusting
+          // them let anyone tombstone any instance id they could read off the
+          // public market.
+          const real = await fetchOwnedItem(instanceId, burner);
+          if (!real) { fail(); return; }
+          // Tombstone: same d-tag, KEEPS p + t so the owner's query still returns it,
+          // adds a 'burned' marker + newer created_at. The client dedupes by d-tag
+          // (newest wins) and filters burned — so only ONE relay needs this event.
+          const tombstone = finalizeEvent({
+            kind: 30078,
+            pubkey: ORACLE_PUBKEY,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['d', instanceId], ['p', burner], ['t', 'nditem'], ['burned', '1']],
+            content: '',
+          }, ORACLE_SK);
+          publishToRelays(tombstone);
+          recordBurned(instanceId);
+          console.log(`[Oracle] Burned item ${instanceId} for ${burner.slice(0,8)}…`);
+          ws.send(JSON.stringify({ type: 'item_discarded', eventId: real.id }));
+        })().catch(() => fail());
         return;
       }
 
@@ -1926,7 +2164,7 @@ wss.on('connection', (ws) => {
         if (!lud16) { fail('no_lightning_address'); return; }
         (async () => {
           // 1. The seller must actually own the item right now
-          const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [seller], '#t': ['nditem'] }));
+          const owned = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': [seller], '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = owned.get(instanceId);
           if (!ev || isBurned(ev)) { fail('not_owned'); return; }
           // 2. Their wallet must support LNURL verify (needed to confirm offline sales)
@@ -1950,11 +2188,18 @@ wss.on('connection', (ws) => {
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'item_unescrow_error', instanceId, reason }));
         if (!instanceId) { fail('bad_request'); return; }
         if (soldInstances.has(instanceId)) { fail('already_sold'); return; }
+        // A live reservation means a buyer is holding an invoice for this item
+        // right now. Pulling it back mid-payment leaves them paid and empty —
+        // the seller can delist once the 5-minute window lapses unpaid.
+        if (isReserved(instanceId)) { fail('purchase_in_progress'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('not_escrowed'); return; }
           if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
+          // Re-check: the query above is async, and a buyer may have started
+          // paying while it was in flight.
+          if (isReserved(instanceId)) { fail('purchase_in_progress'); return; }
           const returned = transferItem(ev, ORACLE_PUBKEY, seller);
           if (!returned) { fail('return_failed'); return; }
           publishToRelays(returned);
@@ -1980,25 +2225,31 @@ wss.on('connection', (ws) => {
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'item_purchase_error', instanceId, reason }));
         if (!instanceId) { fail('bad_request'); return; }
         if (soldInstances.has(instanceId)) { fail('already_sold'); return; }
-        if (isReserved(instanceId)) { fail('reserved'); return; }
+        // Claim the item BEFORE the first await. Everything below is async, and
+        // an unclaimed window here is a window where a second buyer gets an
+        // invoice for the same item and pays for nothing.
+        if (!tryReserve(instanceId, buyer)) { fail('reserved'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          // Any exit that isn't "invoice handed to the buyer" must give the item
+          // back, or a failed init would lock it for the full 5 minutes.
+          const abort = (reason: string) => { releaseReservation(instanceId, buyer); fail(reason); };
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
-          if (!ev || isBurned(ev)) { fail('item_gone'); return; }
+          if (!ev || isBurned(ev)) { abort('item_gone'); return; }
           const seller  = tagVal(ev, 'escrow_seller');
           const lud16   = tagVal(ev, 'escrow_lud16');
           const winner  = tagVal(ev, 'awaiting_winner');
-          if (!seller || !lud16) { fail('not_listed'); return; }
-          if (seller === buyer) { fail('own_listing'); return; }
+          if (!seller || !lud16) { abort('not_listed'); return; }
+          if (seller === buyer) { abort('own_listing'); return; }
           // If a bid was accepted, only that winner may buy — at the bid price.
           let price: number;
           if (winner) {
-            if (winner !== buyer) { fail('reserved_for_winner'); return; }
+            if (winner !== buyer) { abort('reserved_for_winner'); return; }
             price = Math.floor(Number(tagVal(ev, 'winning_price') ?? '0'));
           } else {
             price = Math.floor(Number(tagVal(ev, 'escrow_price') ?? '0'));
           }
-          if (!(price >= 1)) { fail('not_listed'); return; }
+          if (!(price >= 1)) { abort('not_listed'); return; }
           // Sale memo rides on the payment (LNURL comment) so the seller sees what
           // sold + to whom on the incoming zap — no separate DM needed.
           const itemName = tagVal(ev, 'escrow_name') ?? tagVal(ev, 'item_id') ?? 'item';
@@ -2006,11 +2257,10 @@ wss.on('connection', (ws) => {
           // seller's incoming payment record).
           const memo = `Nostr District market: ${itemName} (${price} sats)`;
           const inv = await lnurlGetInvoice(lud16, price, memo);
-          if (!inv || !inv.verify) { fail('invoice_failed'); return; }
-          reserve(instanceId);
+          if (!inv || !inv.verify) { abort('invoice_failed'); return; }
           ws.send(JSON.stringify({ type: 'purchase_invoice', instanceId, bolt11: inv.bolt11, price }));
-          pollAndRelease(instanceId, buyer, ws, inv.verify);
-        })().catch(() => fail('init_failed'));
+          pollAndRelease(instanceId, buyer, ws, inv.verify, seller);
+        })().catch(() => { releaseReservation(instanceId, buyer); fail('init_failed'); });
         return;
       }
 
@@ -2030,14 +2280,14 @@ wss.on('connection', (ws) => {
         if (isReserved(instanceId)) { fail('reserved'); return; }
         (async () => {
           // Verify the seller owns the escrowed listing
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
           // Already accepted a bid on this item — don't accept a second one.
           if (tagVal(ev, 'awaiting_winner')) { fail('already_accepted'); return; }
           // Read the winner's signed bid off the relays → trustworthy amount
-          const bidsByAuthor = newestPerD(await queryRelays({ kinds: [30078], authors: [winner], '#t': ['ndbid'] }));
+          const bidsByAuthor = newestPerD(await queryRelays({ kinds: [30078], authors: [winner], '#t': ['ndbid'] }), [winner]);
           const bidEv = bidsByAuthor.get(instanceId);
           if (!bidEv || tagVal(bidEv, 'withdrawn')) { fail('no_such_bid'); return; }
           const amount = Math.floor(Number(tagVal(bidEv, 'amount') ?? '0'));
@@ -2067,7 +2317,7 @@ wss.on('connection', (ws) => {
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'decline_win_error', instanceId, reason }));
         if (!instanceId) { fail('bad_request'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           if (tagVal(ev, 'awaiting_winner') !== caller) { fail('not_winner'); return; }
@@ -2096,7 +2346,7 @@ wss.on('connection', (ws) => {
         const fail = (reason: string) => ws.send(JSON.stringify({ type: 'revoke_acceptance_error', instanceId, reason }));
         if (!instanceId) { fail('bad_request'); return; }
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) { fail('item_gone'); return; }
           if (tagVal(ev, 'escrow_seller') !== seller) { fail('not_your_listing'); return; }
@@ -2128,13 +2378,13 @@ wss.on('connection', (ws) => {
         const instanceId = typeof msg.instanceId === 'string' ? msg.instanceId : '';
         if (!instanceId) return;
         (async () => {
-          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }));
+          const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
           const ev = held.get(instanceId);
           if (!ev || isBurned(ev)) return;
           const seller = tagVal(ev, 'escrow_seller');
           if (!seller || seller === bidder) return;
           // Confirm the bidder really has a live bid on this item before DMing.
-          const bids = newestPerD(await queryRelays({ kinds: [30078], authors: [bidder], '#t': ['ndbid'] }));
+          const bids = newestPerD(await queryRelays({ kinds: [30078], authors: [bidder], '#t': ['ndbid'] }), [bidder]);
           const bidEv = bids.get(instanceId);
           if (!bidEv || tagVal(bidEv, 'withdrawn')) return;
           const amount = Math.floor(Number(tagVal(bidEv, 'amount') ?? '0'));

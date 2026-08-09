@@ -26,3 +26,9 @@ promo/*.webm
 promo/*.wav
 promo/*.png
 !promo/breez-logo.png
+
+# source art (Aseprite/Photoshop) lives in art/, never under public/ — vite
+# copies public/ verbatim into the shipped bundle
+*.psd
+!art/**/*.psd
+!art/**/*.aseprite

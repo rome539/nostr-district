@@ -505,11 +505,24 @@ async function handleGiftWrap(event: any): Promise<void> {
       return; // no way to decrypt
     }
 
+    // ── Authenticate the sender (NIP-17 §"the seal") ──
+    // The gift wrap is signed by a throwaway key, so it proves nothing about who
+    // sent this. The seal is the only signed layer that names the real author,
+    // and the rumor is deliberately unsigned — which means an unchecked
+    // `rumor.pubkey` is just a claim. Without both checks below, anyone could
+    // send a DM that displays as a trusted friend or a crew founder, and the
+    // trade/key-injection handlers downstream act on that identity.
+    if (!seal || typeof seal !== 'object' || seal.kind !== 13) return;
+    try {
+      if (!NT.verifyEvent(seal)) return;
+    } catch { return; }
+    if (!rumor || rumor.pubkey !== seal.pubkey) return;
+
     // ── Validate rumor ──
     // kind 14 = chat; kind 15 = encrypted file (image); ND_PROTOCOL_KIND = game
     // payloads (trades). Older clients sent trades as kind 14, so all are
     // accepted for the 7-day history replay.
-    if (!rumor || (rumor.kind !== 14 && rumor.kind !== 15 && rumor.kind !== ND_PROTOCOL_KIND)) return;
+    if (rumor.kind !== 14 && rumor.kind !== 15 && rumor.kind !== ND_PROTOCOL_KIND) return;
     if (typeof rumor.content !== 'string') return;
     if (!rumor.pubkey) return;
 

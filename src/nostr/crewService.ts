@@ -17,7 +17,7 @@
  * groups and keep them invisible to other apps on the same relay.
  */
 
-import { nip19, generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools';
+import { nip19, generateSecretKey, getPublicKey, finalizeEvent, verifyEvent } from 'nostr-tools';
 import { authStore } from '../stores/authStore';
 import { signEvent, publishEvent, fetchProfile } from './nostrService';
 import { DEFAULT_RELAYS, RelayManager } from './relayManager';
@@ -266,8 +266,54 @@ function parsePointer(event: any): CrewPointer | null {
     const data = JSON.parse(event.content);
     if (!data || data.deleted) return null;
     if (typeof data.crewPk !== 'string' || !/^[0-9a-f]{64}$/.test(data.crewPk)) return null;
+    // Relays hand us these unverified, and `founderPubkey` below is taken from
+    // the event — an unsigned or relay-forged pointer must not be able to name
+    // a founder.
+    if (!verifyEvent(event)) return null;
+    // A pointer dated in the future would win every earliest-wins comparison
+    // forever. Allow a little clock skew, nothing more.
+    if ((event.created_at ?? 0) > Math.floor(Date.now() / 1000) + 900) return null;
     return { crewPk: data.crewPk, founderPubkey: event.pubkey, createdAt: event.created_at ?? 0 };
   } catch { return null; }
+}
+
+// ── Founder pinning ──────────────────────────────────────────────────────────
+// Canonical founder = earliest pointer, which is only as trustworthy as
+// `created_at` — a value the publisher picks. Anyone could backdate a pointer
+// for an existing crewId and take it over. Timestamps alone can't settle this,
+// so we pin the founder we first saw for a crew and refuse later contradictions:
+// trust-on-first-use, the same way an SSH host key works.
+function founderPinKey(): string {
+  const pk = authStore.getState().pubkey;
+  return pk ? `nd_crew_founders_${pk}` : 'nd_crew_founders_guest';
+}
+
+function getFounderPins(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(founderPinKey()) ?? '{}'); } catch { return {}; }
+}
+
+function pinFounder(crewId: string, founderPubkey: string): void {
+  try {
+    const pins = getFounderPins();
+    if (pins[crewId] === founderPubkey) return;
+    pins[crewId] = founderPubkey;
+    localStorage.setItem(founderPinKey(), JSON.stringify(pins));
+  } catch { /* storage full or blocked — pinning is best-effort */ }
+}
+
+/** The founder we already know for this crew, if we've seen one. */
+function pinnedFounder(crewId: string): string | null {
+  return getFounderPins()[crewId] ?? null;
+}
+
+/** Forget a pin — used when the local user legitimately deletes/leaves a crew. */
+function clearFounderPin(crewId: string): void {
+  try {
+    const pins = getFounderPins();
+    if (!(crewId in pins)) return;
+    delete pins[crewId];
+    localStorage.setItem(founderPinKey(), JSON.stringify(pins));
+  } catch { /* best-effort */ }
 }
 
 /**
@@ -287,7 +333,10 @@ async function publishCrewPointer(crewId: string, crewPk: string): Promise<boole
     pubkey,
   });
   const ok = await publishEvent(event);
-  if (ok) pointerCache.set(crewId, { crewPk, founderPubkey: pubkey, createdAt: event.created_at });
+  if (ok) {
+    pointerCache.set(crewId, { crewPk, founderPubkey: pubkey, createdAt: event.created_at });
+    pinFounder(crewId, pubkey);   // we founded it — pin before anyone else can claim it
+  }
   return ok;
 }
 
@@ -306,9 +355,18 @@ async function fetchCrewPointer(crewId: string, forceRefresh = false): Promise<C
       kinds: [30078], '#d': [CREW_PTR_PREFIX + crewId],
     }, { maxWait: 4000 });
     if (!events.length) return null;
+    // If we already know this crew's founder, that decides it — a newly appeared
+    // pointer from a different key is a takeover attempt, not a correction, no
+    // matter how old it claims to be.
+    const pinned = pinnedFounder(crewId);
+    const candidates = pinned ? events.filter(ev => ev.pubkey === pinned) : events;
+    if (pinned && candidates.length === 0) {
+      console.warn(`[Crew] No pointer from the known founder of ${crewId} — ignoring ${events.length} pointer(s) from other keys.`);
+      return null;
+    }
     // Pick the canonical pointer: earliest created_at wins; among ties, lowest pubkey.
     let canonical: any | null = null;
-    for (const ev of events) {
+    for (const ev of candidates) {
       const p = parsePointer(ev);
       if (!p) continue;
       if (!canonical) { canonical = ev; continue; }
@@ -326,7 +384,10 @@ async function fetchCrewPointer(crewId: string, forceRefresh = false): Promise<C
       if (ev.created_at > latestByAuthor.created_at) latestByAuthor = ev;
     }
     const parsed = parsePointer(latestByAuthor);
-    if (parsed) pointerCache.set(crewId, parsed);
+    if (parsed) {
+      pointerCache.set(crewId, parsed);
+      pinFounder(crewId, parsed.founderPubkey);
+    }
     return parsed;
   } catch { return null; }
 }
@@ -706,6 +767,7 @@ export async function fetchMyCrews(): Promise<Crew[]> {
     const ptr = parsePointer(ptrEv);
     if (!ptr) continue;
     pointerCache.set(id, ptr);
+    pinFounder(id, ptr.founderPubkey);   // our own pointers: crews we founded
     addJoinedCrew(id);
     const crew = await fetchCrew(id, true);
     if (crew) resultMap.set(id, crew);
@@ -925,6 +987,7 @@ export async function deleteCrew(crewId: string): Promise<void> {
   markCrewDeleted(crewId);
   crewCache.delete(crewId);
   pointerCache.delete(crewId);
+  clearFounderPin(crewId);
   removeJoinedCrew(crewId);
   allCrewsCache = allCrewsCache.filter(c => c.id !== crewId);
 

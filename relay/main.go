@@ -28,9 +28,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fiatjaf/eventstore/badger"
 	"github.com/fiatjaf/khatru"
+	"github.com/fiatjaf/khatru/policies"
 	"github.com/nbd-wtf/go-nostr"
 )
 
@@ -43,6 +45,10 @@ var oracleTags = map[string]bool{
 var userTags = map[string]bool{
 	"ndmarket": true, "ndbid": true, "ndbiddecline": true, "ndfish": true,
 }
+
+// How far ahead of our clock an event may be dated. Generous enough for a badly
+// set client clock, tight enough that nobody can park an unreplaceable listing.
+const maxFutureDrift = nostr.Timestamp(15 * 60)
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -57,6 +63,17 @@ func main() {
 		if pk = strings.TrimSpace(strings.ToLower(pk)); pk != "" {
 			oraclePubkeys[pk] = true
 		}
+	}
+	// Fail CLOSED. This guard used to be skipped entirely when the env var was
+	// unset, which meant the one relay we control would store and rebroadcast
+	// anyone's forged nditem/ndwin/ndbounty as canonical economy truth — the
+	// exact thing the allowlist exists to prevent. An unconfigured relay is a
+	// misconfiguration, not a reason to trust everybody.
+	if len(oraclePubkeys) == 0 {
+		fmt.Fprintln(os.Stderr, "ND_ORACLE_PUBKEYS is unset — refusing to start: "+
+			"oracle-signed economy events would be unauthenticated. "+
+			"Set it to the oracle pubkey(s) (comma-separated hex).")
+		os.Exit(1)
 	}
 
 	relay := khatru.NewRelay()
@@ -76,7 +93,27 @@ func main() {
 	// ghost listings/bids.
 	relay.ReplaceEvent = append(relay.ReplaceEvent, db.ReplaceEvent)
 
+	// Rate limits. Writes here are cheap for a client and permanent for us — an
+	// unthrottled loop fills the droplet's disk. Limits are well above what the
+	// game generates in normal play (a burst of inventory writes on login, then
+	// occasional trades), so they only bite on abuse.
+	relay.RejectConnection = append(relay.RejectConnection,
+		policies.ConnectionRateLimiter(8, time.Minute, 16))
+	relay.RejectFilter = append(relay.RejectFilter,
+		policies.FilterIPRateLimiter(60, time.Minute, 120))
 	relay.RejectEvent = append(relay.RejectEvent,
+		policies.EventIPRateLimiter(40, time.Minute, 80),
+		// Timestamp window, checked before anything else. Replacement here is
+		// newest-wins, so a listing dated years ahead can never be superseded —
+		// its burn tombstone and every later edit lose the comparison forever.
+		// Only the future is bounded: a past-dated event simply loses the
+		// comparison, and the backfill tool legitimately republishes old events.
+		func(ctx context.Context, event *nostr.Event) (bool, string) {
+			if event.CreatedAt > nostr.Now()+maxFutureDrift {
+				return true, "invalid: created_at is too far in the future"
+			}
+			return false, ""
+		},
 		func(ctx context.Context, event *nostr.Event) (bool, string) {
 			tTag := event.Tags.GetFirst([]string{"t"})
 			t := ""
@@ -97,7 +134,7 @@ func main() {
 					return false, ""
 				}
 				if oracleTags[t] {
-					if len(oraclePubkeys) > 0 && !oraclePubkeys[strings.ToLower(event.PubKey)] {
+					if !oraclePubkeys[strings.ToLower(event.PubKey)] {
 						return true, "blocked: oracle-signed tag from non-oracle key"
 					}
 					logAccept(event, t)
@@ -114,7 +151,7 @@ func main() {
 
 			case 0:
 				// Oracle profile only (public relays carry everyone else's).
-				if len(oraclePubkeys) == 0 || oraclePubkeys[strings.ToLower(event.PubKey)] {
+				if oraclePubkeys[strings.ToLower(event.PubKey)] {
 					return false, ""
 				}
 			}

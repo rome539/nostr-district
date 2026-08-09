@@ -297,8 +297,14 @@ export class BunkerClient {
                     rejectFn(new Error(resp.error));
                     return;
                 }
-                if (resp.result !== secret && resp.result !== 'ack') {
-                    console.log('[NIP-46] Ignoring response, secret mismatch. Got:', resp.result, 'Expected:', secret);
+                // The secret is the ONLY thing proving this reply came from the
+                // signer that scanned our QR: this flow doesn't know the signer's
+                // pubkey ahead of time, and our client pubkey is public on the
+                // relay. Accepting a bare "ack" (as we used to) let anyone
+                // watching the relay answer first and become the user's signer.
+                // NIP-46 requires the secret to be echoed for nostrconnect://.
+                if (resp.result !== secret) {
+                    console.log('[NIP-46] Ignoring response, secret mismatch.');
                     return;
                 }
 
@@ -387,6 +393,14 @@ export class BunkerClient {
                     onevent: async (ev) => {
                         console.log('[BUNKER-URL] event from', ev.pubkey.slice(0, 16), 'kind', ev.kind);
                         if (settled) return;
+                        // The bunker:// URI names the signer, so anything from
+                        // another key is an impostor racing the real signer —
+                        // including `auth_url`, which would pop an attacker's
+                        // page mid-login for the user to "approve".
+                        if (ev.pubkey !== signerPk) {
+                            console.warn('[BUNKER-URL] ignoring response from unexpected pubkey', ev.pubkey.slice(0, 16));
+                            return;
+                        }
                         try {
                             const resp = JSON.parse(await nip44Decrypt(clientSk, ev.pubkey, ev.content));
                             console.log('[BUNKER-URL] decrypted response:', resp);
@@ -467,6 +481,12 @@ export class BunkerClient {
             };
             this._rawPool.subscribe(subId, { kinds: [24133], '#p': [clientPk], since }, async (ev) => {
                 if (settled) return;
+                // Same rule as the SimplePool path: the URI names our signer, so
+                // only that key gets to answer.
+                if (ev.pubkey !== signerPk) {
+                    console.warn('[BUNKER-URL] ignoring response from unexpected pubkey', ev.pubkey.slice(0, 16));
+                    return;
+                }
                 try {
                     const decrypted = await nip44Decrypt(clientSk, ev.pubkey, ev.content);
                     const resp = JSON.parse(decrypted);
@@ -768,6 +788,9 @@ export class BunkerClient {
 
                 sub = pool.subscribeMany(relays, [{ kinds: [24133], '#p': [pk], since }], {
                     onevent: async (ev) => {
+                        // Once connected we know exactly who our signer is; only
+                        // they can answer our RPCs.
+                        if (this._signerPk && ev.pubkey !== this._signerPk) return;
                         try {
                             const r = JSON.parse(await nip44Decrypt(sk, ev.pubkey, ev.content));
                             if (r.id !== id) return;
@@ -800,6 +823,7 @@ export class BunkerClient {
 
             if (this._rawPool) {
                 this._rawPool.subscribe(subId, { kinds: [24133], '#p': [pk], since }, async (ev) => {
+                    if (this._signerPk && ev.pubkey !== this._signerPk) return;
                     try {
                         const r = JSON.parse(await nip44Decrypt(sk, ev.pubkey, ev.content));
                         if (r.id !== id) return;

@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run clean:cruft && tsc && vite build && npm run clean:cruft",
     "preview": "vite preview",
     "itch:push": "npm run build && butler push dist rome539/the-district:html5",
     "server": "tsx server.ts",
-    "start": "tsx server.ts"
+    "start": "tsx server.ts",
+    "clean:cruft": "find public dist -name '.DS_Store' -delete 2>/dev/null; find dist -name '*.aseprite' -o -name '*.psd' -delete 2>/dev/null; true"
   },
   "dependencies": {
     "@breeztech/breez-sdk-spark": "^0.14.0",

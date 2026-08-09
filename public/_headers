@@ -1,3 +1,11 @@
 /*
   Cross-Origin-Embedder-Policy: credentialless
   Cross-Origin-Opener-Policy: same-origin-allow-popups
+  # Framing protection has to live here, not in the CSP <meta> in index.html:
+  # frame-ancestors is ignored when CSP is delivered as a meta tag, which left
+  # the app embeddable — and a click on an invisible overlay is a click on a
+  # real wallet button.
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

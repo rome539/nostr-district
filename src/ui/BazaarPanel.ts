@@ -1037,7 +1037,7 @@ export class BazaarPanel {
           // A player in their own room reports room = "myroom:<pubkey>" — never show that
           // raw string (it overflows the row). Show a short label; truncate long names.
           const roomLabel = p.room ? (p.room.startsWith('myroom:') ? 'in a room' : p.room) : '';
-          row.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${display}</span><span style="color:#555;font-size:9px;flex-shrink:0;margin-left:8px;">${roomLabel}</span>`;
+          row.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(display)}</span><span style="color:#555;font-size:9px;flex-shrink:0;margin-left:8px;">${esc(roomLabel)}</span>`;
           row.addEventListener('click', () => close({ pubkey: p.pubkey, name: display }));
           wrap.appendChild(row);
         }
@@ -1183,8 +1183,8 @@ export class BazaarPanel {
         const n = getCachedName(toPubkey);
         if (!n || n.startsWith('npub')) return; // still no real name
         const t1 = box.querySelector('#wp-title1'); const t2 = box.querySelector('#wp-title2');
-        if (t1) t1.innerHTML = `⇄ ${ti18n('bz.offer_to', { item: `${offerDef.emoji} ${offerDef.name}`, name: n })}`;
-        if (t2) t2.innerHTML = ti18n('bz.pick_their_item', { name: `<span style="color:#d0d060;">${n}</span>` });
+        if (t1) t1.innerHTML = `⇄ ${ti18n('bz.offer_to', { item: `${offerDef.emoji} ${offerDef.name}`, name: esc(n) })}`;
+        if (t2) t2.innerHTML = ti18n('bz.pick_their_item', { name: `<span style="color:#d0d060;">${esc(n)}</span>` });
       }).catch(() => {});
     }
   }

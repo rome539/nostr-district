@@ -9,9 +9,9 @@ store for the district's economy events and citizens' wallet-mnemonic backups.
 |---|---|
 | kind:30402 `t=ndmarket` | bazaar listings (seller-signed) |
 | kind:30078 `t=ndbid / ndbiddecline / ndfish` | player-signed economy events |
-| kind:30078 `t=nditem / ndwin / ndbounty / ndfishrec / ndweekly` | oracle-signed; forgery-walled when `ND_ORACLE_PUBKEYS` is set |
+| kind:30078 `t=nditem / ndwin / ndbounty / ndfishrec / ndweekly` | oracle-signed; rejected unless authored by an `ND_ORACLE_PUBKEYS` key |
 | kind:30078 `d=nostr-district:spark-mnemonic` (exact) | Spark wallet mnemonic backup — NIP-44 self-encrypted by the client, relay only ever sees ciphertext (v2, 2026-07-03) |
-| kind:0 | oracle profile only (when the wall is set) |
+| kind:0 | oracle profile only |
 
 Everything else → `blocked: not a district event`. NIP-33 replacement is wired
 (`ReplaceEvent`), so newest-wins per (kind, pubkey, d) — burns supersede items,
@@ -37,7 +37,7 @@ which is what kills ghost listings/bids.
 |---|---|---|
 | `ND_LISTEN` | `127.0.0.1:8080` | listen address |
 | `ND_DATA` | `/opt/nd-relay/data` | badger directory |
-| `ND_ORACLE_PUBKEYS` | *(unset — wall OFF)* | comma-separated hex pubkeys; when set, oracle tags must be authored by one of them |
+| `ND_ORACLE_PUBKEYS` | **required — relay refuses to start without it** | comma-separated hex pubkeys; oracle tags must be authored by one of them |
 
 ## Build & deploy
 
@@ -96,5 +96,10 @@ events → 918 after NIP-33 collapse) used the same relay-to-relay pattern.
   moving the most critical user data onto owned infrastructure); source
   reconstructed into this folder; app's `MNEMONIC_BACKUP_RELAYS` now leads
   with this relay.
-- Open items: set `ND_ORACLE_PUBKEYS` (forgery wall, keys documented in the
-  oracle setup), droplet pending a reboot for security updates.
+- **2026-08-09 (security)** — the forgery wall is now fail-closed: an unset
+  `ND_ORACLE_PUBKEYS` used to let ANY key publish oracle economy events, so the
+  relay now refuses to start until it is set. **Set it on the droplet before
+  deploying this build.** Also added: a 15-minute future-dating cap (a
+  future-dated listing could otherwise never be replaced, since replacement is
+  newest-wins) and connection/event/filter rate limits.
+- Open items: droplet pending a reboot for security updates.

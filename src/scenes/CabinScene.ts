@@ -758,10 +758,19 @@ export class CabinScene extends BaseScene {
         medal.style.cssText = `font-size:16px;min-width:22px;text-align:center;`;
         medal.textContent = MEDALS[i] || `${i + 1}.`;
 
+        // Both the display name and the fish name come from relay events any
+        // player can publish, so they are set as text, never interpolated into
+        // markup — this row is rendered in every client that opens the board.
         const info = document.createElement('div');
         info.style.cssText = `flex:1;`;
-        info.innerHTML = `<div style="color:#f0d070;font-size:12px;font-weight:bold;">${name}</div>
-          <div style="color:#8a7030;font-size:10px;">${lastFish}${lastDate ? ` · ${lastDate}` : ''}</div>`;
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = `color:#f0d070;font-size:12px;font-weight:bold;`;
+        nameEl.textContent = name;
+        const subEl = document.createElement('div');
+        subEl.style.cssText = `color:#8a7030;font-size:10px;`;
+        subEl.textContent = `${lastFish}${lastDate ? ` · ${lastDate}` : ''}`;
+        info.appendChild(nameEl);
+        info.appendChild(subEl);
 
         const count = document.createElement('div');
         count.style.cssText = `color:#ffd700;font-size:14px;font-weight:bold;min-width:28px;text-align:right;`;

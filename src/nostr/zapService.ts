@@ -9,6 +9,7 @@
 import { authStore } from '../stores/authStore';
 import { signEvent, fetchSparkAddress } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
+import { invoiceMatchesAmount } from '../utils/bolt11';
 import { sendSparkPayment, sparkCanCover } from './sparkService';
 import { sendIncomingZapPing, setIncomingZapHandler } from './presenceService';
 import { claimIncomingZap, showZapToast as _showZapToastEager } from '../ui/ZapToast';
@@ -205,6 +206,14 @@ async function fetchInvoice(
     const r = await fetch(`${callbackUrl}?${params}`);
     const data = await r.json();
     if (!data.pr) return null;
+    // The LNURL server chooses the invoice, and the user already saw and agreed
+    // to an amount. An invoice for anything else — or one we can't read — gets
+    // dropped rather than handed to a wallet that would pay it without asking
+    // again.
+    if (!invoiceMatchesAmount(data.pr, amountMsats)) {
+      console.warn('[Zap] LNURL returned an invoice for the wrong amount — refusing it.');
+      return null;
+    }
     return { pr: data.pr, verify: data.verify || undefined };
   } catch { return null; }
 }

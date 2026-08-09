@@ -2,6 +2,7 @@ import { authStore } from '../stores/authStore';
 import { getAvatar, serializeAvatar } from '../stores/avatarStore';
 import { extractEmojiTags } from './emojiService';
 import { getStatus } from '../stores/statusStore';
+import { signEvent } from './nostrService';
 
 type PlayerData = {
   pubkey: string;
@@ -278,6 +279,75 @@ let reconnectTimer:      ReturnType<typeof setTimeout> | null = null;
 const CONNECT_TIMEOUT_MS = 10000;     // give up on a connect attempt after this
 const OUTAGE_AFTER_FAILURES = 2;       // show outage UI once we've failed this many times
 
+// ── Presence auth ────────────────────────────────────────────────────────────
+// The server no longer takes our word for who we are: it issues a challenge on
+// connect, and claiming a real pubkey means returning a kind:22242 event signed
+// over that challenge. It answers with a session token we replay on reconnect,
+// so bunker/extension users aren't prompted to sign every time the socket flaps.
+// The token is a bearer credential for presence only — memory-only, never
+// persisted, so it dies with the tab.
+const AUTH_KIND = 22242;
+let sessionToken: string | null = null;
+let signingAuth = false;    // guards against overlapping signer prompts
+
+async function sendJoin(challenge: string, forceResign = false): Promise<void> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const state = authStore.getState();
+  const payload: Record<string, unknown> = {
+    type: 'join',
+    name: state.displayName || 'guest',
+    x: lastSentX || 400,
+    y: lastSentY || 348,
+    room: currentRoom,
+    avatar: serializeAvatar(getAvatar()),
+    status: getStatus(),
+    // Forward the ?holiday= URL override; only the keyless dev sandbox honors
+    // it (the prod server ignores this field and uses the real calendar).
+    testHoliday: new URLSearchParams(window.location.search).get('holiday') ?? null,
+  };
+
+  // Guests have nothing to prove — the server assigns them an id.
+  if (!state.pubkey || state.isGuest) {
+    ws.send(JSON.stringify(payload));
+    return;
+  }
+
+  payload.pubkey = state.pubkey;
+
+  if (sessionToken && !forceResign) {
+    payload.token = sessionToken;
+    ws.send(JSON.stringify(payload));
+    return;
+  }
+
+  if (signingAuth) return;
+  signingAuth = true;
+  try {
+    payload.auth = await signEvent({
+      kind: AUTH_KIND,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['challenge', challenge], ['relay', location.origin]],
+      content: 'Nostr District presence auth',
+    });
+  } catch (e) {
+    // A refused or unavailable signer means no authenticated presence. Surface
+    // it rather than silently dropping the player into a nameless guest slot.
+    // Clear the overlay too: without a join there's no `players` message coming,
+    // so the user would otherwise sit on "CONNECTING…" forever.
+    console.warn('[Presence] Auth signing failed', e);
+    hideLoadingOverlay();
+    window.dispatchEvent(new CustomEvent('nd-toast', {
+      detail: { msg: 'Could not verify your key with the presence server — reload to retry. Other players won\'t see you until you do.', color: '#ff9070' },
+    }));
+    return;
+  } finally {
+    signingAuth = false;
+  }
+
+  // The socket may have dropped while the signer prompt was open.
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+
 function showLoadingOverlay(): void {
   hideOutageOverlay();
   let el = document.getElementById('ps-loading');
@@ -441,25 +511,31 @@ export function connectPresence(cb: PresenceCallback): void {
     hideOutageOverlay();
     console.log('[Presence] Connected');
     presenceReady = false;
-    const state = authStore.getState();
-    ws!.send(JSON.stringify({
-      type: 'join',
-      pubkey: state.pubkey || `guest_${Math.random().toString(36).slice(2, 8)}`,
-      name: state.displayName || 'guest',
-      x: lastSentX || 400,
-      y: lastSentY || 348,
-      room: currentRoom,
-      avatar: serializeAvatar(getAvatar()),
-      status: getStatus(),
-      // Forward the ?holiday= URL override; only the keyless dev sandbox honors
-      // it (the prod server ignores this field and uses the real calendar).
-      testHoliday: new URLSearchParams(window.location.search).get('holiday') ?? null,
-    }));
+    // Joining now waits for the server's auth challenge — see sendJoin().
   };
 
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
+
+      // Server issued a challenge — this is what actually triggers our join.
+      if (msg.type === 'auth_challenge' && typeof msg.challenge === 'string') {
+        void sendJoin(msg.challenge);
+        return;
+      }
+
+      // Our token was rejected (server restarted, or it expired). Sign once more
+      // against the fresh challenge that came with the rejection.
+      if (msg.type === 'auth_required' && typeof msg.challenge === 'string') {
+        sessionToken = null;
+        void sendJoin(msg.challenge, true);
+        return;
+      }
+
+      if (msg.type === 'auth_ok') {
+        if (typeof msg.token === 'string') sessionToken = msg.token;
+        return;
+      }
 
       if (msg.type === 'players') {
         presenceReady = true; // server has synced — room navigation now allowed
@@ -775,6 +851,9 @@ export function setLoungeListenersHandler(fn: LoungeListenersHandler | null): vo
 
 export function disconnectPresence(): void {
   presenceReady = false;
+  // The token is bound to the pubkey that signed for it — replaying it after an
+  // account switch would rejoin under the previous identity.
+  sessionToken = null;
   callbacks = null;
   onRoomRequest = null;
   onRoomGranted = null;
