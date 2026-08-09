@@ -2078,7 +2078,14 @@ onDMReceived((msg) => {
   const crewId  = content.slice(idx1 + 1, idx2);
   const chatKey = content.slice(idx2 + 1).trim();
   if (!crewId || !/^[0-9a-f]{64}$/.test(chatKey)) return;
-  setCrewKey(crewId, chatKey).catch(() => {});
+  // Authorize the sender against the crew's current def before caching —
+  // otherwise any DM sender could poison our copy of the crew chat key.
+  // Unresolvable def → drop the message.
+  fetchCrew(crewId).then((crew) => {
+    if (!crew) return;
+    if (!isCrewAdmin(crewId, msg.senderPubkey) && !isCrewOfficer(crewId, msg.senderPubkey)) return;
+    setCrewKey(crewId, chatKey).catch(() => {});
+  }).catch(() => {});
 });
 
 // ── Admin promotion: crewSk delivery via DM ──────────────────────────────────
@@ -2095,5 +2102,12 @@ onDMReceived((msg) => {
   const crewId = content.slice(idx1 + 1, idx2);
   const crewSk = content.slice(idx2 + 1).trim();
   if (!crewId || !/^[0-9a-f]{64}$/.test(crewSk)) return;
-  setCrewSk(crewId, crewSk).catch(() => {});
+  // Authorize the sender against the crew's current def before caching —
+  // otherwise any DM sender could poison our copy of the crew admin key.
+  // Unresolvable def → drop the message.
+  fetchCrew(crewId).then((crew) => {
+    if (!crew) return;
+    if (!isCrewAdmin(crewId, msg.senderPubkey)) return;
+    setCrewSk(crewId, crewSk).catch(() => {});
+  }).catch(() => {});
 });

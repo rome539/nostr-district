@@ -1076,8 +1076,8 @@ export class BazaarPanel {
     box.style.cssText = `background:#0a0a18;border:1px solid #4a4a1a;border-radius:10px;padding:18px;width:min(440px,92vw);max-height:70vh;display:flex;flex-direction:column;font-family:'Courier New',monospace;`;
 
     box.innerHTML = `
-      <div id="wp-title1" style="color:#d0d060;font-size:13px;font-weight:bold;margin-bottom:4px;">⇄ ${ti18n('bz.offer_to', { item: `${offerDef.emoji} ${offerDef.name}`, name: toName })}</div>
-      <div id="wp-title2" style="color:#666;font-size:11px;margin-bottom:8px;">${ti18n('bz.pick_their_item', { name: `<span style="color:#d0d060;">${toName}</span>` })}</div>
+      <div id="wp-title1" style="color:#d0d060;font-size:13px;font-weight:bold;margin-bottom:4px;">⇄ ${ti18n('bz.offer_to', { item: `${offerDef.emoji} ${offerDef.name}`, name: esc(toName) })}</div>
+      <div id="wp-title2" style="color:#666;font-size:11px;margin-bottom:8px;">${ti18n('bz.pick_their_item', { name: `<span style="color:#d0d060;">${esc(toName)}</span>` })}</div>
       <button id="want-gift" style="align-self:flex-start;background:#0a1a2a;border:1px solid #1a4a6a;color:#70b0ff;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;padding:5px 10px;border-radius:4px;margin-bottom:10px;">${ti18n('bz.or_gift')}</button>
       <input id="want-search" placeholder="${ti18n('bz.search_items')}" style="background:#0e0e22;border:1px solid #2a2a4a;color:#c0c0e0;font-family:'Courier New',monospace;font-size:11px;padding:6px 10px;border-radius:4px;margin-bottom:10px;outline:none;" />
       <div id="want-list" class="nd-want-list" style="overflow-y:auto;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;scrollbar-width:thin;scrollbar-color:#8a8a1a55 transparent;"></div>
@@ -1103,7 +1103,7 @@ export class BazaarPanel {
     const renderList = (filter = '') => {
       const list = box.querySelector('#want-list')!;
       if (loading) { list.innerHTML = msg(ti18n('bz.loading_their_items')); return; }
-      if (!theirItems.length) { list.innerHTML = msg(ti18n('bz.no_tradeable', { name: toName })); return; }
+      if (!theirItems.length) { list.innerHTML = msg(ti18n('bz.no_tradeable', { name: esc(toName) })); return; }
       list.innerHTML = '';
       const filtered = filter ? theirItems.filter(d => d.name.toLowerCase().includes(filter.toLowerCase())) : theirItems;
       if (!filtered.length) { list.innerHTML = msg(ti18n('bz.no_matching')); return; }

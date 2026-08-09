@@ -3,6 +3,7 @@ import { webcrypto } from 'crypto';
 if (!globalThis.crypto) (globalThis as any).crypto = webcrypto;
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { promises as dns } from 'node:dns';
 import { finalizeEvent, getPublicKey, generateSecretKey, getEventHash, verifyEvent, nip44 } from 'nostr-tools';
 import { invoiceMatchesAmount } from './src/utils/bolt11';
 
@@ -190,7 +191,7 @@ async function fetchWeeklyMarkerMs(pubkey: string): Promise<number> {
   try {
     const events = await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndweekly_${pubkey}`] });
     let newest = 0;
-    for (const ev of events) if (ev?.created_at > newest) newest = ev.created_at;
+    for (const ev of verifiedOracleEvents(events)) if (ev.created_at > newest) newest = ev.created_at;
     return newest * 1000;
   } catch { return 0; } // relays unreachable → cache-only behavior (same as before this fix)
 }
@@ -630,7 +631,7 @@ async function loadBountyClaims(bountyId: string): Promise<string[]> {
     try {
       const events = await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#d': [`ndbounty_${bountyId}`] });
       let newest: any = null;
-      for (const ev of events) if (!newest || ev.created_at > newest.created_at) newest = ev;
+      for (const ev of verifiedOracleEvents(events)) if (!newest || ev.created_at > newest.created_at) newest = ev;
       if (newest) {
         const fromRelay: string[] = JSON.parse(newest.content || '[]');
         const merged = [...(bountyClaims[bountyId] ?? [])];
@@ -879,9 +880,9 @@ const LATE_SWEEP_MS = 30 * 60_000; // 30 min
 // for 5 minutes, so without a cap one client could loop the market and keep
 // every listing permanently unbuyable.
 const MAX_RESERVATIONS_PER_BUYER = 3;
-const reservations = new Map<string, { expires: number; buyer: string }>();
+const reservations = new Map<string, { expires: number; buyer: string; attempts: number }>();
 
-function reservationFor(id: string): { expires: number; buyer: string } | null {
+function reservationFor(id: string): { expires: number; buyer: string; attempts: number } | null {
   const r = reservations.get(id);
   if (!r) return null;
   if (Date.now() > r.expires) { reservations.delete(id); return null; }
@@ -895,23 +896,34 @@ function isReserved(id: string): boolean { return reservationFor(id) !== null; }
  * and an LNURL round-trip, so two buyers could both pass the check, both be
  * handed an invoice for the same item, and both pay — with only one getting it.
  * Returns false if someone else holds it or the buyer is at their cap.
+ *
+ * `attempts` counts the buyer's own in-flight inits: a duplicate purchase_init
+ * from the same buyer re-enters here, and its abort must NOT free the slot while
+ * the first attempt's invoice is still live (that re-opened the two-invoice race).
  */
 function tryReserve(id: string, buyer: string): boolean {
   const held = reservationFor(id);
-  if (held) return held.buyer === buyer;   // re-entry by the same buyer is fine
+  if (held) {
+    if (held.buyer !== buyer) return false;
+    held.attempts++;
+    return true;
+  }
   let active = 0;
   for (const key of [...reservations.keys()]) {
     const r = reservationFor(key);
     if (r?.buyer === buyer) active++;
   }
   if (active >= MAX_RESERVATIONS_PER_BUYER) return false;
-  reservations.set(id, { expires: Date.now() + RESERVE_MS, buyer });
+  reservations.set(id, { expires: Date.now() + RESERVE_MS, buyer, attempts: 1 });
   return true;
 }
 
-/** Release a claim, but only the holder's own — never someone else's. */
+/** Release one attempt of a claim, but only the holder's own — never someone else's. */
 function releaseReservation(id: string, buyer: string): void {
-  if (reservations.get(id)?.buyer === buyer) reservations.delete(id);
+  const r = reservations.get(id);
+  if (r?.buyer !== buyer) return;
+  r.attempts--;
+  if (r.attempts <= 0) reservations.delete(id);
 }
 
 // Bids are RELAY-BACKED — published as signed Nostr events by the bidder (kind
@@ -1224,6 +1236,45 @@ function isPublicLnurlUrl(raw: string): boolean {
   } catch { return false; }
 }
 
+// DNS-level SSRF check: the name filter above only looks at strings — a public
+// hostname can still resolve to a private address. Resolve and reject those.
+function isPrivateIp(ip: string): boolean {
+  let a = ip.trim().toLowerCase();
+  if (a.startsWith('::ffff:')) a = a.slice(7);                    // v4-mapped v6
+  if (PRIVATE_HOST_RE.test(a)) return true;                       // loopback/RFC1918/ULA/link-local v4
+  if (a === '::' || a.startsWith('fe80:')) return true;           // v6 unspecified + link-local
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a)) return true; // CGNAT 100.64.0.0/10
+  return false;
+}
+
+async function resolvesToPublicIp(host: string): Promise<boolean> {
+  try {
+    const addrs = await dns.lookup(host, { all: true, verbatim: true });
+    if (!addrs.length) return false;
+    return addrs.every(a => !isPrivateIp(a.address));
+  } catch { return false; }
+}
+
+// Fetch a seller-controlled URL with NO automatic redirects — every hop is
+// re-validated (URL syntax + DNS) before being followed, so a public host that
+// 302s to http://169.254.169.254 can't launder an internal request through us.
+async function lnurlFetch(rawUrl: string): Promise<any | null> {
+  let url = rawUrl;
+  for (let hop = 0; hop <= 3; hop++) {
+    if (!isPublicLnurlUrl(url)) return null;
+    if (!await resolvesToPublicIp(new URL(url).hostname)) return null;
+    const res = await fetch(url, { redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location');
+      if (!loc) return null;
+      url = new URL(loc, url).toString();
+      continue;
+    }
+    try { return await res.json(); } catch { return null; }
+  }
+  return null;
+}
+
 async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
     Promise<{ bolt11: string; verify: string | null } | null> {
   try {
@@ -1235,8 +1286,7 @@ async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
     // otherwise a listing could point the oracle at internal infrastructure.
     if (!isPublicLnurlHost(domain)) return null;
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(user)) return null;
-    const metaRes = await fetch(`https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`);
-    const meta: any = await metaRes.json();
+    const meta: any = await lnurlFetch(`https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`);
     if (!meta?.callback || !isPublicLnurlUrl(meta.callback)) return null;
     const msats = sats * 1000;
     if (meta.minSendable && msats < meta.minSendable) return null;
@@ -1247,8 +1297,7 @@ async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
     const maxComment = Number(meta.commentAllowed ?? 0);
     if (comment && maxComment > 0) params.set('comment', comment.slice(0, maxComment));
     const sep = meta.callback.includes('?') ? '&' : '?';
-    const invRes = await fetch(`${meta.callback}${sep}${params.toString()}`);
-    const inv: any = await invRes.json();
+    const inv: any = await lnurlFetch(`${meta.callback}${sep}${params.toString()}`);
     if (!inv?.pr) return null;
     // The seller's LNURL server chooses the invoice; the buyer is shown `sats`
     // and pays what we hand them. An invoice for a different amount — or one we
@@ -1265,9 +1314,7 @@ async function lnurlGetInvoice(lud16: string, sats: number, comment?: string):
 async function lnurlIsSettled(verifyUrl: string): Promise<boolean> {
   try {
     // Also seller-controlled, and polled on a timer — same host rules as above.
-    if (!isPublicLnurlUrl(verifyUrl)) return false;
-    const r = await fetch(verifyUrl);
-    const d: any = await r.json();
+    const d: any = await lnurlFetch(verifyUrl);
     return !!d?.settled;
   } catch { return false; }
 }
@@ -1296,6 +1343,25 @@ function newestPerD(events: any[], allowedAuthors: readonly string[]): Map<strin
 const isBurned = (e: any): boolean => !!e?.tags?.find((t: string[]) => t[0] === 'burned');
 const tagVal = (e: any, name: string): string | undefined => e?.tags?.find((t: string[]) => t[0] === name)?.[1];
 
+// Same distrust as newestPerD, for the marker reads (weekly drop, bounty claims)
+// that pick a "newest" event by created_at: a hostile relay can answer any filter
+// with forged, future-dated events — which would win that pick and re-block weekly
+// drops or inject phantom bounty claimants. Author, signature, and the same
+// future-drift cap the relay enforces are all re-checked here.
+const MAX_FUTURE_DRIFT_S = 15 * 60;
+function verifiedOracleEvents(events: any[]): any[] {
+  const allowed = new Set(ORACLE_AUTHORS.map(a => a.toLowerCase()));
+  const maxCreated = Math.floor(Date.now() / 1000) + MAX_FUTURE_DRIFT_S;
+  const out: any[] = [];
+  for (const e of events) {
+    if (typeof e?.pubkey !== 'string' || !allowed.has(e.pubkey.toLowerCase())) continue;
+    if (typeof e.created_at !== 'number' || e.created_at > maxCreated) continue;
+    try { if (!verifyEvent(e)) continue; } catch { continue; }
+    out.push(e);
+  }
+  return out;
+}
+
 // Poll an LNURL verify URL; once the invoice settles, release the escrowed item to
 // the buyer (transfer oracle → buyer), mark it sold, and notify everyone. Used by
 // both direct buys and accepted bids. `buyerWs` is where the buyer is connected.
@@ -1316,8 +1382,15 @@ function pollAndRelease(instanceId: string, buyer: string, buyerWs: WebSocket | 
     }
   };
   const poll = async () => {
-    if (soldInstances.has(instanceId)) return;
-    if (await lnurlIsSettled(verifyUrl)) {
+    // Check settlement BEFORE the sold short-circuit: during the late-sweep
+    // window another buyer can complete the same item, and if OUR invoice also
+    // settled the buyer paid and got nothing — that used to exit silently here.
+    const settled = await lnurlIsSettled(verifyUrl);
+    if (soldInstances.has(instanceId)) {
+      if (settled) reportUndeliverable('already_sold');
+      return;
+    }
+    if (settled) {
       const held = newestPerD(await queryRelays({ kinds: [30078], authors: ORACLE_AUTHORS, '#p': ORACLE_AUTHORS, '#t': ['nditem'] }), ORACLE_AUTHORS);
       const ev = held.get(instanceId);
       // Payment has settled by this point, so these two exits mean the buyer paid
@@ -1507,6 +1580,10 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(raw.toString());
 
       if (msg.type === 'join') {
+        // A socket that joins twice re-seats under a new identity below — capture
+        // the old one so its players entry doesn't linger as a ghost pointing at
+        // this ws (the close handler only ever deletes the LATEST identity).
+        const previousPubkey = myPubkey;
         // Resolve the caller's identity BEFORE trusting anything else in the
         // message. Three outcomes: a valid session token, a fresh signature, or
         // a guest — and guest ids are minted here, never accepted from the wire
@@ -1551,6 +1628,13 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'reserved_list', ids: [...reservedForWinner] }));
         ws.send(JSON.stringify({ type: 'burned_list', ids: [...burnedInstances] }));
         const room = msg.room || 'hub';
+        if (previousPubkey && previousPubkey !== myPubkey) {
+          const old = players.get(previousPubkey);
+          if (old && old.ws === ws) {
+            broadcastToRoom(old.room, { type: 'leave', pubkey: previousPubkey }, null);
+            players.delete(previousPubkey);
+          }
+        }
         players.set(myPubkey!, {
           pubkey: myPubkey!,
           name: msg.name || 'anon',
@@ -1815,6 +1899,25 @@ wss.on('connection', (ws) => {
           amountSats,
           comment,
         }));
+      }
+
+      // ── Economy gate ──────────────────────────────────────────────────────
+      // Everything below moves or creates value, keyed to the caller's identity.
+      // Guest connections are free and unlimited, so they must not reach any of
+      // it: a fresh guest id passes the weekly-drop gate every time (farm into a
+      // throwaway id, then gift to a real account), and guest-held purchase
+      // reservations bypass the per-buyer cap that keeps the market unbuyable.
+      // Guests can still walk, chat, and emote — anything item/money needs a
+      // signed identity. auth_required makes the client re-sign (or prompts login).
+      const ECONOMY_TYPES = new Set([
+        'item_mint_request', 'scavenge_request', 'fish_catch_request',
+        'bounty_claim_request', 'item_discard_request', 'item_gift_request',
+        'item_swap_request', 'item_escrow_request', 'item_unescrow_request',
+        'item_purchase_init', 'accept_bid', 'decline_win', 'revoke_acceptance',
+      ]);
+      if (ECONOMY_TYPES.has(msg.type) && !isRealPubkey(myPubkey)) {
+        ws.send(JSON.stringify({ type: 'auth_required', challenge }));
+        return;
       }
 
       // ── Item minting ──────────────────────────────────────────────────────

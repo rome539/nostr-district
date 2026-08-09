@@ -6,6 +6,7 @@
  * and pays via WebLN → NWC → QR fallback.
  */
 
+import { verifyEvent } from 'nostr-tools';
 import { authStore } from '../stores/authStore';
 import { signEvent, fetchSparkAddress } from './nostrService';
 import { nwcPayInvoice, weblnPayInvoice, hasNWC, hasWebLN } from './nwcService';
@@ -540,17 +541,15 @@ export function watchForPurchaseReceipt(
 
 // ── Zap receipt subscription (kind 9735) ─────────────────────────────────────
 
-// Tracks kind:9734 zap-request event ids we've already surfaced — used to
-// dedupe across the two paths a single zap can arrive on (raw 9734 we
-// republish ourselves, and the canonical 9735 receipt from the LNURL provider
-// which embeds the same 9734 JSON in its `description` tag). When both arrive
-// we always prefer the raw 9734, because some LNURL providers (e.g.,
-// breez.tips) strip the comment from the embedded zap request — only the raw
-// 9734 reliably carries the sender's message in its `content`.
+// Tracks kind:9734 zap-request event ids we've already surfaced — a single
+// zap can arrive as several distinct kind:9735 receipts (one per relay), all
+// embedding the same 9734 JSON in their `description` tag, so we toast only
+// once per zap request. Only verified 9735 receipts fire the "zapped you"
+// toast; raw 9734s are payment REQUESTS (anyone can self-publish one with any
+// amount) and are only cached for the wallet-history comment lookup.
 const _seenZapRequestIds  = new Set<string>();
 const _seenReceiptIds     = new Set<string>();
-const _pendingReceiptToasts = new Map<string, ReturnType<typeof setTimeout>>();
-const RECEIPT_DEFER_MS    = 1500;
+const _seenRawZapReqIds   = new Set<string>();
 
 const _zapReceiptSockets: WebSocket[] = [];
 
@@ -568,11 +567,15 @@ export function subscribeToZapReceipts(
     if (_seenReceiptIds.has(ev.id)) return;
     _seenReceiptIds.add(ev.id);
 
+    // The receipt is attacker-forgeable until both its own signature and the
+    // embedded kind:9734 zap request verify — drop it if any check fails.
+    if (!verifyEvent(ev)) return;
+
     let amountMsats = 0;
     const amountTag = ev.tags?.find((t: string[]) => t[0] === 'amount');
     if (amountTag?.[1]) amountMsats = parseInt(amountTag[1], 10) || 0;
 
-    let senderPubkey = ev.pubkey || '';
+    let senderPubkey = '';
     let comment      = '';
     let zapReqId: string | null = null;
 
@@ -580,23 +583,26 @@ export function subscribeToZapReceipts(
     const bolt11Tag = ev.tags?.find((t: string[]) => t[0] === 'bolt11');
     const bolt11    = bolt11Tag?.[1] || undefined;
 
-    if (descTag?.[1]) {
-      try {
-        const zapReq = JSON.parse(descTag[1]);
-        zapReqId = zapReq.id || null;
-        if (zapReq.pubkey) senderPubkey = zapReq.pubkey;
-        if (zapReq.content) comment = zapReq.content;
-        if (!amountMsats) {
-          const amt = zapReq.tags?.find((t: string[]) => t[0] === 'amount');
-          if (amt?.[1]) amountMsats = parseInt(amt[1], 10) || 0;
-        }
-      } catch { /* */ }
-    }
+    // The sender identity and comment come ONLY from the embedded, signed
+    // zap request — never from the unsigned receipt fields.
+    if (!descTag?.[1]) return;
+    try {
+      const zapReq = JSON.parse(descTag[1]);
+      if (zapReq.kind !== 9734 || !zapReq.pubkey || !verifyEvent(zapReq)) return;
+      zapReqId = zapReq.id || null;
+      senderPubkey = zapReq.pubkey;
+      if (zapReq.content) comment = zapReq.content;
+      const amt = zapReq.tags?.find((t: string[]) => t[0] === 'amount');
+      const reqMsats = amt?.[1] ? parseInt(amt[1], 10) || 0 : 0;
+      // The displayed amount must match what the sender actually requested.
+      if (amountMsats && reqMsats && amountMsats !== reqMsats) return;
+      if (!amountMsats) amountMsats = reqMsats;
+    } catch { return; }
 
     if (amountMsats <= 0) return;
 
     // Cache for the wallet history lookup. We do this BEFORE the dedupe check
-    // so the comment + bolt11 land in the cache even when a sibling 9734
+    // so the comment + bolt11 land in the cache even when a sibling receipt
     // already fired the toast.
     cacheIncomingZap({
       comment,
@@ -607,38 +613,23 @@ export function subscribeToZapReceipts(
       zapReqId:   zapReqId || undefined,
     });
 
-    // If a raw 9734 with the same id already fired (and carried the real
-    // sender comment), skip the receipt's toast.
-    if (zapReqId && _seenZapRequestIds.has(zapReqId)) return;
-
-    if (!zapReqId) {
-      onZap(senderPubkey, Math.floor(amountMsats / 1000), comment);
-      return;
+    // Dedupe sibling receipts embedding the same zap request.
+    if (zapReqId) {
+      if (_seenZapRequestIds.has(zapReqId)) return;
+      _seenZapRequestIds.add(zapReqId);
     }
-
-    // Defer the receipt-driven toast briefly. If the raw 9734 (which always
-    // carries the sender's comment) lands during this window, handleZapRequest
-    // will cancel the timer and fire its own toast instead.
-    const captured = { senderPubkey, amountMsats, comment };
-    const timer = setTimeout(() => {
-      _pendingReceiptToasts.delete(zapReqId!);
-      if (_seenZapRequestIds.has(zapReqId!)) return; // 9734 fired in the meantime
-      _seenZapRequestIds.add(zapReqId!);
-      onZap(captured.senderPubkey, Math.floor(captured.amountMsats / 1000), captured.comment);
-    }, RECEIPT_DEFER_MS);
-    _pendingReceiptToasts.set(zapReqId, timer);
+    onZap(senderPubkey, Math.floor(amountMsats / 1000), comment);
   };
 
   const handleZapRequest = (ev: any) => {
-    // Raw kind:9734 — Nostr District republishes these so the receiver sees
-    // the message even when the LNURL provider strips it from the 9735.
-    if (_seenZapRequestIds.has(ev.id)) return;
-    _seenZapRequestIds.add(ev.id);
-
-    // Cancel any deferred 9735 toast for this same zap request — we always
-    // prefer the raw 9734 because it reliably carries the sender's comment.
-    const pending = _pendingReceiptToasts.get(ev.id);
-    if (pending) { clearTimeout(pending); _pendingReceiptToasts.delete(ev.id); }
+    // Raw kind:9734 — Nostr District republishes these so the receiver's
+    // wallet history can carry the sender's comment even when the LNURL
+    // provider strips it from the 9735. It is a payment REQUEST, not a
+    // payment: anyone can self-publish a 9734 claiming any amount, so it
+    // NEVER fires the "zapped you" toast — only a verified kind:9735 does.
+    if (_seenRawZapReqIds.has(ev.id)) return;
+    _seenRawZapReqIds.add(ev.id);
+    if (!verifyEvent(ev)) return;
 
     let amountMsats = 0;
     const amountTag = ev.tags?.find((t: string[]) => t[0] === 'amount');
@@ -658,8 +649,6 @@ export function subscribeToZapReceipts(
         zapReqId:   ev.id,
       });
     }
-
-    if (amountMsats > 0) onZap(senderPubkey, Math.floor(amountMsats / 1000), comment);
   };
 
   // Subscribe on all relays so we catch wherever the receipt lands

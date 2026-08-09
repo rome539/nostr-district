@@ -115,29 +115,54 @@ func main() {
 			return false, ""
 		},
 		func(ctx context.Context, event *nostr.Event) (bool, string) {
-			tTag := event.Tags.GetFirst([]string{"t"})
-			t := ""
-			if tTag != nil {
-				t = tTag.Value()
+			// Evaluate ALL `t` values, not just the first: an event tagged
+			// [[t,ndfish],[t,nditem]] would otherwise pass on the user tag
+			// while being stored and served for the oracle tag's queries.
+			tVals := []string{""}
+			if all := event.Tags.GetAll([]string{"t"}); len(all) > 0 {
+				tVals = tVals[:0]
+				for _, tag := range all {
+					tVals = append(tVals, tag.Value())
+				}
+			}
+			hasUser, hasOracle, hasOther := false, false, false
+			for _, t := range tVals {
+				switch {
+				case userTags[t]:
+					hasUser = true
+				case oracleTags[t]:
+					hasOracle = true
+				default:
+					hasOther = true
+				}
 			}
 
 			switch event.Kind {
 			case 30402:
-				if t == "ndmarket" {
-					logAccept(event, t)
-					return false, ""
+				// Listings legitimately carry facet tags alongside the marker —
+				// ndmarket + ndcat:<category> + ndrarity:<rarity>. Requiring a
+				// lone `t` here rejected every real listing. What actually needs
+				// blocking is an oracle tag smuggled in beside the user one.
+				if hasOracle {
+					return true, "blocked: oracle-signed tag from non-oracle key"
+				}
+				for _, t := range tVals {
+					if t == "ndmarket" {
+						logAccept(event, "ndmarket")
+						return false, ""
+					}
 				}
 
 			case 30078:
-				if userTags[t] {
-					logAccept(event, t)
-					return false, ""
-				}
-				if oracleTags[t] {
+				if hasOracle {
 					if !oraclePubkeys[strings.ToLower(event.PubKey)] {
 						return true, "blocked: oracle-signed tag from non-oracle key"
 					}
-					logAccept(event, t)
+					logAccept(event, "oracle-tags")
+					return false, ""
+				}
+				if hasUser && !hasOther {
+					logAccept(event, "user-tags")
 					return false, ""
 				}
 				// v2: the Spark wallet mnemonic backup — NIP-44 self-encrypted

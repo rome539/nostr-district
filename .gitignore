@@ -19,6 +19,7 @@ vite.config.ts.timestamp-*.mjs
 
 # relay (relay/) — source tracked, cross-compiled binaries are not
 relay/nd-relay-bin*
+relay/nd-relay
 
 # promo kit (promo/) — scripts+data are tracked, render output is not
 promo/*.mp4
